@@ -1,0 +1,81 @@
+[
+  {
+    "title": "FORCEDENTRY: NSO Group iMessage Zero-Click Exploit Captured in the Wild",
+    "organization": "Citizen Lab",
+    "publication_date": "2021-09-13",
+    "spyware_family": "Pegasus",
+    "source_url": "https://citizenlab.ca/2021/09/forcedentry-nso-group-imessage-zero-click-exploit-captured-in-the-wild/",
+    "local_filename": "citizenlab_2021_forcedentry.pdf"
+  },
+  {
+    "title": "Project Torogoz: Extensive Hacking of Media & Civil Society in El Salvador with Pegasus Spyware",
+    "organization": "Citizen Lab",
+    "publication_date": "2022-01-12",
+    "spyware_family": "Pegasus",
+    "source_url": "https://citizenlab.ca/2022/01/project-torogoz-extensive-hacking-of-media-and-civil-society-in-el-salvador-with-pegasus-spyware/",
+    "local_filename": "citizenlab_2022_el_salvador_pegasus.pdf"
+  },
+  {
+    "title": "CatalanGate: Extensive Mercenary Spyware Operation against Catalans Using Pegasus and Candiru",
+    "organization": "Citizen Lab",
+    "publication_date": "2022-04-18",
+    "spyware_family": "Pegasus / Candiru",
+    "source_url": "https://citizenlab.ca/2022/04/catalangate-extensive-mercenary-spyware-operation-against-catalans-using-pegasus-candiru/",
+    "local_filename": "citizenlab_2022_catalangate.pdf"
+  },
+  {
+    "title": "Sweet QuaDreams: A First Look at Spyware Vendor QuaDream’s Exploits, Victims, and Customers",
+    "organization": "Citizen Lab",
+    "publication_date": "2023-04-11",
+    "spyware_family": "QuaDream Reign",
+    "source_url": "https://citizenlab.ca/2023/04/spyware-vendor-quadream-exploits-victims-customers/",
+    "local_filename": "citizenlab_2023_quadream_endofdays.pdf"
+  },
+  {
+    "title": "BLASTPASS: NSO Group iPhone Zero-Click, Zero-Day Exploit Captured in the Wild",
+    "organization": "Citizen Lab",
+    "publication_date": "2023-09-07",
+    "spyware_family": "Pegasus",
+    "source_url": "https://citizenlab.ca/2023/09/blastpass-nso-group-iphone-zero-click-zero-day-exploit-captured-in-the-wild/",
+    "local_filename": "citizenlab_2023_blastpass.pdf"
+  },
+  {
+    "title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "organization": "Amnesty Tech",
+    "publication_date": "2021-07-18",
+    "spyware_family": "Pegasus",
+    "source_url": "https://www.amnesty.org/en/latest/research/2021/07/forensic-methodology-report-how-to-catch-nso-groups-pegasus/",
+  },
+  {
+    "title": "Predator Files: Technical deep-dive into Intellexa Alliance's surveillance products",
+    "organization": "Amnesty Tech",
+    "publication_date": "2023-10-09",
+    "spyware_family": "Predator",
+    "source_url": "https://securitylab.amnesty.org/latest/2023/10/technical-deep-dive-into-intellexa-alliance-surveillance-products/",
+    "local_filename": "amnesty_2023_predator_files.pdf"
+  },
+  {
+    "title": "Hooking Candiru: Another Mercenary Spyware Vendor Comes into Focus",
+    "organization": "Citizen Lab",
+    "publication_date": "2021-07-15",
+    "spyware_family": "Candiru",
+    "source_url": "https://citizenlab.ca/2021/07/hooking-candiru-another-mercenary-spyware-vendor-comes-into-focus/",
+    "local_filename": "citizenlab_2021_hooking_candiru.pdf"
+  },
+  {
+    "title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "organization": "Google TAG",
+    "publication_date": "2024-02-06",
+    "spyware_family": "Pegasus / Predator / Candiru",
+    "source_url": "https://blog.google/threat-analysis-group/buying-spying-insights-into-commercial-surveillance-vendors/",
+    "local_filename": "google_tag_2024_buying_spying.pdf"
+  },
+  {
+    "title": "Protecting Android Users from 0-Day Attacks (Intellexa Predator & Cytrox)",
+    "organization": "Google TAG",
+    "publication_date": "2022-05-19",
+    "spyware_family": "Predator",
+    "source_url": "https://blog.google/threat-analysis-group/protecting-android-users-from-0-day-attacks/",
+    "local_filename": "google_tag_2022_android_predator_0day.pdf"
+  }
+]

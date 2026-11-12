@@ -95,10 +95,12 @@ CREATE TRIGGER trg_chunks_search_vector
 -- El constraint CHECK impide a nivel de BD registrar activos sin consentimiento explícito
 CREATE TABLE osint_monitored_assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_token VARCHAR(128) NOT NULL DEFAULT 'default_analyst',
     asset_type VARCHAR(50) NOT NULL,      -- domain, institutional_email, organization
-    asset_value VARCHAR(255) NOT NULL UNIQUE,
+    asset_value VARCHAR(255) NOT NULL,
     explicit_consent BOOLEAN NOT NULL CHECK (explicit_consent = TRUE),
     consented_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_checked_at TIMESTAMPTZ
+    last_checked_at TIMESTAMPTZ,
+    CONSTRAINT uq_osint_owner_asset UNIQUE (owner_token, asset_value)
 );
 

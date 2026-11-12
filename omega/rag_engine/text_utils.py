@@ -43,8 +43,8 @@ BENIGN_DOMAINS = {
 
 
 def refang_text(text: str) -> str:
-    """Normaliza indicadores ofuscados ([.], hxxp, [@]) a su forma canónica."""
-    cleaned = text
+    """Normaliza indicadores ofuscados ([.], hxxp, [@]) a su forma canónica y elimina bytes NUL."""
+    cleaned = text.replace("\x00", "")
     for pattern, replacement in DEFANG_RULES:
         cleaned = pattern.sub(replacement, cleaned)
     return cleaned

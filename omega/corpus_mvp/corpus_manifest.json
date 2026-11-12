@@ -1,130 +1,145 @@
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "project": "Omega - Defensive CTI RAG & MVT Verification Platform",
-  "phase": "Phase 0 - Seed Corpus MVP",
-  "generated_at": "2026-11-12",
-  "description": "Traceability manifest for seed threat intelligence reports on commercial state-grade spyware (NSO Group, Candiru, Intellexa Alliance).",
-  "reports": [
-    {
-      "report_id": "CITIZENLAB_2021_FORCEDENTRY",
-      "title": "FORCEDENTRY: NSO Group iMessage Zero-Click Exploit Captured in the Wild",
-      "organization": "The Citizen Lab (Munk School of Global Affairs & Public Policy, University of Toronto)",
-      "publication_date": "2021-09-13",
-      "spyware_family": "Pegasus",
-      "vendor": "NSO Group",
-      "cves": ["CVE-2021-30860"],
-      "document_type": "HTML (Web Technical Report)",
-      "source_url": "https://citizenlab.ca/2021/09/forcedentry-nso-group-imessage-zero-click-exploit-captured-in-the-wild/",
-      "direct_pdf_url": null,
-      "local_filename": "citizenlab_2021_forcedentry.pdf",
-      "target_os": ["iOS", "macOS", "watchOS"],
-      "mvt_relevant_artifacts": [
-        "IMTransferAgent crashes",
-        "JBIG2 JBIG2Stream dictionary parsing artifacts",
-        "SMS/iMessage attachment database entries"
-      ]
-    },
-    {
-      "report_id": "CITIZENLAB_2021_CANDIRU",
-      "title": "Hooking Candiru: Another Mercenary Spyware Vendor Comes into Focus",
-      "organization": "The Citizen Lab (Munk School of Global Affairs & Public Policy, University of Toronto)",
-      "publication_date": "2021-07-15",
-      "spyware_family": "Candiru",
-      "vendor": "Candiru (Saito Tech / Sourgum)",
-      "cves": ["CVE-2021-31979", "CVE-2021-33771"],
-      "document_type": "HTML (Web Technical Report)",
-      "source_url": "https://citizenlab.ca/2021/07/hooking-candiru-another-mercenary-spyware-vendor-comes-into-focus/",
-      "direct_pdf_url": null,
-      "local_filename": "citizenlab_2021_hooking_candiru.pdf",
-      "target_os": ["Windows", "iOS", "Android"],
-      "mvt_relevant_artifacts": [
-        "C2 Domain telemetry",
-        "URL redirect infrastructure",
-        "Browser history artifacts"
-      ]
-    },
-    {
-      "report_id": "AMNESTY_2021_PEGASUS_METHODOLOGY",
-      "title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
-      "organization": "Amnesty International Security Lab",
-      "publication_date": "2021-07-18",
-      "spyware_family": "Pegasus",
-      "vendor": "NSO Group",
-      "cves": ["CVE-2016-4655", "CVE-2016-4656", "CVE-2016-4657", "CVE-2019-8646", "CVE-2021-30860"],
-      "document_type": "PDF & HTML (Comprehensive Technical Methodology)",
-      "source_url": "https://www.amnesty.org/en/latest/research/2021/07/forensic-methodology-report-how-to-catch-nso-groups-pegasus/",
-      "direct_pdf_url": "https://www.amnesty.org/en/wp-content/uploads/2021/08/DOC1044872021ENGLISH.pdf",
-      "local_filename": "amnesty_2021_pegasus_forensic_methodology.pdf",
-      "target_os": ["iOS", "Android"],
-      "mvt_relevant_artifacts": [
-        "DataUsage.sqlite",
-        "netusage.sqlite",
-        "interactionC.db",
-        "Safari History.db",
-        "com.apple.identityservices.idstatuscache.plist",
-        "iOS sysdiagnose logs",
-        "BridgeHead process anomalies"
-      ]
-    },
-    {
-      "report_id": "AMNESTY_2023_PREDATOR_FILES",
-      "title": "Predator Files: Technical deep-dive into Intellexa Alliance's surveillance products",
-      "organization": "Amnesty International Security Lab",
-      "publication_date": "2023-10-09",
-      "spyware_family": "Predator",
-      "vendor": "Intellexa Alliance (Cytrox / Nexa / WiSpear)",
-      "cves": ["CVE-2023-41991", "CVE-2023-41992", "CVE-2023-41993"],
-      "document_type": "HTML (Web Technical Report)",
-      "source_url": "https://securitylab.amnesty.org/latest/2023/10/technical-deep-dive-into-intellexa-alliance-surveillance-products/",
-      "direct_pdf_url": null,
-      "local_filename": "amnesty_2023_predator_deep_dive.pdf",
-      "target_os": ["iOS", "Android"],
-      "mvt_relevant_artifacts": [
-        "Aladdin tactical network injection traces",
-        "Malicious iOS Configuration Profiles (.mobileconfig)",
-        "Tethered exploit artifacts",
-        "Android com.google.android.apps.messaging intent spoofing"
-      ]
-    },
-    {
-      "report_id": "GOOGLE_TAG_2024_BUYING_SPYING",
-      "title": "Buying Spying: Insights into Commercial Surveillance Vendors",
-      "organization": "Google Threat Analysis Group (TAG) & Jigsaw",
-      "publication_date": "2024-02-06",
-      "spyware_family": "Multi-Vendor (Pegasus, Predator, Candiru, RCS Lab)",
-      "vendor": "Commercial Surveillance Vendors Ecosystem (CSVs)",
-      "cves": ["CVE-2023-2033", "CVE-2023-3079", "CVE-2023-4762", "CVE-2023-4863", "CVE-2023-5217"],
-      "document_type": "PDF Whitepaper",
-      "source_url": "https://blog.google/threat-analysis-group/commercial-surveillance-vendors-google-tag-report/",
-      "direct_pdf_url": "https://storage.googleapis.com/gweb-uniblog-publish-prod/documents/Buying_Spying_-_Insights_into_Commercial_Surveillance_Vendors_-_TAG_report.pdf",
-      "local_filename": "google_tag_2024_buying_spying.pdf",
-      "target_os": ["Android", "iOS", "Windows", "macOS"],
-      "mvt_relevant_artifacts": [
-        "Zero-day exploit chains taxonomy",
-        "Exploit broker supply chain indicators",
-        "Chrome renderer sandboxing escapes"
-      ]
-    },
-    {
-      "report_id": "GOOGLE_TAG_2022_PREDATOR_ANDROID",
-      "title": "Protecting Android users from 0-Day attacks",
-      "organization": "Google Threat Analysis Group (TAG)",
-      "publication_date": "2022-05-19",
-      "spyware_family": "Predator",
-      "vendor": "Cytrox (Intellexa Alliance)",
-      "cves": ["CVE-2021-37973", "CVE-2021-37976", "CVE-2021-38000", "CVE-2021-38003", "CVE-2021-1048"],
-      "document_type": "HTML (Technical Security Analysis)",
-      "source_url": "https://blog.google/threat-analysis-group/protecting-android-users-from-0-day-attacks/",
-      "direct_pdf_url": null,
-      "local_filename": "google_tag_2022_protecting_android_predator.pdf",
-      "target_os": ["Android"],
-      "mvt_relevant_artifacts": [
-        "Chrome sandbox bypass artifacts",
-        "Linux kernel privilege escalation traces (binder UAF)",
-        "Android package manager (pm) anomalies",
-        "libssl.so injection artifacts"
-      ]
-    }
-  ]
-}
-
+[
+  {
+    "title": "FORCEDENTRY: NSO Group iMessage Zero-Click Exploit Captured in the Wild",
+    "organization": "Citizen Lab",
+    "publication_date": "2021-09-13",
+    "spyware_family": "Pegasus",
+    "source_url": "https://citizenlab.ca/2021/09/forcedentry-nso-group-imessage-zero-click-exploit-captured-in-the-wild/",
+    "local_filename": "citizenlab_2021_forcedentry.pdf"
+  },
+  {
+    "title": "Hooking Candiru: Another Mercenary Spyware Vendor Comes into Focus",
+    "organization": "Citizen Lab",
+    "publication_date": "2021-07-15",
+    "spyware_family": "Candiru",
+    "source_url": "https://citizenlab.ca/2021/07/hooking-candiru-another-mercenary-spyware-vendor-comes-into-focus/",
+    "local_filename": "citizenlab_2021_hooking_candiru.pdf"
+  },
+  {
+    "title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "organization": "Amnesty Tech",
+    "publication_date": "2021-07-18",
+    "spyware_family": "Pegasus",
+    "source_url": "https://www.amnesty.org/en/latest/research/2021/07/forensic-methodology-report-how-to-catch-nso-groups-pegasus/",
+    "local_filename": "amnesty_2021_pegasus_forensic_methodology.pdf"
+  },
+  {
+    "report_id": "AMNESTY_2023_PREDATOR_FILES",
+    "title": "Predator Files: Technical deep-dive into Intellexa Alliance's surveillance products",
+    "organization": "Amnesty International Security Lab",
+    "publication_date": "2023-10-09",
+    "spyware_family": "Predator",
+    "vendor": "Intellexa Alliance (Cytrox / Nexa / WiSpear)",
+    "cves": [
+      "CVE-2023-41991",
+      "CVE-2023-41992",
+      "CVE-2023-41993"
+    ],
+    "document_type": "HTML (Web Technical Report)",
+    "source_url": "https://securitylab.amnesty.org/latest/2023/10/technical-deep-dive-into-intellexa-alliance-surveillance-products/",
+    "direct_pdf_url": null,
+    "local_filename": "amnesty_2023_predator_deep_dive.pdf",
+    "target_os": [
+      "iOS",
+      "Android"
+    ],
+    "mvt_relevant_artifacts": [
+      "Aladdin tactical network injection traces",
+      "Malicious iOS Configuration Profiles (.mobileconfig)",
+      "Tethered exploit artifacts",
+      "Android com.google.android.apps.messaging intent spoofing"
+    ]
+  },
+  {
+    "title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "organization": "Google TAG",
+    "publication_date": "2024-02-06",
+    "spyware_family": "Pegasus / Predator / Candiru",
+    "source_url": "https://blog.google/threat-analysis-group/buying-spying-insights-into-commercial-surveillance-vendors/",
+    "local_filename": "google_tag_2024_buying_spying.pdf"
+  },
+  {
+    "report_id": "GOOGLE_TAG_2022_PREDATOR_ANDROID",
+    "title": "Protecting Android users from 0-Day attacks",
+    "organization": "Google Threat Analysis Group (TAG)",
+    "publication_date": "2022-05-19",
+    "spyware_family": "Predator",
+    "vendor": "Cytrox (Intellexa Alliance)",
+    "cves": [
+      "CVE-2021-37973",
+      "CVE-2021-37976",
+      "CVE-2021-38000",
+      "CVE-2021-38003",
+      "CVE-2021-1048"
+    ],
+    "document_type": "HTML (Technical Security Analysis)",
+    "source_url": "https://blog.google/threat-analysis-group/protecting-android-users-from-0-day-attacks/",
+    "direct_pdf_url": null,
+    "local_filename": "google_tag_2022_protecting_android_predator.pdf",
+    "target_os": [
+      "Android"
+    ],
+    "mvt_relevant_artifacts": [
+      "Chrome sandbox bypass artifacts",
+      "Linux kernel privilege escalation traces (binder UAF)",
+      "Android package manager (pm) anomalies",
+      "libssl.so injection artifacts"
+    ]
+  },
+  {
+    "title": "Project Torogoz: Extensive Hacking of Media & Civil Society in El Salvador with Pegasus Spyware",
+    "organization": "Citizen Lab",
+    "publication_date": "2022-01-12",
+    "spyware_family": "Pegasus",
+    "source_url": "https://citizenlab.ca/2022/01/project-torogoz-extensive-hacking-of-media-and-civil-society-in-el-salvador-with-pegasus-spyware/",
+    "local_filename": "citizenlab_2022_el_salvador_pegasus.pdf"
+  },
+  {
+    "title": "CatalanGate: Extensive Mercenary Spyware Operation against Catalans Using Pegasus and Candiru",
+    "organization": "Citizen Lab",
+    "publication_date": "2022-04-18",
+    "spyware_family": "Pegasus / Candiru",
+    "source_url": "https://citizenlab.ca/2022/04/catalangate-extensive-mercenary-spyware-operation-against-catalans-using-pegasus-candiru/",
+    "local_filename": "citizenlab_2022_catalangate.pdf"
+  },
+  {
+    "title": "Sweet QuaDreams: A First Look at Spyware Vendor QuaDream’s Exploits, Victims, and Customers",
+    "organization": "Citizen Lab",
+    "publication_date": "2023-04-11",
+    "spyware_family": "QuaDream Reign",
+    "source_url": "https://citizenlab.ca/2023/04/spyware-vendor-quadream-exploits-victims-customers/",
+    "local_filename": "citizenlab_2023_quadream_endofdays.pdf"
+  },
+  {
+    "title": "BLASTPASS: NSO Group iPhone Zero-Click, Zero-Day Exploit Captured in the Wild",
+    "organization": "Citizen Lab",
+    "publication_date": "2023-09-07",
+    "spyware_family": "Pegasus",
+    "source_url": "https://citizenlab.ca/2023/09/blastpass-nso-group-iphone-zero-click-zero-day-exploit-captured-in-the-wild/",
+    "local_filename": "citizenlab_2023_blastpass.pdf"
+  },
+  {
+    "title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "organization": "Amnesty Tech",
+    "publication_date": "2021-07-18",
+    "spyware_family": "Pegasus",
+    "source_url": "https://www.amnesty.org/en/latest/research/2021/07/forensic-methodology-report-how-to-catch-nso-groups-pegasus/",
+    "local_filename": "amnesty_2021_forensic_methodology_pegasus.pdf"
+  },
+  {
+    "title": "Predator Files: Technical deep-dive into Intellexa Alliance's surveillance products",
+    "organization": "Amnesty Tech",
+    "publication_date": "2023-10-09",
+    "spyware_family": "Predator",
+    "source_url": "https://securitylab.amnesty.org/latest/2023/10/technical-deep-dive-into-intellexa-alliance-surveillance-products/",
+    "local_filename": "amnesty_2023_predator_files.pdf"
+  },
+  {
+    "title": "Protecting Android Users from 0-Day Attacks (Intellexa Predator & Cytrox)",
+    "organization": "Google TAG",
+    "publication_date": "2022-05-19",
+    "spyware_family": "Predator",
+    "source_url": "https://blog.google/threat-analysis-group/protecting-android-users-from-0-day-attacks/",
+    "local_filename": "google_tag_2022_android_predator_0day.pdf"
+  }
+]

@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 import psycopg
 from groq import Groq
@@ -71,15 +72,24 @@ def build_dataset(target_samples: int = 10):
 
     dataset = []
     for idx, (content, page_num, title) in enumerate(rows, start=1):
-        res = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            temperature=0.1,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": QA_GEN_PROMPT},
-                {"role": "user", "content": f"Reporte: {title} (Pág. {page_num})\n\nFRAGMENTO:\n{content}"},
-            ],
-        )
+        res = None
+        for attempt in range(4):
+            try:
+                res = groq_client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    temperature=0.1,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": QA_GEN_PROMPT},
+                        {"role": "user", "content": f"Reporte: {title} (Pág. {page_num})\n\nFRAGMENTO:\n{content}"},
+                    ],
+                )
+                break
+            except Exception as err:
+                if "rate_limit" in str(err).lower() and attempt < 3:
+                    time.sleep(6 * (attempt + 1))
+                else:
+                    raise
         parsed = json.loads(res.choices[0].message.content)
         dataset.append(
             {
@@ -91,6 +101,7 @@ def build_dataset(target_samples: int = 10):
             }
         )
         print(f"[{idx}/{len(rows)}] Generada pregunta sobre '{title}' (Pág. {page_num})")
+        time.sleep(1.5)
 
     dataset.extend(TRAP_QUESTIONS)
     OUTPUT_PATH.write_text(json.dumps(dataset, indent=2, ensure_ascii=False), encoding="utf-8")
