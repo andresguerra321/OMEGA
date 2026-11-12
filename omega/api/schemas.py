@@ -35,6 +35,8 @@ class ChatResponse(BaseModel):
 class IocMatchItem(BaseModel):
     ioc_type: str
     ioc_value: str
+    match_precision: str
+    artifact_origin: str
     context: str | None
     campaign: str
     spyware_family: str
@@ -44,8 +46,10 @@ class IocMatchItem(BaseModel):
 
 
 class IocVerifyResponse(BaseModel):
+    detected_format: str
     analyzed_indicators: int
     total_matches: int
+    breakdown: dict[str, int]
     ephemeral_notice: str
     matches: list[IocMatchItem]
 

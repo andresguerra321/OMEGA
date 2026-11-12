@@ -4,22 +4,19 @@ import {
   ShieldAlert,
   Layers,
   MessageSquare,
-  Upload,
-  Lock,
   FileSearch,
   ChevronRight,
   Radar,
 } from 'lucide-react';
 import {
   sendChatQuery,
-  verifyMvtFile,
-  verifyMvtText,
   fetchCampaigns,
   fetchCampaignDetail,
 } from './lib/api';
 import { CitationDrawer } from './components/CitationDrawer';
 import { OsintPanel } from './components/OsintPanel';
 import { MarkdownMessage } from './components/MarkdownMessage';
+import { MvtVerifierPanel } from './components/MvtVerifierPanel';
 
 const STARTER_PROMPTS = [
   '¿Qué vulnerabilidades zero-click (CVEs) se documentan para Pegasus?',
@@ -28,16 +25,11 @@ const STARTER_PROMPTS = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'mvt' | 'campaigns'
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'mvt' | 'campaigns' | 'osint'
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState(null);
-
-  // Estado Verificador MVT (RF5, RNF4)
-  const [iocText, setIocText] = useState('');
-  const [mvtResult, setMvtResult] = useState(null);
-  const [loadingMvt, setLoadingMvt] = useState(false);
 
   // Estado Campañas (RF6)
   const [campaigns, setCampaigns] = useState([]);
@@ -82,31 +74,6 @@ export default function App() {
       ]);
     } finally {
       setLoadingChat(false);
-    }
-  }
-
-  async function handleFileUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLoadingMvt(true);
-    try {
-      const res = await verifyMvtFile(file);
-      setMvtResult(res);
-    } finally {
-      setLoadingMvt(false);
-      e.target.value = '';
-    }
-  }
-
-  async function handleTextVerify(e) {
-    e.preventDefault();
-    if (!iocText.trim()) return;
-    setLoadingMvt(true);
-    try {
-      const res = await verifyMvtText(iocText);
-      setMvtResult(res);
-    } finally {
-      setLoadingMvt(false);
     }
   }
 
@@ -285,96 +252,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Vista 2: Verificador Forense MVT / IOCs (RF5, RNF4) */}
-        {activeTab === 'mvt' && (
-          <div className="space-y-6">
-            <div className="flex items-start justify-between rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold">Cruce de Indicadores de Compromiso (IOC)</h2>
-                <p className="text-xs text-zinc-400">
-                  Carga la salida JSON de Mobile Verification Toolkit (MVT) o pega dominios, IPs o hashes SHA-256 sospechosos.
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5 rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-3 py-1.5 text-[11px] text-emerald-300">
-                <Lock className="h-3.5 w-3.5" />
-                <span>Procesamiento volátil en RAM (RNF4)</span>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/20 p-6 text-center hover:border-zinc-500 transition">
-                <Upload className="mb-2 h-6 w-6 text-zinc-400" />
-                <span className="text-xs font-medium text-zinc-200">
-                  Subir archivo JSON / TXT de MVT
-                </span>
-                <span className="mt-1 text-[11px] text-zinc-500">
-                  No se almacena en servidor ni base de datos
-                </span>
-                <input type="file" accept=".json,.txt,.log" onChange={handleFileUpload} className="hidden" />
-              </label>
-
-              <form onSubmit={handleTextVerify} className="flex flex-col gap-2">
-                <textarea
-                  rows={4}
-                  value={iocText}
-                  onChange={(e) => setIocText(e.target.value)}
-                  placeholder="O pega aquí una lista de dominios, IPs o procesos (uno por línea)..."
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200 placeholder-zinc-500 focus:border-zinc-600 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={loadingMvt || !iocText.trim()}
-                  className="self-end rounded-lg bg-zinc-100 px-4 py-2 text-xs font-medium text-zinc-950 hover:bg-white disabled:opacity-40 transition"
-                >
-                  {loadingMvt ? 'Analizando...' : 'Cruzar contra base CTI'}
-                </button>
-              </form>
-            </div>
-
-            {mvtResult && (
-              <div className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3 text-xs">
-                  <span className="text-zinc-400">
-                    Indicadores evaluados: <strong className="text-zinc-100">{mvtResult.analyzed_indicators}</strong>
-                  </span>
-                  <span
-                    className={`font-medium ${
-                      mvtResult.total_matches > 0 ? 'text-rose-400' : 'text-emerald-400'
-                    }`}
-                  >
-                    Coincidencias: {mvtResult.total_matches}
-                  </span>
-                </div>
-
-                {mvtResult.matches.length === 0 ? (
-                  <p className="text-xs text-zinc-400">
-                    Sin coincidencias contra los indicadores públicos indexados actualmente.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {mvtResult.matches.map((m, i) => (
-                      <div
-                        key={i}
-                        className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-3.5 text-xs space-y-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-semibold text-rose-300">
-                            [{m.ioc_type.toUpperCase()}] {m.ioc_value}
-                          </span>
-                          <span className="rounded bg-rose-950 px-2 py-0.5 text-[11px] text-rose-200">
-                            {m.spyware_family}
-                          </span>
-                        </div>
-                        <p className="text-zinc-300">Campaña: {m.campaign}</p>
-                        <p className="text-zinc-400">Fuente: {m.source_report} ({m.organization})</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Vista 2: Verificador Forense MVT / IOCs (RF5, RNF4, RNF6) */}
+        {activeTab === 'mvt' && <MvtVerifierPanel />}
 
         {/* Vista 3: Explorador de Campañas Normalizadas (RF6) */}
         {activeTab === 'campaigns' && (

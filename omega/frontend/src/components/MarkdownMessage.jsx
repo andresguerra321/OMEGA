@@ -132,3 +132,4 @@ export function MarkdownMessage({ content, citations = [], onSelectCitation }) {
     </div>
   );
 }
+

@@ -25,8 +25,8 @@ from services import (
     register_osint_asset,
     run_passive_osint_scan,
     run_rag_query,
-    verify_indicators_ephemeral,
 )
+from forensic_engine import analyze_forensic_payload
 
 app = FastAPI(
     title="Omega CTI API",
@@ -76,37 +76,14 @@ async def verify_ioc_file(file: UploadFile = File(...)):
     raw_bytes = await file.read()
     try:
         raw_text = raw_bytes.decode("utf-8", errors="ignore")
-        return verify_indicators_ephemeral(raw_text)
+        return analyze_forensic_payload(raw_text, filename=file.filename)
     finally:
         del raw_bytes
 
 
 @app.post("/api/ioc/verify/text", response_model=IocVerifyResponse)
-async def verify_ioc_text(request: Request):
-    """
-    Verificación resiliente en memoria (RNF4).
-    Acepta JSON estándar {"indicators_text": "..."}, texto plano o formato de PowerShell sin fallar.
-    """
-    raw_bytes = await request.body()
-    raw_text = raw_bytes.decode("utf-8", errors="ignore")
-    del raw_bytes
-
-    text_to_analyze = raw_text
-    try:
-        parsed = json.loads(raw_text)
-        if isinstance(parsed, dict):
-            text_to_analyze = (
-                parsed.get("indicators_text")
-                or parsed.get("text")
-                or parsed.get("indicators")
-                or raw_text
-            )
-        elif isinstance(parsed, list):
-            text_to_analyze = " ".join(str(item) for item in parsed)
-    except Exception:
-        text_to_analyze = raw_text
-
-    return verify_indicators_ephemeral(text_to_analyze)
+def verify_ioc_text(payload: IocRawRequest):
+    return analyze_forensic_payload(payload.indicators_text, filename="consulta_manual.txt")
 
 
 @app.get("/api/ioc/verify/text", include_in_schema=False)
