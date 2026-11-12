@@ -281,3 +281,4 @@ def run_passive_osint_scan(asset_id: str, owner_token: str) -> dict | None:
         "cti_ioc_matches": cti_matches,
         "ethical_notice": "Consulta OSINT pasiva ejecutada exclusivamente sobre activo propio con consentimiento explícito registrado (RF8 / RNF8).",
     }
+

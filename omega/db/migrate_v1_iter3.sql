@@ -10,3 +10,4 @@ DROP CONSTRAINT IF EXISTS uq_osint_owner_asset;
 
 ALTER TABLE osint_monitored_assets
 ADD CONSTRAINT uq_osint_owner_asset UNIQUE (owner_token, asset_value);
+

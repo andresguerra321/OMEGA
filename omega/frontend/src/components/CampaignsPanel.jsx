@@ -381,3 +381,4 @@ export function CampaignsPanel({ onAskInChat }) {
     </div>
   );
 }
+
