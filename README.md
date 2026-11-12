@@ -132,3 +132,4 @@ En la carpeta [`omega/docs/`](omega/docs/) se encuentran los anexos para la memo
 * [Matriz de Trazabilidad Técnica (RF1–RF8 / RNF1–RNF8)](omega/docs/matriz_trazabilidad.md)
 * [Declaración de Blindaje Ético y Salvaguardas](omega/docs/declaracion_etica.md)
 * [Guión de Demostración en Vivo en 5 Minutos](omega/docs/guion_demo.md)
+

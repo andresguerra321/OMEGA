@@ -70,6 +70,7 @@ CREATE TABLE document_chunks (
     section_title VARCHAR(255),
     content TEXT NOT NULL,
     embedding vector(768) NOT NULL,
+    search_vector tsvector,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (report_id, chunk_index)
@@ -79,6 +80,16 @@ CREATE TABLE document_chunks (
 CREATE INDEX idx_chunks_embedding_hnsw
     ON document_chunks
     USING hnsw (embedding vector_cosine_ops);
+
+-- Índice GIN y Trigger para búsqueda léxica exacta (Búsqueda Híbrida RRF)
+CREATE INDEX idx_chunks_search_gin
+    ON document_chunks
+    USING GIN (search_vector);
+
+CREATE TRIGGER trg_chunks_search_vector
+    BEFORE INSERT OR UPDATE OF content ON document_chunks
+    FOR EACH ROW
+    EXECUTE FUNCTION tsvector_update_trigger(search_vector, 'pg_catalog.simple', content);
 
 -- 6. Activos propios para monitoreo OSINT defensivo (RF8, RNF8)
 -- El constraint CHECK impide a nivel de BD registrar activos sin consentimiento explícito

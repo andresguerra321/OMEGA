@@ -25,24 +25,86 @@ embedder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-mp
 
 SYSTEM_PROMPT = """Eres el motor analítico de Omega, una plataforma defensiva de Cyber Threat Intelligence sobre spyware comercial.
 REGLAS ESTRICTAS DE TRAZABILIDAD (RNF1):
-1. Responde ÚNICAMENTE utilizando la información contenida en los FRAGMENTOS DE CONTEXTO proporcionados.
-2. Cada afirmación técnica, CVE, dominio, actor o fecha DEBE incluir una cita explícita con el formato exacto entre corchetes: [Título del Reporte, Pág. X].
-3. Si los fragmentos no contienen evidencia suficiente, declara exactamente: "No hay evidencia suficiente en los reportes indexados para responder esta consulta." No extrapoles ni uses conocimiento externo.
+1. Responde ÚNICAMENTE utilizando los hechos explícitos contenidos en los FRAGMENTOS DE CONTEXTO numerados [1], [2], etc.
+2. Inserta citas inline obligatorias inmediatamente después de cada dato técnico, CVE, dominio, actor o fecha usando el número del fragmento: ejemplo [1] o [1][3]. No escribas títulos largos dentro del corchete, usa únicamente el índice numérico [1].
+3. Si los fragmentos no contienen evidencia suficiente para responder, declara exactamente: "No hay evidencia suficiente en los reportes indexados para responder esta consulta." No extrapoles ni uses conocimiento externo.
 4. Responde en español técnico, claro y estructurado en Markdown."""
 
-DOMAIN_RE = re.compile(r"\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,15}\b", re.IGNORECASE)
-IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-SHA256_RE = re.compile(r"\b[a-f0-9]{64}\b", re.IGNORECASE)
+CONDENSE_PROMPT = """Reescribe la última pregunta del analista como una consulta técnica autocontenida (en español o conservando los términos técnicos/CVEs exactos) resolviendo pronombres como "esa campaña", "ese exploit" o "el segundo" a partir del historial.
+Si la pregunta ya es autocontenida, devuélvela sin cambios. Responde ÚNICAMENTE con la consulta reescrita, sin explicaciones."""
 
 
-def run_rag_query(question: str, top_k: int = 5) -> dict:
-    q_vec = embedder.encode([question], normalize_embeddings=True)[0].tolist()
+def _condense_followup_query(query: str, history: list[dict]) -> str:
+    if not history:
+        return query
+
+    recent = history[-4:]
+    formatted_hist = "\n".join(f"{t['role'].upper()}: {t['content'][:400]}" for t in recent)
+
+    for attempt in range(4):
+        try:
+            resp = groq_client.chat.completions.create(
+                model=GROQ_MODEL,
+                temperature=0.0,
+                max_tokens=150,
+                messages=[
+                    {"role": "system", "content": CONDENSE_PROMPT},
+                    {"role": "user", "content": f"HISTORIAL:\n{formatted_hist}\n\nÚLTIMA PREGUNTA: {query}"},
+                ],
+            )
+            rewritten = resp.choices[0].message.content.strip()
+            return rewritten or query
+        except Exception as err:
+            if "rate_limit" in str(err).lower() and attempt < 3:
+                time.sleep(5 * (attempt + 1))
+            else:
+                return query
+    return query
+
+
+def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = None) -> dict:
+    history = history or []
+    standalone_query = _condense_followup_query(question, history)
+    q_vec = embedder.encode([standalone_query], normalize_embeddings=True)[0].tolist()
 
     with psycopg.connect(DB_DSN) as conn:
         register_vector(conn)
         with conn.cursor() as cur:
+            # Fusión Híbrida RRF: Top-20 Semántico (pgvector) + Top-20 Léxico Exacto (GIN tsvector)
             cur.execute(
                 """
+                WITH semantic AS (
+                    SELECT
+                        dc.id,
+                        ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) AS vec_rank,
+                        1 - (dc.embedding <=> %s::vector) AS cos_sim
+                    FROM document_chunks dc
+                    ORDER BY dc.embedding <=> %s::vector
+                    LIMIT 20
+                ),
+                keyword AS (
+                    SELECT
+                        dc.id,
+                        ROW_NUMBER() OVER (
+                            ORDER BY ts_rank_cd(dc.search_vector, websearch_to_tsquery('simple', %s)) DESC
+                        ) AS fts_rank
+                    FROM document_chunks dc
+                    WHERE dc.search_vector @@ websearch_to_tsquery('simple', %s)
+                    LIMIT 20
+                ),
+                fused AS (
+                    SELECT
+                        COALESCE(s.id, k.id) AS chunk_id,
+                        COALESCE(1.0 / (60 + s.vec_rank), 0.0) + COALESCE(1.0 / (60 + k.fts_rank), 0.0) AS rrf_score,
+                        COALESCE(s.cos_sim, 0.0) AS cos_sim,
+                        CASE
+                            WHEN s.id IS NOT NULL AND k.id IS NOT NULL THEN 'Híbrido (Vector + Exacto)'
+                            WHEN k.id IS NOT NULL THEN 'Coincidencia Exacta'
+                            ELSE 'Semántico'
+                        END AS method
+                    FROM semantic s
+                    FULL OUTER JOIN keyword k ON s.id = k.id
+                )
                 SELECT
                     r.id::text,
                     r.title,
@@ -50,19 +112,23 @@ def run_rag_query(question: str, top_k: int = 5) -> dict:
                     r.source_url,
                     dc.page_number,
                     dc.content,
-                    1 - (dc.embedding <=> %s::vector) AS similarity
-                FROM document_chunks dc
+                    f.cos_sim,
+                    f.rrf_score,
+                    f.method
+                FROM fused f
+                JOIN document_chunks dc ON dc.id = f.chunk_id
                 JOIN reports r ON dc.report_id = r.id
-                ORDER BY dc.embedding <=> %s::vector
+                ORDER BY f.rrf_score DESC
                 LIMIT %s;
                 """,
-                (q_vec, q_vec, top_k),
+                (q_vec, q_vec, q_vec, standalone_query, standalone_query, top_k),
             )
             rows = cur.fetchall()
 
     if not rows:
         return {
             "answer": "No hay evidencia suficiente en los reportes indexados para responder esta consulta.",
+            "standalone_query": standalone_query,
             "citations": [],
             "model": GROQ_MODEL,
         }
@@ -72,6 +138,7 @@ def run_rag_query(question: str, top_k: int = 5) -> dict:
 
     for idx, row in enumerate(rows, start=1):
         sim = round(float(row[6]), 4)
+        method = row[8]
         citations.append(
             {
                 "index": idx,
@@ -82,17 +149,18 @@ def run_rag_query(question: str, top_k: int = 5) -> dict:
                 "source_url": row[3],
                 "snippet": row[5],
                 "similarity": sim,
+                "retrieval_method": method,
             }
         )
         context_blocks.append(
-            f"--- FRAGMENTO [{idx}] (Similitud: {sim}) ---\n"
+            f"--- FRAGMENTO [{idx}] ({method}) ---\n"
             f"Fuente: {row[1]} ({row[2]}) | Página: {row[4]}\n"
             f"Contenido: {row[5]}\n"
         )
 
     user_prompt = (
         f"FRAGMENTOS DE CONTEXTO:\n{''.join(context_blocks)}\n"
-        f"CONSULTA DEL ANALISTA:\n{question}"
+        f"CONSULTA DEL ANALISTA:\n{standalone_query}"
     )
 
     completion = None
@@ -115,6 +183,7 @@ def run_rag_query(question: str, top_k: int = 5) -> dict:
 
     return {
         "answer": completion.choices[0].message.content,
+        "standalone_query": standalone_query,
         "citations": citations,
         "model": GROQ_MODEL,
     }

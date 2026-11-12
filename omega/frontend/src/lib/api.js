@@ -1,10 +1,10 @@
 const API_BASE = 'http://localhost:8000/api';
 
-export async function sendChatQuery(query, topK = 5) {
+export async function sendChatQuery(query, history = [], topK = 6) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, top_k: topK }),
+    body: JSON.stringify({ query, history, top_k: topK }),
   });
   if (!res.ok) throw new Error('Error consultando el motor RAG');
   return res.json();

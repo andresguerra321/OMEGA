@@ -30,6 +30,11 @@ export function CitationDrawer({ citation, onClose }) {
             <span className="rounded-md bg-zinc-900 px-2.5 py-1 border border-zinc-800">
               Página {citation.page}
             </span>
+            {citation.retrieval_method && (
+              <span className="rounded-md bg-zinc-900 px-2.5 py-1 border border-zinc-800 text-zinc-300">
+                {citation.retrieval_method}
+              </span>
+            )}
             <span className="rounded-md bg-emerald-950/50 text-emerald-300 px-2.5 py-1 border border-emerald-800/40">
               Similitud: {(citation.similarity * 100).toFixed(1)}%
             </span>

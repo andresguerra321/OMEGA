@@ -2,9 +2,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class ChatRequest(BaseModel):
-    query: str = Field(..., min_length=3, max_length=2000)
-    top_k: int = Field(default=5, ge=1, le=12)
+    query: str = Field(..., min_length=2, max_length=2000)
+    history: list[ChatTurn] = Field(default_factory=list)
+    top_k: int = Field(default=6, ge=1, le=12)
 
 
 class CitationItem(BaseModel):
@@ -16,10 +22,12 @@ class CitationItem(BaseModel):
     source_url: str
     snippet: str
     similarity: float
+    retrieval_method: str
 
 
 class ChatResponse(BaseModel):
     answer: str
+    standalone_query: str
     citations: list[CitationItem]
     model: str
 
