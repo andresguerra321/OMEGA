@@ -82,5 +82,6 @@ class OsintExposureReport(BaseModel):
     checked_at: str
     exposed_subdomains: list[str]
     dns_posture: dict
+    email_breaches: dict | None = None
     cti_ioc_matches: list[dict]
     ethical_notice: str

@@ -321,3 +321,4 @@ def analyze_forensic_payload(raw_text: str, filename: str | None = None) -> dict
         "ephemeral_notice": "Análisis volátil completado en RAM. Ningún dato del dispositivo fue almacenado (RNF4).",
         "matches": matches,
     }
+

@@ -338,9 +338,11 @@ def get_campaign_detail(campaign_id: str) -> dict | None:
 
             cur.execute(
                 """
-                SELECT id::text, title, organization, publication_date::text, source_url, ingested_at::text
+                SELECT id::text, title, organization, publication_date::text,
+                       source_url, local_filename, file_hash, ingested_at::text
                 FROM reports
-                WHERE campaign_id = %s::uuid;
+                WHERE campaign_id = %s::uuid
+                ORDER BY publication_date DESC NULLS LAST;
                 """,
                 (campaign_id,),
             )
@@ -351,7 +353,9 @@ def get_campaign_detail(campaign_id: str) -> dict | None:
                     "organization": r[2],
                     "publication_date": r[3],
                     "source_url": r[4],
-                    "ingested_at": r[5],
+                    "local_filename": r[5],
+                    "file_hash": r[6],
+                    "ingested_at": r[7],
                 }
                 for r in cur.fetchall()
             ]
@@ -361,7 +365,8 @@ def get_campaign_detail(campaign_id: str) -> dict | None:
                 SELECT cv.cve_code, cv.description, cv.cvss_score
                 FROM campaign_cves cc
                 JOIN cves cv ON cc.cve_id = cv.id
-                WHERE cc.campaign_id = %s::uuid;
+                WHERE cc.campaign_id = %s::uuid
+                ORDER BY cv.cve_code ASC;
                 """,
                 (campaign_id,),
             )
@@ -375,11 +380,23 @@ def get_campaign_detail(campaign_id: str) -> dict | None:
                 SELECT ioc_type, ioc_value, context
                 FROM iocs
                 WHERE campaign_id = %s::uuid
-                LIMIT 100;
+                ORDER BY ioc_type ASC, ioc_value ASC
+                LIMIT 250;
                 """,
                 (campaign_id,),
             )
             iocs = [{"ioc_type": r[0], "ioc_value": r[1], "context": r[2]} for r in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT ioc_type, COUNT(*)
+                FROM iocs
+                WHERE campaign_id = %s::uuid
+                GROUP BY ioc_type;
+                """,
+                (campaign_id,),
+            )
+            ioc_breakdown = {r[0]: r[1] for r in cur.fetchall()}
 
     return {
         "id": camp[0],
@@ -393,6 +410,7 @@ def get_campaign_detail(campaign_id: str) -> dict | None:
         "reports": reports,
         "cves": cves,
         "iocs": iocs,
+        "ioc_breakdown": ioc_breakdown,
     }
 
 

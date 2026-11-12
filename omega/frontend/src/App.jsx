@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Send,
   ShieldAlert,
@@ -8,15 +8,12 @@ import {
   ChevronRight,
   Radar,
 } from 'lucide-react';
-import {
-  sendChatQuery,
-  fetchCampaigns,
-  fetchCampaignDetail,
-} from './lib/api';
+import { sendChatQuery } from './lib/api';
 import { CitationDrawer } from './components/CitationDrawer';
 import { OsintPanel } from './components/OsintPanel';
 import { MarkdownMessage } from './components/MarkdownMessage';
 import { MvtVerifierPanel } from './components/MvtVerifierPanel';
+import { CampaignsPanel } from './components/CampaignsPanel';
 
 const STARTER_PROMPTS = [
   '¿Qué vulnerabilidades zero-click (CVEs) se documentan para Pegasus?',
@@ -30,18 +27,6 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState(null);
-
-  // Estado Campañas (RF6)
-  const [campaigns, setCampaigns] = useState([]);
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
-
-  useEffect(() => {
-    if (activeTab === 'campaigns' && campaigns.length === 0) {
-      fetchCampaigns()
-        .then((data) => setCampaigns(data.campaigns || []))
-        .catch(() => setCampaigns([]));
-    }
-  }, [activeTab, campaigns.length]);
 
   async function handleSend(customPrompt) {
     const query = (customPrompt ?? input).trim();
@@ -77,9 +62,9 @@ export default function App() {
     }
   }
 
-  async function openCampaign(id) {
-    const detail = await fetchCampaignDetail(id);
-    setSelectedCampaign(detail);
+  function handleAskCampaignInChat(promptText) {
+    setActiveTab('chat');
+    handleSend(promptText);
   }
 
   return (
@@ -255,66 +240,8 @@ export default function App() {
         {/* Vista 2: Verificador Forense MVT / IOCs (RF5, RNF4, RNF6) */}
         {activeTab === 'mvt' && <MvtVerifierPanel />}
 
-        {/* Vista 3: Explorador de Campañas Normalizadas (RF6) */}
-        {activeTab === 'campaigns' && (
-          <div className="space-y-4">
-            <h2 className="text-base font-semibold">Campañas Documentadas</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              {campaigns.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => openCampaign(c.id)}
-                  className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 text-left hover:border-zinc-700 transition"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded bg-zinc-800 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
-                        {c.spyware_family}
-                      </span>
-                      <span className="text-[11px] text-zinc-500">{c.first_seen_date || 'Fecha N/D'}</span>
-                    </div>
-                    <h3 className="text-sm font-semibold text-zinc-100">{c.name}</h3>
-                    <p className="line-clamp-2 text-xs text-zinc-400">{c.summary}</p>
-                  </div>
-                  <div className="mt-4 flex items-center gap-3 border-t border-zinc-800/80 pt-2.5 text-[11px] text-zinc-400">
-                    <span>{c.cves?.length || 0} CVEs</span>
-                    <span>·</span>
-                    <span>{c.ioc_count} IOCs</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {selectedCampaign && (
-              <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold">{selectedCampaign.name}</h3>
-                  <button
-                    onClick={() => setSelectedCampaign(null)}
-                    className="text-xs text-zinc-400 hover:text-zinc-200"
-                  >
-                    Cerrar detalle
-                  </button>
-                </div>
-                <p className="text-xs text-zinc-300 leading-relaxed">{selectedCampaign.summary}</p>
-                <div className="grid gap-3 text-xs sm:grid-cols-2">
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
-                    <p className="text-zinc-500">Sector objetivo</p>
-                    <p className="mt-1 font-medium text-zinc-200">
-                      {selectedCampaign.target_sector || 'No especificado'}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
-                    <p className="text-zinc-500">CVEs asociados</p>
-                    <p className="mt-1 font-mono text-emerald-400">
-                      {selectedCampaign.cves?.map((x) => x.cve_code).join(', ') || 'Ninguno registrado'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Vista 3: Explorador de Campañas Normalizadas (RF6, RF7) */}
+        {activeTab === 'campaigns' && <CampaignsPanel onAskInChat={handleAskCampaignInChat} />}
 
         {/* Vista 4: Módulo de Monitoreo de Exposición Propia (OSINT Defensivo - RF8, RNF8) */}
         {activeTab === 'osint' && <OsintPanel />}

@@ -227,6 +227,45 @@ export function OsintPanel() {
             </div>
           )}
 
+          {/* Auditoría pasiva de brechas para correo institucional (RF8) */}
+          {report.email_breaches && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-zinc-200">
+                  Exposición en Brechas Públicas Documentadas ({report.email_breaches.source})
+                </span>
+                <span
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                    report.email_breaches.breach_count > 0
+                      ? 'bg-amber-950/70 text-amber-300 border border-amber-800/50'
+                      : 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/50'
+                  }`}
+                >
+                  {report.email_breaches.status === 'unavailable'
+                    ? 'Servicio externo temporalmente no disponible'
+                    : `${report.email_breaches.breach_count} brechas detectadas`}
+                </span>
+              </div>
+
+              {report.email_breaches.breaches?.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2 pt-1">
+                  {report.email_breaches.breaches.map((b, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-zinc-800/90 bg-zinc-900/60 p-2.5 space-y-0.5"
+                    >
+                      <div className="flex items-center justify-between font-medium text-zinc-100">
+                        <span>{b.breach_name}</span>
+                        <span className="text-[11px] text-zinc-500">{b.breach_date}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400">Datos expuestos: {b.exposed_data}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Subdominios en Certificate Transparency */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-zinc-300">

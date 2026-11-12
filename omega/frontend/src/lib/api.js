@@ -45,8 +45,19 @@ export async function fetchCampaignDetail(id) {
 
 // --- Servicios OSINT Defensivo (RF8, RNF8) ---
 
+function getWorkspaceHeaders() {
+  let wsId = localStorage.getItem('omega_workspace_id');
+  if (!wsId) {
+    wsId = `analyst_${crypto.randomUUID()}`;
+    localStorage.setItem('omega_workspace_id', wsId);
+  }
+  return { 'X-Workspace-Id': wsId };
+}
+
 export async function fetchOsintAssets() {
-  const res = await fetch(`${API_BASE}/osint/assets`);
+  const res = await fetch(`${API_BASE}/osint/assets`, {
+    headers: getWorkspaceHeaders(),
+  });
   if (!res.ok) throw new Error('Error cargando activos OSINT');
   return res.json();
 }
@@ -54,7 +65,7 @@ export async function fetchOsintAssets() {
 export async function createOsintAsset(payload) {
   const res = await fetch(`${API_BASE}/osint/assets`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getWorkspaceHeaders() },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -67,6 +78,7 @@ export async function createOsintAsset(payload) {
 export async function scanOsintAsset(assetId) {
   const res = await fetch(`${API_BASE}/osint/assets/${assetId}/scan`, {
     method: 'POST',
+    headers: getWorkspaceHeaders(),
   });
   if (!res.ok) throw new Error('Error ejecutando consulta OSINT pasiva');
   return res.json();
@@ -75,6 +87,7 @@ export async function scanOsintAsset(assetId) {
 export async function deleteOsintAsset(assetId) {
   const res = await fetch(`${API_BASE}/osint/assets/${assetId}`, {
     method: 'DELETE',
+    headers: getWorkspaceHeaders(),
   });
   if (!res.ok) throw new Error('Error eliminando activo');
   return res.json();

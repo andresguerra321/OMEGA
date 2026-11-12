@@ -1,7 +1,7 @@
 import sys
 import json
 from pathlib import Path
-from fastapi import FastAPI, File, HTTPException, UploadFile, Request
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -18,15 +18,17 @@ from schemas import (
     OsintExposureReport,
 )
 from services import (
-    delete_osint_asset,
     get_campaign_detail,
     list_campaigns,
-    list_osint_assets,
-    register_osint_asset,
-    run_passive_osint_scan,
     run_rag_query,
 )
 from forensic_engine import analyze_forensic_payload
+from osint_engine import (
+    delete_osint_asset,
+    list_osint_assets,
+    register_osint_asset,
+    run_passive_osint_scan,
+)
 
 app = FastAPI(
     title="Omega CTI API",
@@ -112,23 +114,32 @@ def campaign_detail(campaign_id: str):
 # --- Endpoints OSINT Defensivo (RF8, RNF8) ---
 
 @app.post("/api/osint/assets", response_model=OsintAssetOut)
-def create_osint_asset(payload: OsintAssetCreate):
+def create_osint_asset(
+    payload: OsintAssetCreate,
+    x_workspace_id: str = Header(default="default_analyst"),
+):
     try:
         return register_osint_asset(
-            payload.asset_type, payload.asset_value, payload.explicit_consent
+            payload.asset_type,
+            payload.asset_value,
+            payload.explicit_consent,
+            owner_token=x_workspace_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/api/osint/assets")
-def get_osint_assets():
-    return {"assets": list_osint_assets()}
+def get_osint_assets(x_workspace_id: str = Header(default="default_analyst")):
+    return {"assets": list_osint_assets(owner_token=x_workspace_id)}
 
 
 @app.post("/api/osint/assets/{asset_id}/scan", response_model=OsintExposureReport)
-def scan_osint_asset(asset_id: str):
-    report = run_passive_osint_scan(asset_id)
+def scan_osint_asset(
+    asset_id: str,
+    x_workspace_id: str = Header(default="default_analyst"),
+):
+    report = run_passive_osint_scan(asset_id, owner_token=x_workspace_id)
     if not report:
         raise HTTPException(
             status_code=404,
@@ -138,7 +149,10 @@ def scan_osint_asset(asset_id: str):
 
 
 @app.delete("/api/osint/assets/{asset_id}")
-def remove_osint_asset(asset_id: str):
-    if not delete_osint_asset(asset_id):
+def remove_osint_asset(
+    asset_id: str,
+    x_workspace_id: str = Header(default="default_analyst"),
+):
+    if not delete_osint_asset(asset_id, owner_token=x_workspace_id):
         raise HTTPException(status_code=404, detail="Activo no encontrado.")
     return {"deleted": True}
