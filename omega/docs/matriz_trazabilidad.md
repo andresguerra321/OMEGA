@@ -1,0 +1,23 @@
+# Matriz de Trazabilidad de Requerimientos — Proyecto Omega
+
+Esta matriz vincula cada requerimiento funcional (**RF1–RF8**) y no funcional (**RNF1–RNF8**) definido en los objetivos específicos del proyecto con su implementación técnica en la arquitectura de Omega y su respectivo método de verificación.
+
+| ID | Requerimiento | Implementación Técnica en Omega | Evidencia de Verificación |
+| :--- | :--- | :--- | :--- |
+| **RF1** | Ingesta de PDFs y extracción de metadatos | `rag_engine/ingest.py` (PyMuPDF / FitZ) + `normalize_meta.py` (extracción JSON con `openai/gpt-oss-120b` / Groq LPU) | Registros estructurados en tablas `reports`, `campaigns` y `cves`. Hash SHA-256 verificado. |
+| **RF2** | Normalización a esquema común estructurado | Esquema relacional en PostgreSQL 16 con tipos nativos (`db/init.sql`) | Integridad referencial con claves foráneas verificada vía `psql \dt` y endpoint `/api/campaigns`. |
+| **RF3** | Generación y almacenamiento de embeddings vectoriales | `paraphrase-multilingual-mpnet-base-v2` (768 dimensiones) + extensión `pgvector` con índice HNSW | Tabla `document_chunks` poblada con vectores de 768d y búsquedas por similitud coseno (`<=>`). |
+| **RF4** | Consultas en lenguaje natural con citas verificables | `api/services.py` (`run_rag_query`) + endpoint `POST /api/chat` (temperatura 0.0) | Respuestas con formato canónico `[Reporte, Pág. X]` renderizadas interactivamente en la interfaz y Swagger UI. |
+| **RF5** | Verificación de IOCs y salidas de Mobile Verification Toolkit (MVT) | `rag_engine/ingest_iocs.py` (STIX2 / JSON de Amnesty Tech y Citizen Lab) + `POST /api/ioc/verify/file` y `/text` | Detección positiva de dominios, IPs y procesos (`actualite.emergence-mada.com`, etc.) en pruebas controladas. |
+| **RF6** | Vista de detalle y trazabilidad por campaña de spyware | Endpoint `GET /api/campaigns/{id}` + vista de Campañas en `frontend/src/App.jsx` | Inspección de familia de spyware, actor patrocinador, sector objetivo, CVEs asociados e indicadores vinculados. |
+| **RF7** | Registro inmutable de fuentes y fecha de ingesta | Columnas `source_url`, `local_filename`, `file_hash` e `ingested_at` en tabla `reports` | Auditoría directa en PostgreSQL y drawer lateral interactivo `CitationDrawer.jsx`. |
+| **RF8** | Monitoreo OSINT propio con consentimiento explícito | Endpoint `POST /api/osint/assets` + componente `OsintPanel.jsx` (consultas pasivas a `crt.sh` y DNS DoH) | Registro condicionado a `explicit_consent = TRUE` en base de datos; detección de registros SPF/DMARC y subdominios. |
+| **RNF1** | Precisión documental y mitigación de alucinación | Inferencia determinista (`temperature=0.0`), prompt estricto de abstención y fragmentación acotada por página | Puntuaciones de RAGAS *Faithfulness* y 100% de tasa de abstención documentadas en `eval_report.md`. |
+| **RNF2** | Usabilidad y divulgación progresiva | Interfaz chat-first oscura (React 19 + Tailwind v4); evidencia técnica oculta hasta clic del usuario | Cajón lateral `CitationDrawer.jsx` desplegable por chip numérico `[n]` en `http://localhost:5173`. |
+| **RNF3** | Rendimiento interactivo en segundos | Aceleración de inferencia LPU en Groq + búsqueda indexada HNSW en `pgvector` | Latencias medias registradas en benchmark cuantitativo (`eval_report.md`). |
+| **RNF4** | Protección y privacidad de evidencia forense del usuario | Ingesta en buffer volátil RAM con liberación de memoria (`del raw_bytes`) sin sentencia `INSERT` | Inspección estática del código en `verify_indicators_ephemeral` (cero persistencia de artefactos de usuario). |
+| **RNF5** | Escalabilidad incremental del corpus | Deduplicación criptográfica mediante hash SHA-256 (`file_hash UNIQUE`) en tablas `reports` e `iocs` | La re-ejecución de scripts omite archivos previamente indexados sin duplicar vectores ni registros. |
+| **RNF6** | Arquitectura modular desacoplada | Separación estricta en capas: base de datos (`db/`), motor RAG (`rag_engine/`), API (`api/`) y cliente (`frontend/`) | Contenedores independientes y portabilidad integral mediante `docker-compose.yml`. |
+| **RNF7** | Alcance técnico delimitado (enfoque 100% defensivo) | Cero capacidades de explotación activa, sandbox dinámico, decompilación de binarios o pruebas intrusivas | Cumplimiento ético auditado en dependencias y código fuente sin módulos ofensivos. |
+| **RNF8** | Salvaguarda y gobernanza ética en módulo OSINT | Doble candado: restricción `CHECK (explicit_consent = TRUE)` en PostgreSQL y validación en API/UI | Bloqueo automático `HTTP 400 Bad Request` al intentar registrar o auditar activos sin consentimiento explícito. |
+

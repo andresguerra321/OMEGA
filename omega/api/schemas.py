@@ -1,0 +1,74 @@
+from typing import Literal
+from pydantic import BaseModel, Field
+
+
+class ChatRequest(BaseModel):
+    query: str = Field(..., min_length=3, max_length=2000)
+    top_k: int = Field(default=5, ge=1, le=12)
+
+
+class CitationItem(BaseModel):
+    index: int
+    report_id: str
+    title: str
+    organization: str
+    page: int
+    source_url: str
+    snippet: str
+    similarity: float
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    citations: list[CitationItem]
+    model: str
+
+
+class IocMatchItem(BaseModel):
+    ioc_type: str
+    ioc_value: str
+    context: str | None
+    campaign: str
+    spyware_family: str
+    source_report: str
+    organization: str
+    source_url: str
+
+
+class IocVerifyResponse(BaseModel):
+    analyzed_indicators: int
+    total_matches: int
+    ephemeral_notice: str
+    matches: list[IocMatchItem]
+
+
+class IocRawRequest(BaseModel):
+    indicators_text: str = Field(..., min_length=3)
+
+
+# --- Requerimientos OSINT Defensivo (RF8, RNF8) ---
+
+class OsintAssetCreate(BaseModel):
+    asset_type: Literal["domain", "institutional_email", "organization"]
+    asset_value: str = Field(..., min_length=3, max_length=255)
+    explicit_consent: bool
+
+
+class OsintAssetOut(BaseModel):
+    id: str
+    asset_type: str
+    asset_value: str
+    explicit_consent: bool
+    consented_at: str
+    last_checked_at: str | None
+
+
+class OsintExposureReport(BaseModel):
+    asset_id: str
+    asset_type: str
+    asset_value: str
+    checked_at: str
+    exposed_subdomains: list[str]
+    dns_posture: dict
+    cti_ioc_matches: list[dict]
+    ethical_notice: str

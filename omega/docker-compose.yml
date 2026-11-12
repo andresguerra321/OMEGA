@@ -1,0 +1,50 @@
+services:
+  omega-db:
+    image: pgvector/pgvector:pg16
+    container_name: omega_postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - omega_pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  omega-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: omega_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: omega-db
+    ports:
+      - "8000:8000"
+    volumes:
+      - omega_hf_cache:/root/.cache/huggingface
+    depends_on:
+      omega-db:
+        condition: service_healthy
+
+  omega-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: omega_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - omega-api
+
+volumes:
+  omega_pgdata:
+  omega_hf_cache:

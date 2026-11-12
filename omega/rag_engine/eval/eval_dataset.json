@@ -1,0 +1,93 @@
+[
+  {
+    "question": "¿Cuántos exploits 0‑day descubrió TAG entre 2019 y 2023 y cuántos de esos fueron desarrollados por CSVs?",
+    "ground_truth": "TAG descubrió 53 exploits 0‑day en total, de los cuales 33 fueron desarrollados por CSVs.",
+    "is_trap": false,
+    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "source_page": 25
+  },
+  {
+    "question": "¿Qué procesos aparecen en el fragmento y en qué momentos fueron registrados?",
+    "ground_truth": "Los procesos registrados son: com.apple.rapports.events (00:09:33 y 00:17:12), proceso crash detectado (00:12:57), faskeepd (00:17:12 y 17:38:44), lobbrogd (00:17:12 y 17:38:44), neagentd (00:17:12).",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 78
+  },
+  {
+    "question": "¿Qué base de datos de Safari se utilizó para identificar visitas a dominios de infección de NSO Group que no aparecían en el historial?",
+    "ground_truth": "Favicon.db",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 9
+  },
+  {
+    "question": "Según el fragmento, ¿qué consecuencias genera el escrutinio público sobre las actividades de los CSV?",
+    "ground_truth": "El escrutinio público provoca interrupciones, retrasos y ceses temporales de sus actividades, impide ataques contra usuarios y dificulta que los CSV anuncien y vendan sus productos.",
+    "is_trap": false,
+    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "source_page": 27
+  },
+  {
+    "question": "¿Cuál es la fecha y hora del SMS que contiene la frase \"Hace 3 dias que no aparece mi hija\" enviado desde el número +525585401299?",
+    "ground_truth": "2016-06-15 21:21:29",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 76
+  },
+  {
+    "question": "Según el fragmento, ¿qué medidas específicas se propone que tome el gobierno de EE. UU. para limitar la actividad de los proveedores de spyware?",
+    "ground_truth": "El fragmento propone que EE. UU. fomente mayor transparencia con requisitos más estrictos para la industria de vigilancia doméstica, revise y divulgue su propio uso histórico de estas herramientas, y considere imponer sanciones adicionales que limiten la capacidad de los proveedores de spyware de operar en EE. UU. y recibir inversión estadounidense.",
+    "is_trap": false,
+    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "source_page": 28
+  },
+  {
+    "question": "¿Cuáles fueron los nombres, fechas de primera y última aparición, volúmenes de tráfico WWAN (IN/OUT) y los IDs de proceso de los procesos sospechosos detectados en el teléfono de Maati Monjib según el fragmento?",
+    "ground_truth": "Se detectaron dos procesos sospechosos: pcsd, con primera y última aparición el 2018-05-04 23:30:45, WWAN IN 12305.0, WWAN OUT 10173.0 y Process ID 14946; y fmld, con primera aparición el 2018-05-21 23:46:06 y última el 2018-06-04 13:05:43, WWAN IN 0.0, WWAN OUT 188326.0 y Process ID 21207.",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 13
+  },
+  {
+    "question": "¿Cuál es la URL del archivo WebKit IndexedDB registrado en el evento del 11 de febrero de 2019 a las 14:45:45?",
+    "ground_truth": "hxxps://d9z3sz93x5ueidq3.get1tn0w.free247downloads[.]com",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 44
+  },
+  {
+    "question": "¿En qué fecha y hora (UTC) se registró por última vez la actividad de red de la aplicación Fotos de iOS según el fragmento?",
+    "ground_truth": "El 18 de diciembre de 2019 a las 08:13:33 UTC.",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 14
+  },
+  {
+    "question": "¿Qué proceso sospechoso se encontró registrado en las bases de datos de uso de red (DataUsage.sqlite y netusage.sqlite) de los dispositivos analizados?",
+    "ground_truth": "El proceso sospechoso llamado \"bh\".",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 11
+  },
+  {
+    "question": "¿Qué infraestructura de comando y control utilizó el ransomware LockBit 3.0 en Colombia durante 2025?",
+    "ground_truth": "No hay evidencia suficiente en los reportes indexados para responder esta consulta.",
+    "is_trap": true,
+    "source_title": "N/A (Prueba de abstención RNF1)",
+    "source_page": 0
+  },
+  {
+    "question": "¿Cuál es la clave privada PGP utilizada por NSO Group para firmar actualizaciones de Pegasus?",
+    "ground_truth": "No hay evidencia suficiente en los reportes indexados para responder esta consulta.",
+    "is_trap": true,
+    "source_title": "N/A (Prueba de abstención RNF1)",
+    "source_page": 0
+  },
+  {
+    "question": "¿Qué vulnerabilidad crítica afecta al kernel de Windows Server 2022 en el módulo SMBv3 según los reportes?",
+    "ground_truth": "No hay evidencia suficiente en los reportes indexados para responder esta consulta.",
+    "is_trap": true,
+    "source_title": "N/A (Prueba de abstención RNF1)",
+    "source_page": 0
+  }
+]
