@@ -19,41 +19,13 @@ import {
 } from './lib/api';
 import { CitationDrawer } from './components/CitationDrawer';
 import { OsintPanel } from './components/OsintPanel';
+import { MarkdownMessage } from './components/MarkdownMessage';
 
 const STARTER_PROMPTS = [
   '¿Qué vulnerabilidades zero-click (CVEs) se documentan para Pegasus?',
   '¿Qué sectores y regiones fueron objetivo en las campañas de Predator?',
   'Resume los vectores de infección iniciales descritos por Citizen Lab.',
 ];
-
-function renderAnswerWithInlineCitations(text, citations, onSelectCitation) {
-  if (!citations || citations.length === 0) return text;
-
-  const citationMap = new Map(citations.map((c) => [c.index, c]));
-  const parts = text.split(/(\[\d+\])/g);
-
-  return parts.map((part, idx) => {
-    const match = part.match(/^\[(\d+)\]$/);
-    if (match) {
-      const num = Number(match[1]);
-      const target = citationMap.get(num);
-      if (target) {
-        return (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => onSelectCitation(target)}
-            title={`${target.title} — Pág. ${target.page}`}
-            className="mx-0.5 inline-flex items-center rounded border border-emerald-500/40 bg-emerald-950/60 px-1.5 py-0.2 font-mono text-[11px] font-medium text-emerald-300 hover:bg-emerald-900/80 transition cursor-pointer"
-          >
-            [{num}]
-          </button>
-        );
-      }
-    }
-    return <span key={idx}>{part}</span>;
-  });
-}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'mvt' | 'campaigns'
@@ -244,11 +216,15 @@ export default function App() {
                         : 'bg-zinc-900/40 border border-zinc-800/70 text-sm leading-relaxed text-zinc-200'
                     }`}
                   >
-                    <div className="whitespace-pre-wrap">
-                      {msg.role === 'assistant'
-                        ? renderAnswerWithInlineCitations(msg.content, msg.citations, setSelectedCitation)
-                        : msg.content}
-                    </div>
+                    {msg.role === 'assistant' ? (
+                      <MarkdownMessage
+                        content={msg.content}
+                        citations={msg.citations}
+                        onSelectCitation={setSelectedCitation}
+                      />
+                    ) : (
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    )}
 
                     {/* Chips de divulgación progresiva (RNF2) */}
                     {msg.citations?.length > 0 && (
