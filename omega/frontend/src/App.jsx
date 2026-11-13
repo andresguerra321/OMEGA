@@ -182,38 +182,6 @@ function formatRelativeTime(isoString) {
   return `Hace ${diffDays} d`;
 }
 
-function buildFallbackAnswer(query) {
-  return {
-    answer: `Resumen de investigación generado a partir de reportes técnicos indexados para **"${query}"** [1][2].\n\n- **Cadenas de explotación documentadas:** Vulnerabilidades críticas zero-click como \`CVE-2021-30860\` (FORCEDENTRY) y \`CVE-2023-41064\` (BLASTPASS), diseñadas para evadir las mitigaciones de memoria en iOS [1].\n- **Evidencia forense y persistencia:** Las inspecciones con MVT revelan anomalías cronológicas en \`shutdown.log\`, redirecciones hacia dominios señuelo y artefactos en procesos de mensajería [2].`,
-    citations: [
-      {
-        index: 1,
-        title: 'FORCEDENTRY: NSO Group iMessage Zero-Click Exploit Captured in the Wild',
-        organization: 'Citizen Lab',
-        page: 3,
-        similarity: 0.914,
-        retrieval_method: 'Híbrido (Vector + Exacto)',
-        snippet:
-          'FORCEDENTRY targets Apple’s ImageIO library via maliciously crafted PDF files disguised as GIFs sent over iMessage, bypassing the BlastDoor sandbox introduced in iOS 14 (CVE-2021-30860).',
-        source_url:
-          'https://citizenlab.ca/2021/09/forcedentry-nso-group-imessage-zero-click-exploit-captured-in-the-wild/',
-      },
-      {
-        index: 2,
-        title: 'Forensic Methodology Report: How to Catch NSO Group Pegasus',
-        organization: 'Amnesty Tech',
-        page: 58,
-        similarity: 0.885,
-        retrieval_method: 'Coincidencia Exacta',
-        snippet:
-          'Examining Shutdown.log alongside Safari History.db and crash logs from IMTranscoderAgent provides high-confidence corroboration of Pegasus activity.',
-        source_url: 'https://securitylab.amnesty.org/latest/2021/07/the-pegasus-project/',
-      },
-    ],
-    model: 'omega-hybrid-rrf',
-  };
-}
-
 export default function App() {
   const [activeNav, setActiveNav] = useState('preguntar');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -313,7 +281,9 @@ export default function App() {
       );
     }
 
-    const historyPayload = messages.map((m) => ({ role: m.role, content: m.content }));
+    const historyPayload = messages
+      .filter((m) => !m.isError)
+      .map((m) => ({ role: m.role, content: m.content }));
     setInput('');
     setLoadingChat(true);
 
@@ -324,6 +294,7 @@ export default function App() {
         content: res.answer,
         citations: res.citations || [],
         model: res.model,
+        analysis: res.analysis,
       };
       setSessions((prev) =>
         prev.map((s) =>
@@ -332,24 +303,37 @@ export default function App() {
             : s
         )
       );
-    } catch {
-      const fallback = buildFallbackAnswer(query);
-      const fallbackTurn = {
+    } catch (err) {
+      const errorTurn = {
         role: 'assistant',
-        content: fallback.answer,
-        citations: fallback.citations,
-        model: fallback.model,
+        isError: true,
+        retryQuery: query,
+        content: err?.message || 'No fue posible conectar con el motor RAG en http://localhost:8000.',
+        citations: [],
       };
       setSessions((prev) =>
         prev.map((s) =>
           s.id === targetSessionId
-            ? { ...s, updatedAt: new Date().toISOString(), messages: [...s.messages, fallbackTurn] }
+            ? { ...s, updatedAt: new Date().toISOString(), messages: [...s.messages, errorTurn] }
             : s
         )
       );
     } finally {
       setLoadingChat(false);
     }
+  }
+
+  function handleRetryFailedTurn(errorMsgIndex, retryQuery) {
+    if (!currentSessionId || !retryQuery || loadingChat) return;
+    const baseMessages = messages.slice(0, Math.max(0, errorMsgIndex - 1));
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === currentSessionId
+          ? { ...s, updatedAt: new Date().toISOString(), messages: baseMessages }
+          : s
+      )
+    );
+    setTimeout(() => handleSend(retryQuery), 0);
   }
 
   function handleKeyDown(e) {
@@ -739,6 +723,29 @@ export default function App() {
                               {msg.content}
                             </div>
                           </div>
+                        </div>
+                      ) : msg.isError ? (
+                        <div
+                          key={idx}
+                          className="omega-fade-up rounded-[14px] border border-red-500/25 bg-red-950/15 px-4 py-3.5 flex items-start justify-between gap-4"
+                        >
+                          <div className="space-y-1 text-[13px]">
+                            <p className="font-medium text-red-200">
+                              No se pudo completar la consulta en el motor RAG
+                            </p>
+                            <p className="text-[12.5px] text-red-200/75 leading-relaxed">
+                              {msg.content}
+                            </p>
+                          </div>
+                          {msg.retryQuery && (
+                            <button
+                              type="button"
+                              onClick={() => handleRetryFailedTurn(idx, msg.retryQuery)}
+                              className="shrink-0 h-7 px-3 rounded-full border border-red-400/30 bg-red-500/10 text-[11.5px] font-medium text-red-200 hover:bg-red-500/20 active:scale-[0.96] transition-all duration-150 ease-kowalski cursor-pointer"
+                            >
+                              Reintentar
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div key={idx} className="omega-fade-up py-1">

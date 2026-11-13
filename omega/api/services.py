@@ -19,26 +19,35 @@ DB_DSN = (
     f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
 )
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+FALLBACK_GROQ_MODELS = [
+    m.strip()
+    for m in os.getenv(
+        "GROQ_FALLBACK_MODELS",
+        "qwen/qwen3.8-27b,openai/gpt-oss-120b,openai/gpt-oss-20b",
+    ).split(",")
+    if m.strip()
+]
+_MODEL_COOLDOWN_UNTIL: dict[str, float] = {}
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"), max_retries=0)
 embedder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
 
 SYSTEM_PROMPT = """Eres el motor analítico de Omega, una plataforma defensiva de Cyber Threat Intelligence sobre spyware comercial.
 
 REGLAS DE TRAZABILIDAD (RNF1):
 1. Responde ÚNICAMENTE con los hechos explícitos contenidos en los FRAGMENTOS DE CONTEXTO numerados [1], [2], etc.
-2. Cita la fuente inmediatamente después de cada dato técnico, CVE, actor o fecha usando EXCLUSIVAMENTE el índice numérico del fragmento: ejemplo [1] o [1][3]. NUNCA escribas el título del reporte ni la página dentro de los corchetes.
-3. Si no hay evidencia suficiente en los fragmentos, responde exactamente: "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
+2. Cita la fuente inmediatamente después de cada dato técnico, CVE, actor o fecha usando EXCLUSIVAMENTE el índice numérico del fragmento: ejemplo [1] o [1][3]. NUNCA escribas texto ni títulos ni palabras dentro de los corchetes (prohibido [Metadatos], [Reporte], etc.).
+3. Si los fragmentos recuperados no responden la pregunta específica o son de un tema ajeno (por ejemplo malware diferente, claves privadas no públicas o años/productos no cubiertos), responde EXACTAMENTE: "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
 
-REGLAS DE ESTILO Y LEGIBILIDAD (RNF2):
-1. Escribe en español técnico, directo y bien estructurado en Markdown limpio.
-2. NUNCA uses etiquetas HTML como <br>, <b> o <table>.
-3. Evita tablas anchas en el chat. Organiza la información usando:
-   - Un párrafo breve de conclusión ejecutiva inicial (2-3 líneas directas) con sus citas [1].
-   - Listas con viñetas donde cada hallazgo inicie con categoría/concepto en **negrita** (ej. **Vector de explotación:**, **Infraestructura C2:**, **Artefactos forenses:**, **Impacto y objetivos:**, **Mitigación:**) seguido de la explicación concisa y su cita [1].
-   - Citas textuales en inglés únicamente cuando aporten evidencia forense clave, usando bloque de cita (`> "..."`) corto."""
+REGLAS DE ESTILO Y ESTRUCTURA (RNF2):
+1. Responde directamente en español técnico claro, en Markdown limpio, adaptado exactamente a lo que pregunta el analista.
+2. NUNCA uses etiquetas HTML (<br>, <b>, <table>), listas anidadas con sub-viñetas ni encabezados sueltos tipo "**Detalles técnicos:**" o "**Conclusión ejecutiva:**" antes de las listas.
+3. Organiza SIEMPRE la respuesta en dos partes limpias de un solo nivel:
+   - Primero, un párrafo inicial directo (2 a 4 oraciones) que responda de frente la consulta con sus citas [1][2].
+   - Luego, una lista plana con viñetas de un solo nivel (`- **Concepto clave:** explicación completa y concisa [1].`) cubriendo los puntos relevantes hallados en los fragmentos."""
 
-CONDENSE_PROMPT = """Reescribe la última pregunta del analista como una consulta técnica autocontenida (en español o conservando los términos técnicos/CVEs exactos) resolviendo pronombres como "esa campaña", "ese exploit" o "el segundo" a partir del historial.
+CONDENSE_PROMPT = """Reescribe la última pregunta del analista como una consulta técnica autocontenida (en español o conservando los términos técnicos/CVEs exactos) resolviendo pronombres como "esa campaña", "ese exploit", "detectarlo" o "el segundo" a partir del historial.
+Si el historial trata de una familia de spyware general (como Pegasus, Predator o Candiru), resuelve el pronombre hacia esa familia sin restringirlo a un único exploit salvo que la pregunta trate específicamente sobre ese exploit.
 Si la pregunta ya es autocontenida, devuélvela sin cambios. Responde ÚNICAMENTE con la consulta reescrita, sin explicaciones."""
 
 CVE_CODE_RE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
@@ -286,6 +295,64 @@ def _build_structured_analysis(answer: str, citations: list[dict], linked_ctx: d
     }
 
 
+_STOPWORDS = {
+    "que", "hay", "de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas",
+    "en", "por", "para", "con", "sin", "sobre", "entre", "hacia", "desde", "hasta",
+    "como", "cual", "cuales", "quien", "quienes", "donde", "cuando", "cuanto", "cuantos",
+    "segun", "este", "esta", "estos", "estas", "ese", "esa", "esos", "esas", "eso",
+    "son", "ser", "fue", "fueron", "han", "has", "tiene", "tienen", "puede", "pueden",
+    "sobre", "acerca", "mas", "muy", "todo", "todos", "toda", "todas", "algo", "nada",
+    "se", "su", "sus", "mi", "mis", "tu", "tus", "me", "te", "lo", "le", "les", "nos",
+    "y", "o", "u", "si", "no", "ni", "al", "ya",
+    "what", "is", "are", "was", "were", "the", "a", "an", "of", "in", "on", "to",
+    "for", "from", "with", "by", "about", "how", "who", "which", "and", "or",
+}
+
+_BILINGUAL_CTI_TERMS = (
+    (("vulnerabilidad", "vulnerabilidades", "zero-click", "zeroclick", "0-day", "zeroday", "exploit", "exploits"),
+     "zero-click exploit vulnerability 0-day"),
+    (("parche", "parches", "actualizacion", "actualizaciones", "mitigacion", "mitigaciones", "mitigar"),
+     "patch fix backport commit security issue mitigation update"),
+    (("kernel", "nucleo", "android", "linux"),
+     "Android Linux kernel sandbox escalation"),
+    (("forense", "forenses", "artefacto", "artefactos", "mvt", "respaldo", "respaldos", "backup", "evidencia", "indicador", "indicadores", "persistencia", "detectar", "revisar"),
+     "MVT forensic artifacts shutdown.log Safari History.db DataUsage netusage crash log persistence"),
+    (("infraestructura", "dominio", "dominios", "c2", "servidor", "servidores", "redireccion", "redirecciones", "enlace", "enlaces", "1-click"),
+     "C2 domain infrastructure command control delivery server 1-click SMS redirection"),
+    (("sector", "sectores", "objetivo", "objetivos", "victima", "victimas", "region", "regiones", "pais", "paises", "campana", "campanas"),
+     "targets journalists human rights defenders civil society politicians region campaign victims"),
+    (("proceso", "procesos", "trafico", "red", "archivo", "archivos"),
+     "process network traffic DataUsage Safari History file"),
+)
+
+_OVERVIEW_TRIGGERS = (
+    "que hay de",
+    "que es",
+    "hablame de",
+    "resumen",
+    "informacion sobre",
+    "todo sobre",
+    "explica",
+    "overview",
+)
+
+_FAMILY_OVERVIEW_HINTS = {
+    "pegasus": "Pegasus NSO Group zero-click FORCEDENTRY BLASTPASS MVT forensic indicators victims CatalanGate",
+    "predator": "Predator Intellexa Cytrox ALIEN 1-click Chrome Android Linux kernel 0-day targets",
+    "candiru": "Candiru DevilsTongue Windows Chrome Office exploits C2 decoy domains dissidents",
+    "quadream": "QuaDream Reign KingsPawn ENDOFDAYS iOS 14 calendar zero-click targets",
+}
+
+_DEPENDENT_FOLLOWUP_RE = re.compile(
+    r"\b(eso|esa|ese|esos|esas|ello|aquel|aquella|segundo|primero|anterior|mismo|misma|su|sus|campaña|exploit|artefacto)\b",
+    re.IGNORECASE,
+)
+
+
+def _normalize_ascii(text: str) -> str:
+    return (text or "").lower().translate(str.maketrans("áéíóúüñ", "aeiouun"))
+
+
 def _groq_extra_params(model_name: str) -> dict:
     m = (model_name or "").lower()
     if "qwen" in m:
@@ -295,45 +362,490 @@ def _groq_extra_params(model_name: str) -> dict:
     return {}
 
 
+def _candidate_chat_models() -> list[str]:
+    ordered = []
+    for candidate in [GROQ_MODEL, *FALLBACK_GROQ_MODELS]:
+        if candidate and candidate not in ordered:
+            ordered.append(candidate)
+    now = time.time()
+    available = [m for m in ordered if _MODEL_COOLDOWN_UNTIL.get(m, 0.0) <= now]
+    return available or ordered
+
+
+def _chat_completion_with_failover(
+    messages: list[dict],
+    temperature: float = 0.0,
+    max_tokens: int = 1200,
+) -> tuple[str | None, str]:
+    last_model = GROQ_MODEL
+    for model_name in _candidate_chat_models():
+        last_model = model_name
+        extra_params = _groq_extra_params(model_name)
+        for attempt in range(2):
+            try:
+                resp = groq_client.chat.completions.create(
+                    model=model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    **extra_params,
+                )
+                content = (resp.choices[0].message.content or "").strip()
+                if content:
+                    return content, model_name
+                break
+            except Exception as err:
+                msg = str(err).lower()
+                is_missing_model = (
+                    "model_not_found" in msg
+                    or "decommissioned" in msg
+                    or "does not exist" in msg
+                )
+                is_daily_limit = "tokens per day" in msg or "tpd" in msg
+                if is_missing_model:
+                    _MODEL_COOLDOWN_UNTIL[model_name] = time.time() + 1800
+                    break
+                if is_daily_limit:
+                    wait_match = re.search(
+                        r"try again in\s+(?:(\d+)m)?(\d+(?:\.\d+)?)s\b",
+                        msg,
+                    )
+                    if wait_match:
+                        mins = float(wait_match.group(1) or 0)
+                        secs = float(wait_match.group(2) or 0)
+                        cooldown_s = min(max(mins * 60.0 + secs, 45.0), 600.0)
+                    else:
+                        cooldown_s = 180.0
+                    _MODEL_COOLDOWN_UNTIL[model_name] = time.time() + cooldown_s
+                    break
+                if ("rate_limit" in msg or "429" in msg) and attempt == 0 and "try again in" in msg:
+                    # Espera breve para ráfagas TPM/RPM en segundos; si supera ~4s cambia rápido de modelo
+                    sec_match = re.search(r"try again in\s+(\d+(?:\.\d+)?)s\b", msg)
+                    if sec_match and float(sec_match.group(1)) <= 4.0:
+                        time.sleep(float(sec_match.group(1)) + 0.25)
+                        continue
+                    _MODEL_COOLDOWN_UNTIL[model_name] = time.time() + 20
+                    break
+                if "rate_limit" in msg or "429" in msg:
+                    _MODEL_COOLDOWN_UNTIL[model_name] = time.time() + 20
+                    break
+                break
+    return None, last_model
+
+
+def _prepare_retrieval_queries(query: str) -> tuple[str, str, list[str], list[str], str]:
+    """Prepara consulta semántica bilingüe, tsquery OR balanceado, tokens entidad y CVEs exactos."""
+    norm = _normalize_ascii(query)
+    exact_cves = [c.lower() for c in CVE_CODE_RE.findall(norm)]
+    cve_parts_to_drop = set()
+    cve_phrases = []
+    for cve in exact_cves:
+        parts = cve.split("-")
+        if len(parts) == 3:
+            cve_phrases.append(f"({parts[0]} <-> {parts[1]} <-> {parts[2]})")
+            cve_parts_to_drop.update({parts[0], parts[1]})
+
+    raw_tokens = re.findall(r"[a-z0-9]{2,}", norm)
+    core_tokens = [
+        t for t in dict.fromkeys(raw_tokens)
+        if t not in _STOPWORDS and (not exact_cves or t not in cve_parts_to_drop)
+    ]
+
+    semantic_extras = []
+    expansion_tokens = []
+
+    for triggers, eng_expansion in _BILINGUAL_CTI_TERMS:
+        if any(tr in norm for tr in triggers):
+            semantic_extras.append(eng_expansion)
+            for etok in re.findall(r"[a-z0-9]{3,}", eng_expansion.lower()):
+                if etok not in _STOPWORDS and etok not in cve_parts_to_drop and etok not in expansion_tokens:
+                    expansion_tokens.append(etok)
+
+    is_overview = not exact_cves and (any(trig in norm for trig in _OVERVIEW_TRIGGERS) or len(core_tokens) <= 2)
+    if is_overview:
+        for family, hint in _FAMILY_OVERVIEW_HINTS.items():
+            if family in norm:
+                semantic_extras.append(hint)
+                for htok in re.findall(r"[a-z0-9]{3,}", hint.lower()):
+                    if htok not in expansion_tokens:
+                        expansion_tokens.append(htok)
+
+    semantic_query = query if not semantic_extras else f"{query}. {' '.join(semantic_extras)}"
+
+    # Reservar cupo en FTS tanto para tokens propios de la consulta como para equivalentes técnicos en inglés
+    merged_tokens = list(dict.fromkeys([*core_tokens[:9], *expansion_tokens[:9]]))
+    safe_fts = [tok for tok in merged_tokens if re.fullmatch(r"[a-z0-9]{2,32}", tok)]
+    all_clauses = [*cve_phrases, *safe_fts[:16]]
+    ts_expr = " | ".join(all_clauses) if all_clauses else "omeganomatchtoken"
+    exact_cve_ts = " | ".join(cve_phrases) if cve_phrases else "omeganomatchtoken"
+    scoring_tokens = list(dict.fromkeys([*core_tokens[:8], *expansion_tokens[:6]]))
+    return semantic_query, ts_expr, scoring_tokens, exact_cves, exact_cve_ts
+
+
+_LIGATURE_TABLE = str.maketrans({
+    "\ufb00": "ff",
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\ufb03": "ffi",
+    "\ufb04": "ffl",
+    "\u00a0": " ",
+    "\u2010": "-",
+    "\u2011": "-",
+    "\u2012": "-",
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2212": "-",
+})
+
+_PDF_HEADER_STRIP_RE = re.compile(
+    r"(?:FORENSIC METHODOLOGY REPORT\s+HOW TO CATCH NSO GROUP[’']S PEGASUS\s+Amnesty International\s*\d*"
+    r"|(?:[-–—]\s*)?The Citizen Lab\s+Skip to content.*?(?:Subscribe to our newsletter|Digital Transnational Repression)"
+    r"|Skip to content(?:\s+Opens (?:in a new window|an external site))*\s*"
+    r"|Opens (?:in a new window|an external site(?:\s+in a new window)?)\s*"
+    r"|Fuente:\s*[^|\n]+\|\s*Fecha:\s*[^|\n]+\|\s*URL:\s*\S+"
+    r"|APPENDIX\s+[A-Z0-9]+:\s*[^\n.]{4,})",
+    re.IGNORECASE,
+)
+
+
+def _clean_pdf_text(text: str) -> str:
+    cleaned = (text or "").translate(_LIGATURE_TABLE)
+    cleaned = re.sub(r"([A-Za-z0-9])-\s*\n\s*([a-z])", r"\1\2", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _select_diverse_topk(
+    rows: list[tuple],
+    entity_tokens: list[str],
+    exact_cves: list[str],
+    top_k: int,
+) -> list[tuple]:
+    """Reordena candidatos RRF priorizando CVE exacto, prosa técnica y diversidad entre reportes."""
+    if len(rows) <= top_k:
+        return rows
+
+    def _score(row: tuple) -> float:
+        title_lc = _normalize_ascii(row[1] or "")
+        body = _clean_pdf_text(row[5] or "")
+        body_lc = _normalize_ascii(body)
+        base = float(row[7] or 0.0)
+        cve_hits = sum(1 for cve in exact_cves if cve in body_lc)
+        entity_hits = sum(1 for tok in entity_tokens if tok in title_lc or tok in body_lc)
+        title_hits = sum(1 for tok in entity_tokens if tok in title_lc)
+
+        # Penalizar tablas CSV/apéndices enumerativos e índices de contenido (TOC) cuando hay prosa técnica
+        raw_lines = [ln.strip() for ln in (row[5] or "").splitlines() if ln.strip()]
+        avg_line_len = sum(len(ln) for ln in raw_lines) / max(len(raw_lines), 1)
+        many_cves_count = len(CVE_CODE_RE.findall(body))
+        is_index_table = (many_cves_count >= 6 and avg_line_len < 30) or "appendix csv" in body_lc
+        head_sample = body[:420]
+        alpha_chars = sum(1 for ch in head_sample if ch.isalpha())
+        upper_chars = sum(1 for ch in head_sample if ch.isupper())
+        is_upper_toc = (
+            alpha_chars >= 40
+            and (upper_chars / alpha_chars) >= 0.48
+            and len(re.findall(r"\b\d{1,3}\b", head_sample)) >= 4
+        )
+        is_toc = (
+            ("contents" in body_lc[:260] and len(re.findall(r"\b\d+\.\s+[a-z]", body_lc)) >= 2)
+            or is_upper_toc
+            or "detailed traces per target" in body_lc[:220]
+        )
+        table_penalty = (0.018 if is_index_table else 0.0) + (0.020 if is_toc else 0.0)
+
+        return (
+            base
+            + 0.032 * min(cve_hits, 2)
+            + 0.006 * min(entity_hits, 5)
+            + 0.005 * min(title_hits, 2)
+            - table_penalty
+        )
+
+    ranked = sorted(rows, key=_score, reverse=True)
+    selected = []
+    used_indices = set()
+    per_report_counts: dict[str, int] = {}
+
+    # Primera pasada: hasta 2 fragmentos por reporte para evitar saturar una única fuente
+    for i, row in enumerate(ranked):
+        if len(selected) >= top_k:
+            break
+        rep_id = row[0]
+        if per_report_counts.get(rep_id, 0) < 2:
+            selected.append(row)
+            used_indices.add(i)
+            per_report_counts[rep_id] = per_report_counts.get(rep_id, 0) + 1
+
+    # Segunda pasada: completar top_k si aún faltan cupos
+    for i, row in enumerate(ranked):
+        if len(selected) >= top_k:
+            break
+        if i not in used_indices:
+            selected.append(row)
+
+    return selected
+
+
+_GENERIC_SPYWARE_WORDS = {
+    "pegasus", "predator", "candiru", "quadream", "nso", "group", "intellexa",
+    "cytrox", "spyware", "malware", "citizen", "lab", "amnesty", "google", "tag",
+    "actualizaciones", "firmar", "utilizada", "utilizado", "reporte", "reportes",
+}
+
+
+_CTI_ANCHOR_TERMS = (
+    "zero-click", "0-day", "1-click", "epoll", "backport", "kernel", "sandbox",
+    "mvt", "shutdown.log", "safari", "datausage", "imessage", "passkit",
+    "forcedentry", "blastpass", "exploit", "vulnerabilities", "flagged", "attackers",
+    "profiting", "indicator", "victim", "target", "domain", "spyware",
+    "nso", "intellexa", "cytrox", "predator", "pegasus", "candiru",
+)
+
+_FALLBACK_ALT_TERMS = {
+    "artefactos": ("artifact", "artifacts", "mvt", "shutdown", "datausage", "safari", "cascadefail"),
+    "forenses": ("forensic", "forensics", "mvt", "indicator", "indicators"),
+    "vulnerabilidades": ("cve", "vulnerability", "exploit", "zero-click"),
+    "victimas": ("victim", "victims", "target", "targeted", "journalist", "politician"),
+    "sectores": ("sector", "journalist", "defender", "politician", "government"),
+    "regiones": ("region", "country", "egypt", "spain", "greece", "catalan"),
+    "clave": ("key", "pgp", "private", "signature"),
+    "privada": ("private", "pgp", "secret", "signing"),
+    "pgp": ("pgp", "gpg", "openpgp"),
+    "parche": ("patch", "fix", "backport", "commit", "flagged"),
+    "presente": ("present", "backported", "missing", "android", "kernels"),
+    "mayoria": ("most", "all", "android", "kernels"),
+    "kernels": ("kernel", "kernels", "linux", "android"),
+    "android": ("android", "linux", "kernel"),
+    "detectarlo": ("detect", "mvt", "indicator", "forensic", "artifacts"),
+    "detectar": ("detect", "mvt", "indicator", "forensic", "artifacts"),
+}
+
+
+def _extract_best_excerpt(
+    raw_snippet: str,
+    query_terms: list[str],
+    exact_cves: list[str],
+    max_chars: int = 310,
+) -> tuple[str, float]:
+    stripped = _PDF_HEADER_STRIP_RE.sub(" ", raw_snippet or "")
+    cleaned = _clean_pdf_text(stripped)
+    cleaned = re.sub(r"^[:;\-–—•.\s]+", "", cleaned)
+    # Primero limpiar solo un prefijo truncado previo a una coma ("h cases, the fix..." -> "the fix...")
+    cleaned = re.sub(r"^[a-z]{1,4}\s+[a-z]{2,12},\s+", "", cleaned)
+    # Solo saltar al siguiente punto si persiste una letra suelta truncada ("s due to...")
+    if cleaned and re.match(r"^[B-HJ-Zb-hj-z]\s+[a-z]", cleaned):
+        first_break = re.search(r"(?<=[.!?])\s+(?=[A-Z0-9“\"(])", cleaned)
+        if first_break and len(cleaned) - first_break.end() >= 110:
+            cleaned = cleaned[first_break.end():].strip()
+    if cleaned and cleaned[0].islower():
+        cleaned = cleaned[0].upper() + cleaned[1:]
+
+    raw_sentences = re.split(r"(?<=[.!?])\s+(?=(?:[A-Z0-9“\"(]|[a-z0-9-]+\.[a-z]{2,}))", cleaned)
+    candidates = [s.strip() for s in raw_sentences if len(s.strip()) >= 28]
+    if not candidates:
+        candidates = [cleaned] if cleaned else []
+
+    scored: list[tuple[float, int, str]] = []
+    for idx, sent in enumerate(candidates):
+        s_norm = _normalize_ascii(sent)
+        score = 0.0
+        for cve in exact_cves:
+            if cve in s_norm:
+                score += 8.0
+        for qt in query_terms:
+            opts = (qt, *_FALLBACK_ALT_TERMS.get(qt, ()))
+            if any(opt in s_norm for opt in opts):
+                score += 2.0
+        anchor_hits = sum(1 for anc in _CTI_ANCHOR_TERMS if anc in s_norm)
+        score += min(anchor_hits * 0.9, 4.5)
+
+        if len(sent) < 48:
+            score -= 1.0
+        alpha_c = sum(1 for ch in sent if ch.isalpha())
+        upper_c = sum(1 for ch in sent if ch.isupper())
+        if alpha_c >= 20 and (upper_c / alpha_c) > 0.55:
+            score -= 5.0
+        if (
+            "contents" in s_norm
+            or "appendix csv" in s_norm
+            or "detailed traces" in s_norm
+            or "remain committed to updating" in s_norm
+            or "remiss if we did not acknowledge" in s_norm
+            or "skip to content" in s_norm
+            or "opens in a" in s_norm
+            or "opens an external" in s_norm
+            or "subscribe to our newsletter" in s_norm
+            or "digital transnational" in s_norm
+            or s_norm.startswith("tabla")
+            or len(CVE_CODE_RE.findall(sent)) >= 5
+        ):
+            score -= 10.0
+        if "url:" in s_norm or "fecha:" in s_norm:
+            score -= 4.0
+        scored.append((score, idx, sent))
+
+    scored.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    if not scored:
+        return "", 0.0
+
+    best_score = scored[0][0]
+    chosen: list[tuple[int, str]] = []
+    total_len = 0
+    for sc, idx, sent in scored:
+        if len(chosen) >= 2:
+            break
+        if chosen and sc <= 0.0:
+            break
+        if any(sent[:40] == prev[:40] for _, prev in chosen):
+            continue
+        if chosen and total_len + len(sent) + 1 > max_chars + 60:
+            continue
+        chosen.append((idx, sent))
+        total_len += len(sent) + 1
+
+    chosen.sort(key=lambda item: item[0])
+    combined = " ".join(s for _, s in chosen).strip()
+    if len(combined) > max_chars:
+        cut = combined[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:")
+        combined = f"{cut}…"
+    return combined, best_score
+
+
+def _build_extractive_fallback_answer(
+    standalone_query: str,
+    citations: list[dict],
+    linked_ctx: dict,
+) -> str:
+    """Genera una síntesis extractiva 100% anclada a citas reales si falla el LLM externo."""
+    if not citations:
+        return "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
+
+    best_sim = max(float(c.get("similarity") or 0.0) for c in citations)
+    has_lexical = any(c.get("retrieval_method") != "Semántico" for c in citations)
+    if not has_lexical and best_sim < 0.34:
+        return "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
+
+    # Guard RNF1 anti-alucinación también en modo extractivo: si la pregunta exige términos específicos ajenos al corpus
+    norm_q = _normalize_ascii(standalone_query)
+    exact_cves = [c.lower() for c in CVE_CODE_RE.findall(norm_q)]
+    q_tokens = [
+        t for t in re.findall(r"[a-z0-9]{3,}", norm_q)
+        if t not in _STOPWORDS and t not in _GENERIC_SPYWARE_WORDS
+    ]
+    joined_snippets = _normalize_ascii(
+        " ".join(_clean_pdf_text((c.get("snippet") or "") + " " + (c.get("title") or "")) for c in citations)
+    )
+    is_overview_q = any(trig in norm_q for trig in _OVERVIEW_TRIGGERS) or (len(q_tokens) <= 1 and not exact_cves)
+    if not is_overview_q and q_tokens:
+        matched_discriminating = 0
+        for tok in q_tokens:
+            candidates = (tok, *_FALLBACK_ALT_TERMS.get(tok, ()))
+            if any(cand in joined_snippets for cand in candidates):
+                matched_discriminating += 1
+        # Si menciona entidades altamente específicas fuera del corpus que no aparecen en ningún fragmento -> abstenerse
+        if any(tr in q_tokens and tr not in joined_snippets for tr in ("pgp", "lockbit", "smbv3", "wannacry", "conti")) or (
+            matched_discriminating == 0 and best_sim < 0.56
+        ):
+            return "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
+
+    orgs = sorted({c["organization"] for c in citations if c.get("organization")})
+    corpus_plain = " ".join(_clean_pdf_text(c.get("snippet") or "") for c in citations)
+    families = [label for label, pat in ACTOR_PATTERNS if pat.search(corpus_plain)]
+
+    extracted = []
+    for c in citations:
+        excerpt, rel_score = _extract_best_excerpt(c.get("snippet") or "", q_tokens, exact_cves, max_chars=290)
+        if excerpt:
+            extracted.append((rel_score, c, excerpt))
+
+    clean_extracted = [item for item in extracted if item[0] > -2.0]
+    display_items = (clean_extracted if len(clean_extracted) >= 2 else extracted)[:4]
+    lead_item = max(extracted, key=lambda x: x[0]) if extracted else None
+
+    cve_citations: dict[str, int] = {}
+    for c in citations:
+        for found_cve in CVE_CODE_RE.findall(_clean_pdf_text(c.get("snippet") or "")):
+            uc = found_cve.upper()
+            if uc not in cve_citations:
+                cve_citations[uc] = c["index"]
+
+    fam_phrase = f" sobre {', '.join(families[:3])}" if families else ""
+    intro_parts = []
+    if lead_item:
+        _, best_c, best_excerpt = lead_item
+        lead_sentence = best_excerpt.rstrip(".")
+        intro_parts.append(
+            f"De acuerdo con la documentación técnica publicada por {', '.join(orgs[:3])}{fam_phrase}, {lead_sentence} [{best_c['index']}]."
+        )
+    else:
+        intro_parts.append(
+            f"De acuerdo con la documentación técnica publicada por {', '.join(orgs[:3])}{fam_phrase}, los reportes indexados detallan vectores de infección, artefactos e indicadores relevantes [{citations[0]['index']}]."
+        )
+
+    if cve_citations:
+        cve_refs = ", ".join(f"{cve} [{idx}]" for cve, idx in list(cve_citations.items())[:4])
+        intro_parts.append(f"Entre los identificadores documentados en los fragmentos citados destacan {cve_refs}.")
+
+    bullets = []
+    seen_prefixes = set()
+    for _, c, excerpt in display_items:
+        prefix = excerpt[:60].lower()
+        if prefix in seen_prefixes:
+            continue
+        seen_prefixes.add(prefix)
+        category = _classify_finding(c["title"], excerpt)
+        short_title = c["title"].split(":")[0].strip()
+        if len(short_title) > 54:
+            short_title = short_title[:51].rsplit(" ", 1)[0] + "…"
+        bullets.append(
+            f"- **{category} · {short_title} (p.{c['page']}):** {excerpt.rstrip('.')} [{c['index']}]."
+        )
+
+    return " ".join(intro_parts) + "\n\n" + "\n".join(bullets)
+
+
 def _condense_followup_query(query: str, history: list[dict]) -> str:
     if not history:
         return query
 
+    # Solo gastar llamada LLM si la pregunta tiene referencias dependientes del contexto previo
+    stripped = query.strip()
+    if len(stripped.split()) >= 9 and not _DEPENDENT_FOLLOWUP_RE.search(stripped):
+        return query
+
     recent = history[-4:]
     formatted_hist = "\n".join(f"{t['role'].upper()}: {t['content'][:400]}" for t in recent)
+    rewritten, _ = _chat_completion_with_failover(
+        messages=[
+            {"role": "system", "content": CONDENSE_PROMPT},
+            {"role": "user", "content": f"HISTORIAL:\n{formatted_hist}\n\nÚLTIMA PREGUNTA: {query}"},
+        ],
+        temperature=0.0,
+        max_tokens=160,
+    )
+    if rewritten:
+        return rewritten
 
-    extra_params = _groq_extra_params(GROQ_MODEL)
-    for attempt in range(4):
-        try:
-            resp = groq_client.chat.completions.create(
-                model=GROQ_MODEL,
-                temperature=0.0,
-                max_tokens=150,
-                messages=[
-                    {"role": "system", "content": CONDENSE_PROMPT},
-                    {"role": "user", "content": f"HISTORIAL:\n{formatted_hist}\n\nÚLTIMA PREGUNTA: {query}"},
-                ],
-                **extra_params,
-            )
-            rewritten = resp.choices[0].message.content.strip()
-            return rewritten or query
-        except Exception as err:
-            if "rate_limit" in str(err).lower() and attempt < 3:
-                time.sleep(5 * (attempt + 1))
-            else:
-                return query
+    # Fallback determinista sin LLM para anclar la entidad del historial
+    hist_lower = formatted_hist.lower()
+    for fam in ("Pegasus", "Predator", "Candiru", "QuaDream"):
+        if fam.lower() in hist_lower and fam.lower() not in query.lower():
+            return f"{query} ({fam})"
     return query
 
 
 def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = None) -> dict:
     history = history or []
     standalone_query = _condense_followup_query(question, history)
-    q_vec = embedder.encode([standalone_query], normalize_embeddings=True)[0].tolist()
+    semantic_query, ts_expr, entity_tokens, exact_cves, exact_cve_ts = _prepare_retrieval_queries(standalone_query)
+    q_vec = embedder.encode([semantic_query], normalize_embeddings=True)[0].tolist()
+    candidate_limit = min(max(top_k * 5, 30), 48)
 
     with psycopg.connect(DB_DSN) as conn:
         register_vector(conn)
         with conn.cursor() as cur:
-            # Fusión Híbrida RRF: Top-20 Semántico (pgvector) + Top-20 Léxico Exacto (GIN tsvector)
+            # Fusión Híbrida RRF: Top-32 Semántico (pgvector) + Top-32 Léxico OR (GIN tsvector priorizando CVEs exactos)
             cur.execute(
                 """
                 WITH semantic AS (
@@ -342,18 +854,22 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                         ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) AS vec_rank,
                         1 - (dc.embedding <=> %s::vector) AS cos_sim
                     FROM document_chunks dc
+                    WHERE length(dc.content) >= 120
                     ORDER BY dc.embedding <=> %s::vector
-                    LIMIT 20
+                    LIMIT 32
                 ),
                 keyword AS (
                     SELECT
                         dc.id,
                         ROW_NUMBER() OVER (
-                            ORDER BY ts_rank_cd(dc.search_vector, websearch_to_tsquery('simple', %s)) DESC
+                            ORDER BY
+                                (dc.search_vector @@ to_tsquery('simple', %s)) DESC,
+                                ts_rank_cd(dc.search_vector, to_tsquery('simple', %s)) DESC
                         ) AS fts_rank
                     FROM document_chunks dc
-                    WHERE dc.search_vector @@ websearch_to_tsquery('simple', %s)
-                    LIMIT 20
+                    WHERE length(dc.content) >= 120
+                      AND dc.search_vector @@ to_tsquery('simple', %s)
+                    LIMIT 32
                 ),
                 fused AS (
                     SELECT
@@ -384,10 +900,15 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                 ORDER BY f.rrf_score DESC
                 LIMIT %s;
                 """,
-                (q_vec, q_vec, q_vec, standalone_query, standalone_query, top_k),
+                (q_vec, q_vec, q_vec, exact_cve_ts, ts_expr, ts_expr, candidate_limit),
             )
-            rows = cur.fetchall()
-            linked_ctx = _fetch_linked_cti_context(cur, list({row[0] for row in rows})) if rows else {"campaigns": [], "cves": [], "iocs": []}
+            raw_rows = cur.fetchall()
+            rows = _select_diverse_topk(raw_rows, entity_tokens, exact_cves, top_k)
+            linked_ctx = (
+                _fetch_linked_cti_context(cur, list({row[0] for row in rows}))
+                if rows
+                else {"campaigns": [], "cves": [], "iocs": []}
+            )
 
     if not rows:
         empty_answer = "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
@@ -405,6 +926,7 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
     for idx, row in enumerate(rows, start=1):
         sim = round(float(row[6]), 4)
         method = row[8]
+        clean_snip = _clean_pdf_text(row[5])
         citations.append(
             {
                 "index": idx,
@@ -413,7 +935,7 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                 "organization": row[2],
                 "page": row[4],
                 "source_url": row[3],
-                "snippet": row[5],
+                "snippet": clean_snip,
                 "similarity": sim,
                 "retrieval_method": method,
             }
@@ -421,7 +943,7 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
         context_blocks.append(
             f"--- FRAGMENTO [{idx}] ({method}) ---\n"
             f"Fuente: {row[1]} ({row[2]}) | Página: {row[4]}\n"
-            f"Contenido: {row[5]}\n"
+            f"Contenido: {clean_snip[:900]}\n"
         )
 
     user_prompt = (
@@ -429,32 +951,24 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
         f"CONSULTA DEL ANALISTA:\n{standalone_query}"
     )
 
-    extra_params = _groq_extra_params(GROQ_MODEL)
-    completion = None
-    for attempt in range(4):
-        try:
-            completion = groq_client.chat.completions.create(
-                model=GROQ_MODEL,
-                temperature=0.0,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                **extra_params,
-            )
-            break
-        except Exception as err:
-            if "rate_limit" in str(err).lower() and attempt < 3:
-                time.sleep(6 * (attempt + 1))
-            else:
-                raise
+    answer_text, used_model = _chat_completion_with_failover(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.0,
+        max_tokens=700,
+    )
 
-    answer_text = completion.choices[0].message.content
+    if not answer_text:
+        answer_text = _build_extractive_fallback_answer(standalone_query, citations, linked_ctx)
+        used_model = "omega-extractive-fallback"
+
     return {
         "answer": answer_text,
         "standalone_query": standalone_query,
         "citations": citations,
-        "model": GROQ_MODEL,
+        "model": used_model,
         "analysis": _build_structured_analysis(answer_text, citations, linked_ctx),
     }
 

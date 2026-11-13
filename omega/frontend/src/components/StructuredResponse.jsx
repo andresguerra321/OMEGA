@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { MarkdownMessage, formatTextWithTechAndCitations } from './MarkdownMessage';
 
-const CVE_RE = /\bCVE-\d{4}-\d{4,7}\b/gi;
+const CVE_RE = /\bCVE[-\u2010-\u2015\u2212]\d{4}[-\u2010-\u2015\u2212]\d{4,7}\b/gi;
 const SHA256_RE = /\b[a-f0-9]{64}\b/gi;
 const DOMAIN_RE =
   /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)\b/gi;
@@ -33,7 +33,11 @@ export function StructuredResponse({
   // Extraer CVEs y dominios técnicos
   const technicalIndicators = useMemo(() => {
     const text = message.content || '';
-    const cves = Array.from(new Set(text.match(CVE_RE) || [])).map((c) => c.toUpperCase());
+    const cves = Array.from(
+      new Set(
+        (text.match(CVE_RE) || []).map((c) => c.replace(/[\u2010-\u2015\u2212]/g, '-').toUpperCase())
+      )
+    );
     const hashes = Array.from(new Set(text.match(SHA256_RE) || [])).map((h) => h.toLowerCase());
     const domains = Array.from(
       new Set(
@@ -56,14 +60,27 @@ export function StructuredResponse({
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      const bulletMatch = trimmed.match(/^(?:[-*]|\d+\.)\s+(?:\*\*([^*]+?)\*\*\s*:?\s*)?(.*)$/);
+      // Omitir subtítulos sueltos de sección tipo "**Detalles técnicos:**" o "**Conclusión ejecutiva:**"
+      if (/^\*\*[^*]{2,48}:?\*\*:?$/.test(trimmed)) continue;
+
+      const indentLen = line.length - line.trimStart().length;
+      const bulletMatch = trimmed.match(/^(?:[-*•]|\d+\.)\s+(?:\*\*([^*]+?)\*\*\s*:?\s*)?(.*)$/);
       if (bulletMatch) {
         isParsingFindings = true;
         let title = (bulletMatch[1] || '').trim().replace(/:$/, '');
-        let body = (bulletMatch[2] || '').trim();
-        if (!title && body.includes(':')) {
+        let body = (bulletMatch[2] || '').trim().replace(/^:\s*/, '');
+
+        // Si es sub-viñeta indentada y hay un hallazgo padre previo, agruparla dentro de ese hallazgo
+        if (indentLen >= 2 && findings.length > 0) {
+          const subLine = title ? (body ? `**${title}:** ${body}` : `**${title}**`) : body;
+          const prev = findings[findings.length - 1];
+          prev.body = prev.body ? `${prev.body}\n${subLine}` : subLine;
+          continue;
+        }
+
+        if (!title && body.includes(':') && body.indexOf(':') < 64) {
           const splitIdx = body.indexOf(':');
-          title = body.slice(0, splitIdx).trim();
+          title = body.slice(0, splitIdx).trim().replace(/\*\*/g, '');
           body = body.slice(splitIdx + 1).trim();
         }
         findings.push({
@@ -71,13 +88,20 @@ export function StructuredResponse({
           body,
         });
       } else if (!isParsingFindings && !trimmed.startsWith('#') && !trimmed.startsWith('>')) {
-        execLines.push(trimmed);
+        const cleanedLine = trimmed.replace(
+          /^\*\*(?:Conclusi[oó]n|Resumen)\s+ejecutiv[ao]:?\*\*\s*/i,
+          ''
+        );
+        if (cleanedLine) execLines.push(cleanedLine);
+      } else if (isParsingFindings && findings.length > 0 && !trimmed.startsWith('#')) {
+        const prev = findings[findings.length - 1];
+        prev.body = prev.body ? `${prev.body}\n${trimmed}` : trimmed;
       }
     }
 
     return {
       executive: execLines.join(' ').trim() || lines[0] || '',
-      findings,
+      findings: findings.filter((f) => f.body || f.title !== 'Evidencia documentada'),
     };
   }, [message.content]);
 
@@ -88,6 +112,7 @@ export function StructuredResponse({
   }
 
   const hasStructuredContent = parsedSections.findings.length > 0;
+  const isExtractiveFallback = message.model === 'omega-extractive-fallback';
 
   return (
     <div className="space-y-4">
@@ -95,13 +120,18 @@ export function StructuredResponse({
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#929BAA] pb-2 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-2 font-medium text-[#F0F2F5]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#3978F6]" />
+            <span className={`h-1.5 w-1.5 rounded-full ${isExtractiveFallback ? 'bg-amber-400' : 'bg-[#3978F6]'}`} />
             <span>Respuesta Verificada CTI</span>
           </span>
           <span className="text-white/15">·</span>
           <span className="font-tech text-[11px] text-[#8E98A8]">
             {citations.length} {citations.length === 1 ? 'fuente' : 'fuentes'}
           </span>
+          {isExtractiveFallback && (
+            <span className="font-tech text-[10px] px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
+              Extractivo local
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -196,10 +226,18 @@ export function StructuredResponse({
                     className="rounded-[12px] border border-white/[0.065] bg-[#111318]/90 p-3.5 space-y-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:border-white/[0.11] transition-colors duration-150 ease-kowalski"
                   >
                     <div className="text-[13px] font-semibold text-[#F0F2F5]">
-                      {f.title}
+                      {f.title.replace(/`/g, '')}
                     </div>
-                    <div className="text-[13px] leading-[1.6] text-[#9BA3B2]">
-                      {formatTextWithTechAndCitations(f.body, citationMap, onSelectCitation)}
+                    <div className="text-[13px] leading-[1.6] text-[#9BA3B2] space-y-1.5">
+                      {f.body
+                        .split("\n")
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line, lineIdx) => (
+                          <div key={lineIdx}>
+                            {formatTextWithTechAndCitations(line, citationMap, onSelectCitation)}
+                          </div>
+                        ))}
                     </div>
                   </div>
                 ))}

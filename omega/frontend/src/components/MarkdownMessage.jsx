@@ -3,14 +3,20 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const TECH_TOKEN_RE =
-  /(\[\d+\]|\bCVE-\d{4}-\d{4,7}\b|\b[a-f0-9]{64}\b|\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)\b)/gi;
+  /(\[\d+\]|\bCVE[-\u2010-\u2015\u2212]\d{4}[-\u2010-\u2015\u2212]\d{4,7}\b|\b[a-f0-9]{64}\b|\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)\b)/gi;
 
-export function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
+const INLINE_MD_RE =
+  /(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|\*\*[^*\n]+?\*\*|\*[^*\n]+?\*)/g;
+
+const UNICODE_HYPHENS_RE = /[\u2010-\u2015\u2212]/g;
+
+function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') {
   if (!text) return null;
   const parts = String(text).split(TECH_TOKEN_RE);
 
   return parts.map((part, idx) => {
     if (!part) return null;
+    const key = `${keyPrefix}-${idx}`;
 
     // 1. Cita verificable [1] en JetBrains Mono
     const citMatch = part.match(/^\[(\d+)\]$/);
@@ -19,7 +25,7 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
       const target = citationMap.get(num);
       return (
         <button
-          key={idx}
+          key={key}
           type="button"
           onClick={() => target && onSelectCitation?.(target)}
           title={target ? `${target.title} — Pág. ${target.page}` : `Fuente [${num}]`}
@@ -30,9 +36,10 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
       );
     }
 
-    // 2. Datos técnicos (CVEs, SHA-256, dominios) en JetBrains Mono
+    // 2. Datos técnicos (CVEs con guion ASCII o Unicode, SHA-256, dominios) en JetBrains Mono
+    const normalizedCve = part.replace(UNICODE_HYPHENS_RE, '-');
     if (
-      /^CVE-\d{4}-\d{4,7}$/i.test(part) ||
+      /^CVE-\d{4}-\d{4,7}$/i.test(normalizedCve) ||
       /^[a-f0-9]{64}$/i.test(part) ||
       (/^(?:[a-z0-9-]+\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)$/i.test(part) &&
         !part.includes('citizenlab') &&
@@ -40,15 +47,68 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
     ) {
       return (
         <span
-          key={idx}
+          key={key}
           className="font-tech rounded-[5px] border border-white/[0.08] bg-[#13161C] px-1.5 py-0.5 text-[12px] text-[#E6E9EF]"
         >
-          {part}
+          {normalizedCve}
         </span>
       );
     }
 
     return part;
+  });
+}
+
+export function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
+  if (!text) return null;
+  const segments = String(text).split(INLINE_MD_RE);
+
+  return segments.map((seg, sIdx) => {
+    if (!seg) return null;
+
+    if (seg.startsWith('`') && seg.endsWith('`') && seg.length >= 2) {
+      return (
+        <code
+          key={`c-${sIdx}`}
+          className="font-tech rounded-[5px] border border-white/[0.08] bg-[#13161C] px-1.5 py-0.5 text-[12px] text-[#E6E9EF]"
+        >
+          {seg.slice(1, -1)}
+        </code>
+      );
+    }
+
+    const linkMatch = seg.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+    if (linkMatch) {
+      return (
+        <a
+          key={`a-${sIdx}`}
+          href={linkMatch[2]}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#7AA7FF] underline underline-offset-2 hover:text-[#9FC0FF]"
+        >
+          {linkMatch[1]}
+        </a>
+      );
+    }
+
+    if (seg.startsWith('**') && seg.endsWith('**') && seg.length >= 4) {
+      return (
+        <strong key={`b-${sIdx}`} className="font-semibold text-[#F2F4F8]">
+          {renderTechTokens(seg.slice(2, -2), citationMap, onSelectCitation, `b-${sIdx}`)}
+        </strong>
+      );
+    }
+
+    if (seg.startsWith('*') && seg.endsWith('*') && seg.length >= 2) {
+      return (
+        <em key={`i-${sIdx}`} className="italic text-[#D8DCE3]">
+          {renderTechTokens(seg.slice(1, -1), citationMap, onSelectCitation, `i-${sIdx}`)}
+        </em>
+      );
+    }
+
+    return renderTechTokens(seg, citationMap, onSelectCitation, `t-${sIdx}`);
   });
 }
 

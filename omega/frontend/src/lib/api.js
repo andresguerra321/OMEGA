@@ -6,7 +6,10 @@ export async function sendChatQuery(query, history = [], topK = 6) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, history, top_k: topK }),
   });
-  if (!res.ok) throw new Error('Error consultando el motor RAG');
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || `Error HTTP ${res.status} consultando el motor RAG`);
+  }
   return res.json();
 }
 
