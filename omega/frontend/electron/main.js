@@ -1271,13 +1271,13 @@ ipcMain.handle('omega:set-titlebar-theme', (event, theme = 'light') => {
     if (win && typeof win.setTitleBarOverlay === 'function') {
       if (theme === 'light') {
         win.setTitleBarOverlay({
-          color: '#EAEAE6',
-          symbolColor: '#191C22',
+          color: '#F5F7FB',
+          symbolColor: '#090D16',
           height: 40,
         });
       } else {
         win.setTitleBarOverlay({
-          color: '#101319',
+          color: '#090D16',
           symbolColor: '#A1A7B4',
           height: 40,
         });
@@ -1295,12 +1295,12 @@ function createMainWindow() {
     height: 860,
     minWidth: 960,
     minHeight: 680,
-    backgroundColor: '#0D1115',
+    backgroundColor: '#050811',
     title: 'OMEGA — Cyber Threat Intelligence',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#EAEAE6',
-      symbolColor: '#191C22',
+      color: '#F5F7FB',
+      symbolColor: '#090D16',
       height: 40,
     },
     webPreferences: {

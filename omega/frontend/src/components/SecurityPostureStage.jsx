@@ -14,17 +14,17 @@ import { SpatialNavPill } from './SpatialNavPill';
 
 function drawLightCurtains(ctx, width, height, elapsedSec, palette, animate) {
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#0B0E13';
+  ctx.fillStyle = '#050811';
   ctx.fillRect(0, 0, width, height);
 
-  // Cortinas verticales suaves de luz atmosférica (sin ruido ni partículas geométricas)
+  // Cortinas verticales suaves de luz en Azul Rey sobre negro profundo
   ctx.globalCompositeOperation = 'screen';
   const folds = [
-    { xRatio: 0.14, widthRatio: 0.28, amp: 0.035, speed: 0.22, phase: 0.4, color: palette.secondary, alpha: 0.28 },
-    { xRatio: 0.34, widthRatio: 0.32, amp: 0.04, speed: 0.17, phase: 1.7, color: palette.primary, alpha: 0.34 },
-    { xRatio: 0.56, widthRatio: 0.3, amp: 0.03, speed: 0.2, phase: 2.9, color: palette.secondary, alpha: 0.26 },
-    { xRatio: 0.78, widthRatio: 0.36, amp: 0.038, speed: 0.15, phase: 4.1, color: palette.accent, alpha: 0.38 },
-    { xRatio: 0.92, widthRatio: 0.28, amp: 0.025, speed: 0.19, phase: 5.3, color: palette.primary, alpha: 0.24 },
+    { xRatio: 0.12, widthRatio: 0.34, amp: 0.032, speed: 0.19, phase: 0.4, color: palette.secondary, alpha: 0.38 },
+    { xRatio: 0.34, widthRatio: 0.36, amp: 0.038, speed: 0.15, phase: 1.7, color: palette.primary, alpha: 0.44 },
+    { xRatio: 0.58, widthRatio: 0.32, amp: 0.028, speed: 0.18, phase: 2.9, color: palette.secondary, alpha: 0.32 },
+    { xRatio: 0.78, widthRatio: 0.38, amp: 0.035, speed: 0.14, phase: 4.1, color: palette.accent, alpha: 0.46 },
+    { xRatio: 0.94, widthRatio: 0.28, amp: 0.022, speed: 0.17, phase: 5.3, color: palette.sheen, alpha: 0.14 },
   ];
 
   const t = animate ? elapsedSec : 0;
@@ -37,50 +37,38 @@ function drawLightCurtains(ctx, width, height, elapsedSec, palette, animate) {
 
     const hGrad = ctx.createLinearGradient(leftX, 0, leftX + bandW, 0);
     hGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    hGrad.addColorStop(0.45, `rgba(${fold.color}, ${fold.alpha * 0.55})`);
+    hGrad.addColorStop(0.42, `rgba(${fold.color}, ${fold.alpha * 0.48})`);
     hGrad.addColorStop(0.55, `rgba(${fold.color}, ${fold.alpha})`);
     hGrad.addColorStop(1, 'rgba(0,0,0,0)');
 
-    const vMask = ctx.createLinearGradient(0, 0, 0, height);
-    vMask.addColorStop(0, 'rgba(0,0,0,0)');
-    vMask.addColorStop(0.35, 'rgba(255,255,255,0.45)');
-    vMask.addColorStop(0.85, 'rgba(255,255,255,0.9)');
-    vMask.addColorStop(1, 'rgba(255,255,255,0.65)');
-
-    ctx.save();
     ctx.fillStyle = hGrad;
     ctx.fillRect(leftX, 0, bandW, height);
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.restore();
-
-    // Atenuado vertical suave en bordes superior/inferior por banda
-    const verticalBloom = ctx.createLinearGradient(centerX, 0, centerX, height);
-    verticalBloom.addColorStop(0, 'rgba(11,14,19,0.86)');
-    verticalBloom.addColorStop(0.42, 'rgba(11,14,19,0.2)');
-    verticalBloom.addColorStop(0.86, 'rgba(11,14,19,0)');
-    verticalBloom.addColorStop(1, 'rgba(11,14,19,0.35)');
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = verticalBloom;
-    ctx.fillRect(leftX, 0, bandW, height);
-    ctx.globalCompositeOperation = 'screen';
-    void vMask;
   }
 
-  // Concentración luminosa discreta en esquina inferior derecha (borde hacia hoja piedra)
+  // Bloom discreto azul rey hacia la esquina inferior derecha
   const cornerGlow = ctx.createRadialGradient(
-    width * 0.9,
-    height * 0.88,
+    width * 0.88,
+    height * 0.86,
     0,
-    width * 0.9,
-    height * 0.88,
-    Math.max(width, height) * 0.62,
+    width * 0.88,
+    height * 0.86,
+    Math.max(width, height) * 0.68,
   );
-  cornerGlow.addColorStop(0, `rgba(${palette.corner}, 0.2)`);
-  cornerGlow.addColorStop(0.55, `rgba(${palette.secondary}, 0.06)`);
+  cornerGlow.addColorStop(0, `rgba(${palette.corner}, 0.24)`);
+  cornerGlow.addColorStop(0.55, `rgba(${palette.secondary}, 0.1)`);
   cornerGlow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = cornerGlow;
   ctx.fillRect(0, 0, width, height);
+
+  // Viñeta vertical continua superior/inferior para evitar bordes duros
   ctx.globalCompositeOperation = 'source-over';
+  const vVignette = ctx.createLinearGradient(0, 0, 0, height);
+  vVignette.addColorStop(0, 'rgba(5, 8, 17, 0.78)');
+  vVignette.addColorStop(0.28, 'rgba(5, 8, 17, 0.18)');
+  vVignette.addColorStop(0.75, 'rgba(5, 8, 17, 0.04)');
+  vVignette.addColorStop(1, 'rgba(5, 8, 17, 0.56)');
+  ctx.fillStyle = vVignette;
+  ctx.fillRect(0, 0, width, height);
 }
 
 export function SecurityPostureStage({
@@ -127,29 +115,23 @@ export function SecurityPostureStage({
 
   const linkRisk = String(lastLinkResult?.risk_level || lastLinkResult?.verdict || '').toUpperCase();
 
-  // Paleta atmosférica discreta derivada del estado real del equipo
+  // Paleta atmosférica unificada en Negro, Blanco y Azul Rey
   const atmospherePalette = useMemo(() => {
     if (pcWarn || linkRisk === 'HIGH') {
       return {
-        primary: '214, 130, 52',
-        secondary: '96, 114, 140',
-        accent: '232, 93, 74',
-        corner: '214, 130, 52',
-      };
-    }
-    if (pcHealthy) {
-      return {
-        primary: '56, 148, 108',
-        secondary: '74, 112, 168',
-        accent: '76, 184, 128',
-        corner: '64, 164, 118',
+        primary: '29, 78, 216',
+        secondary: '23, 37, 84',
+        accent: '37, 99, 235',
+        sheen: '191, 219, 254',
+        corner: '220, 38, 38',
       };
     }
     return {
-      primary: '68, 108, 178',
-      secondary: '86, 104, 132',
-      accent: '198, 146, 72',
-      corner: '188, 138, 68',
+      primary: '29, 78, 216',
+      secondary: '23, 37, 84',
+      accent: '37, 99, 235',
+      sheen: '191, 219, 254',
+      corner: pcHealthy ? '37, 99, 235' : '30, 64, 175',
     };
   }, [pcWarn, pcHealthy, linkRisk]);
 
@@ -217,7 +199,7 @@ export function SecurityPostureStage({
         label: 'PC Windows',
         ariaLabel: '#01 Esta PC · Windows',
         icon: Laptop,
-        tone: pcWarn ? 'alert' : pcHealthy ? 'clean' : 'amber',
+        tone: pcWarn ? 'alert' : pcHealthy ? 'clean' : 'royal',
         status: pcWarn
           ? `Revisar (${pcAlerts})`
           : pcHealthy
@@ -256,7 +238,7 @@ export function SecurityPostureStage({
         label: 'Base forense local',
         ariaLabel: '#04 Base forense STIX2',
         icon: Layers,
-        tone: apiOnline ? 'clean' : 'amber',
+        tone: apiOnline ? 'clean' : 'royal',
         status: apiOnline
           ? technicalMode
             ? `${campaignsCount} campañas`
@@ -312,7 +294,7 @@ export function SecurityPostureStage({
     <section
       ref={containerRef}
       aria-label="Postura de seguridad OMEGA"
-      className="relative h-full w-full overflow-hidden bg-[#0B0E13] border-r border-white/[0.06] select-none flex flex-col justify-between"
+      className="relative h-full w-full overflow-hidden bg-[#050811] border-r border-white/[0.08] select-none flex flex-col justify-between"
     >
       {/* Fondo atmosférico de cortinas verticales de luz */}
       <canvas
@@ -321,10 +303,10 @@ export function SecurityPostureStage({
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
 
-      {/* Sutiles marcas arquitectónicas de encuadre en esquinas */}
+      {/* Sutiles marcas arquitectónicas de encuadre */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-3 border border-white/[0.03] rounded-[18px]"
+        className="pointer-events-none absolute inset-3 border border-[#93C5FD]/[0.05] rounded-[18px]"
       />
 
       {/* Barra superior agrupada arriba */}
@@ -430,12 +412,12 @@ export function SecurityPostureStage({
                 const selected = selectedNodeId === item.id;
                 const dotColor =
                   item.tone === 'alert'
-                    ? 'bg-[#FF453A]'
+                    ? 'bg-[#EF4444]'
                     : item.tone === 'clean'
-                      ? 'bg-[#30D158]'
-                      : item.tone === 'amber'
-                        ? 'bg-[#F5A623]'
-                        : 'bg-[#7A8494]';
+                      ? 'bg-[#22C55E]'
+                      : item.tone === 'royal'
+                        ? 'bg-[#3B82F6]'
+                        : 'bg-[#7A889E]';
 
                 return (
                   <button
@@ -447,15 +429,17 @@ export function SecurityPostureStage({
                     onClick={() => onSelectNode?.(item.id)}
                     className={`group relative w-full border-b border-white/[0.08] py-3 px-3 flex items-center justify-between gap-3 text-left transition-colors cursor-pointer ${
                       selected
-                        ? 'bg-white/[0.055]'
-                        : 'hover:bg-white/[0.03]'
+                        ? 'bg-[#1D4ED8]/[0.14]'
+                        : 'hover:bg-white/[0.035]'
                     }`}
                   >
-                    {/* Indicador vertical fino para el sensor activo */}
+                    {/* Indicador vertical en Azul Rey para la superficie activa */}
                     <span
                       aria-hidden="true"
-                      className={`absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full transition-opacity ${
-                        selected ? 'bg-[#F4F4EF] opacity-100' : 'opacity-0'
+                      className={`absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full transition-opacity ${
+                        selected
+                          ? 'bg-[#3B82F6] shadow-[0_0_12px_rgba(59,130,246,0.7)] opacity-100'
+                          : 'opacity-0'
                       }`}
                     />
 
@@ -507,12 +491,12 @@ export function SecurityPostureStage({
               const Icon = item.icon;
               const dotColor =
                 item.tone === 'alert'
-                  ? 'bg-[#FF453A]'
+                  ? 'bg-[#EF4444]'
                   : item.tone === 'clean'
-                    ? 'bg-[#30D158]'
-                    : item.tone === 'amber'
-                      ? 'bg-[#F5A623]'
-                      : 'bg-[#7A8494]';
+                    ? 'bg-[#22C55E]'
+                    : item.tone === 'royal'
+                      ? 'bg-[#3B82F6]'
+                      : 'bg-[#7A889E]';
 
               return (
                 <button
@@ -549,7 +533,7 @@ export function SecurityPostureStage({
         <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-[#CBD3DF] backdrop-blur-md">
           <span
             aria-hidden="true"
-            className={`h-1.5 w-1.5 rounded-full ${apiOnline ? 'bg-[#30D158]' : 'bg-[#F5A623]'}`}
+            className={`h-1.5 w-1.5 rounded-full ${apiOnline ? 'bg-[#22C55E]' : 'bg-[#3B82F6]'}`}
           />
           <span className="font-tech">
             {pcScannedAt ? `Chequeo ${pcScannedAt} · Solo RAM` : 'Memoria volátil · 0 bytes en disco'}

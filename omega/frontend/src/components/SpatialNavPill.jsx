@@ -20,18 +20,18 @@ const NAV_ITEMS = [
 
 function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat }) {
   if (id === 'inicio') {
-    if (!apiOnline) return 'bg-[#F5A623]';
+    if (!apiOnline) return 'bg-[#3B82F6]';
     if (pcVerdict === 'alert' || pcVerdict === 'suspicious' || pcVerdict === 'high') {
-      return 'bg-[#FF453A]';
+      return 'bg-[#EF4444]';
     }
-    if (pcVerdict === 'warning' || pcVerdict === 'watch') return 'bg-[#F5A623]';
-    return 'bg-[#30D158]';
+    if (pcVerdict === 'warning' || pcVerdict === 'watch') return 'bg-[#3B82F6]';
+    return 'bg-[#22C55E]';
   }
   if (id === 'equipo' && usbConnected) {
-    return 'bg-[#5E9BFF]';
+    return 'bg-[#3B82F6]';
   }
   if (id === 'preguntar' && isLoadingChat) {
-    return 'bg-[#5E9BFF] omega-core-pulse';
+    return 'bg-[#3B82F6] omega-core-pulse';
   }
   return null;
 }
@@ -81,8 +81,8 @@ export function SpatialNavPill({
                 compact ? 'h-8 w-8' : 'h-9 w-9'
               } ${
                 isActive
-                  ? 'bg-[#F4F4EF] text-[#14171D] shadow-[0_4px_12px_rgba(0,0,0,0.34)]'
-                  : 'bg-white/[0.06] text-[#DCE2EC] hover:bg-white/[0.15] hover:text-white'
+                  ? 'bg-white text-[#090D16] shadow-[0_4px_12px_rgba(0,0,0,0.34)]'
+                  : 'bg-white/[0.06] text-[#DCE4F2] hover:bg-[#1D4ED8]/35 hover:text-white'
               }`}
             >
               <Icon className="h-[16px] w-[16px]" strokeWidth={isActive ? 2.1 : 1.75} />
@@ -91,7 +91,7 @@ export function SpatialNavPill({
                 <span
                   aria-hidden="true"
                   className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ${
-                    isActive ? 'ring-[#F4F4EF]' : 'ring-[#161B22]'
+                    isActive ? 'ring-white' : 'ring-[#090D16]'
                   } ${ledClass}`}
                 />
               )}

@@ -632,7 +632,7 @@ export default function App() {
   const showLeftStage = !stageCollapsed;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col md:flex-row bg-[#0B0E13] text-[#F4F6FA] select-none">
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col md:flex-row bg-[#050811] text-[#F8FAFC] select-none">
       {/* Panel Izquierdo: Postura de Seguridad Atmosférica / Rail Sereno en Módulos */}
       {showLeftStage && (
         <div
@@ -681,8 +681,8 @@ export default function App() {
             showLeftStage ? '-left-3' : 'left-2'
           } w-6 h-12 rounded-full border shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-all cursor-pointer ${
             isHome
-              ? 'bg-[#FFFFFF] border-black/10 text-[#191C22] hover:scale-105'
-              : 'bg-[#1D222B] border-white/15 text-[#E4E8F0] hover:bg-[#272D38] hover:scale-105'
+              ? 'bg-[#FFFFFF] border-[#0B1220]/15 text-[#090D16] hover:border-[#1D4ED8]/40 hover:scale-105'
+              : 'bg-[#0F172A] border-[#3B82F6]/30 text-[#E2E8F0] hover:bg-[#1E293B] hover:scale-105'
           }`}
         >
           {stageCollapsed ? (
