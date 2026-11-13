@@ -338,6 +338,14 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function askInChat(promptText) {
+    setSelectedCitation(null);
+    setIsSourcesPanelOpen(false);
+    setSourceScope('Todas las fuentes');
+    setActiveNav('preguntar');
+    handleSend(promptText, 'Todas las fuentes', { forceNewSession: true });
+  }
+
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-[#0A0A0C] text-[#F2F2F4]">
       {/* Sidebar Fija Izquierda (#111115) */}
@@ -560,21 +568,25 @@ export default function App() {
             textareaRef={textareaRef}
           />
         ) : activeNav === 'amenazas' ? (
-          <CampaignsPanel
-            onAskInChat={(p) => {
-              setSelectedCitation(null);
-              setIsSourcesPanelOpen(false);
-              setSourceScope('Todas las fuentes');
-              setActiveNav('preguntar');
-              handleSend(p, 'Todas las fuentes', { forceNewSession: true });
-            }}
-          />
+          <CampaignsPanel onAskInChat={askInChat} />
         ) : (
           /* Módulos de Soporte (Equipo, Exposición, Enlace, Ajustes) */
-          <main className="flex-1 overflow-y-auto px-8 py-8">
-            <div className="mx-auto max-w-[940px]">
-              {activeNav === 'equipo' && <MvtVerifierPanel />}
-              {activeNav === 'exposicion' && <OsintPanel />}
+          <main
+            className={`flex-1 overflow-y-auto ${
+              activeNav === 'equipo' || activeNav === 'exposicion'
+                ? 'px-7 py-6'
+                : 'px-8 py-8'
+            }`}
+          >
+            <div
+              className={`mx-auto ${
+                activeNav === 'equipo' || activeNav === 'exposicion'
+                  ? 'max-w-[1120px]'
+                  : 'max-w-[940px]'
+              }`}
+            >
+              {activeNav === 'equipo' && <MvtVerifierPanel onAskInChat={askInChat} />}
+              {activeNav === 'exposicion' && <OsintPanel onAskInChat={askInChat} />}
               {activeNav === 'enlace' && <LinkVerifierPanel />}
               {activeNav === 'ajustes' && <SettingsPanel topK={topK} onChangeTopK={setTopK} />}
             </div>
