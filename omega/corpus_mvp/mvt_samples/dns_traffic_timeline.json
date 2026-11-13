@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2024-06-14T18:23:04Z",
+    "query_domain": "smscentro.com",
+    "query_type": "A",
+    "dest_ip": "185.141.63.120",
+    "process": "mDNSResponder"
+  },
+  {
+    "timestamp": "2024-06-14T18:24:11Z",
+    "query_domain": "tookcheckout.com",
+    "query_type": "HTTPS",
+    "dest_ip": "104.21.44.10",
+    "process": "nsurlsessiond"
+  }
+]
+

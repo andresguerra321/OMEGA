@@ -42,6 +42,15 @@ CONDENSE_PROMPT = """Reescribe la última pregunta del analista como una consult
 Si la pregunta ya es autocontenida, devuélvela sin cambios. Responde ÚNICAMENTE con la consulta reescrita, sin explicaciones."""
 
 
+def _groq_extra_params(model_name: str) -> dict:
+    m = (model_name or "").lower()
+    if "qwen" in m:
+        return {"reasoning_effort": "none"}
+    if "gpt-oss" in m:
+        return {"reasoning_effort": "low"}
+    return {}
+
+
 def _condense_followup_query(query: str, history: list[dict]) -> str:
     if not history:
         return query
@@ -49,6 +58,7 @@ def _condense_followup_query(query: str, history: list[dict]) -> str:
     recent = history[-4:]
     formatted_hist = "\n".join(f"{t['role'].upper()}: {t['content'][:400]}" for t in recent)
 
+    extra_params = _groq_extra_params(GROQ_MODEL)
     for attempt in range(4):
         try:
             resp = groq_client.chat.completions.create(
@@ -59,6 +69,7 @@ def _condense_followup_query(query: str, history: list[dict]) -> str:
                     {"role": "system", "content": CONDENSE_PROMPT},
                     {"role": "user", "content": f"HISTORIAL:\n{formatted_hist}\n\nÚLTIMA PREGUNTA: {query}"},
                 ],
+                **extra_params,
             )
             rewritten = resp.choices[0].message.content.strip()
             return rewritten or query
@@ -171,6 +182,7 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
         f"CONSULTA DEL ANALISTA:\n{standalone_query}"
     )
 
+    extra_params = _groq_extra_params(GROQ_MODEL)
     completion = None
     for attempt in range(4):
         try:
@@ -181,6 +193,7 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
+                **extra_params,
             )
             break
         except Exception as err:

@@ -23,6 +23,8 @@ from services import (
     run_rag_query,
 )
 from forensic_engine import analyze_forensic_payload
+from triage_orchestrator import run_parallel_forensic_triage
+from detection_engineering import generate_mvt_triage_script, generate_yara_for_campaign
 from osint_engine import (
     delete_osint_asset,
     list_osint_assets,
@@ -156,3 +158,38 @@ def remove_osint_asset(
     if not delete_osint_asset(asset_id, owner_token=x_workspace_id):
         raise HTTPException(status_code=404, detail="Activo no encontrado.")
     return {"deleted": True}
+
+
+# --- Endpoints Triage Forense Paralelo & Ingeniería de Detección (RF5, RF6, RNF4, RNF7) ---
+
+@app.post("/api/triage/parallel")
+async def parallel_forensic_triage(files: list[UploadFile] = File(...)):
+    """Ejecuta Subagentes A, B y C en paralelo sobre múltiples artefactos en RAM (RF5, RNF4)."""
+    artifacts = []
+    for f in files:
+        content = await f.read()
+        artifacts.append({"filename": f.filename or "artifact.bin", "bytes": content})
+
+    try:
+        return await run_parallel_forensic_triage(artifacts)
+    finally:
+        # Liberación explícita de todos los buffers en memoria (RNF4)
+        for art in artifacts:
+            art["bytes"] = b""
+        artifacts.clear()
+
+
+@app.get("/api/campaigns/{campaign_id}/yara")
+def campaign_yara_rule(campaign_id: str):
+    res = generate_yara_for_campaign(campaign_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada.")
+    return res
+
+
+@app.get("/api/campaigns/{campaign_id}/mvt-script")
+def campaign_mvt_script(campaign_id: str):
+    res = generate_mvt_triage_script(campaign_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada.")
+    return res

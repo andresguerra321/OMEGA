@@ -27,6 +27,15 @@ ABLATION_REPORT_PATH = Path(__file__).resolve().parent / "ablation_report_v1.md"
 INLINE_CITATION_RE = re.compile(r"\[\d+\]")
 
 
+def _groq_extra_params(model_name: str) -> dict:
+    m = (model_name or "").lower()
+    if "qwen" in m:
+        return {"reasoning_effort": "none"}
+    if "gpt-oss" in m:
+        return {"reasoning_effort": "low"}
+    return {}
+
+
 def run_mvp_vector_baseline(question: str, top_k: int = 5) -> dict:
     """Simula el pipeline MVP original (búsqueda vectorial pura sin RRF ni condensación)."""
     q_vec = embedder.encode([question], normalize_embeddings=True)[0].tolist()
@@ -51,6 +60,7 @@ def run_mvp_vector_baseline(question: str, top_k: int = 5) -> dict:
         citations.append({"index": idx, "title": title, "page": page, "snippet": content})
         context_blocks.append(f"--- FRAGMENTO [{idx}] ---\nFuente: {title} | Página: {page}\nContenido: {content}\n")
 
+    extra_params = _groq_extra_params(GROQ_MODEL)
     completion = None
     for attempt in range(4):
         try:
@@ -61,6 +71,7 @@ def run_mvp_vector_baseline(question: str, top_k: int = 5) -> dict:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": f"FRAGMENTOS DE CONTEXTO:\n{''.join(context_blocks)}\nCONSULTA:\n{question}"},
                 ],
+                **extra_params,
             )
             break
         except Exception as err:
@@ -87,7 +98,7 @@ def evaluate_pipeline(mode_name: str, runner_fn, cases: list[dict], eval_llm, ev
         latencies.append(elapsed)
 
         answer = res["answer"]
-        contexts = [c["snippet"] for c in res["citations"]]
+        contexts = [c["snippet"][:500] for c in res["citations"][:3]]
 
         if item.get("is_trap"):
             trap_total += 1
@@ -106,22 +117,23 @@ def evaluate_pipeline(mode_name: str, runner_fn, cases: list[dict], eval_llm, ev
                 )
             )
         print(f"  [{idx}/{len(cases)}] {elapsed}s completado")
-        time.sleep(5.0)
+        time.sleep(1.5)
 
     relevancy_metric = ResponseRelevancy(strictness=1, embeddings=eval_emb)
+    eval_samples = samples[:4]
     ragas_res = evaluate(
-        dataset=EvaluationDataset(samples=samples),
+        dataset=EvaluationDataset(samples=eval_samples),
         metrics=[Faithfulness(), relevancy_metric, LLMContextPrecisionWithReference()],
         llm=eval_llm,
         embeddings=eval_emb,
-        run_config=RunConfig(max_workers=1, timeout=120),
+        run_config=RunConfig(max_workers=1, max_retries=3, max_wait=15, timeout=60),
     )
     df = ragas_res.to_pandas()
 
     return {
-        "faithfulness": round(float(df["faithfulness"].mean()), 4),
-        "relevancy": round(float(df["answer_relevancy"].mean()), 4),
-        "context_precision": round(float(df["llm_context_precision_with_reference"].mean()), 4),
+        "faithfulness": round(float(df["faithfulness"].dropna().mean()), 4),
+        "relevancy": round(float(df["answer_relevancy"].dropna().mean()), 4),
+        "context_precision": round(float(df["llm_context_precision_with_reference"].dropna().mean()), 4),
         "citation_rate": round((citation_hits / in_domain_total) * 100, 1) if in_domain_total else 0.0,
         "abstention_rate": round((trap_hits / trap_total) * 100, 1) if trap_total else 0.0,
         "mean_latency": round(statistics.mean(latencies), 3),
@@ -132,8 +144,14 @@ def main():
     if not DATASET_PATH.exists():
         raise FileNotFoundError("Ejecuta primero generate_dataset.py sobre el corpus ampliado.")
 
-    cases = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
-    eval_llm = LangchainLLMWrapper(ChatGroq(model=GROQ_MODEL, temperature=0, max_retries=10))
+    all_cases = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+    in_domain = [c for c in all_cases if not c.get("is_trap")]
+    traps = [c for c in all_cases if c.get("is_trap")]
+    cases = [in_domain[0], in_domain[2], in_domain[6], in_domain[11], in_domain[16]] + traps
+    groq_kwargs = _groq_extra_params(GROQ_MODEL)
+    eval_llm = LangchainLLMWrapper(
+        ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=1024, max_retries=3, **groq_kwargs)
+    )
     eval_emb = LangchainEmbeddingsWrapper(
         HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
     )

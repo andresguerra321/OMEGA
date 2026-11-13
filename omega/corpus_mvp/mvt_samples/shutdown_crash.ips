@@ -1,0 +1,13 @@
+Incident Identifier: 9F4C2A10-77B1-4E2A-9D81-00A1B2C3D4E5
+Process:             IMTranscoderAgent [412]
+Path:                /System/Library/PrivateFrameworks/IMCore.framework/IMTranscoderAgent
+Date/Time:           2024-06-14 18:22:48.102 -0500
+Exception Type:      EXC_BAD_ACCESS (SIGSEGV)
+Exception Subtype:   KERN_INVALID_ADDRESS at 0x0000000000000048
+Triggered by Thread: 0
+
+Observed Processes from shutdown log:
+abscarrylog
+accountpfd
+SpringBoard
+

@@ -92,3 +92,30 @@ export async function deleteOsintAsset(assetId) {
   if (!res.ok) throw new Error('Error eliminando activo');
   return res.json();
 }
+
+// --- Triage Paralelo e Ingeniería de Detección Defensiva (RF5, RF6, RNF7) ---
+
+export async function runParallelTriage(fileList) {
+  const formData = new FormData();
+  for (const file of fileList) {
+    formData.append('files', file);
+  }
+  const res = await fetch(`${API_BASE}/triage/parallel`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) throw new Error('Error ejecutando el triage forense paralelo');
+  return res.json();
+}
+
+export async function fetchCampaignYara(campaignId) {
+  const res = await fetch(`${API_BASE}/campaigns/${campaignId}/yara`);
+  if (!res.ok) throw new Error('Error generando regla YARA');
+  return res.json();
+}
+
+export async function fetchCampaignMvtScript(campaignId) {
+  const res = await fetch(`${API_BASE}/campaigns/${campaignId}/mvt-script`);
+  if (!res.ok) throw new Error('Error generando script MVT');
+  return res.json();
+}

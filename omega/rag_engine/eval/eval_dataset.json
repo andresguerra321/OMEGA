@@ -1,73 +1,143 @@
 [
   {
-    "question": "¿Cuántos exploits 0‑day descubrió TAG entre 2019 y 2023 y cuántos de esos fueron desarrollados por CSVs?",
-    "ground_truth": "TAG descubrió 53 exploits 0‑day en total, de los cuales 33 fueron desarrollados por CSVs.",
+    "question": "¿Por qué el parche para CVE-2021-1048 no estaba presente en la mayoría de los kernels de Android, como los de Samsung, a pesar de haber sido corregido en el kernel de Linux en septiembre de 2020?",
+    "ground_truth": "El commit que corrigió el error no fue marcado como un problema de seguridad, por lo que el parche no se retrotrajo (backported) a la mayoría de los kernels de Android.",
     "is_trap": false,
-    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
-    "source_page": 25
+    "source_title": "Protecting Android Users from 0-Day Attacks (Intellexa Predator & Cytrox)",
+    "source_page": 3
   },
   {
-    "question": "¿Qué procesos aparecen en el fragmento y en qué momentos fueron registrados?",
-    "ground_truth": "Los procesos registrados son: com.apple.rapports.events (00:09:33 y 00:17:12), proceso crash detectado (00:12:57), faskeepd (00:17:12 y 17:38:44), lobbrogd (00:17:12 y 17:38:44), neagentd (00:17:12).",
+    "question": "¿Qué deficiencias específicas de transparencia y rendición de cuentas identifica el informe en el proceso de licencias de exportación del Ministerio de Defensa de Israel?",
+    "ground_truth": "El proceso de licencias de exportación es casi completamente opaco y carece incluso de las medidas más básicas de rendición de cuentas pública o transparencia.",
     "is_trap": false,
-    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
-    "source_page": 78
-  },
-  {
-    "question": "¿Qué base de datos de Safari se utilizó para identificar visitas a dominios de infección de NSO Group que no aparecían en el historial?",
-    "ground_truth": "Favicon.db",
-    "is_trap": false,
-    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_title": "Hooking Candiru: Another Mercenary Spyware Vendor Comes into Focus",
     "source_page": 9
   },
   {
-    "question": "Según el fragmento, ¿qué consecuencias genera el escrutinio público sobre las actividades de los CSV?",
-    "ground_truth": "El escrutinio público provoca interrupciones, retrasos y ceses temporales de sus actividades, impide ataques contra usuarios y dificulta que los CSV anuncien y vendan sus productos.",
+    "question": "¿Qué dominios específicos de infraestructura de señuelo (masquerading) identificó el informe como ejemplos de la imitación de medios internacionales y organizaciones de derechos humanos?",
+    "ground_truth": "El informe identifica dominios como blacklivesmatters.info, womanstudies.co, genderconference.org, cnn24-7.online (imitando a CNN) y dw-arabic.com, además de infraestructura que se hace pasar por Amnesty International, Refugee International, la ONU y la OMS.",
     "is_trap": false,
-    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
-    "source_page": 27
+    "source_title": "Hooking Candiru: Another Mercenary Spyware Vendor Comes into Focus",
+    "source_page": 7
   },
   {
-    "question": "¿Cuál es la fecha y hora del SMS que contiene la frase \"Hace 3 dias que no aparece mi hija\" enviado desde el número +525585401299?",
-    "ground_truth": "2016-06-15 21:21:29",
+    "question": "¿Qué número de teléfono se identifica como el origen de los SMS forenses asociados al dispositivo MXJRN2 (Carmen Aristegui) entre las fechas del 6 y el 9 de enero de 2015?",
+    "ground_truth": "El número de teléfono es +525512350872.",
     "is_trap": false,
     "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
-    "source_page": 76
+    "source_page": 73
   },
   {
-    "question": "Según el fragmento, ¿qué medidas específicas se propone que tome el gobierno de EE. UU. para limitar la actividad de los proveedores de spyware?",
-    "ground_truth": "El fragmento propone que EE. UU. fomente mayor transparencia con requisitos más estrictos para la industria de vigilancia doméstica, revise y divulgue su propio uso histórico de estas herramientas, y considere imponer sanciones adicionales que limiten la capacidad de los proveedores de spyware de operar en EE. UU. y recibir inversión estadounidense.",
-    "is_trap": false,
-    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
-    "source_page": 28
-  },
-  {
-    "question": "¿Cuáles fueron los nombres, fechas de primera y última aparición, volúmenes de tráfico WWAN (IN/OUT) y los IDs de proceso de los procesos sospechosos detectados en el teléfono de Maati Monjib según el fragmento?",
-    "ground_truth": "Se detectaron dos procesos sospechosos: pcsd, con primera y última aparición el 2018-05-04 23:30:45, WWAN IN 12305.0, WWAN OUT 10173.0 y Process ID 14946; y fmld, con primera aparición el 2018-05-21 23:46:06 y última el 2018-06-04 13:05:43, WWAN IN 0.0, WWAN OUT 188326.0 y Process ID 21207.",
+    "question": "¿Qué dirección de correo electrónico específica se identificó en la búsqueda de iMessage registrada el 2019-07-15 a las 12:02:37 en el dispositivo de Szabolcs Panyi?",
+    "ground_truth": "emmadavies8266@gmail.com",
     "is_trap": false,
     "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 61
+  },
+  {
+    "question": "¿Qué acción específica recomienda Amnesty International a los fabricantes de dispositivos para mejorar la capacidad de los propietarios y expertos técnicos de verificar la integridad del sistema, y bajo qué condición?",
+    "ground_truth": "Amnesty International recomienda a los fabricantes de dispositivos explorar opciones para hacer sus dispositivos más auditables, sin sacrificar las protecciones de seguridad y privacidad ya existentes.",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 36
+  },
+  {
+    "question": "¿Cuáles son las dos vulnerabilidades específicas recuperadas de la cadena de exploits FORCEDENTRY y qué función cumplía cada una según el fragmento?",
+    "ground_truth": "Las dos vulnerabilidades recuperadas fueron CVE-2021-30860, que correspondía a la vulnerabilidad de ejecución remota de código inicial, y CVE-2021-31010, que correspondía a la fuga de la sandbox (sandbox escape).",
+    "is_trap": false,
+    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "source_page": 20
+  },
+  {
+    "question": "¿Qué evento específico se registró el 2021-07-05 a las 11:44:29 UTC y qué archivo se creó inmediatamente después a las 11:48:34?",
+    "ground_truth": "Se registraron 'Traces related to iMessage attack' y posteriormente se creó el archivo 'Library/Caches from RootDomain'.",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 71
+  },
+  {
+    "question": "¿Qué procesos se registraron específicamente en las fechas del 2019-07-09 y 2019-07-12 según las huellas forenses del dispositivo FRJRN3?",
+    "ground_truth": "El 2019-07-09 se registró el proceso 'fservernetd' y el 2019-07-12 se registró el proceso 'nehelprd'.",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 58
+  },
+  {
+    "question": "¿Cuáles son los tres tipos principales de exploits que componen una cadena de explotación (exploit chain) para la instalación remota de spyware?",
+    "ground_truth": "Ejecución remota de código inicial (RCE), escape de sandbox (SBX) y escalada local de privilegios (LPE).",
+    "is_trap": false,
+    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "source_page": 16
+  },
+  {
+    "question": "¿Qué disfraz o pretexto específico utilizó el segundo intento de infección con Pegasus contra la profesora Elisenda Paluzie el 10 de junio de 2020?",
+    "ground_truth": "Se disfrazó de una actualización de Twitter de un periódico catalán.",
+    "is_trap": false,
+    "source_title": "CatalanGate: Extensive Mercenary Spyware Operation against Catalans Using Pegasus and Candiru",
+    "source_page": 7
+  },
+  {
+    "question": "¿Qué organización mediática coordinó el proyecto 'Predator Files' y cuál fue el objetivo principal de la investigación publicada el 5 de octubre de 2023?",
+    "ground_truth": "El proyecto fue coordinado por la red de medios European Investigative Collaborations (EIC) y su objetivo fue exponer la proliferación de tecnologías de vigilancia en todo el mundo y el fracaso de los gobiernos y la Unión Europea para regular adecuadamente la industria.",
+    "is_trap": false,
+    "source_title": "Predator Files: Technical deep-dive into Intellexa Alliance's surveillance products",
+    "source_page": 1
+  },
+  {
+    "question": "Según el fragmento, qué metadatos específicos de la red siguen siendo visibles para un observador que registra el tráfico a través de sistemas de vigilancia desplegados en un operador móvil, incluso cuando la carga de un video en Instagram está cifrada con HTTPS?",
+    "ground_truth": "El tamaño del archivo del video cargado y la hora de la carga.",
+    "is_trap": false,
+    "source_title": "Predator Files: Technical deep-dive into Intellexa Alliance's surveillance products",
     "source_page": 13
   },
   {
-    "question": "¿Cuál es la URL del archivo WebKit IndexedDB registrado en el evento del 11 de febrero de 2019 a las 14:45:45?",
-    "ground_truth": "hxxps://d9z3sz93x5ueidq3.get1tn0w.free247downloads[.]com",
+    "question": "¿Qué fecha específica de infección se documenta para Andreu Van den Eynde y qué limitación técnica se menciona respecto a la fecha de infección de Jaume Alonso-Cuevillas?",
+    "ground_truth": "Andreu Van den Eynde fue infectado el 14 de mayo de 2020, mientras que para Jaume Alonso-Cuevillas se confirma la infección con Pegasus, pero no fue posible determinar la fecha exacta de la infección.",
     "is_trap": false,
-    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
-    "source_page": 44
+    "source_title": "CatalanGate: Extensive Mercenary Spyware Operation against Catalans Using Pegasus and Candiru",
+    "source_page": 8
   },
   {
-    "question": "¿En qué fecha y hora (UTC) se registró por última vez la actividad de red de la aplicación Fotos de iOS según el fragmento?",
-    "ground_truth": "El 18 de diciembre de 2019 a las 08:13:33 UTC.",
+    "question": "¿Cuáles son las fechas aproximadas de infección atribuidas a Joaquim Torra, Presidente de Cataluña (2018-2020), según el fragmento?",
+    "ground_truth": "Las fechas aproximadas de infección para Joaquim Torra son: alrededor del 2020-04-21, alrededor del 2020-05-19 y alrededor del 2020-06-11.",
     "is_trap": false,
-    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
-    "source_page": 14
+    "source_title": "CatalanGate: Extensive Mercenary Spyware Operation against Catalans Using Pegasus and Candiru",
+    "source_page": 19
   },
   {
-    "question": "¿Qué proceso sospechoso se encontró registrado en las bases de datos de uso de red (DataUsage.sqlite y netusage.sqlite) de los dispositivos analizados?",
-    "ground_truth": "El proceso sospechoso llamado \"bh\".",
+    "question": "¿A qué URL de destino se redirigió la visita al sitio yahoo.fr realizada por Maati Monjib el 22 de julio de 2019, según el registro de historial de navegación de Safari?",
+    "ground_truth": "https://bun54l2b67.get1tn0w.free247downloads.com:30495/szev4hz",
     "is_trap": false,
     "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
-    "source_page": 11
+    "source_page": 8
+  },
+  {
+    "question": "¿Qué mitigación introducida por Apple en iOS 14 se sospecha que impide la explotación de la vulnerabilidad KISMET a través de iMessage, y qué herramienta desarrolló NSO Group para sortearla?",
+    "ground_truth": "La mitigación es BlastDoor, y NSO Group desarrolló FORCEDENTRY para sortearla.",
+    "is_trap": false,
+    "source_title": "FORCEDENTRY: NSO Group iMessage Zero-Click Exploit Captured in the Wild",
+    "source_page": 3
+  },
+  {
+    "question": "¿Qué acción específica se registró en el informe forense el 11 de febrero de 2019 a las 14:45:56 para deshabilitar el reportador de errores?",
+    "ground_truth": "Se deshabilitó el reportador de errores escribiendo en el archivo com.apple.CrashReporter.plist.",
+    "is_trap": false,
+    "source_title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
+    "source_page": 12
+  },
+  {
+    "question": "¿Qué protocolo de votación digital segura y resistente a la censura fundaron conjuntamente Pau Escrich y Xavier Vives, y qué organización lo utilizó durante sus elecciones internas?",
+    "ground_truth": "Fundaron Vocdoni, un protocolo de votación digital segura y resistente a la censura, que fue utilizado por Òmnium durante sus elecciones internas.",
+    "is_trap": false,
+    "source_title": "CatalanGate: Extensive Mercenary Spyware Operation against Catalans Using Pegasus and Candiru",
+    "source_page": 12
+  },
+  {
+    "question": "¿Cuál es la diferencia fundamental en la arquitectura de entrega de exploits entre la aplicación de Android y la de iOS descrita en el fragmento?",
+    "ground_truth": "A diferencia de la aplicación de iOS, la aplicación de Android no incluye los exploits dentro de la aplicación; en su lugar, contacta un servidor C2 remoto para recibir los módulos que debe ejecutar después de la instalación, incluidos los exploits.",
+    "is_trap": false,
+    "source_title": "Buying Spying: Insights into Commercial Surveillance Vendors",
+    "source_page": 19
   },
   {
     "question": "¿Qué infraestructura de comando y control utilizó el ransomware LockBit 3.0 en Colombia durante 2025?",

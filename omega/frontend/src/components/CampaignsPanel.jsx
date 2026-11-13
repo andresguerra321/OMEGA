@@ -12,7 +12,12 @@ import {
   ExternalLink,
   ArrowLeft,
 } from 'lucide-react';
-import { fetchCampaigns, fetchCampaignDetail } from '../lib/api';
+import {
+  fetchCampaigns,
+  fetchCampaignDetail,
+  fetchCampaignYara,
+  fetchCampaignMvtScript,
+} from '../lib/api';
 
 export function CampaignsPanel({ onAskInChat }) {
   const [campaigns, setCampaigns] = useState([]);
@@ -97,20 +102,56 @@ export function CampaignsPanel({ onAskInChat }) {
             <span>Volver al catálogo</span>
           </button>
 
-          {onAskInChat && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() =>
-                onAskInChat(
-                  `Resume los vectores técnicos, exploits y hallazgos clave de la campaña "${selectedDetail.name}" (${selectedDetail.spyware_family}).`
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-3.5 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/25 transition"
+              onClick={async () => {
+                const data = await fetchCampaignYara(selectedDetail.id);
+                const blob = new Blob([data.yara_rule], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-500/50 transition"
             >
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-              <span>Investigar campaña en el Chat RAG</span>
+              <span>Descargar Regla YARA (.yar)</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                const data = await fetchCampaignMvtScript(selectedDetail.id);
+                const blob = new Blob([data.script_content], { type: 'text/x-shellscript;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-500/50 transition"
+            >
+              <span>Script Extracción MVT (.sh)</span>
+            </button>
+
+            {onAskInChat && (
+              <button
+                type="button"
+                onClick={() =>
+                  onAskInChat(
+                    `Resume los vectores técnicos, exploits y hallazgos clave de la campaña "${selectedDetail.name}" (${selectedDetail.spyware_family}).`
+                  )
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-3.5 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/25 transition"
+              >
+                <MessageSquarePlus className="h-3.5 w-3.5" />
+                <span>Investigar campaña en el Chat RAG</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Cabecera del Dossier */}
