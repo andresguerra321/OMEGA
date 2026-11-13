@@ -4,72 +4,75 @@ export function CitationDrawer({ citation, onClose }) {
   if (!citation) return null;
 
   return (
-    <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-md border-l border-zinc-800 bg-zinc-950/95 p-6 shadow-2xl backdrop-blur-md flex flex-col justify-between">
-      <div className="space-y-5 overflow-y-auto pr-1">
-        <div className="flex items-start justify-between border-b border-zinc-800 pb-4">
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-emerald-400">
-            <ShieldCheck className="h-4 w-4" />
-            <span>Evidencia Documental [{citation.index}]</span>
+    <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-[380px] border-l border-[#232329] bg-[#141418] flex flex-col justify-between">
+      <div className="p-5 space-y-5 overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-[#232329] pb-3.5">
+          <div className="flex items-center gap-2 text-[12px] font-medium text-[#F2F2F4]">
+            <ShieldCheck className="h-4 w-4 text-[#2F6FED]" />
+            <span>Fuente Verificada</span>
+            <span className="font-tech rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0.5 text-[11px] text-[#7AA7FF]">
+              [{citation.index}]
+            </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition"
+            className="rounded-[4px] border border-transparent p-1 text-[#8E8E96] hover:border-[#232329] hover:bg-[#0A0A0C] hover:text-[#F2F2F4] transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="space-y-2">
-          <h3 className="text-base font-semibold text-zinc-100 leading-snug">
+        <div className="space-y-2.5">
+          <h3 className="text-[14px] font-semibold leading-snug text-[#F2F2F4]">
             {citation.title}
           </h3>
-          <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
-            <span className="rounded-md bg-zinc-900 px-2.5 py-1 border border-zinc-800">
+          <div className="flex flex-wrap gap-1.5 text-[11px]">
+            <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#F2F2F4]">
               {citation.organization}
             </span>
-            <span className="rounded-md bg-zinc-900 px-2.5 py-1 border border-zinc-800">
-              Página {citation.page}
+            <span className="font-tech rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
+              Pág. {citation.page}
+            </span>
+            <span className="font-tech rounded-[4px] border border-[#2F6FED]/30 bg-[#15223D] px-2 py-0.5 text-[#7AA7FF]">
+              Similitud {(citation.similarity * 100).toFixed(1)}%
             </span>
             {citation.retrieval_method && (
-              <span className="rounded-md bg-zinc-900 px-2.5 py-1 border border-zinc-800 text-zinc-300">
+              <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
                 {citation.retrieval_method}
               </span>
             )}
-            <span className="rounded-md bg-emerald-950/50 text-emerald-300 px-2.5 py-1 border border-emerald-800/40">
-              Similitud: {(citation.similarity * 100).toFixed(1)}%
-            </span>
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-            Fragmento indexado
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[#8E8E96]">
+            Fragmento extraído del reporte
           </p>
-          <blockquote className="rounded-xl border border-zinc-800/90 bg-zinc-900/60 p-4 text-sm leading-relaxed text-zinc-300">
+          <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-3.5 text-[13px] leading-relaxed text-[#F2F2F4]/90">
             “{citation.snippet}”
-          </blockquote>
+          </div>
         </div>
       </div>
 
-      <div className="border-t border-zinc-800 pt-4">
+      <div className="border-t border-[#232329] bg-[#0A0A0C] p-4">
         {citation.source_url?.startsWith('http') ? (
           <a
             href={citation.source_url}
             target="_blank"
             rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2.5 text-xs font-medium text-zinc-950 hover:bg-white transition"
+            className="flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#2F6FED] px-4 py-2 text-[12px] font-medium text-[#F2F2F4] hover:bg-[#255ED4] transition-colors"
           >
-            <FileText className="h-4 w-4" />
+            <FileText className="h-3.5 w-3.5" />
             <span>Abrir publicación original</span>
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         ) : (
-          <p className="text-center text-xs text-zinc-500">
-            Fuente local verificada: {citation.source_url}
+          <p className="font-tech text-center text-[11px] text-[#8E8E96] truncate">
+            {citation.source_url}
           </p>
         )}
       </div>
     </aside>
   );
 }
-
