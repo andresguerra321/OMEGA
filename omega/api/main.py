@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 # Garantizar que el directorio api esté en sys.path al ejecutar desde cualquier raíz
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -25,6 +26,7 @@ from services import (
 from forensic_engine import analyze_forensic_payload
 from triage_orchestrator import run_parallel_forensic_triage
 from detection_engineering import generate_mvt_triage_script, generate_yara_for_campaign
+from link_verifier import inspect_suspicious_link
 from osint_engine import (
     delete_osint_asset,
     list_osint_assets,
@@ -193,3 +195,79 @@ def campaign_mvt_script(campaign_id: str):
     if not res:
         raise HTTPException(status_code=404, detail="Campaña no encontrada.")
     return res
+
+
+# --- Endpoints Verificador Pasivo de Enlaces & Gobernanza (RF7, RNF4, RNF7, RNF8) ---
+
+class LinkCheckRequest(BaseModel):
+    url: str = Field(..., min_length=4, max_length=2048)
+
+
+@app.post("/api/link/verify")
+def verify_link_endpoint(payload: LinkCheckRequest):
+    try:
+        return inspect_suspicious_link(payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/system/governance")
+def system_governance_status(x_workspace_id: str = Header(default="default_analyst")):
+    """Entrega métricas de trazabilidad del corpus (RF7) y estado de permisos/consentimientos (RNF4, RNF8)."""
+    from services import DB_DSN
+    import psycopg
+
+    with psycopg.connect(DB_DSN) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM reports;")
+            reports_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM document_chunks;")
+            chunks_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM iocs;")
+            iocs_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM campaigns;")
+            campaigns_count = cur.fetchone()[0]
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM osint_monitored_assets
+                WHERE owner_token = %s AND explicit_consent = TRUE;
+                """,
+                (x_workspace_id,),
+            )
+            consented_assets = cur.fetchone()[0]
+            cur.execute(
+                """
+                SELECT title, organization, publication_date::text, ingested_at::text
+                FROM reports
+                ORDER BY ingested_at DESC
+                LIMIT 20;
+                """
+            )
+            recent_reports = [
+                {
+                    "title": r[0],
+                    "organization": r[1],
+                    "publication_date": r[2],
+                    "ingested_at": r[3],
+                }
+                for r in cur.fetchall()
+            ]
+
+    return {
+        "workspace_id": x_workspace_id,
+        "corpus_stats": {
+            "reports": reports_count,
+            "chunks": chunks_count,
+            "iocs": iocs_count,
+            "campaigns": campaigns_count,
+        },
+        "consented_osint_assets": consented_assets,
+        "privacy_guarantees": {
+            "forensic_volatile_ram": True,
+            "passive_link_inspection": True,
+            "explicit_osint_consent_enforced": True,
+            "offensive_capabilities_disabled": True,
+        },
+        "indexed_sources": recent_reports,
+    }

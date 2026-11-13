@@ -119,3 +119,26 @@ export async function fetchCampaignMvtScript(campaignId) {
   if (!res.ok) throw new Error('Error generando script MVT');
   return res.json();
 }
+
+// --- Verificador Pasivo de Enlaces y Gobernanza (RF7, RNF4, RNF7, RNF8) ---
+
+export async function verifySuspiciousLink(url) {
+  const res = await fetch(`${API_BASE}/link/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Error verificando el enlace');
+  }
+  return res.json();
+}
+
+export async function fetchSystemGovernance() {
+  const res = await fetch(`${API_BASE}/system/governance`, {
+    headers: getWorkspaceHeaders(),
+  });
+  if (!res.ok) throw new Error('Error cargando estado de cuenta y permisos');
+  return res.json();
+}
