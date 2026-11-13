@@ -19,10 +19,10 @@ import {
 } from '../lib/api';
 
 const CONFIG_SECTIONS = [
-  { id: 'cuenta', number: 1, label: 'Cuenta y sesión' },
-  { id: 'rag', number: 2, label: 'Motor RAG' },
-  { id: 'permisos', number: 3, label: 'Permisos y ética' },
-  { id: 'corpus', number: 4, label: 'Corpus indexado' },
+  { id: 'cuenta', label: 'Cuenta y sesión', icon: Shield },
+  { id: 'rag', label: 'Motor RAG', icon: Layers },
+  { id: 'permisos', label: 'Permisos y ética', icon: ShieldCheck },
+  { id: 'corpus', label: 'Corpus indexado', icon: Database },
 ];
 
 const TOPK_OPTIONS = [
@@ -110,10 +110,10 @@ function formatDateTag(rawDate) {
 function RadioDot({ selected }) {
   return (
     <span
-      className={`h-3.5 w-3.5 rounded-full inline-flex items-center justify-center shrink-0 transition-colors ${
+      className={`h-4 w-4 rounded-full inline-flex items-center justify-center shrink-0 transition-all duration-150 ${
         selected
-          ? 'bg-[#2F6FED]'
-          : 'border border-[#232329] bg-[#0A0A0C]'
+          ? 'bg-[#2F6FED] shadow-[0_0_0_2px_rgba(47,111,237,0.22)]'
+          : 'border border-white/20 bg-black/30'
       }`}
     >
       {selected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -132,11 +132,13 @@ function TogglePill({ checked, disabled = false, onChange, label }) {
       onClick={() => {
         if (!disabled && onChange) onChange(!checked);
       }}
-      className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-        checked ? 'bg-[#2F6FED] justify-end' : 'bg-[#232329] justify-start'
-      } ${disabled ? 'opacity-85 cursor-not-allowed' : 'cursor-pointer'}`}
+      className={`w-10 h-[22px] rounded-full p-0.5 transition-colors duration-200 flex items-center shrink-0 ${
+        checked
+          ? 'bg-[#2F6FED] justify-end shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]'
+          : 'bg-white/[0.14] justify-start'
+      } ${disabled ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}
     >
-      <span className="h-4 w-4 rounded-full bg-[#F2F2F4]" />
+      <span className="h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.45)] transition-transform duration-200" />
     </button>
   );
 }
@@ -242,61 +244,62 @@ export function SettingsPanel({
   const sources = effectiveGov.indexed_sources || FALLBACK_GOVERNANCE.indexed_sources;
 
   return (
-    <div className="h-full flex bg-[#0A0A0C]">
-      {/* Columna Izquierda: Índice de Configuración (210px fijo) */}
-      <aside className="w-[210px] shrink-0 bg-[#141418]/50 border-r border-[#232329] p-4 hidden md:block">
+    <div className="h-full flex">
+      {/* Columna Izquierda: macOS System Settings Sidebar */}
+      <aside className="w-[228px] shrink-0 apple-vibrancy border-r border-white/[0.07] p-3 hidden md:block">
         <nav className="space-y-1">
           {CONFIG_SECTIONS.map((sec) => {
+            const Icon = sec.icon;
             const isActive = activeSection === sec.id;
             return (
               <button
                 key={sec.id}
                 type="button"
                 onClick={() => scrollToSection(sec.id)}
-                className={`w-full flex items-center gap-2.5 rounded-[4px] px-2.5 py-2 text-left text-[12.5px] transition-colors cursor-pointer ${
+                className={`w-full flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] transition-all duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-[#15223D]/45 text-[#F2F2F4] font-medium'
-                    : 'text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4]'
+                    ? 'bg-[#2F6FED]/18 text-[#F5F5F7] font-medium ring-1 ring-inset ring-[#2F6FED]/35'
+                    : 'text-[#8E8E93] hover:bg-white/[0.055] hover:text-[#F5F5F7]'
                 }`}
               >
                 <span
-                  className={`font-tech h-5 w-5 rounded-full inline-flex items-center justify-center text-[11px] shrink-0 ${
+                  className={`h-6 w-6 rounded-[7px] inline-flex items-center justify-center shrink-0 transition-colors ${
                     isActive
-                      ? 'bg-[#2F6FED] text-[#F2F2F4]'
-                      : 'border border-[#232329] text-[#8E8E96]'
+                      ? 'bg-[#2F6FED] text-white shadow-[0_2px_8px_rgba(47,111,237,0.35)]'
+                      : 'bg-white/[0.06] text-[#8E8E93]'
                   }`}
                 >
-                  {sec.number}
+                  <Icon className="h-3.5 w-3.5" />
                 </span>
-                <span className="truncate">{sec.label}</span>
+                <span className="truncate tracking-[-0.01em]">{sec.label}</span>
               </button>
             );
           })}
         </nav>
       </aside>
 
-      {/* Columna Derecha: Lienzo de Configuración */}
+      {/* Columna Derecha: Lienzo de Ajustes */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Barra Superior de Acción */}
-        <div className="h-12 shrink-0 border-b border-[#232329] px-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[12px]">
-            <span className="text-[#8E8E96]">Ajustes</span>
-            <span className="text-[#232329]">&gt;</span>
-            <span className="text-[#F2F2F4] font-medium">Cuenta y permisos</span>
+        <div className="h-12 shrink-0 border-b border-white/[0.06] bg-[#08080A]/60 backdrop-blur-xl px-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-[12.5px]">
+            <span className="text-[#8E8E93]">Ajustes</span>
+            <span className="text-white/25">›</span>
+            <span className="text-[#F5F5F7] font-medium">Cuenta y permisos</span>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleDiscardChanges}
-              className="text-[12px] text-[#8E8E96] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+              className="text-[12.5px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
             >
               Descartar
             </button>
             <button
               type="button"
               onClick={handleSaveChanges}
-              className="rounded-[4px] bg-[#2F6FED] hover:bg-[#255ED4] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] px-3.5 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
             >
               {savedFeedback ? (
                 <>
@@ -312,28 +315,28 @@ export function SettingsPanel({
 
         {/* Área Scrollable */}
         <div className="flex-1 overflow-y-auto px-8 py-7">
-          <div className="max-w-[780px] space-y-8 pb-8">
-            <h1 className="text-[20px] font-semibold tracking-tight text-[#F2F2F4]">
+          <div className="omega-fade-up max-w-[780px] space-y-8 pb-8">
+            <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#F5F5F7]">
               Configuración del espacio de trabajo
             </h1>
 
             {/* Bloque 1 — Identidad de Sesión Local */}
             <section ref={cuentaRef} className="space-y-3 scroll-mt-6">
               <div>
-                <h2 className="text-[14px] font-semibold text-[#F2F2F4]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Cuenta y espacio de trabajo
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E96]">
+                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
                   Identificador local utilizado para aislar tus activos OSINT autorizados sin requerir cuentas en la nube.
                 </p>
               </div>
 
-              <div className="rounded-[6px] bg-[#141418] border border-[#232329] p-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="apple-group rounded-[13px] p-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[12px] text-[#8E8E96]">
+                  <div className="text-[12px] text-[#8E8E93]">
                     ID de sesión activo
                   </div>
-                  <div className="font-tech mt-1 text-[13px] text-[#F2F2F4] break-all">
+                  <div className="font-tech mt-1 text-[13px] text-[#F5F5F7] break-all">
                     {workspaceId}
                   </div>
                 </div>
@@ -342,16 +345,16 @@ export function SettingsPanel({
                   <button
                     type="button"
                     onClick={handleCopyWorkspaceId}
-                    className="inline-flex items-center gap-1.5 rounded-[4px] bg-[#0A0A0C] border border-[#232329] hover:border-[#2F6FED] px-2.5 py-1.5 text-[12px] text-[#F2F2F4] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
                   >
                     {copiedId ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-[#7AA7FF]" />
+                        <Check className="h-3.5 w-3.5 text-[#5E9BFF]" />
                         <span>Copiado</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="h-3.5 w-3.5 text-[#8E8E96]" />
+                        <Copy className="h-3.5 w-3.5 text-[#8E8E93]" />
                         <span>Copiar ID</span>
                       </>
                     )}
@@ -360,9 +363,9 @@ export function SettingsPanel({
                   <button
                     type="button"
                     onClick={handleRotateId}
-                    className="inline-flex items-center gap-1.5 rounded-[4px] bg-[#0A0A0C] border border-[#232329] hover:border-[#2F6FED] px-2.5 py-1.5 text-[12px] text-[#F2F2F4] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
                   >
-                    <RotateCcw className="h-3.5 w-3.5 text-[#8E8E96]" />
+                    <RotateCcw className="h-3.5 w-3.5 text-[#8E8E93]" />
                     <span>{rotated ? 'Rotado' : 'Rotar ID'}</span>
                   </button>
                 </div>
@@ -372,10 +375,10 @@ export function SettingsPanel({
             {/* Bloque 2 — Profundidad de Recuperación RAG */}
             <section ref={ragRef} className="space-y-3 scroll-mt-6">
               <div>
-                <h2 className="text-[14px] font-semibold text-[#F2F2F4]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Alcance de evidencia (<span className="font-tech">Top-K</span>)
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E96]">
+                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
                   Define cuántos fragmentos documentales evalúa el motor híbrido RRF antes de redactar cada respuesta.
                 </p>
               </div>
@@ -389,26 +392,26 @@ export function SettingsPanel({
                       key={opt.value}
                       type="button"
                       onClick={() => onChangeTopK?.(opt.value)}
-                      className={`relative rounded-[6px] border p-3.5 text-left transition-colors cursor-pointer ${
+                      className={`relative rounded-[13px] border p-4 text-left active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
-                          ? 'bg-[#15223D]/45 border-[#2F6FED]'
-                          : 'bg-[#141418] border-[#232329] hover:border-[#2F6FED]/50'
+                          ? 'bg-[#2F6FED]/15 border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+                          : 'apple-group hover:border-white/[0.15]'
                       }`}
                     >
-                      <div className="absolute top-3 left-3">
+                      <div className="absolute top-3.5 left-3.5">
                         <RadioDot selected={selected} />
                       </div>
 
                       <div className="pt-4 pb-1 flex flex-col items-center text-center">
                         <Icon
-                          className={`h-[18px] w-[18px] mb-2 ${
-                            selected ? 'text-[#2F6FED]' : 'text-[#8E8E96]'
+                          className={`h-[19px] w-[19px] mb-2 ${
+                            selected ? 'text-[#5E9BFF]' : 'text-[#8E8E93]'
                           }`}
                         />
-                        <div className="font-tech text-[12px] font-medium text-[#F2F2F4]">
+                        <div className="font-tech text-[12.5px] font-medium text-[#F5F5F7]">
                           {opt.label}
                         </div>
-                        <div className="mt-0.5 text-[11.5px] text-[#8E8E96]">
+                        <div className="mt-0.5 text-[11.5px] text-[#8E8E93]">
                           {opt.caption}
                         </div>
                       </div>
@@ -421,10 +424,10 @@ export function SettingsPanel({
             {/* Bloque 3 — Prioridad de Corpus CTI */}
             <section className="space-y-3">
               <div>
-                <h2 className="text-[14px] font-semibold text-[#F2F2F4]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Fuentes documentales prioritarias
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E96]">
+                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
                   Selecciona qué investigaciones públicas tienen prioridad por defecto en tus consultas.
                 </p>
               </div>
@@ -438,10 +441,10 @@ export function SettingsPanel({
                       key={opt.value}
                       type="button"
                       onClick={() => onChangeSourceScope?.(opt.value)}
-                      className={`relative rounded-[6px] border p-3.5 text-left transition-colors cursor-pointer ${
+                      className={`relative rounded-[13px] border p-3.5 text-left active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
-                          ? 'bg-[#15223D]/45 border-[#2F6FED]'
-                          : 'bg-[#141418] border-[#232329] hover:border-[#2F6FED]/50'
+                          ? 'bg-[#2F6FED]/15 border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+                          : 'apple-group hover:border-white/[0.15]'
                       }`}
                     >
                       <div className="absolute top-3 left-3">
@@ -451,13 +454,13 @@ export function SettingsPanel({
                       <div className="pt-4 flex flex-col items-center text-center">
                         <Icon
                           className={`h-[18px] w-[18px] mb-1.5 ${
-                            selected ? 'text-[#2F6FED]' : 'text-[#8E8E96]'
+                            selected ? 'text-[#5E9BFF]' : 'text-[#8E8E93]'
                           }`}
                         />
-                        <div className="text-[13px] font-semibold text-[#F2F2F4]">
+                        <div className="text-[13px] font-semibold text-[#F5F5F7]">
                           {opt.title}
                         </div>
-                        <p className="mt-1 text-[11.5px] text-[#8E8E96] leading-snug line-clamp-2">
+                        <p className="mt-1 text-[11.5px] text-[#8E8E93] leading-snug line-clamp-2">
                           {opt.description}
                         </p>
                       </div>
@@ -470,27 +473,26 @@ export function SettingsPanel({
             {/* Bloque 4 — Permisos y Garantías Éticas */}
             <section ref={permisosRef} className="space-y-3 scroll-mt-6">
               <div>
-                <h2 className="text-[14px] font-semibold text-[#F2F2F4]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Permisos y límites operativos
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E96]">
+                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
                   Controles de privacidad y cumplimiento ético aplicados automáticamente en todos los módulos.
                 </p>
               </div>
 
-              <div className="rounded-[6px] bg-[#141418] border border-[#232329] divide-y divide-[#232329]">
-                {/* Fila 1: Obligatorio */}
+              <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
                 <div className="p-4 flex items-center justify-between gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13px] font-medium text-[#F2F2F4]">
+                      <span className="text-[13.5px] font-medium text-[#F5F5F7]">
                         Procesamiento forense volátil (<span className="font-tech">RNF4</span>)
                       </span>
-                      <span className="rounded-[4px] bg-[#15223D] border border-[#2F6FED]/40 px-2 py-0.5 text-[10.5px] font-medium text-[#7AA7FF]">
+                      <span className="rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/35 px-2.5 py-0.5 text-[10.5px] font-medium text-[#8AB4FF]">
                         Obligatorio
                       </span>
                     </div>
-                    <p className="text-[12px] text-[#8E8E96] leading-relaxed">
+                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">
                       Analiza respaldos MVT y SQLite exclusivamente en RAM; descarta los buffers al finalizar sin escribir en disco.
                     </p>
                   </div>
@@ -502,13 +504,12 @@ export function SettingsPanel({
                   />
                 </div>
 
-                {/* Fila 2 */}
                 <div className="p-4 flex items-center justify-between gap-4">
                   <div className="space-y-0.5 min-w-0">
-                    <div className="text-[13px] font-medium text-[#F2F2F4]">
+                    <div className="text-[13.5px] font-medium text-[#F5F5F7]">
                       Inspección pasiva de enlaces (<span className="font-tech">RNF7</span>)
                     </div>
-                    <p className="text-[12px] text-[#8E8E96] leading-relaxed">
+                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">
                       Verifica URLs sospechosas contra IOCs y crt.sh sin emitir peticiones HTTP hacia el servidor destino.
                     </p>
                   </div>
@@ -520,13 +521,12 @@ export function SettingsPanel({
                   />
                 </div>
 
-                {/* Fila 3 */}
                 <div className="p-4 flex items-center justify-between gap-4">
                   <div className="space-y-0.5 min-w-0">
-                    <div className="text-[13px] font-medium text-[#F2F2F4]">
+                    <div className="text-[13.5px] font-medium text-[#F5F5F7]">
                       Consentimiento explícito OSINT (<span className="font-tech">RNF8</span>)
                     </div>
-                    <p className="text-[12px] text-[#8E8E96] leading-relaxed">
+                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">
                       Exige confirmación de titularidad antes de auditar dominios o correos institucionales.
                     </p>
                   </div>
@@ -544,33 +544,33 @@ export function SettingsPanel({
             <section ref={corpusRef} className="space-y-3 scroll-mt-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-[#8E8E96]" />
-                  <h2 className="text-[14px] font-semibold text-[#F2F2F4]">
+                  <Database className="h-4 w-4 text-[#8E8E93]" />
+                  <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                     Trazabilidad del Corpus Indexado (<span className="font-tech">RF7</span>)
                   </h2>
                 </div>
 
-                <span className="font-tech rounded-[4px] bg-[#15223D] border border-[#2F6FED]/40 px-2.5 py-1 text-[11px] text-[#7AA7FF]">
+                <span className="font-tech rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/35 px-3 py-1 text-[11px] text-[#8AB4FF]">
                   {stats.reports} Reportes · {stats.chunks} Fragmentos ·{' '}
                   {Number(stats.iocs || 0).toLocaleString('en-US')} IOCs
                 </span>
               </div>
 
-              <div className="rounded-[6px] bg-[#141418] border border-[#232329] divide-y divide-[#232329] max-h-56 overflow-y-auto">
+              <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] max-h-56 overflow-y-auto">
                 {sources.map((rep, idx) => (
                   <div
                     key={`${rep.title}-${idx}`}
                     className="px-4 py-3 flex items-center justify-between gap-4"
                   >
-                    <span className="text-[12.5px] text-[#F2F2F4] truncate">
+                    <span className="text-[12.5px] text-[#F5F5F7] truncate">
                       {rep.title}
                     </span>
 
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[12px] text-[#8E8E96]">
+                      <span className="text-[12px] text-[#8E8E93]">
                         {rep.organization}
                       </span>
-                      <span className="font-tech text-[11px] text-[#8E8E96]">
+                      <span className="font-tech text-[11px] text-[#8E8E93]">
                         {formatDateTag(rep.ingested_at || rep.publication_date)}
                       </span>
                     </div>

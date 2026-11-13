@@ -12,19 +12,19 @@ import { SourcesPanel } from './SourcesPanel';
 
 const QUICK_BRIEFS = [
   {
-    tag: 'IOS · PEGASUS',
+    tag: 'iOS · Pegasus',
     title: 'CVEs zero-click FORCEDENTRY y BLASTPASS',
     prompt:
       '¿Qué vulnerabilidades zero-click (CVEs) se documentan para Pegasus y qué versiones de iOS afectaron?',
   },
   {
-    tag: 'PREDATOR · CANDIRU',
+    tag: 'Predator · Candiru',
     title: 'Campañas, sectores objetivo e infraestructura C2',
     prompt:
       '¿Qué sectores y regiones fueron objetivo en las campañas de Predator e Intellexa?',
   },
   {
-    tag: 'FORENSE · MVT',
+    tag: 'Forense · MVT',
     title: 'Artefactos de infección en backups iOS',
     prompt:
       'Resume los principales artefactos forenses e indicadores de compromiso descritos en los reportes.',
@@ -48,7 +48,7 @@ function SourceScopePills({ value, onChange, compact = false }) {
     <div
       role="group"
       aria-label="Filtrar fuentes"
-      className="inline-flex flex-wrap items-center gap-0.5 rounded-[5px] border border-[#232329] bg-[#0A0A0C] p-0.5"
+      className="apple-segmented inline-flex flex-wrap items-center gap-0.5 rounded-[9px] p-0.5"
     >
       {SOURCE_OPTIONS.map((opt) => {
         const active = value === opt.value;
@@ -57,12 +57,12 @@ function SourceScopePills({ value, onChange, compact = false }) {
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`rounded-[4px] font-medium transition-colors cursor-pointer ${
+            className={`rounded-[7px] font-medium tracking-[-0.01em] transition-[background-color,color,box-shadow] duration-200 ease-apple cursor-pointer ${
               compact ? 'px-2.5 py-1 text-[11.5px]' : 'px-3 py-1 text-[12px]'
             } ${
               active
-                ? 'bg-[#15223D] text-[#8AB4FF]'
-                : 'text-[#9CA3B0] hover:text-[#F2F4F8]'
+                ? 'apple-segmented-active'
+                : 'text-[#8E8E93] hover:text-[#F5F5F7]'
             }`}
           >
             {opt.label}
@@ -170,8 +170,8 @@ export function ChatWorkspace({
   function renderIocHelperBar() {
     if (!iocPopoverOpen) return null;
     return (
-      <div className="mt-2 rounded-[6px] border border-[#232329] bg-[#0A0A0C]/95 p-2.5 space-y-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="apple-well mt-2.5 rounded-[11px] p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={iocInputRef}
             type="text"
@@ -184,13 +184,13 @@ export function ChatWorkspace({
               }
             }}
             placeholder="CVE-2023-41064, dominio o hash..."
-            className="font-tech flex-1 min-w-[180px] rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12.5px] text-[#F2F4F8] placeholder-[#949CA9] focus:border-[#2F6FED] focus:outline-none"
+            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED]/70 focus:outline-none transition-colors"
           />
           <button
             type="button"
             onClick={() => insertIocValue(iocDraft)}
             disabled={!iocDraft.trim()}
-            className="rounded-[4px] bg-[#2F6FED] px-3 py-1.5 text-[12px] font-medium text-[#F2F4F8] hover:bg-[#255ED4] disabled:bg-[#1C1C22] disabled:text-[#8E8E96] transition-colors cursor-pointer"
+            className="rounded-[8px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:bg-white/[0.06] disabled:text-[#6E6E73] active:scale-[0.96] transition-all cursor-pointer"
           >
             Usar
           </button>
@@ -198,16 +198,16 @@ export function ChatWorkspace({
             type="button"
             onClick={handlePasteClipboardIoc}
             title="Pegar desde el portapapeles"
-            className="inline-flex items-center gap-1 rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1.5 text-[12px] text-[#F2F4F8] hover:border-[#2F6FED]/55 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1.5 text-[12px] text-[#E5E5EA] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
           >
-            <ClipboardPaste className="h-3.5 w-3.5 text-[#2F6FED]" />
+            <ClipboardPaste className="h-3.5 w-3.5 text-[#5E9BFF]" />
             <span>Pegar</span>
           </button>
           <button
             type="button"
             onClick={() => setIocPopoverOpen(false)}
             aria-label="Cerrar"
-            className="p-1 text-[#9CA3B0] hover:text-[#F2F4F8] cursor-pointer"
+            className="p-1.5 rounded-full text-[#8E8E93] hover:bg-white/[0.07] hover:text-[#F5F5F7] transition-colors cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -219,7 +219,7 @@ export function ChatWorkspace({
               key={sample}
               type="button"
               onClick={() => insertIocValue(sample)}
-              className="font-tech rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-0.5 text-[#8AB4FF] hover:border-[#2F6FED]/55 hover:bg-[#15223D] transition-colors cursor-pointer"
+              className="font-tech rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[#8AB4FF] hover:border-[#2F6FED]/50 hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
             >
               + {sample}
             </button>
@@ -235,31 +235,37 @@ export function ChatWorkspace({
       <div className="flex-1 flex flex-col min-w-0">
         {messages.length === 0 ? (
           /* ============================================================
-             ESTADO INICIAL: Directo al punto — Emblema, pregunta y 3 accesos
+             ESTADO INICIAL: Minimalismo Apple — Emblema, pregunta y 3 tiles
              ============================================================ */
-          <main className="flex-1 overflow-y-auto flex flex-col items-center justify-between px-6 pt-4 pb-5">
+          <main className="flex-1 overflow-y-auto flex flex-col items-center justify-between px-6 pt-4 pb-6">
             <div className="flex-1 min-h-[16px] max-h-[84px]" />
 
-            <div className="w-full max-w-[720px] flex flex-col items-center">
-              {/* Emblema + Una sola pregunta directa */}
-              <div className="omega-fade-up flex flex-col items-center text-center mb-6">
-                <OmegaLogo size={64} isThinking={loading} />
-                <span className="mt-3 text-[11.5px] font-medium tracking-[0.18em] text-[#9CA3B0]">
-                  OMEGA · v1.0
-                </span>
-                <h1 className="mt-2 text-[28px] sm:text-[32px] font-semibold tracking-[-0.015em] leading-[1.2] text-[#F5F7FA]">
+            <div className="w-full max-w-[700px] flex flex-col items-center">
+              {/* Emblema luminoso + Título directo sin ruido superior */}
+              <div className="omega-fade-up flex flex-col items-center text-center mb-7">
+                <div className="relative flex items-center justify-center">
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 rounded-full blur-2xl bg-[#2F6FED]/20 scale-125 pointer-events-none"
+                  />
+                  <OmegaLogo size={62} isThinking={loading} />
+                </div>
+                <h1 className="mt-5 text-[28px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
                   ¿Qué amenaza analizamos?
                 </h1>
+                <p className="mt-2 text-[14.5px] tracking-[-0.01em] text-[#8E8E93]">
+                  Inteligencia técnica sobre spyware comercial respaldada con citas verificables.
+                </p>
               </div>
 
-              {/* Composer Central Limpio */}
+              {/* Composer Spotlight Obsidian */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   submitQuery();
                 }}
                 style={{ animationDelay: '60ms' }}
-                className="omega-fade-up omega-capsule w-full rounded-[10px] p-4"
+                className="omega-fade-up omega-capsule w-full rounded-[16px] p-4"
               >
                 <textarea
                   ref={textareaRef}
@@ -268,38 +274,38 @@ export function ChatWorkspace({
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Pregunta por Pegasus, un CVE, dominio o artefacto forense..."
-                  className="w-full resize-none bg-transparent px-1 pt-0.5 pb-2.5 text-[15px] leading-[1.6] text-[#F2F4F8] placeholder-[#949CA9] focus:outline-none"
+                  className="w-full resize-none bg-transparent px-1 pt-0.5 pb-2.5 text-[15px] leading-[1.58] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
                 />
 
                 {(detectedIoc || iocFeedback) && (
-                  <div className="px-1 pb-2 flex flex-wrap items-center gap-2 text-[12px]">
+                  <div className="px-1 pb-2.5 flex flex-wrap items-center gap-2 text-[12px]">
                     {detectedIoc && (
-                      <span className="font-tech inline-flex items-center gap-1 rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-0.5 text-[#8AB4FF]">
-                        <Fingerprint className="h-3 w-3 text-[#2F6FED]" />
+                      <span className="font-tech inline-flex items-center gap-1.5 rounded-full border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[#8AB4FF]">
+                        <Fingerprint className="h-3 w-3 text-[#5E9BFF]" />
                         {detectedIoc}
                       </span>
                     )}
                     {iocFeedback && (
-                      <span className="font-tech text-[#9CA3B0]">{iocFeedback}</span>
+                      <span className="font-tech text-[#8E8E93]">{iocFeedback}</span>
                     )}
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-[#232329]/80">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-white/[0.065]">
                   <SourceScopePills value={sourceScope} onChange={onChangeSourceScope} />
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setIocPopoverOpen((v) => !v)}
                       title="Pegar o insertar un CVE, dominio o hash"
-                      className={`inline-flex items-center gap-1 rounded-[5px] border px-2.5 py-1.5 font-tech text-[12px] transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-1 rounded-[8px] border px-2.5 py-1.5 font-tech text-[11.5px] active:scale-[0.96] transition-all duration-150 cursor-pointer ${
                         iocPopoverOpen
-                          ? 'border-[#2F6FED] bg-[#15223D] text-[#8AB4FF]'
-                          : 'border-[#232329] bg-[#0A0A0C] text-[#9CA3B0] hover:border-[#2F6FED]/55 hover:text-[#F2F4F8]'
+                          ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                          : 'border-white/[0.08] bg-white/[0.04] text-[#98989D] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
                       }`}
                     >
-                      <Plus className="h-3.5 w-3.5 text-[#2F6FED]" />
+                      <Plus className="h-3.5 w-3.5 text-[#5E9BFF]" />
                       <span>IOC</span>
                     </button>
 
@@ -308,7 +314,7 @@ export function ChatWorkspace({
                       disabled={loading || !input.trim()}
                       title="Analizar (Enter)"
                       aria-label="Analizar"
-                      className="inline-flex items-center justify-center rounded-[5px] bg-[#2F6FED] p-2 text-[#F2F4F8] hover:bg-[#255ED4] disabled:bg-[#1C1C22] disabled:text-[#8E8E96] active:scale-[0.94] transition-all duration-150 cursor-pointer disabled:cursor-not-allowed"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                     >
                       <ArrowRight className="h-4 w-4" />
                     </button>
@@ -318,23 +324,23 @@ export function ChatWorkspace({
                 {renderIocHelperBar()}
               </form>
 
-              {/* 3 Accesos Directos Compactos (1 clic y al grano) */}
-              <div className="w-full mt-4 grid gap-2.5 sm:grid-cols-3">
+              {/* 3 Accesos Directos Aireados */}
+              <div className="w-full mt-4 grid gap-3 sm:grid-cols-3">
                 {QUICK_BRIEFS.map((item, idx) => (
                   <button
                     key={item.tag}
                     type="button"
                     onClick={() => submitQuery(item.prompt)}
-                    style={{ animationDelay: `${110 + idx * 40}ms` }}
-                    className="omega-prompt-tile omega-fade-up group flex flex-col justify-between rounded-[8px] px-4 py-3.5 text-left cursor-pointer"
+                    style={{ animationDelay: `${110 + idx * 45}ms` }}
+                    className="omega-prompt-tile omega-fade-up group flex flex-col justify-between rounded-[13px] px-4 py-3.5 text-left cursor-pointer"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-tech text-[11px] font-medium tracking-wider text-[#4C89FF]">
+                      <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#5E9BFF]">
                         {item.tag}
                       </span>
-                      <ArrowRight className="h-3.5 w-3.5 text-[#9CA3B0]/65 group-hover:text-[#F2F4F8] group-hover:translate-x-0.5 transition-all" />
+                      <ArrowRight className="h-3.5 w-3.5 text-[#6E6E73] group-hover:text-[#F5F5F7] group-hover:translate-x-0.5 transition-all duration-200 ease-apple" />
                     </div>
-                    <p className="mt-1.5 text-[13.5px] font-medium leading-[1.42] text-[#E6E9EF] group-hover:text-white">
+                    <p className="mt-1.5 text-[13.5px] font-medium tracking-[-0.01em] leading-[1.42] text-[#D1D1D6] group-hover:text-[#F5F5F7] transition-colors">
                       {item.title}
                     </p>
                   </button>
@@ -344,35 +350,35 @@ export function ChatWorkspace({
 
             <div className="flex-1 min-h-[16px] max-h-[84px]" />
 
-            <footer className="h-6 flex items-center justify-center text-[12px] text-[#9CA3B0]">
+            <footer className="h-6 flex items-center justify-center text-[12px] text-[#8E8E93]">
               {hasHistory && (
                 <button
                   type="button"
                   onClick={onResumeLastSession}
-                  className="hover:text-[#F2F4F8] transition-colors cursor-pointer"
+                  className="hover:text-[#F5F5F7] transition-colors cursor-pointer"
                 >
-                  Retomar última sesión →
+                  Retomar última investigación →
                 </button>
               )}
             </footer>
           </main>
         ) : (
           /* ============================================================
-             ESTADO ACTIVO: Hilo directo de conversación + fuentes
+             ESTADO ACTIVO: Hilo de conversación + evidencia
              ============================================================ */
           <>
-            <main className="flex-1 overflow-y-auto px-6 py-6">
-              <div className="mx-auto max-w-[780px] space-y-6">
+            <main className="flex-1 overflow-y-auto px-6 py-7">
+              <div className="mx-auto max-w-[780px] space-y-7">
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
                     <div key={idx} className="omega-fade-up flex justify-end">
-                      <div className="max-w-[82%] rounded-[8px] border border-[#232329] bg-[#141418] px-4 py-3 space-y-1">
+                      <div className="max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#2F6FED]/28 bg-[#2F6FED]/15 px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                         {msg.sourceScope && msg.sourceScope !== 'Todas las fuentes' && (
-                          <span className="font-tech inline-block rounded-[4px] border border-[#2F6FED]/35 bg-[#15223D] px-2 py-0.5 text-[11px] text-[#8AB4FF]">
+                          <span className="inline-block rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/18 px-2 py-0.5 text-[11px] font-medium text-[#8AB4FF]">
                             {msg.sourceScope}
                           </span>
                         )}
-                        <p className="text-[15px] leading-[1.62] text-[#F5F7FA] whitespace-pre-wrap">
+                        <p className="text-[15px] leading-[1.6] tracking-[-0.008em] text-[#F5F5F7] whitespace-pre-wrap">
                           {msg.content}
                         </p>
                       </div>
@@ -380,17 +386,17 @@ export function ChatWorkspace({
                   ) : msg.isError ? (
                     <div
                       key={idx}
-                      className="omega-fade-up rounded-[6px] border border-red-500/30 bg-red-950/20 px-4 py-3 flex items-center justify-between gap-4"
+                      className="omega-fade-up rounded-[12px] border border-[#FF453A]/30 bg-[#FF453A]/10 px-4 py-3.5 flex items-center justify-between gap-4"
                     >
                       <div className="space-y-0.5 text-[14px]">
-                        <p className="font-medium text-red-200">Error al consultar el motor</p>
-                        <p className="text-[13px] text-red-200/80">{msg.content}</p>
+                        <p className="font-medium text-[#FFDAD6]">Error al consultar el motor</p>
+                        <p className="text-[13px] text-[#FFDAD6]/80">{msg.content}</p>
                       </div>
                       {msg.retryQuery && (
                         <button
                           type="button"
                           onClick={() => onRetryFailedTurn(idx, msg.retryQuery, msg.sourceScope)}
-                          className="shrink-0 h-8 px-3 rounded-[4px] border border-red-400/35 bg-red-500/10 text-[12px] font-medium text-red-200 hover:bg-red-500/20 transition-colors cursor-pointer"
+                          className="shrink-0 h-8 px-3 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/15 text-[12px] font-medium text-[#FFDAD6] hover:bg-[#FF453A]/25 transition-colors cursor-pointer"
                         >
                           Reintentar
                         </button>
@@ -410,9 +416,9 @@ export function ChatWorkspace({
                 )}
 
                 {loading && (
-                  <div className="omega-fade-up flex items-center gap-3 rounded-[6px] border border-[#232329] bg-[#141418] px-4 py-3 text-[14px] text-[#F2F4F8]">
+                  <div className="omega-fade-up apple-group inline-flex items-center gap-3 rounded-[12px] px-4 py-3 text-[14px] text-[#F5F5F7]">
                     <OmegaLogo size={24} isThinking={true} />
-                    <span>
+                    <span className="tracking-[-0.01em]">
                       {sourceScope === 'Todas las fuentes'
                         ? 'Buscando en reportes...'
                         : `Buscando en ${sourceScope}...`}
@@ -424,16 +430,16 @@ export function ChatWorkspace({
               </div>
             </main>
 
-            {/* Composer Inferior Limpio */}
-            <div className="shrink-0 border-t border-[#232329] bg-[#0A0A0C]/95 px-6 py-3">
+            {/* Composer Inferior Flotante */}
+            <div className="shrink-0 border-t border-white/[0.05] bg-[#08080A]/75 backdrop-blur-xl px-6 py-3.5">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   submitQuery();
                 }}
-                className="mx-auto max-w-[780px] rounded-[8px] border border-[#232329] bg-[#141418] p-3 focus-within:border-[#2F6FED] transition-colors"
+                className="omega-capsule mx-auto max-w-[780px] rounded-[15px] p-3"
               >
-                <div className="flex items-end gap-2">
+                <div className="flex items-end gap-2.5">
                   <textarea
                     ref={textareaRef}
                     rows={1}
@@ -441,20 +447,20 @@ export function ChatWorkspace({
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Haz una pregunta de seguimiento..."
-                    className="flex-1 resize-none bg-transparent px-1.5 py-1 text-[15px] leading-[1.55] text-[#F2F4F8] placeholder-[#949CA9] focus:outline-none"
+                    className="flex-1 resize-none bg-transparent px-1.5 py-1 text-[15px] leading-[1.55] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
                   />
 
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
                     aria-label="Enviar"
-                    className="shrink-0 inline-flex items-center justify-center rounded-[5px] bg-[#2F6FED] p-2 text-[#F2F4F8] hover:bg-[#255ED4] disabled:bg-[#1C1C22] disabled:text-[#8E8E96] transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                   >
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
 
-                <div className="mt-2 pt-2 border-t border-[#232329]/75 flex flex-wrap items-center justify-between gap-2">
+                <div className="mt-2.5 pt-2.5 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
                   <SourceScopePills value={sourceScope} onChange={onChangeSourceScope} compact />
 
                   <div className="flex items-center gap-2">
@@ -467,13 +473,13 @@ export function ChatWorkspace({
                       type="button"
                       onClick={() => setIocPopoverOpen((v) => !v)}
                       title="Pegar o insertar un CVE, dominio o hash"
-                      className={`inline-flex items-center gap-1 rounded-[4px] border px-2.5 py-1 font-tech text-[11.5px] transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-1 rounded-[7px] border px-2.5 py-1 font-tech text-[11.5px] active:scale-[0.96] transition-all cursor-pointer ${
                         iocPopoverOpen
-                          ? 'border-[#2F6FED] bg-[#15223D] text-[#8AB4FF]'
-                          : 'border-[#232329] bg-[#0A0A0C] text-[#9CA3B0] hover:border-[#2F6FED]/55 hover:text-[#F2F4F8]'
+                          ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                          : 'border-white/[0.08] bg-white/[0.04] text-[#98989D] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
                       }`}
                     >
-                      <Plus className="h-3 w-3 text-[#2F6FED]" />
+                      <Plus className="h-3 w-3 text-[#5E9BFF]" />
                       <span>IOC</span>
                     </button>
                   </div>

@@ -1,61 +1,43 @@
 /**
- * Capa atmosférica volumétrica restringida a la vista de chat.
- * Reproduce haces de luz tenues y diagonales desde la parte superior derecha
- * sobre el lienzo oscuro sin interferir con el contraste de lectura.
+ * ChatAtmosphere — Luz atmosférica silenciosa de fondo (estilo Apple Obsidian).
+ * Iluminación radial profunda en cobalto tenue con transición suave al modo de lectura.
  */
 export function ChatAtmosphere({ dimmed = false }) {
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute inset-0 overflow-hidden select-none transition-opacity duration-500 ease-kowalski ${
-        dimmed ? 'opacity-35' : 'opacity-100'
+      className={`pointer-events-none absolute inset-0 overflow-hidden select-none transition-opacity duration-700 ease-apple ${
+        dimmed ? 'opacity-25' : 'opacity-100'
       }`}
     >
-      {/* Bruma ambiental muy contenida en el eje superior */}
+      {/* Halo óptico superior central muy suave */}
       <div
-        className="absolute -top-32 left-1/2 h-[440px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
+        className="absolute -top-44 left-1/2 -translate-x-1/2 h-[420px] w-[760px]"
         style={{
           background:
-            'radial-gradient(ellipse at 55% 24%, rgba(190, 210, 245, 0.06) 0%, rgba(47, 111, 237, 0.045) 38%, transparent 72%)',
+            'radial-gradient(ellipse at center, rgba(47, 111, 237, 0.14) 0%, rgba(47, 111, 237, 0.045) 45%, rgba(8, 8, 10, 0) 76%)',
         }}
       />
 
-      {/* Haces diagonales discretos estilo LiLi 3.0 */}
-      <div
-        className="omega-ray-drift absolute -top-24 right-[-8%] h-[115%] w-[88%] origin-top-right"
-        style={{
-          maskImage:
-            'radial-gradient(ellipse 72% 68% at 62% 14%, black 0%, rgba(0,0,0,0.65) 42%, transparent 82%)',
-          WebkitMaskImage:
-            'radial-gradient(ellipse 72% 68% at 62% 14%, black 0%, rgba(0,0,0,0.65) 42%, transparent 82%)',
-        }}
-      >
+      {/* Haz diagonal volumétrico sutil */}
+      <div className="omega-ray-drift absolute -top-28 right-[-8%] h-[112%] w-[86%] origin-top-right">
         <div
-          className="h-full w-full -rotate-[24deg] transform-gpu"
+          className="h-full w-full"
           style={{
-            background: `repeating-linear-gradient(
-              92deg,
-              transparent 0px,
-              transparent 36px,
-              rgba(226, 232, 240, 0.032) 48px,
-              rgba(255, 255, 255, 0.055) 62px,
-              rgba(147, 197, 253, 0.022) 78px,
-              transparent 104px,
-              transparent 148px
-            )`,
-            filter: 'blur(9px)',
+            background:
+              'radial-gradient(ellipse 68% 58% at 78% 12%, rgba(74, 134, 247, 0.105) 0%, rgba(47, 111, 237, 0.04) 44%, rgba(8, 8, 10, 0) 76%)',
           }}
         />
       </div>
 
-      {/* Suavizado inferior hacia el tono sólido del canvas */}
+      {/* Difusión inferior hacia el lienzo obsidiana #08080A */}
       <div
-        className="absolute inset-x-0 bottom-0 h-56"
+        className="absolute inset-0"
         style={{
-          background: 'linear-gradient(to bottom, transparent, #0A0A0C 92%)',
+          background:
+            'linear-gradient(180deg, rgba(8, 8, 10, 0) 0%, rgba(8, 8, 10, 0.25) 62%, #08080A 100%)',
         }}
       />
     </div>
   );
 }
-

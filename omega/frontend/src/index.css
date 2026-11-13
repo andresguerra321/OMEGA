@@ -1,179 +1,232 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'IBM Plex Sans', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'IBM Plex Mono', SFMono-Regular, monospace;
+
+  --color-obsidian: #08080A;
+  --color-surface: #121216;
+  --color-cobalt: #2F6FED;
+  --color-ink-primary: #F5F5F7;
+  --color-ink-secondary: #98989F;
 }
 
 @layer base {
   :root {
-    --bg-canvas: #0A0A0C;
-    --bg-sidebar: #111115;
-    --bg-surface: #141418;
-    --bg-surface-inset: #0E0F13;
-    --border-subtle: #232329;
-    --text-primary: #F2F4F8;
-    --text-prose: #E6E9EF;
-    --text-secondary: #9CA3B0;
-    --accent-blue: #2F6FED;
-    --accent-blue-hover: #255ED4;
-    --accent-muted: #15223D;
-    --ease-kowalski: cubic-bezier(0.23, 1, 0.32, 1);
-  }
-
-  * {
-    border-color: #232329;
-  }
-
-  html {
-    font-size: 16px;
     color-scheme: dark;
+    --bg-canvas: #08080A;
+    --bg-elevated: rgba(20, 20, 24, 0.74);
+    --bg-well: rgba(0, 0, 0, 0.34);
+    --border-hairline: rgba(255, 255, 255, 0.085);
+    --border-subtle: rgba(255, 255, 255, 0.065);
+    --accent-cobalt: #2F6FED;
+    --accent-cobalt-tint: rgba(47, 111, 237, 0.16);
+    --text-primary: #F5F5F7;
+    --text-secondary: #98989F;
+    --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-kowalski: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  body {
-    background-color: #0A0A0C;
-    color: #F2F4F8;
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
     font-family: var(--font-sans);
-    font-size: 1rem;
-    line-height: 1.55;
-    letter-spacing: -0.003em;
+    font-size: 14.5px;
+    line-height: 1.6;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-  }
-
-  h1,
-  h2,
-  h3 {
-    text-wrap: balance;
+    overflow: hidden;
   }
 
   ::selection {
-    background-color: rgba(47, 111, 237, 0.28);
-    color: #F4F6FA;
-  }
-
-  input,
-  textarea,
-  select {
-    caret-color: #2F6FED;
-  }
-
-  :focus-visible {
-    outline: 1.5px solid rgba(47, 111, 237, 0.78);
-    outline-offset: 2px;
-  }
-
-  code,
-  pre,
-  .font-tech {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "zero" 1;
-  }
-
-  /* Scrollbars discretos estilo consola de escritorio */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.11);
-    border-radius: 9999px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(47, 111, 237, 0.34);
+    color: #F5F5F7;
   }
 }
 
-@layer utilities {
-  .titlebar-drag {
-    -webkit-app-region: drag;
-  }
+/* Tipografía Monospace estricta para identificadores forenses y registros */
+.font-tech {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}
 
-  .titlebar-no-drag {
-    -webkit-app-region: no-drag;
-  }
+/* Scrollbar estilo macOS — sutil, translúcido y silencioso */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
 
-  .ease-kowalski {
-    transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  /* Superficie principal del composer estilo Raycast + macOS Sequoia */
-  .omega-capsule {
-    background-color: rgba(20, 20, 24, 0.94);
-    border: 1px solid #232329;
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.055),
-      0 0 0 1px rgba(0, 0, 0, 0.5),
-      0 12px 32px -12px rgba(0, 0, 0, 0.72);
-    transition:
-      border-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
-      background-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
-      box-shadow 220ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
 
-  .omega-capsule:focus-within {
-    background-color: rgba(20, 20, 24, 0.99);
-    border-color: rgba(47, 111, 237, 0.78);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
-      0 0 0 1px rgba(47, 111, 237, 0.22),
-      0 18px 40px -14px rgba(0, 0, 0, 0.78);
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
 
-  /* Tarjeta compacta de sugerencia bajo el composer */
-  .omega-prompt-tile {
-    background-color: rgba(20, 20, 24, 0.9);
-    border: 1px solid #232329;
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
-      0 8px 22px -12px rgba(0, 0, 0, 0.62);
-    transition:
-      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
-      border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
-      background-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
-      box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
+/* Integración nativa de ventana Electron macOS / Windows */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
 
-  .omega-prompt-tile:hover {
-    background-color: rgba(21, 34, 61, 0.36);
-    border-color: rgba(47, 111, 237, 0.58);
-    transform: translateY(-2px);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
-      0 14px 28px -12px rgba(0, 0, 0, 0.72);
-  }
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
 
-  .omega-prompt-tile:active {
-    transform: translateY(0) scale(0.985);
-    transition-duration: 90ms;
-  }
+/* Curva de desaceleración Apple CoreAnimation */
+.ease-apple,
+.ease-kowalski {
+  transition-timing-function: var(--ease-apple);
+}
 
-  .omega-core-pulse {
-    animation: omegaCorePulse 1.8s ease-in-out infinite;
-  }
+/* Materiales Ópticos — Apple Obsidian Vibrancy (estándar backdrop-filter al final para Vite/LightningCSS) */
+.apple-vibrancy {
+  background: rgba(16, 16, 20, 0.78);
+  -webkit-backdrop-filter: blur(28px) saturate(1.45);
+  backdrop-filter: blur(28px) saturate(1.45);
+}
 
-  .omega-fade-up {
-    animation: omegaFadeUp 460ms cubic-bezier(0.23, 1, 0.32, 1) both;
-  }
+.apple-group {
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 10px 32px rgba(0, 0, 0, 0.26);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
 
-  .omega-panel-in {
-    animation: omegaPanelIn 240ms cubic-bezier(0.23, 1, 0.32, 1) both;
-  }
+.apple-well {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
 
-  .omega-ray-drift {
-    animation: omegaRayDrift 18s ease-in-out infinite alternate;
+.apple-segmented {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.28);
+}
+
+.apple-segmented-active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #F5F5F7;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.apple-tooltip {
+  background: rgba(24, 24, 30, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 36px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* Cápsula flotante estilo macOS Spotlight para entrada primaria */
+.omega-capsule {
+  background: rgba(22, 22, 27, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 20px 54px rgba(0, 0, 0, 0.56);
+  -webkit-backdrop-filter: blur(26px) saturate(1.4);
+  backdrop-filter: blur(26px) saturate(1.4);
+  transition:
+    border-color 200ms var(--ease-apple),
+    background-color 200ms var(--ease-apple),
+    box-shadow 240ms var(--ease-apple);
+}
+
+.omega-capsule:focus-within {
+  background: rgba(24, 24, 30, 0.9);
+  border-color: rgba(47, 111, 237, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 3px rgba(47, 111, 237, 0.14),
+    0 24px 64px rgba(0, 0, 0, 0.64);
+}
+
+/* Sugerencias flotantes de bienvenida */
+.omega-prompt-tile {
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  transition:
+    transform 200ms var(--ease-apple),
+    border-color 200ms var(--ease-apple),
+    background-color 200ms var(--ease-apple),
+    box-shadow 200ms var(--ease-apple);
+}
+
+.omega-prompt-tile:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.052);
+  border-color: rgba(47, 111, 237, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.38);
+}
+
+.omega-prompt-tile:active {
+  transform: scale(0.985);
+}
+
+/* Micro-animaciones nítidas estilo macOS */
+.omega-core-pulse {
+  animation: omegaCorePulse 2.2s ease-in-out infinite;
+}
+
+.omega-fade-up {
+  animation: omegaFadeUp 180ms var(--ease-apple) both;
+}
+
+.omega-panel-in {
+  animation: omegaPanelIn 220ms var(--ease-apple) both;
+}
+
+.apple-modal-in {
+  animation: appleModalIn 180ms var(--ease-apple) both;
+}
+
+.omega-ray-drift {
+  animation: omegaRayDrift 22s ease-in-out infinite alternate;
+}
+
+@keyframes omegaCorePulse {
+  0%,
+  100% {
+    opacity: 0.74;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
   }
 }
 
 @keyframes omegaFadeUp {
   from {
-    opacity: 0;
-    transform: translateY(8px);
+    opacity: 0.35;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -184,7 +237,7 @@
 @keyframes omegaPanelIn {
   from {
     opacity: 0;
-    transform: translateX(10px);
+    transform: translateX(12px);
   }
   to {
     opacity: 1;
@@ -192,40 +245,40 @@
   }
 }
 
-@keyframes omegaRayDrift {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.78;
+@keyframes appleModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
   }
-  100% {
-    transform: translate3d(-14px, 6px, 0) scale(1.03);
+  to {
     opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 
-@keyframes omegaCorePulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(1.02);
+@keyframes omegaRayDrift {
+  0% {
+    transform: translate3d(0px, 0px, 0) scale(1);
+    opacity: 0.88;
   }
-  50% {
-    opacity: 0.85;
-    transform: scale(1.14);
+  100% {
+    transform: translate3d(-14px, 10px, 0) scale(1.03);
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .omega-fade-up,
   .omega-panel-in,
+  .apple-modal-in,
   .omega-ray-drift,
   .omega-core-pulse {
     animation: none !important;
-    transform: none !important;
   }
 
   .omega-prompt-tile,
   .omega-capsule {
-    transition-duration: 0.01ms !important;
+    transition: none !important;
+    transform: none !important;
   }
 }

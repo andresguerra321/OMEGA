@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Loader2, Smartphone, Upload } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, ShieldCheck, Smartphone, Upload } from 'lucide-react';
 import { analyzeLiveDeviceSnapshot, runParallelTriage, verifyMvtText } from '../lib/api';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
@@ -284,11 +284,14 @@ export function MvtVerifierPanel({ onAskInChat }) {
       behavioralAnomalies.some((a) => a.severity === 'CRITICAL') ||
       result.verdictCode === 'BEHAVIORAL_ZERO_DAY_SUSPICION';
 
-    let verdictAccent = 'border-l-[#2F6FED]';
+    let verdictDot = 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.5)]';
+    let verdictHeadingTone = 'text-[#F5F5F7]';
     if (hasMatches || hasCriticalBehavioral) {
-      verdictAccent = 'border-l-[#F87171]';
+      verdictDot = 'bg-[#FF453A] shadow-[0_0_10px_rgba(255,69,58,0.55)]';
+      verdictHeadingTone = 'text-[#FF6961]';
     } else if (hasBehavioral) {
-      verdictAccent = 'border-l-[#FBBF24]';
+      verdictDot = 'bg-[#FF9F0A] shadow-[0_0_10px_rgba(255,159,10,0.45)]';
+      verdictHeadingTone = 'text-[#FFD60A]';
     }
 
     let verdictTitle = 'Sin indicadores de spyware detectados';
@@ -310,86 +313,91 @@ export function MvtVerifierPanel({ onAskInChat }) {
     }
 
     return (
-      <div className="w-full max-w-[700px] mx-auto pt-2 pb-10">
-        {/* Barra superior minimalista */}
-        <div className="flex items-center justify-between mb-6">
+      <div className="omega-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6">
+        {/* Barra superior */}
+        <div className="flex items-center justify-between">
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#8E8E96]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#8E8E93]" />
             <span>Nuevo análisis</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportMarkdown}
-            className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
           >
-            <Download className="h-3.5 w-3.5 text-[#8E8E96]" />
+            <Download className="h-3.5 w-3.5 text-[#8E8E93]" />
             <span>Exportar (.md)</span>
           </button>
         </div>
 
-        {/* Veredicto Claro (1 solo bloque) */}
-        <section
-          className={`rounded-[6px] bg-[#141418] border border-[#232329] border-l-2 p-5 ${verdictAccent}`}
-        >
-          <h2 className="text-[16px] font-semibold text-[#F2F2F4]">
-            {verdictTitle}
-          </h2>
+        {/* Bloque de Veredicto Apple Glass (sin borde lateral grueso) */}
+        <section className="apple-group rounded-[15px] p-5">
+          <div className="flex items-center gap-2.5">
+            {!hasMatches && !hasBehavioral ? (
+              <ShieldCheck className="h-5 w-5 text-[#30D158] shrink-0" />
+            ) : (
+              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictDot}`} />
+            )}
+            <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${verdictHeadingTone}`}>
+              {verdictTitle}
+            </h2>
+          </div>
 
-          <p className="mt-1.5 text-[13px] text-[#8E8E96] leading-relaxed">
+          <p className="mt-2.5 text-[13.5px] text-[#D1D1D6] leading-relaxed">
             {verdictBody}
           </p>
 
-          <div className="font-tech mt-4 text-[11px] text-[#8E8E96]">
-            Archivo: {result.sourceLabel}
+          <div className="font-tech mt-4 pt-3 border-t border-white/[0.06] text-[11.5px] text-[#8E8E93]">
+            {result.sourceLabel}
             {result.filesAnalyzed ? ` · ${result.filesAnalyzed} artefacto(s) en RAM` : ''}
             {` · ${result.analyzedCount} indicadores evaluados · 0 bytes guardados`}
           </div>
         </section>
 
-        {/* Postura de Endurecimiento (cuando proviene de captura viva ADB USB) */}
+        {/* Postura de Endurecimiento (ADB USB) */}
         {hardeningReport?.hardening_checks?.length > 0 && (
-          <section className="mt-6">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="font-tech text-[11px] uppercase tracking-wider text-[#8E8E96]">
-                Postura de Endurecimiento (ADB USB)
+          <section className="space-y-2">
+            <div className="px-1 flex items-center justify-between gap-3">
+              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+                Postura de endurecimiento (ADB USB)
               </span>
               {hardeningReport.device_summary && (
-                <span className="font-tech text-[11px] text-[#8E8E96]">
+                <span className="font-tech text-[11.5px] text-[#8E8E93]">
                   Android {hardeningReport.device_summary.android_version || 'N/D'} · Parche{' '}
                   {hardeningReport.device_summary.security_patch || 'N/D'}
                 </span>
               )}
             </div>
-            <div className="rounded-[6px] border border-[#232329] bg-[#141418] divide-y divide-[#232329]">
+            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
               {hardeningReport.hardening_checks.map((chk) => {
-                let badgeCls = 'border-[#232329] bg-[#0A0A0C] text-[#8E8E96]';
+                let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
                 if (chk.status === 'OK') {
-                  badgeCls = 'border-[#2F6FED]/40 bg-[#15223D] text-[#7AA7FF]';
+                  badgeCls = 'border-[#30D158]/35 bg-[#30D158]/12 text-[#30D158]';
                 } else if (chk.status === 'WARN') {
-                  badgeCls = 'border-[#52401E] bg-[#1C1810] text-[#FBBF24]';
+                  badgeCls = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
                 }
 
                 return (
-                  <div key={chk.control} className="px-4 py-3 flex items-start justify-between gap-4">
+                  <div key={chk.control} className="px-4 py-3.5 flex items-start justify-between gap-4">
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`font-tech rounded-[4px] border px-1.5 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
+                        <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
                           {chk.status}
                         </span>
-                        <span className="text-[13px] font-medium text-[#F2F2F4]">
+                        <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
                           {chk.control}
                         </span>
                       </div>
-                      <p className="text-[12.5px] text-[#8E8E96] leading-relaxed">
+                      <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
                         {chk.detail}
                       </p>
                     </div>
-                    <span className="font-tech shrink-0 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[11px] text-[#F2F2F4]">
+                    <span className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
                       {chk.value}
                     </span>
                   </div>
@@ -399,79 +407,82 @@ export function MvtVerifierPanel({ onAskInChat }) {
           </section>
         )}
 
-        {/* Lista Limpia de Hallazgos CTI (si hay coincidencias) */}
+        {/* Hallazgos CTI */}
         {hasMatches && (
-          <section className="mt-6 border-t border-b border-[#232329] divide-y divide-[#232329]">
-            {result.findings.map((finding) => (
-              <div
-                key={finding.id}
-                className="py-3.5 flex items-center justify-between gap-4"
-              >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="font-tech text-[13px] text-[#F2F2F4] break-all">
-                      {finding.ioc_value}
-                    </span>
-                    <span className="rounded-[4px] border border-[#232329] bg-[#141418] px-2 py-0.5 text-[11px] font-medium text-[#F2F2F4]">
-                      {finding.spyware_family}
-                    </span>
-                  </div>
-                  <div className="font-tech text-[11.5px] text-[#8E8E96] truncate">
-                    {finding.artifact_origin}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={!onAskInChat}
-                  onClick={() => handleInvestigateFinding(finding)}
-                  className="shrink-0 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] hover:text-[#7AA7FF] disabled:opacity-50 transition-colors cursor-pointer"
+          <section className="space-y-2">
+            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+              Coincidencias con inteligencia pública ({result.findings.length})
+            </span>
+            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+              {result.findings.map((finding) => (
+                <div
+                  key={finding.id}
+                  className="px-4 py-3.5 flex items-center justify-between gap-4"
                 >
-                  Investigar en Preguntar
-                </button>
-              </div>
-            ))}
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
+                        {finding.ioc_value}
+                      </span>
+                      <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
+                        {finding.spyware_family}
+                      </span>
+                    </div>
+                    <div className="font-tech text-[11.5px] text-[#8E8E93] truncate">
+                      {finding.artifact_origin}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!onAskInChat}
+                    onClick={() => handleInvestigateFinding(finding)}
+                    className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  >
+                    Investigar en Preguntar
+                  </button>
+                </div>
+              ))}
+            </div>
           </section>
         )}
 
-        {/* Lista Limpia de Anomalías Conductuales (Zero-Day / RAM) */}
+        {/* Anomalías Conductuales */}
         {hasBehavioral && (
-          <section className="mt-6">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-tech text-[11px] uppercase tracking-wider text-[#8E8E96]">
-                Heurística Conductual en RAM (Sin dependencia de IOCs)
-              </span>
-            </div>
-            <div className="border-t border-b border-[#232329] divide-y divide-[#232329]">
+          <section className="space-y-2">
+            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+              Heurística conductual en RAM ({behavioralAnomalies.length})
+            </span>
+            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
               {behavioralAnomalies.map((anom, idx) => {
                 const isCrit = anom.severity === 'CRITICAL';
                 return (
                   <div
                     key={`${anom.category}-${anom.artifact}-${anom.indicator}-${idx}`}
-                    className="py-3.5 flex items-start justify-between gap-4"
+                    className="px-4 py-3.5 flex items-start justify-between gap-4"
                   >
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0 space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`font-tech rounded-[4px] border px-1.5 py-0.5 text-[10.5px] font-medium ${
+                          className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
                             isCrit
-                              ? 'border-[#5A2429] bg-[#1F1215] text-[#F87171]'
-                              : 'border-[#52401E] bg-[#1C1810] text-[#FBBF24]'
+                              ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
+                              : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
                           }`}
                         >
                           {anom.severity}
                         </span>
-                        <span className="font-tech text-[13px] text-[#F2F2F4] break-all">
+                        <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
                           {anom.indicator}
                         </span>
-                        <span className="font-tech rounded-[4px] border border-[#232329] bg-[#141418] px-2 py-0.5 text-[10.5px] text-[#8E8E96]">
+                        <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
                           {anom.category}
                         </span>
                       </div>
-                      <p className="text-[12.5px] text-[#8E8E96] leading-relaxed">
+                      <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
                         {anom.detail}
                       </p>
-                      <div className="font-tech text-[11px] text-[#8E8E96]/90 truncate">
+                      <div className="font-tech text-[11px] text-[#8E8E93] truncate">
                         {anom.artifact}
                       </div>
                     </div>
@@ -480,7 +491,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                       type="button"
                       disabled={!onAskInChat}
                       onClick={() => handleInvestigateAnomaly(anom)}
-                      className="shrink-0 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] hover:text-[#7AA7FF] disabled:opacity-50 transition-colors cursor-pointer"
+                      className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                     >
                       Investigar en Preguntar
                     </button>
@@ -496,42 +507,41 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
   // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente) ---
   return (
-    <div className="flex-1 flex flex-col items-center justify-center py-6">
+    <div className="omega-fade-up flex-1 flex flex-col items-center justify-center py-6">
       <div className="w-full max-w-[620px]">
-        {/* Encabezado centrado */}
-        <header className="text-center mb-6">
-          <span className="font-tech inline-block rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1 text-[11px] text-[#8E8E96]">
-            ANÁLISIS EN RAM · SIN PERSISTENCIA
-          </span>
-          <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-[#F2F2F4]">
+        <header className="text-center mb-7">
+          <h1 className="text-[28px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
             Verificar integridad del dispositivo
           </h1>
-          <p className="mt-2 text-[13px] text-[#8E8E96] leading-relaxed">
-            Analiza salidas JSON de MVT o pega indicadores sospechosos para cruzarlos contra campañas conocidas.
+          <p className="mt-2.5 text-[14px] text-[#8E8E93] leading-[1.55] max-w-[510px] mx-auto">
+            Analiza respaldos en memoria RAM o cruza indicadores sospechosos sin escribir datos en disco.
           </p>
         </header>
 
-        {/* Barra Discreta USB Nativa (solo visible dentro de Electron Desktop) */}
+        {/* Barra USB Nativa (solo Electron Desktop) */}
         {hasDesktopBridge && (
-          <div className="mb-3 rounded-[6px] border border-[#232329] bg-[#141418] px-3.5 py-2.5 flex items-center justify-between gap-3">
-            <div className="min-w-0 flex items-center gap-2.5">
-              <Smartphone
-                className={`h-4 w-4 shrink-0 ${
-                  usbDevice?.connected ? 'text-[#2F6FED]' : 'text-[#8E8E96]'
-                }`}
-              />
+          <div className="apple-group mb-3.5 rounded-[13px] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
+                <Smartphone
+                  className={`h-4 w-4 ${
+                    usbDevice?.connected ? 'text-[#30D158]' : 'text-[#8E8E93]'
+                  }`}
+                />
+              </div>
               <div className="min-w-0">
                 {usbDevice?.connected ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[12.5px] font-medium text-[#F2F2F4] truncate">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
+                    <span className="text-[13px] font-medium text-[#F5F5F7] truncate">
                       {usbDevice.model}
                     </span>
-                    <span className="font-tech text-[11px] text-[#8E8E96]">
-                      {usbDevice.serial} · ADB solo lectura
+                    <span className="font-tech text-[11px] text-[#8E8E93]">
+                      {usbDevice.serial} · solo lectura
                     </span>
                   </div>
                 ) : (
-                  <p className="text-[12px] text-[#8E8E96] truncate">
+                  <p className="text-[12.5px] text-[#8E8E93] truncate">
                     {usbDevice?.reason || 'Detectando dispositivo Android por USB...'}
                   </p>
                 )}
@@ -543,51 +553,53 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 type="button"
                 disabled={scanningUsb || isAnalyzing}
                 onClick={handleLiveUsbScan}
-                className="shrink-0 rounded-[4px] bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-50 px-3 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
               >
                 {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>{scanningUsb ? 'Extrayendo RAM...' : 'Auditar dispositivo'}</span>
               </button>
             ) : (
-              <span className="font-tech shrink-0 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[10.5px] text-[#8E8E96]">
+              <span className="font-tech shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[10.5px] text-[#8E8E93]">
                 USB ADB
               </span>
             )}
           </div>
         )}
 
-        {/* Contenedor Único de Entrada */}
-        <div className="rounded-[6px] bg-[#141418] border border-[#232329] p-4">
-          {/* Selector superior tipo tab minimalista */}
-          <div className="flex items-center gap-1 border-b border-[#232329] pb-3 mb-4">
-            <button
-              type="button"
-              onClick={() => {
-                setInputMode('upload');
-                setErrorMsg('');
-              }}
-              className={`rounded-[4px] px-3 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
-                inputMode === 'upload'
-                  ? 'bg-[#15223D] text-[#F2F2F4]'
-                  : 'text-[#8E8E96] hover:text-[#F2F2F4]'
-              }`}
-            >
-              Subir archivo MVT
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setInputMode('paste');
-                setErrorMsg('');
-              }}
-              className={`rounded-[4px] px-3 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
-                inputMode === 'paste'
-                  ? 'bg-[#15223D] text-[#F2F2F4]'
-                  : 'text-[#8E8E96] hover:text-[#F2F2F4]'
-              }`}
-            >
-              Pegar indicadores
-            </button>
+        {/* Contenedor Principal Apple Glass */}
+        <div className="omega-capsule rounded-[16px] p-4">
+          {/* Selector Segmentado macOS */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="apple-segmented inline-flex rounded-[9px] p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode('upload');
+                  setErrorMsg('');
+                }}
+                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                  inputMode === 'upload'
+                    ? 'apple-segmented-active'
+                    : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                }`}
+              >
+                Subir archivo MVT
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInputMode('paste');
+                  setErrorMsg('');
+                }}
+                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                  inputMode === 'paste'
+                    ? 'apple-segmented-active'
+                    : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                }`}
+              >
+                Pegar indicadores
+              </button>
+            </div>
           </div>
 
           {inputMode === 'upload' ? (
@@ -607,10 +619,10 @@ export function MvtVerifierPanel({ onAskInChat }) {
                   analyzeFiles(e.dataTransfer.files);
                 }
               }}
-              className={`rounded-[4px] border border-dashed py-10 px-6 flex flex-col items-center justify-center text-center transition-colors cursor-pointer ${
+              className={`rounded-[12px] border border-dashed py-11 px-6 flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer ${
                 isDragging
-                  ? 'border-[#2F6FED] bg-[#15223D]/30'
-                  : 'border-[#232329] hover:border-[#2F6FED]/60'
+                  ? 'border-[#2F6FED] bg-[#2F6FED]/12'
+                  : 'border-white/[0.12] bg-black/25 hover:border-[#2F6FED]/55 hover:bg-black/35'
               }`}
             >
               <input
@@ -622,53 +634,55 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 className="hidden"
               />
 
-              {isAnalyzing ? (
-                <Loader2 className="h-5 w-5 text-[#2F6FED] animate-spin mb-2.5" />
-              ) : (
-                <Upload className="h-5 w-5 text-[#8E8E96] mb-2.5" />
-              )}
-
-              <p className="text-[13px] text-[#F2F2F4]">
+              <div className="mb-3 h-10 w-10 rounded-[11px] bg-white/[0.045] border border-white/[0.08] flex items-center justify-center">
                 {isAnalyzing ? (
-                  'Analizando en memoria RAM...'
+                  <Loader2 className="h-5 w-5 text-[#5E9BFF] animate-spin" />
                 ) : (
-                  <>
-                    Arrastra tu volcado MVT o <span className="font-tech">sysdiagnose</span> (
-                    <span className="font-tech">.json</span>,{' '}
-                    <span className="font-tech">.db</span>,{' '}
-                    <span className="font-tech">.tar.gz</span>,{' '}
-                    <span className="font-tech">.zip</span>) aquí
-                  </>
+                  <Upload className="h-4.5 w-4.5 text-[#8E8E93]" />
                 )}
+              </div>
+
+              <p className="text-[13.5px] font-medium text-[#F5F5F7]">
+                {isAnalyzing
+                  ? 'Analizando artefactos en memoria RAM...'
+                  : 'Arrastra tu volcado MVT o sysdiagnose aquí'}
               </p>
+
+              {!isAnalyzing && (
+                <p className="font-tech mt-1 text-[11.5px] text-[#8E8E93]">
+                  .json · .db · .tar.gz · .zip
+                </p>
+              )}
 
               <button
                 type="button"
                 disabled={isAnalyzing}
                 onClick={handleRunSample}
-                className="mt-2.5 text-[12px] text-[#2F6FED] hover:text-[#7AA7FF] hover:underline disabled:opacity-50 cursor-pointer"
+                className="mt-3.5 rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-1 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/20 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 Probar con muestra de ejemplo
               </button>
             </div>
           ) : (
             <form onSubmit={handleAnalyzeText}>
-              <textarea
-                rows={4}
-                value={manualText}
-                onChange={(e) => setManualText(e.target.value)}
-                placeholder={'free247downloads.com\n185.220.101.44\n4a7f... (SHA-256) o proceso anómalo'}
-                className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12px] leading-relaxed text-[#F2F2F4] placeholder-[#8E8E96]/70 focus:outline-none"
-              />
+              <div className="apple-well rounded-[11px] p-3">
+                <textarea
+                  rows={4}
+                  value={manualText}
+                  onChange={(e) => setManualText(e.target.value)}
+                  placeholder={'free247downloads.com\n185.220.101.44\n4a7f... (SHA-256) o proceso anómalo'}
+                  className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+                />
+              </div>
 
-              <div className="mt-3 pt-3 border-t border-[#232329] flex items-center justify-between gap-3">
-                <span className="text-[12px] text-[#8E8E96]">
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-[12px] text-[#8E8E93]">
                   Uno por línea · Dominios, IPs, URLs o hashes
                 </span>
                 <button
                   type="submit"
                   disabled={isAnalyzing || !manualText.trim()}
-                  className="rounded-[4px] bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-45 px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Analizar</span>
@@ -678,7 +692,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
           )}
 
           {errorMsg && (
-            <p className="mt-3 text-[12px] text-[#F87171]">
+            <p className="mt-3 text-[12.5px] text-[#FF453A]">
               {errorMsg}
             </p>
           )}

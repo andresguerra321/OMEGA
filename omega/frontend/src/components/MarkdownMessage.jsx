@@ -29,7 +29,7 @@ function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') 
           type="button"
           onClick={() => target && onSelectCitation?.(target)}
           title={target ? `${target.title} — Pág. ${target.page}` : `Fuente [${num}]`}
-          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0 text-[12px] font-medium text-[#8AB4FF] hover:border-[#2F6FED]/75 hover:bg-[#1B2E52] hover:text-[#F4F6FA] active:scale-[0.94] transition-all duration-150 ease-kowalski cursor-pointer"
+          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#2F6FED]/40 bg-[#2F6FED]/16 px-1.5 py-0 text-[12px] font-medium text-[#8AB4FF] hover:border-[#2F6FED]/70 hover:bg-[#2F6FED]/28 hover:text-white active:scale-[0.94] transition-all duration-150 ease-apple cursor-pointer"
         >
           [{num}]
         </button>
@@ -48,7 +48,7 @@ function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') 
       return (
         <span
           key={key}
-          className="font-tech rounded-[5px] border border-[#2A2D36] bg-[#14161C] px-1.5 py-0.5 text-[13px] font-medium text-[#F2F4F8]"
+          className="font-tech rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]"
         >
           {normalizedCve}
         </span>
@@ -70,7 +70,7 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
       return (
         <code
           key={`c-${sIdx}`}
-          className="font-tech rounded-[5px] border border-[#2A2D36] bg-[#14161C] px-1.5 py-0.5 text-[13px] font-medium text-[#F2F4F8]"
+          className="font-tech rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]"
         >
           {seg.slice(1, -1)}
         </code>
@@ -132,52 +132,52 @@ export function MarkdownMessage({ content, citations = [], onSelectCitation }) {
   const enhance = (children) => processChildren(children, citationMap, onSelectCitation);
 
   return (
-    <div className="max-w-[68ch] space-y-3.5 text-[15.5px] leading-[1.72] text-[#E6E9EF]">
+    <div className="max-w-[68ch] space-y-3.5 text-[15px] leading-[1.72] tracking-[-0.008em] text-[#E5E5EA]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="border-b border-[#262B33] pb-2 text-[20px] font-semibold leading-[1.3] tracking-[-0.01em] text-[#F5F7FA]">
+            <h1 className="border-b border-white/[0.08] pb-2 text-[20px] font-semibold leading-[1.3] tracking-[-0.02em] text-[#F5F5F7]">
               {enhance(children)}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="pt-2.5 text-[17px] font-semibold leading-[1.35] text-[#F5F7FA]">
+            <h2 className="pt-2.5 text-[17px] font-semibold leading-[1.35] tracking-[-0.015em] text-[#F5F5F7]">
               {enhance(children)}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="pt-1.5 text-[13.5px] font-semibold uppercase tracking-[0.06em] text-[#A8B0BE]">
+            <h3 className="pt-1.5 text-[13.5px] font-semibold tracking-[-0.01em] text-[#A1A1A6]">
               {enhance(children)}
             </h3>
           ),
           p: ({ children }) => (
-            <p className="text-[#E6E9EF]">{enhance(children)}</p>
+            <p className="text-[#E5E5EA]">{enhance(children)}</p>
           ),
           ul: ({ children }) => (
-            <ul className="space-y-2.5 pl-5 list-disc marker:text-[#3978F6]">{children}</ul>
+            <ul className="space-y-2.5 pl-5 list-disc marker:text-[#5E9BFF]">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="space-y-2.5 pl-5 list-decimal marker:text-[#3978F6]">{children}</ol>
+            <ol className="space-y-2.5 pl-5 list-decimal marker:text-[#5E9BFF]">{children}</ol>
           ),
           li: ({ children }) => (
-            <li className="pl-1.5 text-[#E6E9EF]">{enhance(children)}</li>
+            <li className="pl-1.5 text-[#E5E5EA]">{enhance(children)}</li>
           ),
           strong: ({ children }) => (
-            <strong className="font-semibold text-[#FFFFFF]">{enhance(children)}</strong>
+            <strong className="font-semibold text-[#F5F5F7]">{enhance(children)}</strong>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="my-2.5 border-l-2 border-[#3978F6] bg-[#14171D] py-2.5 pl-4 pr-3.5 text-[14.5px] leading-[1.65] text-[#C8CFD9]">
+            <blockquote className="apple-well my-2.5 rounded-[10px] py-3 px-4 text-[14.5px] leading-[1.65] text-[#D1D1D6]">
               {enhance(children)}
             </blockquote>
           ),
           code: ({ inline, children }) =>
             inline ? (
-              <code className="font-tech rounded-[4px] border border-[#2A2D36] bg-[#14161C] px-1.5 py-0.5 text-[13px] font-medium text-[#F2F4F8]">
+              <code className="font-tech rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]">
                 {children}
               </code>
             ) : (
-              <pre className="font-tech overflow-x-auto rounded-[6px] border border-[#262B33] bg-[#12141A] p-4 text-[13px] leading-[1.6] text-[#F2F4F8]">
+              <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-4 text-[12.5px] leading-[1.6] text-[#F5F5F7]">
                 <code>{children}</code>
               </pre>
             ),
