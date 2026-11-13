@@ -202,12 +202,13 @@ export default function App() {
     }
   }
 
-  async function handleSend(rawPrompt, requestedScope = sourceScope) {
+  async function handleSend(rawPrompt, requestedScope = sourceScope, options = {}) {
     const query = (rawPrompt || '').trim();
     if (!query || loadingChat) return;
 
+    const { forceNewSession = false } = options;
     const effectiveScope = requestedScope || 'Todas las fuentes';
-    let targetSessionId = currentSessionId;
+    let targetSessionId = forceNewSession ? null : currentSessionId;
     const nowIso = new Date().toISOString();
     const userTurn = {
       role: 'user',
@@ -235,9 +236,11 @@ export default function App() {
       );
     }
 
-    const historyPayload = messages
-      .filter((m) => !m.isError)
-      .map((m) => ({ role: m.role, content: m.content }));
+    const historyPayload = forceNewSession
+      ? []
+      : messages
+          .filter((m) => !m.isError)
+          .map((m) => ({ role: m.role, content: m.content }));
     setLoadingChat(true);
     const t0 = performance.now();
 
@@ -556,18 +559,20 @@ export default function App() {
             }}
             textareaRef={textareaRef}
           />
+        ) : activeNav === 'amenazas' ? (
+          <CampaignsPanel
+            onAskInChat={(p) => {
+              setSelectedCitation(null);
+              setIsSourcesPanelOpen(false);
+              setSourceScope('Todas las fuentes');
+              setActiveNav('preguntar');
+              handleSend(p, 'Todas las fuentes', { forceNewSession: true });
+            }}
+          />
         ) : (
-          /* Módulos de Soporte (Amenazas, Equipo, Exposición, Enlace, Ajustes) */
+          /* Módulos de Soporte (Equipo, Exposición, Enlace, Ajustes) */
           <main className="flex-1 overflow-y-auto px-8 py-8">
             <div className="mx-auto max-w-[940px]">
-              {activeNav === 'amenazas' && (
-                <CampaignsPanel
-                  onAskInChat={(p) => {
-                    startNewInvestigation();
-                    handleSend(p);
-                  }}
-                />
-              )}
               {activeNav === 'equipo' && <MvtVerifierPanel />}
               {activeNav === 'exposicion' && <OsintPanel />}
               {activeNav === 'enlace' && <LinkVerifierPanel />}
