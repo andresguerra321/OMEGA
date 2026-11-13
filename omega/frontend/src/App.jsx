@@ -569,18 +569,16 @@ export default function App() {
           />
         ) : activeNav === 'amenazas' ? (
           <CampaignsPanel onAskInChat={askInChat} />
-        ) : activeNav === 'equipo' || activeNav === 'exposicion' ? (
+        ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
           <main className="flex-1 overflow-y-auto px-6 py-8 flex flex-col">
             {activeNav === 'equipo' && <MvtVerifierPanel onAskInChat={askInChat} />}
             {activeNav === 'exposicion' && <OsintPanel />}
+            {activeNav === 'enlace' && <LinkVerifierPanel />}
           </main>
         ) : (
-          /* Módulos de Soporte (Enlace, Ajustes) */
-          <main className="flex-1 overflow-y-auto px-8 py-8">
-            <div className="mx-auto max-w-[940px]">
-              {activeNav === 'enlace' && <LinkVerifierPanel />}
-              {activeNav === 'ajustes' && <SettingsPanel topK={topK} onChangeTopK={setTopK} />}
-            </div>
+          /* Ajustes */
+          <main className="flex-1 overflow-y-auto px-6">
+            <SettingsPanel topK={topK} onChangeTopK={setTopK} />
           </main>
         )}
       </div>
