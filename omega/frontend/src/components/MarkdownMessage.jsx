@@ -126,13 +126,22 @@ function processChildren(children, citationMap, onSelectCitation) {
   });
 }
 
-export function MarkdownMessage({ content, citations = [], onSelectCitation }) {
+export function MarkdownMessage({
+  content,
+  citations = [],
+  onSelectCitation,
+  isTyping = false,
+}) {
   const citationMap = new Map(citations.map((c) => [c.index, c]));
   const sanitized = (content || '').replace(/<br\s*\/?>/gi, '\n');
   const enhance = (children) => processChildren(children, citationMap, onSelectCitation);
 
   return (
-    <div className="max-w-[68ch] space-y-3.5 text-[15px] leading-[1.72] tracking-[-0.008em] text-[#E5E5EA]">
+    <div
+      className={`max-w-[68ch] space-y-3.5 text-[15px] leading-[1.72] tracking-[-0.008em] text-[#E5E5EA] ${
+        isTyping ? 'omega-prose-typing' : ''
+      }`}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

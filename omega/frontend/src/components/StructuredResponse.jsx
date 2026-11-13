@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Copy,
   Check,
@@ -8,12 +8,82 @@ import {
   ChevronUp,
   Activity,
 } from 'lucide-react';
-import { MarkdownMessage, formatTextWithTechAndCitations } from './MarkdownMessage';
+import { MarkdownMessage } from './MarkdownMessage';
 
-const CVE_RE = /\bCVE[-\u2010-\u2015\u2212]\d{4}[-\u2010-\u2015\u2212]\d{4,7}\b/gi;
-const SHA256_RE = /\b[a-f0-9]{64}\b/gi;
-const DOMAIN_RE =
-  /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)\b/gi;
+const completedTypingIds = new Set();
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+  );
+}
+
+/** Avanza el corte de escritura hasta límites seguros de palabra y sintaxis Markdown inline. */
+function snapMarkdownBoundary(fullText, rawIndex) {
+  const total = fullText.length;
+  if (rawIndex >= total) return total;
+
+  let idx = Math.max(1, rawIndex);
+
+  // Evitar partir palabras a la mitad
+  let wordScan = 0;
+  while (idx < total && !/\s/.test(fullText[idx]) && wordScan < 20) {
+    idx += 1;
+    wordScan += 1;
+  }
+
+  const lineStart = fullText.lastIndexOf('\n', idx - 1) + 1;
+  let lineSlice = fullText.slice(lineStart, idx);
+
+  // Evitar dejar viñetas o encabezados vacíos antes de la primera palabra
+  if (/^(?:[-*•]|\d+\.|#{1,4}|>)\s*$/.test(lineSlice.trim())) {
+    const lineEnd = fullText.indexOf('\n', idx);
+    const limit = lineEnd === -1 ? total : lineEnd;
+    while (idx < limit && /\s/.test(fullText[idx])) idx += 1;
+    while (idx < limit && !/\s/.test(fullText[idx])) idx += 1;
+    lineSlice = fullText.slice(lineStart, idx);
+  }
+
+  // Completar delimitadores inline abiertos en la misma línea (**negrita**, `código`, [cita/enlace])
+  const lineEnd = fullText.indexOf('\n', lineStart);
+  const maxLinePos = lineEnd === -1 ? total : lineEnd;
+
+  const boldMatches = lineSlice.match(/\*\*/g);
+  if (boldMatches && boldMatches.length % 2 === 1) {
+    const closeBold = fullText.indexOf('**', idx);
+    if (closeBold !== -1 && closeBold + 2 <= maxLinePos && closeBold - idx <= 72) {
+      idx = closeBold + 2;
+      lineSlice = fullText.slice(lineStart, idx);
+    }
+  }
+
+  const tickMatches = lineSlice.match(/`/g);
+  if (tickMatches && tickMatches.length % 2 === 1 && !lineSlice.includes('```')) {
+    const closeTick = fullText.indexOf('`', idx);
+    if (closeTick !== -1 && closeTick + 1 <= maxLinePos && closeTick - idx <= 72) {
+      idx = closeTick + 1;
+      lineSlice = fullText.slice(lineStart, idx);
+    }
+  }
+
+  const lastOpenBracket = lineSlice.lastIndexOf('[');
+  const lastCloseBracket = lineSlice.lastIndexOf(']');
+  if (lastOpenBracket > lastCloseBracket) {
+    const closeBracket = fullText.indexOf(']', idx);
+    if (closeBracket !== -1 && closeBracket + 1 <= maxLinePos && closeBracket - idx <= 80) {
+      idx = closeBracket + 1;
+      if (fullText[idx] === '(') {
+        const closeParen = fullText.indexOf(')', idx);
+        if (closeParen !== -1 && closeParen + 1 <= maxLinePos && closeParen - idx <= 120) {
+          idx = closeParen + 1;
+        }
+      }
+    }
+  }
+
+  return Math.min(total, idx);
+}
 
 export function StructuredResponse({
   message,
@@ -21,17 +91,82 @@ export function StructuredResponse({
   onSelectCitation,
   onToggleSources,
   isSourcesOpen,
+  onTypingStep,
 }) {
-  const [viewMode, setViewMode] = useState('structured'); // 'structured' | 'markdown'
   const [showTelemetry, setShowTelemetry] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [copiedIoc, setCopiedIoc] = useState('');
 
-  const citations = message.citations || [];
-  const citationMap = useMemo(
-    () => new Map(citations.map((c) => [c.index, c])),
-    [citations]
+  const fullText = message.content || '';
+  const typingKey = useMemo(
+    () => message.id || `${message.latency || 'hist'}:${fullText.slice(0, 64)}`,
+    [message.id, message.latency, fullText]
   );
+
+  const shouldAnimateInitial =
+    Boolean(message.animateTyping) &&
+    fullText.length > 0 &&
+    !completedTypingIds.has(typingKey) &&
+    !prefersReducedMotion();
+
+  const [visibleLength, setVisibleLength] = useState(() =>
+    shouldAnimateInitial ? 0 : fullText.length
+  );
+  const stepCallbackRef = useRef(onTypingStep);
+
+  useEffect(() => {
+    stepCallbackRef.current = onTypingStep;
+  }, [onTypingStep]);
+
+  useEffect(() => {
+    if (!shouldAnimateInitial) {
+      return undefined;
+    }
+
+    let rafId = 0;
+    let cancelled = false;
+    const durationMs = Math.min(2200, Math.max(850, fullText.length * 4.5));
+    let startTime = null;
+    let lastCommitted = 0;
+
+    const tick = (now) => {
+      if (cancelled) return;
+      if (startTime === null) startTime = now;
+      const elapsed = now - startTime;
+      const linear = Math.min(1, elapsed / durationMs);
+      const eased = 1 - Math.pow(1 - linear, 1.25);
+      const rawIdx = Math.ceil(eased * fullText.length);
+      const nextIdx =
+        linear >= 1 ? fullText.length : snapMarkdownBoundary(fullText, rawIdx);
+
+      if (nextIdx > lastCommitted) {
+        lastCommitted = nextIdx;
+        setVisibleLength(nextIdx);
+        stepCallbackRef.current?.();
+      }
+
+      if (nextIdx < fullText.length) {
+        rafId = window.requestAnimationFrame(tick);
+      } else {
+        completedTypingIds.add(typingKey);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
+  }, [shouldAnimateInitial, fullText, typingKey]);
+
+  const isTyping = shouldAnimateInitial && visibleLength < fullText.length;
+  const visibleContent = isTyping ? fullText.slice(0, visibleLength) : fullText;
+
+  function finishTypingNow() {
+    completedTypingIds.add(typingKey);
+    setVisibleLength(fullText.length);
+  }
+
+  const citations = useMemo(() => message.citations || [], [message.citations]);
 
   // Telemetría colapsable derivada de las citas recuperadas
   const telemetry = useMemo(() => {
@@ -68,110 +203,20 @@ export function StructuredResponse({
       exactCount,
       semanticCount,
       maxSimilarity: trace?.max_similarity ?? maxSim,
-      confidence: trace?.overall_confidence || (maxSim >= 0.72 ? 'Alta' : maxSim >= 0.5 ? 'Media' : 'Referencial'),
     };
   }, [citations, message.analysis]);
 
-  // Extraer CVEs, hashes y dominios para acceso rápido
-  const technicalIndicators = useMemo(() => {
-    const text = message.content || '';
-    const cves = Array.from(
-      new Set(
-        (text.match(CVE_RE) || []).map((c) => c.replace(/[\u2010-\u2015\u2212]/g, '-').toUpperCase())
-      )
-    );
-    const hashes = Array.from(new Set(text.match(SHA256_RE) || [])).map((h) => h.toLowerCase());
-    const domains = Array.from(
-      new Set(
-        (text.match(DOMAIN_RE) || []).filter(
-          (d) =>
-            !d.includes('citizenlab') &&
-            !d.includes('amnesty') &&
-            !d.includes('blog.google') &&
-            !d.includes('github.com')
-        )
-      )
-    );
-    return { cves, hashes, domains };
-  }, [message.content]);
-
-  // Separar respuesta principal y puntos clave
-  const parsedSections = useMemo(() => {
-    const lines = (message.content || '').split(/\r?\n/);
-    const execLines = [];
-    const findings = [];
-    let isParsingFindings = false;
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      if (/^\*\*[^*]{2,48}:?\*\*:?$/.test(trimmed)) continue;
-
-      const indentLen = line.length - line.trimStart().length;
-      const bulletMatch = trimmed.match(/^(?:[-*•]|\d+\.)\s+(?:\*\*([^*]+?)\*\*\s*:?\s*)?(.*)$/);
-      if (bulletMatch) {
-        isParsingFindings = true;
-        let title = (bulletMatch[1] || '').trim().replace(/:$/, '');
-        let body = (bulletMatch[2] || '').trim().replace(/^:\s*/, '');
-
-        if (indentLen >= 2 && findings.length > 0) {
-          const subLine = title ? (body ? `**${title}:** ${body}` : `**${title}**`) : body;
-          const prev = findings[findings.length - 1];
-          prev.body = prev.body ? `${prev.body}\n${subLine}` : subLine;
-          continue;
-        }
-
-        if (!title && body.includes(':') && body.indexOf(':') < 64) {
-          const splitIdx = body.indexOf(':');
-          title = body.slice(0, splitIdx).trim().replace(/\*\*/g, '');
-          body = body.slice(splitIdx + 1).trim();
-        }
-        findings.push({
-          title: title || '',
-          body,
-        });
-      } else if (!isParsingFindings && !trimmed.startsWith('#') && !trimmed.startsWith('>')) {
-        const cleanedLine = trimmed.replace(
-          /^\*\*(?:Conclusi[oó]n|Resumen)\s+ejecutiv[ao]:?\*\*\s*/i,
-          ''
-        );
-        if (cleanedLine) execLines.push(cleanedLine);
-      } else if (isParsingFindings && findings.length > 0 && !trimmed.startsWith('#')) {
-        const prev = findings[findings.length - 1];
-        prev.body = prev.body ? `${prev.body}\n${trimmed}` : trimmed;
-      }
-    }
-
-    return {
-      executive: execLines.join(' ').trim() || lines[0] || '',
-      findings: findings.filter((f) => f.body || f.title),
-    };
-  }, [message.content]);
-
   function handleCopy() {
-    navigator.clipboard.writeText(message.content || '');
+    navigator.clipboard?.writeText(fullText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   }
 
-  function handleCopyIoc(value) {
-    navigator.clipboard?.writeText(value);
-    setCopiedIoc(value);
-    setTimeout(() => setCopiedIoc(''), 1400);
-  }
-
-  const hasStructuredContent = parsedSections.findings.length > 0;
   const isExtractiveFallback = message.model === 'omega-extractive-fallback';
-  const allIocs = [
-    ...technicalIndicators.cves,
-    ...technicalIndicators.domains.slice(0, 4),
-    ...technicalIndicators.hashes.slice(0, 2),
-  ];
 
   return (
     <div className="space-y-4">
-      {/* Barra compacta superior */}
+      {/* Barra compacta superior sin selector de tarjetas */}
       <div className="apple-group rounded-[11px] overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 text-[12.5px] text-[#98989D]">
           <button
@@ -184,7 +229,7 @@ export function StructuredResponse({
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 isExtractiveFallback ? 'bg-[#FF9F0A]' : 'bg-[#2F6FED]'
-              }`}
+              } ${isTyping ? 'omega-core-pulse' : ''}`}
             />
             <span className="font-tech text-[#F5F5F7]">
               {telemetry.fragmentCount} {telemetry.fragmentCount === 1 ? 'fuente' : 'fuentes'}
@@ -215,6 +260,16 @@ export function StructuredResponse({
           </button>
 
           <div className="flex items-center gap-1.5">
+            {isTyping && (
+              <button
+                type="button"
+                onClick={finishTypingNow}
+                className="px-2 py-1 rounded-[7px] text-[11.5px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+              >
+                Completar
+              </button>
+            )}
+
             {citations.length > 0 && (
               <button
                 type="button"
@@ -228,33 +283,6 @@ export function StructuredResponse({
                 <BookOpen className="h-3.5 w-3.5 text-[#5E9BFF]" />
                 <span>{isSourcesOpen ? 'Ocultar fuentes' : `Ver fuentes (${citations.length})`}</span>
               </button>
-            )}
-
-            {hasStructuredContent && (
-              <div className="apple-segmented inline-flex rounded-[8px] p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('structured')}
-                  className={`px-2.5 py-0.5 rounded-[6px] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                    viewMode === 'structured'
-                      ? 'apple-segmented-active'
-                      : 'text-[#8E8E93] hover:text-[#F5F5F7]'
-                  }`}
-                >
-                  Tarjetas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('markdown')}
-                  className={`px-2.5 py-0.5 rounded-[6px] text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                    viewMode === 'markdown'
-                      ? 'apple-segmented-active'
-                      : 'text-[#8E8E93] hover:text-[#F5F5F7]'
-                  }`}
-                >
-                  Texto
-                </button>
-              </div>
             )}
 
             <button
@@ -308,74 +336,19 @@ export function StructuredResponse({
         )}
       </div>
 
-      {/* Respuesta directa sin bordes laterales decorativos */}
-      {viewMode === 'markdown' || !hasStructuredContent ? (
-        <div className="py-0.5">
-          <MarkdownMessage
-            content={message.content}
-            citations={citations}
-            onSelectCitation={onSelectCitation}
-          />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="max-w-[68ch] text-[15.5px] leading-[1.72] tracking-[-0.008em] text-[#F5F5F7]">
-            {formatTextWithTechAndCitations(parsedSections.executive, citationMap, onSelectCitation)}
-          </p>
-
-          {/* Puntos clave en tarjetas agrupadas Apple */}
-          {parsedSections.findings.length > 0 && (
-            <div className="grid gap-2.5">
-              {parsedSections.findings.map((f, i) => (
-                <div
-                  key={i}
-                  className="apple-group rounded-[12px] px-4 py-3.5 space-y-1.5 hover:border-white/[0.14] transition-colors duration-200"
-                >
-                  {f.title && (
-                    <div className="text-[14.5px] font-semibold tracking-[-0.01em] leading-[1.4] text-[#F5F5F7]">
-                      {f.title.replace(/`/g, '')}
-                    </div>
-                  )}
-                  <div className="max-w-[68ch] text-[14px] leading-[1.68] text-[#D1D1D6] space-y-1.5">
-                    {f.body
-                      .split('\n')
-                      .map((line) => line.trim())
-                      .filter(Boolean)
-                      .map((line, lineIdx) => (
-                        <div key={lineIdx}>
-                          {formatTextWithTechAndCitations(line, citationMap, onSelectCitation)}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* IOCs clicables */}
-          {allIocs.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              <span className="text-[11.5px] font-medium text-[#8E8E93] mr-0.5">IOCs</span>
-              {allIocs.map((ioc) => (
-                <button
-                  key={ioc}
-                  type="button"
-                  onClick={() => handleCopyIoc(ioc)}
-                  title="Clic para copiar indicador"
-                  className="font-tech inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[12px] text-[#F5F5F7] hover:border-[#2F6FED]/45 hover:bg-white/[0.07] transition-colors cursor-pointer max-w-[230px] truncate"
-                >
-                  <span className="truncate">{ioc}</span>
-                  {copiedIoc === ioc && <Check className="h-3.5 w-3.5 text-[#5E9BFF] shrink-0" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Respuesta editorial en solo texto con animación elegante de escritura */}
+      <div className="py-0.5">
+        <MarkdownMessage
+          content={visibleContent}
+          citations={citations}
+          onSelectCitation={onSelectCitation}
+          isTyping={isTyping}
+        />
+      </div>
 
       {/* Citas compactas al pie */}
-      {citations.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
+      {citations.length > 0 && !isTyping && (
+        <div className="omega-fade-up flex flex-wrap gap-1.5 pt-1">
           {citations.map((cit) => {
             const isSelected =
               activeCitation?.index === cit.index && activeCitation?.title === cit.title;

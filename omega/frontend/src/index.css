@@ -272,13 +272,70 @@
   .omega-panel-in,
   .apple-modal-in,
   .omega-ray-drift,
-  .omega-core-pulse {
+  .omega-core-pulse,
+  .omega-prose-typing p,
+  .omega-prose-typing li,
+  .omega-prose-typing h1,
+  .omega-prose-typing h2,
+  .omega-prose-typing h3 {
     animation: none !important;
+  }
+
+  .omega-prose-typing > :last-child::after,
+  .omega-prose-typing > ul:last-child > li:last-child::after,
+  .omega-prose-typing > ol:last-child > li:last-child::after,
+  .omega-prose-typing > blockquote:last-child > :last-child::after,
+  .omega-prose-typing > pre:last-child > code::after {
+    display: none !important;
   }
 
   .omega-prompt-tile,
   .omega-capsule {
     transition: none !important;
     transform: none !important;
+  }
+}
+
+/* Simulación elegante de escritura en respuestas solo texto (sin gradientes exagerados) */
+.omega-prose-typing > :last-child:not(ul):not(ol):not(pre):not(blockquote)::after,
+.omega-prose-typing > ul:last-child > li:last-child::after,
+.omega-prose-typing > ol:last-child > li:last-child::after,
+.omega-prose-typing > blockquote:last-child > :last-child::after,
+.omega-prose-typing > pre:last-child > code::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 4px;
+  vertical-align: -0.16em;
+  border-radius: 9999px;
+  background-color: #8ab4ff;
+  animation: omegaCaretPulse 880ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.omega-prose-typing p,
+.omega-prose-typing li,
+.omega-prose-typing h1,
+.omega-prose-typing h2,
+.omega-prose-typing h3 {
+  animation: omegaTextSettle 160ms var(--ease-apple) both;
+}
+
+@keyframes omegaCaretPulse {
+  0%,
+  100% {
+    opacity: 0.92;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes omegaTextSettle {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
   }
 }

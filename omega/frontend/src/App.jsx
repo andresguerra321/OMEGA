@@ -164,7 +164,11 @@ export default function App() {
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+    const persistable = sessions.map((s) => ({
+      ...s,
+      messages: (s.messages || []).map(({ animateTyping: _animate, ...rest }) => rest),
+    }));
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(persistable));
   }, [sessions]);
 
   useEffect(() => {
@@ -311,6 +315,7 @@ export default function App() {
       );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: res.answer,
         citations: res.citations || [],
@@ -319,6 +324,7 @@ export default function App() {
         standaloneQuery: res.rewritten_query || res.standalone_query,
         sourceScope: effectiveScope,
         latency,
+        animateTyping: true,
       };
       setSessions((prev) =>
         prev.map((s) =>

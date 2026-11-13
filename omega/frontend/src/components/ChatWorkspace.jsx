@@ -205,6 +205,7 @@ export function ChatWorkspace({
   const [iocDraft, setIocDraft] = useState('');
   const [iocFeedback, setIocFeedback] = useState('');
   const bottomRef = useRef(null);
+  const threadScrollRef = useRef(null);
   const iocInputRef = useRef(null);
 
   useEffect(() => {
@@ -212,6 +213,14 @@ export function ChatWorkspace({
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, loading]);
+
+  function keepBottomAligned() {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 140) {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    }
+  }
 
   useEffect(() => {
     if (iocPopoverOpen) {
@@ -477,7 +486,7 @@ export function ChatWorkspace({
              ESTADO ACTIVO: Hilo de conversación + evidencia
              ============================================================ */
           <>
-            <main className="flex-1 overflow-y-auto px-6 py-7">
+            <main ref={threadScrollRef} className="flex-1 overflow-y-auto px-6 py-7">
               <div className="mx-auto max-w-[780px] space-y-7">
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
@@ -520,14 +529,15 @@ export function ChatWorkspace({
                         onSelectCitation={onSelectCitation}
                         onToggleSources={onToggleSources}
                         isSourcesOpen={isSourcesOpen}
+                        onTypingStep={keepBottomAligned}
                       />
                     </div>
                   )
                 )}
 
                 {loading && (
-                  <div className="omega-fade-up apple-group inline-flex items-center gap-3 rounded-[12px] px-4 py-3 text-[14px] text-[#F5F5F7]">
-                    <OmegaLogo size={24} isThinking={true} />
+                  <div className="omega-fade-up inline-flex items-center gap-2.5 py-1 text-[13.5px] text-[#A1A1A6]">
+                    <OmegaLogo size={20} isThinking={true} />
                     <span className="tracking-[-0.01em]">
                       {sourceScope === 'Todas las fuentes'
                         ? 'Buscando en reportes...'
