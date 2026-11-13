@@ -24,7 +24,7 @@ function getVerdictPresentation(result) {
   };
 }
 
-export function LinkVerifierPanel() {
+export function LinkVerifierPanel({ onAskInChat }) {
   const [urlInput, setUrlInput] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -77,9 +77,29 @@ export function LinkVerifierPanel() {
         <section
           className={`rounded-[6px] bg-[#141418] border border-[#232329] border-l-2 p-5 ${verdictMeta.borderLeft}`}
         >
-          <h2 className={`text-[16px] font-semibold ${verdictMeta.titleColor}`}>
-            {verdictMeta.headline}
-          </h2>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h2 className={`text-[16px] font-semibold ${verdictMeta.titleColor}`}>
+              {verdictMeta.headline}
+            </h2>
+            {onAskInChat && (
+              <button
+                type="button"
+                onClick={() => {
+                  const prompt = [
+                    `Evalúa este enlace inspeccionado pasivamente en OMEGA:`,
+                    `- URL / Host: ${result.normalized_url} (host: ${result.host})`,
+                    `- Nivel de riesgo: ${result.risk_level} — ${result.verdict}`,
+                    `- Coincidencias CTI: ${ctiMatches.length}`,
+                    `¿Existe campaña o infraestructura de spyware asociada a este dominio o patrón en los reportes indexados?`,
+                  ].join('\n');
+                  onAskInChat(prompt);
+                }}
+                className="shrink-0 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] hover:text-[#7AA7FF] transition-colors cursor-pointer"
+              >
+                Investigar en Preguntar
+              </button>
+            )}
+          </div>
           <p className="mt-1.5 text-[13px] text-[#F2F2F4] leading-relaxed">
             {result.recommendation}
           </p>

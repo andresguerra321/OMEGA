@@ -13,7 +13,7 @@ function formatExposedData(val) {
   return 'Metadatos / Credenciales';
 }
 
-export function OsintPanel() {
+export function OsintPanel({ onAskInChat }) {
   const [assets, setAssets] = useState([]);
   const [assetType, setAssetType] = useState('institutional_email');
   const [assetValue, setAssetValue] = useState('');
@@ -132,17 +132,38 @@ export function OsintPanel() {
             </span>
           </div>
 
-          {activeAsset && (
-            <button
-              type="button"
-              disabled={isScanning}
-              onClick={() => executeScan(activeAsset)}
-              className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] font-medium text-[#8E8E96] hover:text-[#F2F2F4] hover:border-[#2F6FED] disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              <RefreshCw className={`h-3 w-3 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>Re-auditar</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {onAskInChat && (
+              <button
+                type="button"
+                onClick={() => {
+                  const prompt = [
+                    `Analiza defensivamente la exposición pública del activo ${report.asset_value}:`,
+                    `- Coincidencias CTI spyware: ${(report.cti_ioc_matches || []).length}`,
+                    `- SPF configurado: ${dns.spf_configured ? dns.spf_record || 'Sí' : 'No'}`,
+                    `- DMARC configurado: ${dns.dmarc_configured ? dns.dmarc_record || 'Sí' : 'No'}`,
+                    `- Subdominios crt.sh: ${subdomains.length}`,
+                    `¿Cómo pueden abusar campañas de spyware 1-click o phishing de esta superficie y qué medidas defensivas priorizar?`,
+                  ].join('\n');
+                  onAskInChat(prompt);
+                }}
+                className="inline-flex items-center rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] hover:text-[#7AA7FF] transition-colors cursor-pointer"
+              >
+                Investigar en Preguntar
+              </button>
+            )}
+            {activeAsset && (
+              <button
+                type="button"
+                disabled={isScanning}
+                onClick={() => executeScan(activeAsset)}
+                className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] font-medium text-[#8E8E96] hover:text-[#F2F2F4] hover:border-[#2F6FED] disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`h-3 w-3 ${isScanning ? 'animate-spin' : ''}`} />
+                <span>Re-auditar</span>
+              </button>
+            )}
+          </div>
         </header>
 
         {errorMsg && (

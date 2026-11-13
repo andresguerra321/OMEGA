@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
-import { fetchSystemGovernance } from '../lib/api';
+import {
+  fetchSystemGovernance,
+  getWorkspaceId,
+  rotateWorkspaceId,
+} from '../lib/api';
 
 const PRIVACY_GUARANTEES = [
   'Procesamiento forense volátil en RAM (sin escritura en disco)',
@@ -33,8 +37,7 @@ export function SettingsPanel({ topK, onChangeTopK }) {
   }, []);
 
   async function handleRotateWorkspace() {
-    const nextId = `analyst_${crypto.randomUUID()}`;
-    localStorage.setItem('omega_workspace_id', nextId);
+    rotateWorkspaceId();
     setRotated(true);
     setLoadingGov(true);
     try {
@@ -48,10 +51,7 @@ export function SettingsPanel({ topK, onChangeTopK }) {
     }
   }
 
-  const workspaceId =
-    gov?.workspace_id ||
-    localStorage.getItem('omega_workspace_id') ||
-    'default_analyst';
+  const workspaceId = gov?.workspace_id || getWorkspaceId();
 
   const stats = gov?.corpus_stats;
   const sources = gov?.indexed_sources || [];

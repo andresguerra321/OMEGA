@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Plus,
+  Search,
   MessageSquare,
   Layers,
   Laptop,
@@ -24,12 +25,12 @@ import { LinkVerifierPanel } from './components/LinkVerifierPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 
 const NAV_ITEMS = [
-  { id: 'preguntar', label: 'Preguntar', icon: MessageSquare },
-  { id: 'amenazas', label: 'Amenazas', icon: Layers },
-  { id: 'equipo', label: 'Revisar mi equipo', icon: Laptop },
-  { id: 'exposicion', label: 'Mi exposición', icon: Radar },
-  { id: 'enlace', label: 'Verificar enlace', icon: Link2 },
-  { id: 'ajustes', label: 'Ajustes', icon: Settings },
+  { id: 'preguntar', label: 'Preguntar', subtitle: 'Consultas con citas', icon: MessageSquare },
+  { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
+  { id: 'equipo', label: 'Revisar mi equipo', subtitle: 'Verificación forense', icon: Laptop },
+  { id: 'exposicion', label: 'Mi exposición', subtitle: 'Qué hay público sobre mí', icon: Radar },
+  { id: 'enlace', label: 'Verificar enlace', subtitle: 'Antes de abrirlo', icon: Link2 },
+  { id: 'ajustes', label: 'Ajustes', subtitle: 'Cuenta y permisos', icon: Settings },
 ];
 
 const SESSIONS_STORAGE_KEY = 'omega_research_sessions_v2';
@@ -139,6 +140,8 @@ function formatRelativeTime(isoString) {
 export default function App() {
   const [activeNav, setActiveNav] = useState('preguntar');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
   const [sessions, setSessions] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SESSIONS_STORAGE_KEY));
@@ -160,6 +163,20 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
   }, [sessions]);
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandOpen((prev) => !prev);
+        setCommandQuery('');
+      } else if (e.key === 'Escape') {
+        setCommandOpen(false);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === currentSessionId) || null,
@@ -384,8 +401,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Botón + Nueva Investigación */}
-          <div className="p-2.5">
+          {/* Botón + Nueva Investigación y Búsqueda Rápida ⌘K */}
+          <div className="p-2.5 space-y-2">
             <button
               type="button"
               onClick={startNewInvestigation}
@@ -396,6 +413,28 @@ export default function App() {
             >
               <Plus className="h-4 w-4" />
               {!sidebarCollapsed && <span>Nueva investigación</span>}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCommandOpen(true);
+                setCommandQuery('');
+              }}
+              title="Ir a... (Ctrl/Cmd + K)"
+              className={`w-full h-8 rounded-[4px] border border-[#232329] bg-[#0A0A0C] text-[12px] text-[#8E8E96] hover:border-[#2F6FED]/60 hover:text-[#F2F2F4] flex items-center transition-colors cursor-pointer ${
+                sidebarCollapsed ? 'justify-center px-0' : 'justify-between px-2.5'
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Search className="h-3.5 w-3.5" />
+                {!sidebarCollapsed && <span>Ir a...</span>}
+              </span>
+              {!sidebarCollapsed && (
+                <span className="font-tech rounded-[4px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[10px]">
+                  ⌘K
+                </span>
+              )}
             </button>
           </div>
 
@@ -572,8 +611,8 @@ export default function App() {
         ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
           <main className="flex-1 overflow-y-auto px-6 py-8 flex flex-col">
             {activeNav === 'equipo' && <MvtVerifierPanel onAskInChat={askInChat} />}
-            {activeNav === 'exposicion' && <OsintPanel />}
-            {activeNav === 'enlace' && <LinkVerifierPanel />}
+            {activeNav === 'exposicion' && <OsintPanel onAskInChat={askInChat} />}
+            {activeNav === 'enlace' && <LinkVerifierPanel onAskInChat={askInChat} />}
           </main>
         ) : (
           /* Ajustes */
@@ -582,6 +621,91 @@ export default function App() {
           </main>
         )}
       </div>
+
+      {/* Paleta de Comandos Rápidos (Ctrl/Cmd + K) */}
+      {commandOpen && (
+        <div
+          onClick={() => setCommandOpen(false)}
+          className="fixed inset-0 z-50 bg-black/60 flex items-start justify-center pt-24 px-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[480px] rounded-[6px] border border-[#232329] bg-[#141418] overflow-hidden"
+          >
+            <div className="flex items-center gap-2.5 border-b border-[#232329] px-3.5 py-2.5">
+              <Search className="h-4 w-4 text-[#8E8E96]" />
+              <input
+                type="text"
+                autoFocus
+                value={commandQuery}
+                onChange={(e) => setCommandQuery(e.target.value)}
+                placeholder="Saltar a módulo o consulta reciente..."
+                className="flex-1 bg-transparent text-[13px] text-[#F2F2F4] placeholder-[#8E8E96] focus:outline-none"
+              />
+              <span className="font-tech text-[10px] text-[#8E8E96]">ESC</span>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto p-1.5 space-y-1">
+              <p className="px-2 pt-1 text-[10px] font-medium uppercase tracking-wider text-[#8E8E96]">
+                Módulos
+              </p>
+              {NAV_ITEMS.filter(
+                (item) =>
+                  item.label.toLowerCase().includes(commandQuery.toLowerCase()) ||
+                  (item.subtitle || '').toLowerCase().includes(commandQuery.toLowerCase())
+              ).map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveNav(item.id);
+                      setCommandOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between rounded-[4px] px-2.5 py-2 text-left text-[12.5px] text-[#F2F2F4] hover:bg-[#15223D] transition-colors cursor-pointer"
+                  >
+                    <span className="inline-flex items-center gap-2.5">
+                      <Icon className="h-3.5 w-3.5 text-[#2F6FED]" />
+                      <span>{item.label}</span>
+                    </span>
+                    <span className="text-[11px] text-[#8E8E96]">{item.subtitle}</span>
+                  </button>
+                );
+              })}
+
+              {sessions.length > 0 && (
+                <>
+                  <p className="px-2 pt-2 text-[10px] font-medium uppercase tracking-wider text-[#8E8E96]">
+                    Sesiones recientes
+                  </p>
+                  {sessions
+                    .filter((s) =>
+                      s.title.toLowerCase().includes(commandQuery.toLowerCase())
+                    )
+                    .slice(0, 5)
+                    .map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setCurrentSessionId(s.id);
+                          setSelectedCitation(null);
+                          setActiveNav('preguntar');
+                          setCommandOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-[4px] px-2.5 py-1.5 text-left text-[12px] text-[#8E8E96] hover:bg-[#0A0A0C] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{s.title}</span>
+                      </button>
+                    ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
