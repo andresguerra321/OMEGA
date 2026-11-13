@@ -10,8 +10,8 @@ import {
   Settings,
   Download,
   Trash2,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
   BookOpen,
 } from 'lucide-react';
 import { sendChatQuery } from './lib/api';
@@ -139,7 +139,7 @@ function formatRelativeTime(isoString) {
 
 export default function App() {
   const [activeNav, setActiveNav] = useState('preguntar');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const [sessions, setSessions] = useState(() => {
@@ -367,115 +367,190 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-[#0A0A0C] text-[#F2F2F4]">
-      {/* Sidebar Fija Izquierda (#111115) */}
+      {/* Rail Lateral Técnico Izquierdo (68px compacto por defecto / 248px expandido) */}
       <aside
+        aria-label="Navegación principal"
         className={`${
-          sidebarCollapsed ? 'w-[60px]' : 'w-[252px]'
-        } shrink-0 h-full border-r border-[#232329] bg-[#111115] flex flex-col justify-between transition-[width] duration-150 z-10`}
+          sidebarCollapsed ? 'w-[68px]' : 'w-[248px]'
+        } shrink-0 h-screen bg-[#141418] border-r border-[#232329] flex flex-col justify-between transition-all duration-150 z-30 select-none font-['Inter',var(--font-sans)]`}
       >
+        {/* Zona Superior + Stack Central */}
         <div className="flex flex-col min-h-0 flex-1">
-          {/* Header de Sidebar (48px) con Emblema Omega SVG Reactivo */}
-          <div className="h-12 px-3.5 border-b border-[#232329] flex items-center justify-between">
+          {/* Zona Superior — Identidad OMEGA (compatible con barra de título desktop) */}
+          <div
+            className={`titlebar-drag pt-3.5 pb-4 px-3.5 flex items-center ${
+              sidebarCollapsed ? 'justify-center' : 'gap-3'
+            }`}
+          >
+            <div className="titlebar-no-drag h-10 w-10 shrink-0 rounded-[6px] border border-[#232329] bg-[#0A0A0C] flex items-center justify-center">
+              <OmegaLogo size={24} isThinking={loadingChat} />
+            </div>
+
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-2.5">
-                <OmegaLogo size={24} isThinking={loadingChat} />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[14px] font-semibold tracking-[0.12em] text-[#F5F7FA]">
-                    OMEGA
-                  </span>
-                  <span className="font-tech rounded-[3px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[10.5px] text-[#9CA3B0]">
-                    v1.0
-                  </span>
-                </div>
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="text-[13px] font-semibold tracking-[0.18em] text-[#F2F2F4]">
+                  OMEGA
+                </span>
+                <span className="font-['JetBrains_Mono',var(--font-mono)] rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-1.5 py-0.5 text-[10px] text-[#8E8E96]">
+                  v1.0
+                </span>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed((v) => !v)}
-              title={sidebarCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-              className="p-1 rounded-[4px] text-[#9CA3B0] hover:bg-[#141418] hover:text-[#F2F4F8] transition-colors cursor-pointer"
-            >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </button>
           </div>
 
-          {/* Botón + Nueva Investigación y Búsqueda Rápida ⌘K */}
-          <div className="p-2.5 space-y-2">
+          {/* Stack Central — 6 Módulos + Divisor + 2 Botones Utilitarios */}
+          <div className="px-3.5 pt-2 flex flex-col items-center gap-2.5">
+            <nav className="w-full flex flex-col items-center gap-2.5">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeNav === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveNav(item.id)}
+                    aria-label={`${item.label} — ${item.subtitle}`}
+                    className={`relative group h-10 rounded-[6px] border transition-colors cursor-pointer flex items-center ${
+                      sidebarCollapsed
+                        ? 'w-10 justify-center'
+                        : 'w-full px-2.5 justify-start gap-2.5 text-left'
+                    } ${
+                      isActive
+                        ? 'bg-[#2F6FED] border-[#2F6FED] text-[#F2F2F4]'
+                        : 'bg-[#0A0A0C] border-[#232329] text-[#8E8E96] hover:border-[#2F6FED]/50 hover:bg-[#15223D] hover:text-[#F2F2F4]'
+                    }`}
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+
+                    {!sidebarCollapsed && (
+                      <div className="min-w-0 flex-1 leading-none">
+                        <div className="truncate text-[12.5px] font-medium text-[#F2F2F4]">
+                          {item.label}
+                        </div>
+                        <div
+                          className={`truncate text-[10.5px] mt-1 ${
+                            isActive ? 'text-[#F2F2F4]/80' : 'text-[#8E8E96]'
+                          }`}
+                        >
+                          {item.subtitle}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tooltip lateral derecho en modo compacto (68px) */}
+                    {sidebarCollapsed && (
+                      <div
+                        role="tooltip"
+                        className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-100 absolute left-full ml-5 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1.5 text-left"
+                      >
+                        <div className="text-[12px] font-medium leading-tight text-[#F2F2F4]">
+                          {item.label}
+                        </div>
+                        <div className="text-[11px] leading-tight text-[#8E8E96] mt-0.5">
+                          {item.subtitle}
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Divisor sutil */}
+            <div
+              className={`${sidebarCollapsed ? 'w-6' : 'w-full'} h-[1px] bg-[#232329] my-1`}
+            />
+
+            {/* Botón utilitario + (Nueva consulta rápida) */}
             <button
               type="button"
               onClick={startNewInvestigation}
-              title="Nueva investigación"
-              className={`w-full h-9 rounded-[5px] bg-[#F2F4F8] text-[#0A0A0C] flex items-center justify-center gap-2 text-[13px] font-medium hover:bg-white transition-colors cursor-pointer ${
-                sidebarCollapsed ? 'px-0' : 'px-3'
+              aria-label="Nueva consulta rápida"
+              className={`relative group h-10 rounded-[6px] border border-[#232329] bg-[#0A0A0C] text-[#8E8E96] hover:border-[#2F6FED]/50 hover:bg-[#15223D] hover:text-[#F2F2F4] transition-colors cursor-pointer flex items-center ${
+                sidebarCollapsed
+                  ? 'w-10 justify-center'
+                  : 'w-full px-2.5 justify-start gap-2.5'
               }`}
             >
-              <Plus className="h-4 w-4" />
-              {!sidebarCollapsed && <span>Nueva investigación</span>}
+              <Plus className="h-[18px] w-[18px] shrink-0" />
+              {!sidebarCollapsed && (
+                <span className="truncate text-[12.5px] font-medium text-[#F2F2F4]">
+                  Nueva consulta rápida
+                </span>
+              )}
+              {sidebarCollapsed && (
+                <div
+                  role="tooltip"
+                  className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-100 absolute left-full ml-5 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1.5 text-left"
+                >
+                  <div className="text-[12px] font-medium leading-tight text-[#F2F2F4]">
+                    Nueva consulta rápida
+                  </div>
+                  <div className="text-[11px] leading-tight text-[#8E8E96] mt-0.5">
+                    Iniciar hilo limpio en Preguntar
+                  </div>
+                </div>
+              )}
             </button>
 
+            {/* Botón utilitario ⌘K (Paleta de comandos) */}
             <button
               type="button"
               onClick={() => {
                 setCommandOpen(true);
                 setCommandQuery('');
               }}
-              title="Ir a... (Ctrl/Cmd + K)"
-              className={`w-full h-8 rounded-[4px] border border-[#232329] bg-[#0A0A0C] text-[12px] text-[#8E8E96] hover:border-[#2F6FED]/60 hover:text-[#F2F2F4] flex items-center transition-colors cursor-pointer ${
-                sidebarCollapsed ? 'justify-center px-0' : 'justify-between px-2.5'
+              aria-label="Abrir paleta de comandos (⌘K)"
+              className={`relative group h-10 rounded-[6px] border border-[#232329] bg-[#0A0A0C] text-[#8E8E96] hover:border-[#2F6FED]/50 hover:bg-[#15223D] hover:text-[#F2F2F4] transition-colors cursor-pointer flex items-center ${
+                sidebarCollapsed
+                  ? 'w-10 justify-center'
+                  : 'w-full px-2.5 justify-between'
               }`}
             >
-              <span className="inline-flex items-center gap-2">
-                <Search className="h-3.5 w-3.5" />
-                {!sidebarCollapsed && <span>Ir a...</span>}
+              <span className="inline-flex items-center gap-2.5 min-w-0">
+                <Search className="h-[18px] w-[18px] shrink-0" />
+                {!sidebarCollapsed && (
+                  <span className="truncate text-[12.5px] font-medium text-[#F2F2F4]">
+                    Paleta de comandos
+                  </span>
+                )}
               </span>
+
               {!sidebarCollapsed && (
-                <span className="font-tech rounded-[4px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[10px]">
+                <span className="font-['JetBrains_Mono',var(--font-mono)] shrink-0 rounded-[4px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[10.5px] text-[#8E8E96]">
                   ⌘K
                 </span>
+              )}
+
+              {sidebarCollapsed && (
+                <div
+                  role="tooltip"
+                  className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-100 absolute left-full ml-5 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1.5 text-left flex items-center gap-2"
+                >
+                  <div>
+                    <div className="text-[12px] font-medium leading-tight text-[#F2F2F4]">
+                      Paleta de comandos
+                    </div>
+                    <div className="text-[11px] leading-tight text-[#8E8E96] mt-0.5">
+                      Ir a cualquier módulo
+                    </div>
+                  </div>
+                  <span className="font-['JetBrains_Mono',var(--font-mono)] rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-1.5 py-0.5 text-[10px] text-[#8E8E96]">
+                    ⌘K
+                  </span>
+                </div>
               )}
             </button>
           </div>
 
-          {/* Navegación (6 módulos exactos) */}
-          <nav className="px-2 space-y-0.5">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeNav === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveNav(item.id)}
-                  title={item.label}
-                  className={`w-full h-9 flex items-center gap-2.5 px-2.5 rounded-[4px] text-[13.5px] transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-[#15223D]/70 border-l-2 border-[#2F6FED] text-[#F5F7FA] font-medium'
-                      : 'border-l-2 border-transparent text-[#9CA3B0] hover:bg-[#141418] hover:text-[#F5F7FA]'
-                  } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-                >
-                  <Icon
-                    className={`h-4 w-4 shrink-0 ${
-                      isActive ? 'text-[#2F6FED]' : 'text-[#9CA3B0]'
-                    }`}
-                  />
-                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Historial de Investigaciones */}
+          {/* Historial de consultas recientes (visible al expandir a 248px) */}
           {!sidebarCollapsed && (
-            <div className="mt-4 px-2.5 flex-1 min-h-0 flex flex-col">
-              <div className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9CA3B0]">
-                Historial reciente
+            <div className="mt-5 px-3.5 flex-1 min-h-0 flex flex-col">
+              <div className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#8E8E96]">
+                Consultas recientes
               </div>
-              <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
+              <div className="flex-1 overflow-y-auto space-y-1 pr-0.5">
                 {sessions.map((sess) => {
                   const isSelected = activeNav === 'preguntar' && sess.id === currentSessionId;
 
@@ -487,15 +562,17 @@ export default function App() {
                         setSelectedCitation(null);
                         setActiveNav('preguntar');
                       }}
-                      className={`group flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-[4px] text-[13px] cursor-pointer transition-colors ${
+                      className={`group flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-[6px] border text-[12.5px] cursor-pointer transition-colors ${
                         isSelected
-                          ? 'bg-[#141418] text-[#F5F7FA]'
-                          : 'text-[#B2B9C5] hover:bg-[#141418]/70 hover:text-[#F5F7FA]'
+                          ? 'bg-[#0A0A0C] border-[#2F6FED]/50 text-[#F2F2F4]'
+                          : 'border-transparent text-[#8E8E96] hover:bg-[#0A0A0C] hover:border-[#232329] hover:text-[#F2F2F4]'
                       }`}
                     >
                       <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="truncate leading-snug font-medium">{sess.title}</p>
-                        <p className="font-tech text-[11px] text-[#8E96A4]">
+                        <p className="truncate leading-snug font-medium text-[#F2F2F4]">
+                          {sess.title}
+                        </p>
+                        <p className="font-['JetBrains_Mono',var(--font-mono)] text-[10.5px] text-[#8E8E96]">
                           {formatRelativeTime(sess.updatedAt)}
                         </p>
                       </div>
@@ -503,7 +580,7 @@ export default function App() {
                         type="button"
                         onClick={(e) => deleteSession(e, sess.id)}
                         title="Eliminar sesión"
-                        className="opacity-0 group-hover:opacity-100 p-1 text-[#9CA3B0] hover:text-[#F2F4F8] transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-[#8E8E96] hover:text-[#F2F2F4] transition-opacity cursor-pointer"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -515,19 +592,30 @@ export default function App() {
           )}
         </div>
 
-        {/* Footer Sidebar */}
-        <div className="p-3 border-t border-[#232329] bg-[#111115] flex items-center justify-between text-[12px] text-[#9CA3B0]">
-          {sidebarCollapsed ? (
-            <span className="h-1.5 w-1.5 mx-auto rounded-full bg-[#2F6FED]" title="Modo Defensivo" />
-          ) : (
-            <>
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#2F6FED]" />
-                <span>Modo Defensivo</span>
-              </div>
-              <span className="font-tech text-[11px] text-[#8E96A4]">CTI</span>
-            </>
+        {/* Zona Inferior — Botón de Expansión (>/<) */}
+        <div
+          className={`pt-2 pb-4 px-3.5 flex items-center ${
+            sidebarCollapsed ? 'justify-center' : 'justify-between'
+          }`}
+        >
+          {!sidebarCollapsed && (
+            <span className="text-[11px] font-medium text-[#8E8E96]">
+              Modo Defensivo
+            </span>
           )}
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+            title={sidebarCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+            className="h-9 w-9 shrink-0 rounded-[6px] border border-[#232329] bg-[#0A0A0C] flex items-center justify-center text-[#8E8E96] hover:border-[#2F6FED] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </aside>
 

@@ -90,6 +90,14 @@
 }
 
 @layer utilities {
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
   .ease-kowalski {
     transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
   }
