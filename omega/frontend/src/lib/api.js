@@ -103,6 +103,15 @@ export async function verifyMvtText(indicatorsText) {
   return parseJsonOrThrow(res, 'Error cruzando indicadores manuales');
 }
 
+export async function analyzeLiveDeviceSnapshot(snapshot) {
+  const res = await fetch(`${API_BASE}/triage/device-live`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  });
+  return parseJsonOrThrow(res, 'Error analizando la captura viva del dispositivo');
+}
+
 // ============================================================================
 // 4. MI EXPOSICIÓN (OSINT Pasivo con Consentimiento Explícito RNF8)
 // ============================================================================

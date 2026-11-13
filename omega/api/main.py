@@ -1,5 +1,6 @@
 import sys
 import json
+from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,9 +46,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
         "http://localhost:4173",
         "tauri://localhost",
         "app://-",
+        "null",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -190,6 +194,117 @@ async def parallel_forensic_triage(files: list[UploadFile] = File(...)):
         for art in artifacts:
             art["bytes"] = b""
         artifacts.clear()
+
+
+class LiveDeviceSnapshot(BaseModel):
+    device: dict
+    packages_text: str = ""
+    processes_text: str = ""
+
+
+@app.post("/api/triage/device-live")
+async def live_device_triage(payload: LiveDeviceSnapshot):
+    """Analiza en RAM una captura viva extraída vía ADB (RF5, RNF4, RNF7)."""
+    dev = payload.device
+    hardening_checks = []
+
+    # 1. Auditoría de nivel de parche de seguridad Android
+    patch_str = str(dev.get("security_patch") or "").strip()
+    try:
+        patch_date = datetime.strptime(patch_str, "%Y-%m-%d")
+        age_days = (datetime.now() - patch_date).days
+        patch_outdated = age_days > 120
+        hardening_checks.append(
+            {
+                "control": "Nivel de parche de seguridad",
+                "status": "WARN" if patch_outdated else "OK",
+                "value": patch_str,
+                "detail": (
+                    f"Parche con {age_days} días de antigüedad; expuesto a vectores 0-click/1-click conocidos."
+                    if patch_outdated
+                    else f"Parche actualizado ({patch_str})."
+                ),
+            }
+        )
+    except ValueError:
+        hardening_checks.append(
+            {
+                "control": "Nivel de parche de seguridad",
+                "status": "UNKNOWN",
+                "value": patch_str or "N/D",
+                "detail": "No se pudo determinar la fecha exacta del parche.",
+            }
+        )
+
+    # 2. Auditoría de DNS Privado (DoT — mitigación contra inyección de red en tránsito)
+    dns_mode = str(dev.get("private_dns_mode") or "off").strip().lower()
+    dns_host = str(dev.get("private_dns_specifier") or "").strip()
+    dns_ok = dns_mode == "hostname" and bool(dns_host) and dns_host.lower() != "null"
+    hardening_checks.append(
+        {
+            "control": "DNS Privado Cifrado (DNS-over-TLS)",
+            "status": "OK" if dns_ok else "WARN",
+            "value": dns_host if dns_ok else dns_mode,
+            "detail": (
+                f"Tráfico DNS protegido mediante {dns_host}."
+                if dns_ok
+                else "DNS cifrado no forzado; vulnerable a secuestro DNS en redes Wi-Fi/celulares."
+            ),
+        }
+    )
+
+    # 3. Auditoría de orígenes desconocidos (sideloading APK legacy)
+    unknown_src = str(dev.get("install_non_market_apps") or "").strip().lower()
+    if unknown_src:
+        if unknown_src == "1":
+            hardening_checks.append(
+                {
+                    "control": "Instalación desde orígenes desconocidos",
+                    "status": "WARN",
+                    "value": "Habilitado",
+                    "detail": "Permite instalar APKs fuera de Google Play a nivel global; vector común en implantes 1-click Android.",
+                }
+            )
+        else:
+            hardening_checks.append(
+                {
+                    "control": "Instalación desde orígenes desconocidos",
+                    "status": "OK",
+                    "value": "Desactivado" if unknown_src == "0" else "Control por app (Android 8+)",
+                    "detail": "Sin habilitación global de sideloading legacy.",
+                }
+            )
+
+    # 4. Correlación de procesos activos y paquetes instalados en RAM (RNF4)
+    artifacts = []
+    if payload.packages_text.strip():
+        artifacts.append(
+            {
+                "filename": "adb_installed_packages.txt",
+                "bytes": payload.packages_text.encode("utf-8"),
+            }
+        )
+    if payload.processes_text.strip():
+        artifacts.append(
+            {
+                "filename": "adb_running_processes.txt",
+                "bytes": payload.processes_text.encode("utf-8"),
+            }
+        )
+
+    try:
+        triage_report = await run_parallel_forensic_triage(artifacts)
+    finally:
+        # Liberar memoria explícitamente (RNF4)
+        for art in artifacts:
+            art["bytes"] = b""
+        artifacts.clear()
+
+    return {
+        "device_summary": dev,
+        "hardening_checks": hardening_checks,
+        "triage": triage_report,
+    }
 
 
 @app.get("/api/campaigns/{campaign_id}/yara")

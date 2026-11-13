@@ -1,6 +1,7 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 COPY package*.json ./
 RUN npm ci
 COPY . .

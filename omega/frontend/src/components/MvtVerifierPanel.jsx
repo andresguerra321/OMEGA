@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
-import { ArrowLeft, Download, Loader2, Upload } from 'lucide-react';
-import { runParallelTriage, verifyMvtText } from '../lib/api';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Download, Loader2, Smartphone, Upload } from 'lucide-react';
+import { analyzeLiveDeviceSnapshot, runParallelTriage, verifyMvtText } from '../lib/api';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
   [
@@ -51,7 +51,7 @@ function dedupeMatches(rawMatches) {
   return list;
 }
 
-function normalizeParallelResult(res, files) {
+function normalizeParallelResult(res, files = [], customSourceLabel = '') {
   const allMatches = [];
   for (const sub of res.subagents || []) {
     for (const m of sub.matches || []) {
@@ -62,7 +62,7 @@ function normalizeParallelResult(res, files) {
   const fileNames = files.map((f) => f.name).join(', ');
 
   return {
-    sourceLabel: fileNames || 'volcado_mvt',
+    sourceLabel: customSourceLabel || fileNames || 'volcado_mvt',
     analyzedCount: res.total_indicators_analyzed ?? 0,
     filesAnalyzed: res.total_files ?? files.length,
     matchesCount: findings.length,
@@ -94,12 +94,66 @@ export function MvtVerifierPanel({ onAskInChat }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
+  const [usbDevice, setUsbDevice] = useState(null);
+  const [scanningUsb, setScanningUsb] = useState(false);
+  const [hardeningReport, setHardeningReport] = useState(null);
+
+  const hasDesktopBridge =
+    typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
+
+  useEffect(() => {
+    if (!window.omegaDesktop?.checkAdbStatus) return undefined;
+    let cancelled = false;
+
+    const refreshStatus = () => {
+      window.omegaDesktop
+        .checkAdbStatus()
+        .then((status) => {
+          if (!cancelled) setUsbDevice(status);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setUsbDevice({
+              available: false,
+              connected: false,
+              reason: 'No se pudo consultar el estado del puente ADB.',
+            });
+          }
+        });
+    };
+
+    refreshStatus();
+    const timer = setInterval(refreshStatus, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  async function handleLiveUsbScan() {
+    if (!window.omegaDesktop?.collectDeviceSnapshot || scanningUsb || isAnalyzing) return;
+    setScanningUsb(true);
+    setErrorMsg('');
+    try {
+      const snapshot = await window.omegaDesktop.collectDeviceSnapshot();
+      const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
+      const dev = liveRes.device_summary || snapshot.device || {};
+      const label = [dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || 'Dispositivo Android';
+      setHardeningReport(liveRes);
+      setResult(normalizeParallelResult(liveRes.triage, [], `${label} (ADB USB)`));
+    } catch (err) {
+      setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
+    } finally {
+      setScanningUsb(false);
+    }
+  }
 
   async function analyzeFiles(fileList) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
     setIsAnalyzing(true);
     setErrorMsg('');
+    setHardeningReport(null);
     try {
       const apiRes = await runParallelTriage(files);
       setResult(normalizeParallelResult(apiRes, files));
@@ -125,6 +179,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
     if (!trimmed) return;
     setIsAnalyzing(true);
     setErrorMsg('');
+    setHardeningReport(null);
     try {
       const apiRes = await verifyMvtText(trimmed);
       setResult(normalizeManualResult(apiRes));
@@ -137,12 +192,14 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
   function handleReset() {
     setResult(null);
+    setHardeningReport(null);
     setErrorMsg('');
   }
 
   function handleExportMarkdown() {
     if (!result) return;
     const anomalies = result.behavioralAnomalies || [];
+    const checks = hardeningReport?.hardening_checks || [];
     const lines = [
       '# OMEGA · Verificación de Integridad del Dispositivo',
       `- **Origen:** \`${result.sourceLabel}\``,
@@ -153,6 +210,14 @@ export function MvtVerifierPanel({ onAskInChat }) {
       `- **Almacenamiento:** 0 bytes guardados en disco`,
       '',
     ];
+
+    if (checks.length > 0) {
+      lines.push('## Postura de Endurecimiento del Dispositivo (ADB USB)');
+      checks.forEach((chk) => {
+        lines.push(`- [${chk.status}] **${chk.control}** (\`${chk.value}\`): ${chk.detail}`);
+      });
+      lines.push('');
+    }
 
     if (result.findings.length === 0 && anomalies.length === 0) {
       lines.push('## Resultado\nSin indicadores de compromiso detectados frente al corpus CTI público ni anomalías conductuales.');
@@ -286,6 +351,54 @@ export function MvtVerifierPanel({ onAskInChat }) {
           </div>
         </section>
 
+        {/* Postura de Endurecimiento (cuando proviene de captura viva ADB USB) */}
+        {hardeningReport?.hardening_checks?.length > 0 && (
+          <section className="mt-6">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="font-tech text-[11px] uppercase tracking-wider text-[#8E8E96]">
+                Postura de Endurecimiento (ADB USB)
+              </span>
+              {hardeningReport.device_summary && (
+                <span className="font-tech text-[11px] text-[#8E8E96]">
+                  Android {hardeningReport.device_summary.android_version || 'N/D'} · Parche{' '}
+                  {hardeningReport.device_summary.security_patch || 'N/D'}
+                </span>
+              )}
+            </div>
+            <div className="rounded-[6px] border border-[#232329] bg-[#141418] divide-y divide-[#232329]">
+              {hardeningReport.hardening_checks.map((chk) => {
+                let badgeCls = 'border-[#232329] bg-[#0A0A0C] text-[#8E8E96]';
+                if (chk.status === 'OK') {
+                  badgeCls = 'border-[#2F6FED]/40 bg-[#15223D] text-[#7AA7FF]';
+                } else if (chk.status === 'WARN') {
+                  badgeCls = 'border-[#52401E] bg-[#1C1810] text-[#FBBF24]';
+                }
+
+                return (
+                  <div key={chk.control} className="px-4 py-3 flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`font-tech rounded-[4px] border px-1.5 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
+                          {chk.status}
+                        </span>
+                        <span className="text-[13px] font-medium text-[#F2F2F4]">
+                          {chk.control}
+                        </span>
+                      </div>
+                      <p className="text-[12.5px] text-[#8E8E96] leading-relaxed">
+                        {chk.detail}
+                      </p>
+                    </div>
+                    <span className="font-tech shrink-0 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[11px] text-[#F2F2F4]">
+                      {chk.value}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Lista Limpia de Hallazgos CTI (si hay coincidencias) */}
         {hasMatches && (
           <section className="mt-6 border-t border-b border-[#232329] divide-y divide-[#232329]">
@@ -397,6 +510,51 @@ export function MvtVerifierPanel({ onAskInChat }) {
             Analiza salidas JSON de MVT o pega indicadores sospechosos para cruzarlos contra campañas conocidas.
           </p>
         </header>
+
+        {/* Barra Discreta USB Nativa (solo visible dentro de Electron Desktop) */}
+        {hasDesktopBridge && (
+          <div className="mb-3 rounded-[6px] border border-[#232329] bg-[#141418] px-3.5 py-2.5 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-2.5">
+              <Smartphone
+                className={`h-4 w-4 shrink-0 ${
+                  usbDevice?.connected ? 'text-[#2F6FED]' : 'text-[#8E8E96]'
+                }`}
+              />
+              <div className="min-w-0">
+                {usbDevice?.connected ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[12.5px] font-medium text-[#F2F2F4] truncate">
+                      {usbDevice.model}
+                    </span>
+                    <span className="font-tech text-[11px] text-[#8E8E96]">
+                      {usbDevice.serial} · ADB solo lectura
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-[#8E8E96] truncate">
+                    {usbDevice?.reason || 'Detectando dispositivo Android por USB...'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {usbDevice?.connected ? (
+              <button
+                type="button"
+                disabled={scanningUsb || isAnalyzing}
+                onClick={handleLiveUsbScan}
+                className="shrink-0 rounded-[4px] bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-50 px-3 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <span>{scanningUsb ? 'Extrayendo RAM...' : 'Auditar dispositivo'}</span>
+              </button>
+            ) : (
+              <span className="font-tech shrink-0 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[10.5px] text-[#8E8E96]">
+                USB ADB
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Contenedor Único de Entrada */}
         <div className="rounded-[6px] bg-[#141418] border border-[#232329] p-4">

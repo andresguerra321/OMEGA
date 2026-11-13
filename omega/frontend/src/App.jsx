@@ -363,6 +363,8 @@ export default function App() {
     handleSend(promptText, 'Todas las fuentes', { forceNewSession: true });
   }
 
+  const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
+
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-[#0A0A0C] text-[#F2F2F4]">
       {/* Sidebar Fija Izquierda (#111115) */}
@@ -443,6 +445,7 @@ export default function App() {
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
+
               return (
                 <button
                   key={item.id}
@@ -475,6 +478,7 @@ export default function App() {
               <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
                 {sessions.map((sess) => {
                   const isSelected = activeNav === 'preguntar' && sess.id === currentSessionId;
+
                   return (
                     <div
                       key={sess.id}
@@ -534,6 +538,8 @@ export default function App() {
         {/* Barra Superior Minimalista (48px) */}
         <header
           className={`relative z-10 h-12 shrink-0 px-6 flex items-center justify-between transition-colors duration-200 ease-kowalski ${
+            isDesktop ? 'pr-40 [-webkit-app-region:drag] [&_button]:[-webkit-app-region:no-drag]' : ''
+          } ${
             activeNav === 'preguntar'
               ? messages.length === 0
                 ? 'border-b border-transparent'
@@ -660,6 +666,7 @@ export default function App() {
                   (item.subtitle || '').toLowerCase().includes(commandQuery.toLowerCase())
               ).map((item) => {
                 const Icon = item.icon;
+
                 return (
                   <button
                     key={item.id}
