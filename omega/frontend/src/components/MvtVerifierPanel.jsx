@@ -1,7 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Loader2, RefreshCw, ShieldCheck, Smartphone, Upload } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  HelpCircle,
+  Loader2,
+  Lock,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+  Upload,
+} from 'lucide-react';
 import {
   analyzeLiveDeviceSnapshot,
+  resolveIosManifestTargets,
   runParallelTriage,
   syncStixFeeds,
   verifyMvtText,
@@ -177,17 +192,33 @@ function buildForensicMarkdownReport(result, hardeningReport) {
   return lines.join('\n');
 }
 
+const ADB_PATH_STORAGE_KEY = 'omega_custom_adb_path';
+
 export function MvtVerifierPanel({ onAskInChat }) {
   const fileInputRef = useRef(null);
 
+  const [deviceTab, setDeviceTab] = useState('android');
   const [inputMode, setInputMode] = useState('upload');
   const [manualText, setManualText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
+  const [customAdbPath, setCustomAdbPath] = useState(() => {
+    try {
+      return localStorage.getItem(ADB_PATH_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [selectedSerial, setSelectedSerial] = useState('');
   const [usbDevice, setUsbDevice] = useState(null);
+  const [iosStatus, setIosStatus] = useState(null);
+  const [refreshingUsb, setRefreshingUsb] = useState(false);
   const [scanningUsb, setScanningUsb] = useState(false);
+  const [scanningIos, setScanningIos] = useState(false);
+  const [showAndroidGuide, setShowAndroidGuide] = useState(false);
+  const [copiedHintKey, setCopiedHintKey] = useState('');
   const [hardeningReport, setHardeningReport] = useState(null);
   const [confirmingDns, setConfirmingDns] = useState(false);
   const [hardeningDns, setHardeningDns] = useState(false);
@@ -197,35 +228,118 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
   const hasDesktopBridge =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
+  const desktopPlatform = typeof window !== 'undefined' ? window.omegaDesktop?.platform || 'win32' : 'win32';
+
+  const fetchUsbStatuses = useCallback(
+    async (explicitPath = customAdbPath, includeIos = false, isManual = false) => {
+      if (!window.omegaDesktop?.checkAdbStatus) return;
+      if (isManual) setRefreshingUsb(true);
+      try {
+        const status = await window.omegaDesktop.checkAdbStatus(explicitPath);
+        setUsbDevice(status);
+        if (status?.devices?.length) {
+          const readyDev = status.devices.find((d) => d.state === 'device') || status.devices[0];
+          setSelectedSerial((prev) =>
+            prev && status.devices.some((d) => d.serial === prev) ? prev : readyDev.serial,
+          );
+        }
+      } catch {
+        setUsbDevice({
+          available: false,
+          connected: false,
+          status_code: 'ADB_NOT_FOUND',
+          devices: [],
+          reason: 'No se pudo consultar el estado del puente ADB.',
+        });
+      }
+
+      if (includeIos && window.omegaDesktop?.checkIosStatus) {
+        try {
+          const ios = await window.omegaDesktop.checkIosStatus();
+          setIosStatus(ios);
+        } catch {
+          setIosStatus({
+            tools_available: false,
+            connected: false,
+            status_code: 'TOOLS_MISSING',
+            local_backups: [],
+            reason: 'No se pudo consultar el puente USB iOS.',
+          });
+        }
+      }
+      if (isManual) setRefreshingUsb(false);
+    },
+    [customAdbPath],
+  );
 
   useEffect(() => {
     if (!window.omegaDesktop?.checkAdbStatus) return undefined;
     let cancelled = false;
 
-    const refreshStatus = () => {
-      window.omegaDesktop
-        .checkAdbStatus()
-        .then((status) => {
-          if (!cancelled) setUsbDevice(status);
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setUsbDevice({
-              available: false,
-              connected: false,
-              reason: 'No se pudo consultar el estado del puente ADB.',
-            });
-          }
-        });
+    const tick = () => {
+      if (cancelled) return;
+      void fetchUsbStatuses(customAdbPath, deviceTab === 'ios', false);
     };
 
-    refreshStatus();
-    const timer = setInterval(refreshStatus, 5000);
+    const initTimer = setTimeout(tick, 0);
+    const timer = setInterval(tick, deviceTab === 'ios' ? 7500 : 5000);
     return () => {
       cancelled = true;
+      clearTimeout(initTimer);
       clearInterval(timer);
     };
-  }, []);
+  }, [customAdbPath, deviceTab, fetchUsbStatuses]);
+
+  function applyLiveDeviceResult(liveRes, fallbackLabel) {
+    const dev = liveRes.device_summary || {};
+    const unifiedSource = liveRes.triage
+      ? {
+          ...liveRes.triage,
+          yara_hits: liveRes.yara_hits?.length ? liveRes.yara_hits : liveRes.triage.yara_hits,
+          behavioral_anomalies: liveRes.behavioral_anomalies?.length
+            ? liveRes.behavioral_anomalies
+            : liveRes.triage.behavioral_anomalies,
+        }
+      : {};
+    const computedLabel =
+      dev.platform === 'ios'
+        ? `${[dev.name, dev.ios_version ? `iOS ${dev.ios_version}` : ''].filter(Boolean).join(' · ') || fallbackLabel}`
+        : `${[dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || fallbackLabel} (ADB USB)`;
+    setHardeningReport(liveRes);
+    setResult(normalizeParallelResult(unifiedSource, [], computedLabel));
+  }
+
+  async function handleCopyCommand(key, value) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedHintKey(key);
+      setTimeout(() => setCopiedHintKey(''), 1600);
+    } catch {
+      // Clipboard unavailable
+    }
+  }
+
+  async function handlePickAdbBinary() {
+    if (!window.omegaDesktop?.pickAdbBinary) return;
+    setErrorMsg('');
+    try {
+      const pick = await window.omegaDesktop.pickAdbBinary();
+      if (pick?.canceled) return;
+      if (!pick?.valid || !pick.adb_path) {
+        setErrorMsg(pick?.error || 'El ejecutable seleccionado no es un binario ADB válido.');
+        return;
+      }
+      setCustomAdbPath(pick.adb_path);
+      try {
+        localStorage.setItem(ADB_PATH_STORAGE_KEY, pick.adb_path);
+      } catch {
+        // Ignore storage errors
+      }
+      await fetchUsbStatuses(pick.adb_path, false);
+    } catch (err) {
+      setErrorMsg(err?.message || 'No se pudo verificar la ruta de ADB.');
+    }
+  }
 
   async function handleLiveUsbScan() {
     if (!window.omegaDesktop?.collectDeviceSnapshot || scanningUsb || isAnalyzing) return;
@@ -234,25 +348,81 @@ export function MvtVerifierPanel({ onAskInChat }) {
     setConfirmingDns(false);
     setDnsAppliedNote('');
     try {
-      const snapshot = await window.omegaDesktop.collectDeviceSnapshot();
+      const snapshot = await window.omegaDesktop.collectDeviceSnapshot({
+        customPath: customAdbPath,
+        serial: selectedSerial || usbDevice?.serial || '',
+      });
       const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
-      const dev = liveRes.device_summary || snapshot.device || {};
-      const label = [dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || 'Dispositivo Android';
-      const unifiedSource = liveRes.triage
-        ? {
-            ...liveRes.triage,
-            yara_hits: liveRes.yara_hits?.length ? liveRes.yara_hits : liveRes.triage.yara_hits,
-            behavioral_anomalies: liveRes.behavioral_anomalies?.length
-              ? liveRes.behavioral_anomalies
-              : liveRes.triage.behavioral_anomalies,
-          }
-        : {};
-      setHardeningReport(liveRes);
-      setResult(normalizeParallelResult(unifiedSource, [], `${label} (ADB USB)`));
+      applyLiveDeviceResult(liveRes, 'Dispositivo Android');
     } catch (err) {
       setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
     } finally {
       setScanningUsb(false);
+    }
+  }
+
+  async function handleLiveIosScan() {
+    if (!window.omegaDesktop?.collectIosSnapshot || scanningIos || isAnalyzing) return;
+    setScanningIos(true);
+    setErrorMsg('');
+    setConfirmingDns(false);
+    setDnsAppliedNote('');
+    try {
+      const snapshot = await window.omegaDesktop.collectIosSnapshot({
+        udid: iosStatus?.device?.udid || '',
+      });
+      const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
+      applyLiveDeviceResult(liveRes, 'iPhone / iPad (USB Lockdown)');
+    } catch (err) {
+      setErrorMsg(err?.message || 'Error auditando el dispositivo iOS por USB.');
+    } finally {
+      setScanningIos(false);
+    }
+  }
+
+  async function analyzeIosBackupDirectory(backupPath) {
+    if (!window.omegaDesktop?.readIosBackupManifest || scanningIos || isAnalyzing) return;
+    setScanningIos(true);
+    setErrorMsg('');
+    try {
+      const manifestData = await window.omegaDesktop.readIosBackupManifest(backupPath);
+      if (manifestData.encrypted || !manifestData.manifest_b64) {
+        setErrorMsg(
+          `El respaldo "${manifestData.backup?.deviceName || 'iOS'}" está cifrado por Apple. Desencríptalo primero con "mvt-ios decrypt-backup" o arrastra un sysdiagnose (.tar.gz) abajo.`,
+        );
+        return;
+      }
+      const targetPlan = await resolveIosManifestTargets(manifestData.manifest_b64);
+      if (targetPlan.encrypted) {
+        setErrorMsg(targetPlan.detail || 'Manifest.db cifrado; requiere desencriptación previa.');
+        return;
+      }
+      const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
+        backupPath,
+        targets: targetPlan.targets || [],
+      });
+      const liveRes = await analyzeLiveDeviceSnapshot(backupPayload);
+      applyLiveDeviceResult(liveRes, 'Respaldo iOS (Manifest.db en RAM)');
+    } catch (err) {
+      setErrorMsg(err?.message || 'No se pudo analizar la carpeta de respaldo iOS en RAM.');
+    } finally {
+      setScanningIos(false);
+    }
+  }
+
+  async function handlePickIosBackupDir() {
+    if (!window.omegaDesktop?.pickIosBackupDir || scanningIos || isAnalyzing) return;
+    setErrorMsg('');
+    try {
+      const pick = await window.omegaDesktop.pickIosBackupDir();
+      if (pick?.canceled) return;
+      if (!pick?.valid || !pick.backup?.path) {
+        setErrorMsg(pick?.error || 'La carpeta seleccionada no es un respaldo iOS válido.');
+        return;
+      }
+      await analyzeIosBackupDirectory(pick.backup.path);
+    } catch (err) {
+      setErrorMsg(err?.message || 'No se pudo inspeccionar la carpeta seleccionada.');
     }
   }
 
@@ -261,7 +431,10 @@ export function MvtVerifierPanel({ onAskInChat }) {
     setHardeningDns(true);
     setErrorMsg('');
     try {
-      const res = await window.omegaDesktop.hardenPrivateDns();
+      const res = await window.omegaDesktop.hardenPrivateDns({
+        customPath: customAdbPath,
+        serial: selectedSerial || usbDevice?.serial || '',
+      });
       setConfirmingDns(false);
       if (res?.applied) {
         setDnsAppliedNote('DNS Privado cifrado (dns.quad9.net) aplicado en el dispositivo.');
@@ -570,12 +743,14 @@ export function MvtVerifierPanel({ onAskInChat }) {
             <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
               2 · Anomalías conductuales y hardening
             </span>
-            {hardeningReport?.device_summary && (
-              <span className="font-tech text-[11px] text-[#8E8E93]">
-                Android {hardeningReport.device_summary.android_version || 'N/D'} · Parche{' '}
-                {hardeningReport.device_summary.security_patch || 'N/D'}
-              </span>
-            )}
+            {hardeningReport?.device_summary &&
+              Object.keys(hardeningReport.device_summary).length > 0 && (
+                <span className="font-tech text-[11px] text-[#8E8E93]">
+                  {hardeningReport.device_summary.platform === 'ios'
+                    ? `iOS ${hardeningReport.device_summary.ios_version || 'N/D'} · ${hardeningReport.device_summary.model || 'iPhone/iPad'}`
+                    : `Android ${hardeningReport.device_summary.android_version || 'N/D'} · Parche ${hardeningReport.device_summary.security_patch || 'N/D'}`}
+                </span>
+              )}
           </div>
 
           <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
@@ -591,6 +766,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
               const showDnsAction =
                 canHardenDnsInDesktop &&
+                hardeningReport?.device_summary?.platform !== 'ios' &&
                 chk.control.includes('DNS Privado') &&
                 chk.status !== 'OK';
 
@@ -902,56 +1078,376 @@ export function MvtVerifierPanel({ onAskInChat }) {
           </p>
         </header>
 
-        {/* Disparador 1: Analizar dispositivo USB (ADB nativo en Electron Desktop) */}
-        <div className="apple-group mb-3.5 rounded-[13px] px-4 py-3.5 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-[10px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
-              <Smartphone
-                className={`h-4 w-4 ${
-                  hasDesktopBridge && usbDevice?.connected ? 'text-[#30D158]' : 'text-[#8E8E93]'
-                }`}
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                  Analizar dispositivo USB
-                </span>
-                {hasDesktopBridge && usbDevice?.connected && (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
-                    <span className="font-tech text-[11px] text-[#8E8E93] truncate">
-                      {usbDevice.model} · {usbDevice.serial}
-                    </span>
-                  </>
-                )}
-              </div>
-              <p className="text-[12px] text-[#8E8E93] truncate">
-                {hasDesktopBridge
-                  ? usbDevice?.connected
-                    ? 'Sockets kernel /proc/net/tcp, DNS en caché, SELinux y accesibilidad en RAM.'
-                    : usbDevice?.reason || 'Detectando dispositivo Android por USB (solo lectura)...'
-                  : 'Disponible en OMEGA Desktop (Electron) con depuración USB de solo lectura.'}
-              </p>
-            </div>
-          </div>
+        {/* Disparador 1: Analizar dispositivo USB (Android ADB + iOS Lockdown/Backup) */}
+        {(() => {
+          const isMac = desktopPlatform === 'darwin';
+          const installAdbCmd = isMac
+            ? 'brew install android-platform-tools'
+            : 'winget install Google.PlatformTools';
+          const installIosCmd = isMac
+            ? 'pip3 install pymobiledevice3'
+            : 'pip install pymobiledevice3';
 
-          {hasDesktopBridge && usbDevice?.connected ? (
-            <button
-              type="button"
-              disabled={scanningUsb || isAnalyzing}
-              onClick={handleLiveUsbScan}
-              className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
-            >
-              {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>{scanningUsb ? 'Extrayendo RAM...' : 'Analizar dispositivo USB'}</span>
-            </button>
-          ) : (
-            <span className="font-tech shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[10.5px] text-[#8E8E93]">
-              {hasDesktopBridge ? 'USB ADB · En espera' : 'Solo Desktop'}
-            </span>
-          )}
-        </div>
+          let statusPillLabel = 'Solo Desktop';
+          let statusPillTone = 'border-white/[0.08] bg-white/[0.04] text-[#8E8E93]';
+          if (hasDesktopBridge) {
+            if (deviceTab === 'android') {
+              if (usbDevice?.connected) {
+                statusPillLabel = `Listo · ${usbDevice.model || 'Android'}`;
+                statusPillTone = 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]';
+              } else if (usbDevice?.status_code === 'UNAUTHORIZED') {
+                statusPillLabel = 'Autorizar RSA en teléfono';
+                statusPillTone = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
+              } else if (usbDevice?.status_code === 'ADB_NOT_FOUND') {
+                statusPillLabel = 'ADB no detectado';
+                statusPillTone = 'border-[#FF9F0A]/30 bg-[#FF9F0A]/10 text-[#FFD60A]';
+              } else {
+                statusPillLabel = 'USB ADB · En espera';
+              }
+            } else if (iosStatus?.connected) {
+              statusPillLabel = `Listo · ${iosStatus.device?.name || 'iPhone'}`;
+              statusPillTone = 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]';
+            } else if (iosStatus?.status_code === 'UNPAIRED') {
+              statusPillLabel = 'Confiar en PC pendiente';
+              statusPillTone = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
+            } else if (iosStatus?.tools_available) {
+              statusPillLabel = 'Lockdown · En espera';
+            } else {
+              statusPillLabel = 'Backup / sysdiagnose';
+            }
+          } else if (deviceTab === 'ios') {
+            statusPillLabel = 'Subir sysdiagnose abajo';
+          }
+
+          return (
+            <div className="apple-group mb-3.5 rounded-[14px] p-4 space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
+                    <Smartphone
+                      className={`h-4 w-4 ${
+                        hasDesktopBridge &&
+                        ((deviceTab === 'android' && usbDevice?.connected) ||
+                          (deviceTab === 'ios' && iosStatus?.connected))
+                          ? 'text-[#30D158]'
+                          : 'text-[#8E8E93]'
+                      }`}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                        Analizar dispositivo USB
+                      </span>
+                      <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${statusPillTone}`}>
+                        {statusPillLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <div className="apple-segmented inline-flex rounded-[8px] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setDeviceTab('android')}
+                      className={`rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                        deviceTab === 'android'
+                          ? 'apple-segmented-active'
+                          : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      }`}
+                    >
+                      Android (ADB)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeviceTab('ios')}
+                      className={`rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                        deviceTab === 'ios'
+                          ? 'apple-segmented-active'
+                          : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      }`}
+                    >
+                      iPhone / iPad
+                    </button>
+                  </div>
+
+                  {hasDesktopBridge && (
+                    <button
+                      type="button"
+                      disabled={refreshingUsb}
+                      onClick={() => fetchUsbStatuses(customAdbPath, deviceTab === 'ios', true)}
+                      title="Verificar conexión USB"
+                      aria-label="Verificar conexión USB"
+                      className="h-7 w-7 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#8E8E93] hover:text-[#F5F5F7] disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#8AB4FF]' : ''}`} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {deviceTab === 'android' ? (
+                <div className="space-y-2.5">
+                  {hasDesktopBridge && usbDevice?.connected ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[12.5px] font-medium text-[#F5F5F7]">
+                            {usbDevice.model || 'Dispositivo Android'}
+                          </span>
+                          <span className="font-tech text-[11px] text-[#8E8E93]">
+                            {selectedSerial || usbDevice.serial}
+                          </span>
+                          {usbDevice.devices?.length > 1 && (
+                            <select
+                              value={selectedSerial}
+                              onChange={(e) => setSelectedSerial(e.target.value)}
+                              className="font-tech rounded-[6px] border border-white/[0.12] bg-black/50 px-1.5 py-0.5 text-[11px] text-[#E5E5EA]"
+                            >
+                              {usbDevice.devices
+                                .filter((d) => d.state === 'device')
+                                .map((d) => (
+                                  <option key={d.serial} value={d.serial}>
+                                    {d.model} ({d.serial})
+                                  </option>
+                                ))}
+                            </select>
+                          )}
+                        </div>
+                        <p className="text-[12px] text-[#8E8E93]">
+                          Lectura volátil de kernel <span className="font-tech text-[#D1D1D6]">/proc/net/tcp</span>, caché DNS, <span className="font-tech text-[#D1D1D6]">SELinux</span>, Accesibilidad y administradores de dispositivo.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={scanningUsb || isAnalyzing}
+                        onClick={handleLiveUsbScan}
+                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                      >
+                        {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        <span>{scanningUsb ? 'Extrayendo RAM...' : 'Analizar dispositivo USB'}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-start justify-between gap-2.5 rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
+                        <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed flex-1 min-w-[220px]">
+                          {hasDesktopBridge
+                            ? usbDevice?.reason || 'Detectando Android Platform Tools (ADB)...'
+                            : 'La conexión USB directa se ejecuta desde OMEGA Desktop (Electron) para usar ADB local en solo lectura. En navegador puedes subir volcados MVT abajo.'}
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowAndroidGuide((v) => !v)}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#8AB4FF] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                        >
+                          <HelpCircle className="h-3.5 w-3.5" />
+                          <span>{showAndroidGuide || usbDevice?.status_code === 'ADB_NOT_FOUND' ? 'Ocultar guía' : 'Cómo conectar'}</span>
+                        </button>
+                      </div>
+
+                      {(showAndroidGuide ||
+                        usbDevice?.status_code === 'ADB_NOT_FOUND' ||
+                        usbDevice?.status_code === 'UNAUTHORIZED') && (
+                        <div className="rounded-[11px] border border-white/[0.06] bg-black/30 px-3.5 py-3 space-y-2.5 text-[12px] text-[#8E8E93]">
+                          <ol className="space-y-1.5 list-decimal list-inside">
+                            <li>
+                              <span className="text-[#E5E5EA]">En el teléfono Android:</span>{' '}
+                              Ajustes → Acerca del teléfono (toca 7 veces <em>Número de compilación</em>) → Opciones de desarrollador → activa <span className="text-[#F5F5F7]">Depuración USB</span>.
+                            </li>
+                            <li>
+                              <span className="text-[#E5E5EA]">En este equipo:</span>{' '}
+                              {usbDevice?.adb_path
+                                ? <>ADB detectado en <span className="font-tech text-[#30D158]">{usbDevice.adb_path}</span>.</>
+                                : 'necesitas Android Platform Tools (adb).'}
+                            </li>
+                            <li>
+                              <span className="text-[#E5E5EA]">Al conectar el cable:</span>{' '}
+                              desbloquea el teléfono y pulsa <span className="text-[#F5F5F7]">Permitir</span> en el aviso de huella RSA.
+                            </li>
+                          </ol>
+
+                          {hasDesktopBridge && (
+                            <div className="pt-1 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handlePickAdbBinary}
+                                className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 transition-colors cursor-pointer"
+                              >
+                                <FolderOpen className="h-3.5 w-3.5" />
+                                <span>Ubicar adb.exe manualmente</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCopyCommand('adb', installAdbCmd)}
+                                className="font-tech inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                              >
+                                {copiedHintKey === 'adb' ? (
+                                  <Check className="h-3 w-3 text-[#30D158]" />
+                                ) : (
+                                  <Copy className="h-3 w-3 text-[#8E8E93]" />
+                                )}
+                                <span>{installAdbCmd}</span>
+                              </button>
+
+                              {window.omegaDesktop?.openExternalUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    window.omegaDesktop.openExternalUrl(
+                                      'https://developer.android.com/tools/releases/platform-tools',
+                                    )
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11.5px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  <span>Descargar ZIP oficial</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {hasDesktopBridge && iosStatus?.connected ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[12.5px] font-medium text-[#F5F5F7]">
+                            {iosStatus.device?.name || 'iPhone / iPad'}
+                          </span>
+                          <span className="font-tech text-[11px] text-[#8E8E93]">
+                            {iosStatus.device?.model} · iOS {iosStatus.device?.ios_version || 'N/D'}
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-[#8E8E93]">
+                          Lectura por Lockdown ({iosStatus.tool_name}) + extracción efímera de crashlogs <span className="font-tech text-[#D1D1D6]">.ips / .crash</span> en RAM.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={scanningIos || isAnalyzing}
+                        onClick={handleLiveIosScan}
+                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                      >
+                        {scanningIos && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        <span>{scanningIos ? 'Extrayendo RAM...' : 'Auditar iPhone USB'}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5 space-y-2">
+                      <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
+                        {hasDesktopBridge
+                          ? iosStatus?.reason || 'Sin jailbreak, iOS bloquea shell/ADB por USB. OMEGA audita respaldos locales (Manifest.db, TCC.db, DataUsage.sqlite) o archivos sysdiagnose en RAM.'
+                          : 'iOS bloquea shell directo desde navegador. Genera un sysdiagnose en tu iPhone o selecciona un respaldo en OMEGA Desktop.'}
+                      </p>
+
+                      {hasDesktopBridge && (
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            disabled={scanningIos || isAnalyzing}
+                            onClick={handlePickIosBackupDir}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 transition-colors cursor-pointer"
+                          >
+                            {scanningIos ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <FolderOpen className="h-3.5 w-3.5" />
+                            )}
+                            <span>Explorar carpeta de respaldo iOS</span>
+                          </button>
+
+                          {!iosStatus?.tools_available && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCommand('ios', installIosCmd)}
+                              className="font-tech inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                              title="Opcional para conexión USB Lockdown directa en Desktop (requiere Apple Devices / usbmuxd)"
+                            >
+                              {copiedHintKey === 'ios' ? (
+                                <Check className="h-3 w-3 text-[#30D158]" />
+                              ) : (
+                                <Copy className="h-3 w-3 text-[#8E8E93]" />
+                              )}
+                              <span>USB en vivo: {installIosCmd}</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {hasDesktopBridge && iosStatus?.local_backups?.length > 0 && (
+                    <div className="rounded-[11px] border border-white/[0.06] bg-black/30 divide-y divide-white/[0.05] overflow-hidden">
+                      <div className="px-3 py-1.5 text-[11px] font-medium text-[#8E8E93]">
+                        Respaldos locales detectados en este equipo ({iosStatus.local_backups.length})
+                      </div>
+                      {iosStatus.local_backups.slice(0, 3).map((bk) => (
+                        <div key={bk.id} className="px-3 py-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[12px] font-medium text-[#F5F5F7] truncate">
+                                {bk.deviceName}
+                              </span>
+                              {bk.iosVersion && (
+                                <span className="font-tech text-[10.5px] text-[#8E8E93]">
+                                  iOS {bk.iosVersion}
+                                </span>
+                              )}
+                              {bk.encrypted && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-[#FF9F0A]/30 bg-[#FF9F0A]/10 px-1.5 py-0.5 text-[10px] text-[#FFD60A]">
+                                  <Lock className="h-2.5 w-2.5" /> Cifrado
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {bk.encrypted ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCopyCommand(
+                                  `dec-${bk.id}`,
+                                  `mvt-ios decrypt-backup -d ./ios_decrypted "${bk.path}"`,
+                                )
+                              }
+                              className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[10.5px] text-[#D1D1D6] hover:bg-white/[0.08] cursor-pointer"
+                            >
+                              {copiedHintKey === `dec-${bk.id}` ? 'Copiado' : 'Copiar mvt-ios decrypt'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={scanningIos || isAnalyzing}
+                              onClick={() => analyzeIosBackupDirectory(bk.path)}
+                              className="shrink-0 rounded-[7px] bg-[#2F6FED] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 cursor-pointer"
+                            >
+                              Analizar en RAM
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="rounded-[10px] border border-white/[0.05] bg-black/25 px-3 py-2 text-[11.5px] text-[#8E8E93] leading-relaxed">
+                    <span className="text-[#E5E5EA] font-medium">Vía rápida iPhone sin cables ni drivers:</span>{' '}
+                    en iOS ve a <em>Ajustes → Privacidad y seguridad → Análisis y mejoras → Datos de análisis</em> (o pulsa Vol+ / Vol- / Encendido para generar un <span className="font-tech text-[#8AB4FF]">sysdiagnose</span>) y arrastra el <span className="font-tech text-[#D1D1D6]">.tar.gz</span> o <span className="font-tech text-[#D1D1D6]">.ips</span> abajo.
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Disparador 2: Cargar respaldo / volcado */}
         <div className="omega-capsule rounded-[16px] p-4">

@@ -1,21 +1,91 @@
 import { createRequire } from 'node:module';
 import { execFile } from 'node:child_process';
 import dns from 'node:dns/promises';
+import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
+const SQLITE_MAGIC = Buffer.from('SQLite format 3\0', 'ascii');
 
-async function runAdb(args, timeout = 12000) {
-  const { stdout } = await execFileAsync('adb', args, {
+function normalizeAdbCandidate(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') return null;
+  const trimmed = rawPath.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) return null;
+  const resolved = path.resolve(trimmed);
+  try {
+    if (fs.existsSync(resolved)) {
+      const stat = fs.statSync(resolved);
+      if (stat.isFile()) return resolved;
+      if (stat.isDirectory()) {
+        const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb';
+        const nested = path.join(resolved, exeName);
+        if (fs.existsSync(nested)) return nested;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function isRunnableBinary(binPath, args = ['version']) {
+  try {
+    await execFileAsync(binPath, args, { timeout: 2500, maxBuffer: 512 * 1024 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveAdbBinary(customPath = '') {
+  const custom = normalizeAdbCandidate(customPath);
+  if (custom && (await isRunnableBinary(custom, ['version']))) {
+    return custom;
+  }
+  if (await isRunnableBinary('adb', ['version'])) {
+    return 'adb';
+  }
+
+  const exe = process.platform === 'win32' ? 'adb.exe' : 'adb';
+  const candidates = [];
+  if (process.platform === 'win32') {
+    const localApp = process.env.LOCALAPPDATA || '';
+    const userProf = process.env.USERPROFILE || os.homedir();
+    if (localApp) candidates.push(path.join(localApp, 'Android', 'Sdk', 'platform-tools', exe));
+    candidates.push(path.join(userProf, 'platform-tools', exe));
+    candidates.push(path.join('C:\\', 'platform-tools', exe));
+    candidates.push(path.join('C:\\', 'Android', 'platform-tools', exe));
+  } else {
+    candidates.push(path.join(os.homedir(), 'Library', 'Android', 'sdk', 'platform-tools', exe));
+    candidates.push(path.join(os.homedir(), 'Android', 'Sdk', 'platform-tools', exe));
+    candidates.push('/opt/homebrew/bin/adb', '/usr/local/bin/adb', '/usr/bin/adb');
+  }
+  candidates.push(path.join(__dirname, '..', '..', 'tools', 'platform-tools', exe));
+
+  for (const cand of candidates) {
+    if (cand && fs.existsSync(cand) && (await isRunnableBinary(cand, ['version']))) {
+      return cand;
+    }
+  }
+  return null;
+}
+
+async function runAdb(args, timeout = 12000, customPath = '') {
+  const adbBin = await resolveAdbBinary(customPath);
+  if (!adbBin) {
+    throw new Error('ADB_NOT_FOUND');
+  }
+  const { stdout } = await execFileAsync(adbBin, args, {
     timeout,
     maxBuffer: 10 * 1024 * 1024,
   });
@@ -30,50 +100,124 @@ function parseAdbDevices(raw) {
     .filter(Boolean)
     .map((line) => {
       const parts = line.split(/\s+/);
+      const modelMatch = line.match(/model:([^\s]+)/);
+      const productMatch = line.match(/product:([^\s]+)/);
       return {
         line,
         serial: parts[0] || '',
         state: parts[1] || '',
+        model: modelMatch ? modelMatch[1].replace(/_/g, ' ') : productMatch ? productMatch[1] : 'Android',
       };
     });
 }
 
 // 1. Detectar si hay un dispositivo Android autorizado por USB (solo lectura)
-ipcMain.handle('omega:adb-status', async () => {
+ipcMain.handle('omega:adb-status', async (_event, customPath = '') => {
   try {
-    const raw = await runAdb(['devices', '-l'], 5000);
-    const devices = parseAdbDevices(raw);
+    const adbBin = await resolveAdbBinary(customPath);
+    if (!adbBin) {
+      return {
+        available: false,
+        connected: false,
+        status_code: 'ADB_NOT_FOUND',
+        adb_path: null,
+        devices: [],
+        reason: 'ADB no encontrado en el sistema ni en rutas estándar de Android Platform Tools.',
+      };
+    }
+
+    const { stdout } = await execFileAsync(adbBin, ['devices', '-l'], {
+      timeout: 5000,
+      maxBuffer: 2 * 1024 * 1024,
+    });
+    const devices = parseAdbDevices(stdout.trim());
     const authorized = devices.find((d) => d.state === 'device');
 
     if (!authorized) {
       const unauthorized = devices.find((d) => d.state === 'unauthorized');
+      const offline = devices.find((d) => d.state === 'offline');
+      let status_code = 'NO_DEVICE';
+      let reason = 'ADB listo, pero no hay ningún teléfono Android conectado por USB.';
+      if (unauthorized) {
+        status_code = 'UNAUTHORIZED';
+        reason = 'Teléfono detectado sin autorizar. Desbloquea la pantalla y acepta la huella RSA ("¿Permitir depuración por USB?").';
+      } else if (offline) {
+        status_code = 'OFFLINE';
+        reason = 'Dispositivo detectado en estado offline. Desconecta y reconecta el cable en modo Transferencia de archivos.';
+      }
       return {
         available: true,
         connected: false,
-        reason: unauthorized
-          ? 'Dispositivo conectado pero sin autorizar. Acepta la huella RSA en la pantalla del teléfono.'
-          : 'Ningún dispositivo Android conectado por USB.',
+        status_code,
+        adb_path: adbBin,
+        devices,
+        reason,
       };
     }
 
-    const modelMatch = authorized.line.match(/model:([^\s]+)/);
     return {
       available: true,
       connected: true,
+      status_code: 'READY',
+      adb_path: adbBin,
       serial: authorized.serial,
-      model: modelMatch ? modelMatch[1].replace(/_/g, ' ') : 'Android Device',
+      model: authorized.model || 'Android Device',
+      devices,
     };
-  } catch {
+  } catch (err) {
     return {
       available: false,
       connected: false,
-      reason: 'ADB no encontrado en el PATH del sistema. Instala Android Platform Tools.',
+      status_code: 'ADB_NOT_FOUND',
+      adb_path: null,
+      devices: [],
+      reason: err?.message || 'No se pudo consultar Android Platform Tools (ADB).',
+    };
+  }
+});
+
+// 1b. Selector nativo de binario o carpeta platform-tools (adb.exe / adb)
+ipcMain.handle('omega:adb-pick-binary', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  const pick = await dialog.showOpenDialog(win, {
+    title: 'Seleccionar ejecutable adb (Android Platform Tools)',
+    properties: ['openFile'],
+    filters:
+      process.platform === 'win32'
+        ? [{ name: 'Android Debug Bridge (adb.exe)', extensions: ['exe'] }]
+        : undefined,
+  });
+  if (pick.canceled || !pick.filePaths?.length) {
+    return { canceled: true, valid: false };
+  }
+  const chosen = normalizeAdbCandidate(pick.filePaths[0]);
+  if (!chosen) {
+    return { canceled: false, valid: false, error: 'El archivo seleccionado no es válido.' };
+  }
+  try {
+    const { stdout } = await execFileAsync(chosen, ['version'], { timeout: 3000 });
+    return {
+      canceled: false,
+      valid: true,
+      adb_path: chosen,
+      version: stdout.split(/\r?\n/)[0]?.trim() || 'ADB verificado',
+    };
+  } catch (err) {
+    return {
+      canceled: false,
+      valid: false,
+      error: err?.message || 'El ejecutable seleccionado no respondió a "adb version".',
     };
   }
 });
 
 // 2. Extracción forense volátil de solo lectura (sockets kernel, DNS, accesibilidad, SELinux, procesos y paquetes)
-ipcMain.handle('omega:adb-collect', async () => {
+ipcMain.handle('omega:adb-collect', async (_event, opts = {}) => {
+  const customPath = typeof opts === 'string' ? opts : opts?.customPath || '';
+  const serial = typeof opts === 'object' && opts?.serial ? String(opts.serial).trim() : '';
+  const targetPrefix = serial ? ['-s', serial] : [];
+  const execScoped = (args, timeout = 12000) => runAdb([...targetPrefix, ...args], timeout, customPath);
+
   const [
     model,
     manufacturer,
@@ -92,22 +236,22 @@ ipcMain.handle('omega:adb-collect', async () => {
     procNetTcp6,
     dnsResolverDump,
   ] = await Promise.all([
-    runAdb(['shell', 'getprop', 'ro.product.model']).catch(() => 'Desconocido'),
-    runAdb(['shell', 'getprop', 'ro.product.manufacturer']).catch(() => ''),
-    runAdb(['shell', 'getprop', 'ro.build.version.release']).catch(() => 'N/D'),
-    runAdb(['shell', 'getprop', 'ro.build.version.security_patch']).catch(() => 'N/D'),
-    runAdb(['shell', 'settings', 'get', 'global', 'private_dns_mode']).catch(() => 'off'),
-    runAdb(['shell', 'settings', 'get', 'global', 'private_dns_specifier']).catch(() => ''),
-    runAdb(['shell', 'settings', 'get', 'secure', 'install_non_market_apps']).catch(() => ''),
-    runAdb(['shell', 'getenforce']).catch(() => 'Unknown'),
-    runAdb(['shell', 'getprop', 'ro.boot.verifiedbootstate']).catch(() => 'unknown'),
-    runAdb(['shell', 'settings', 'get', 'secure', 'enabled_accessibility_services']).catch(() => 'null'),
-    runAdb(['shell', 'dumpsys', 'device_policy']).catch(() => ''),
-    runAdb(['shell', 'pm', 'list', 'packages', '-3']).catch(() => ''),
-    runAdb(['shell', 'ps', '-A', '-o', 'USER,PID,PPID,NAME,ARGS']).catch(() => ''),
-    runAdb(['shell', 'cat', '/proc/net/tcp']).catch(() => ''),
-    runAdb(['shell', 'cat', '/proc/net/tcp6']).catch(() => ''),
-    runAdb(['shell', 'dumpsys', 'dnsresolver']).catch(() => ''),
+    execScoped(['shell', 'getprop', 'ro.product.model']).catch(() => 'Desconocido'),
+    execScoped(['shell', 'getprop', 'ro.product.manufacturer']).catch(() => ''),
+    execScoped(['shell', 'getprop', 'ro.build.version.release']).catch(() => 'N/D'),
+    execScoped(['shell', 'getprop', 'ro.build.version.security_patch']).catch(() => 'N/D'),
+    execScoped(['shell', 'settings', 'get', 'global', 'private_dns_mode']).catch(() => 'off'),
+    execScoped(['shell', 'settings', 'get', 'global', 'private_dns_specifier']).catch(() => ''),
+    execScoped(['shell', 'settings', 'get', 'secure', 'install_non_market_apps']).catch(() => ''),
+    execScoped(['shell', 'getenforce']).catch(() => 'Unknown'),
+    execScoped(['shell', 'getprop', 'ro.boot.verifiedbootstate']).catch(() => 'unknown'),
+    execScoped(['shell', 'settings', 'get', 'secure', 'enabled_accessibility_services']).catch(() => 'null'),
+    execScoped(['shell', 'dumpsys', 'device_policy']).catch(() => ''),
+    execScoped(['shell', 'pm', 'list', 'packages', '-3']).catch(() => ''),
+    execScoped(['shell', 'ps', '-A', '-o', 'USER,PID,PPID,NAME,ARGS']).catch(() => ''),
+    execScoped(['shell', 'cat', '/proc/net/tcp']).catch(() => ''),
+    execScoped(['shell', 'cat', '/proc/net/tcp6']).catch(() => ''),
+    execScoped(['shell', 'dumpsys', 'dnsresolver']).catch(() => ''),
   ]);
 
   const cleanPackages = packagesRaw
@@ -117,7 +261,10 @@ ipcMain.handle('omega:adb-collect', async () => {
     .join('\n');
 
   return {
+    platform: 'android',
     device: {
+      platform: 'android',
+      serial,
       manufacturer: manufacturer.trim(),
       model: model.trim(),
       android_version: androidVersion.trim(),
@@ -138,15 +285,20 @@ ipcMain.handle('omega:adb-collect', async () => {
 });
 
 // 3. Contramedida defensiva explícita: forzar DNS-over-TLS cifrado (Quad9)
-ipcMain.handle('omega:adb-harden-dns', async (_event, opts) => {
+ipcMain.handle('omega:adb-harden-dns', async (_event, opts = {}) => {
   if (!opts?.confirmed) {
     throw new Error('Se requiere confirmación explícita del analista antes de modificar ajustes de red.');
   }
-  await runAdb(['shell', 'settings', 'put', 'global', 'private_dns_mode', 'hostname'], 5000);
-  await runAdb(['shell', 'settings', 'put', 'global', 'private_dns_specifier', 'dns.quad9.net'], 5000);
+  const customPath = opts?.customPath || '';
+  const serial = opts?.serial ? String(opts.serial).trim() : '';
+  const targetPrefix = serial ? ['-s', serial] : [];
+  const execScoped = (args, timeout = 5000) => runAdb([...targetPrefix, ...args], timeout, customPath);
+
+  await execScoped(['shell', 'settings', 'put', 'global', 'private_dns_mode', 'hostname'], 5000);
+  await execScoped(['shell', 'settings', 'put', 'global', 'private_dns_specifier', 'dns.quad9.net'], 5000);
   const [appliedMode, appliedSpecifier] = await Promise.all([
-    runAdb(['shell', 'settings', 'get', 'global', 'private_dns_mode'], 4000).catch(() => ''),
-    runAdb(['shell', 'settings', 'get', 'global', 'private_dns_specifier'], 4000).catch(() => ''),
+    execScoped(['shell', 'settings', 'get', 'global', 'private_dns_mode'], 4000).catch(() => ''),
+    execScoped(['shell', 'settings', 'get', 'global', 'private_dns_specifier'], 4000).catch(() => ''),
   ]);
   return {
     applied: appliedMode.trim() === 'hostname' && appliedSpecifier.trim() === 'dns.quad9.net',
@@ -154,6 +306,464 @@ ipcMain.handle('omega:adb-harden-dns', async (_event, opts) => {
     specifier: appliedSpecifier.trim(),
     provider: 'dns.quad9.net (DNS-over-TLS)',
   };
+});
+
+// =====================================================================
+// Puente iOS (usbmuxd / pymobiledevice3 / libimobiledevice + Backups locales)
+// =====================================================================
+function hasAppleMobileDeviceSupport() {
+  if (process.platform === 'darwin') return true;
+  if (process.platform !== 'win32') return true;
+  const dirs = [
+    'C:\\Program Files\\Common Files\\Apple\\Mobile Device Support',
+    'C:\\Program Files (x86)\\Common Files\\Apple\\Mobile Device Support',
+  ];
+  return dirs.some((d) => fs.existsSync(d));
+}
+
+async function resolveIosTools() {
+  if (await isRunnableBinary('idevice_id', ['--version'])) {
+    const hasCrash = await isRunnableBinary('idevicecrashreport', ['--help']).catch(() => false);
+    return { kind: 'libimobiledevice', cmd: 'idevice_id', prefix: [], hasCrash };
+  }
+  if (await isRunnableBinary('pymobiledevice3', ['--help'])) {
+    return { kind: 'pymobiledevice3', cmd: 'pymobiledevice3', prefix: [], hasCrash: true };
+  }
+  for (const pyBin of ['python', 'python3', 'py']) {
+    if (await isRunnableBinary(pyBin, ['-m', 'pymobiledevice3', '--help'])) {
+      return { kind: 'pymobiledevice3', cmd: pyBin, prefix: ['-m', 'pymobiledevice3'], hasCrash: true };
+    }
+  }
+  return null;
+}
+
+function readXmlPlistString(text, key) {
+  const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = text.match(new RegExp(`<key>${esc}</key>\\s*<(?:string|date)>([^<]+)</(?:string|date)>`, 'i'));
+  return m ? m[1].trim() : '';
+}
+
+function readBackupMetadata(backupDir) {
+  const infoPath = path.join(backupDir, 'Info.plist');
+  const manifestDbPath = path.join(backupDir, 'Manifest.db');
+  const manifestPlistPath = path.join(backupDir, 'Manifest.plist');
+  if (!fs.existsSync(infoPath) && !fs.existsSync(manifestDbPath) && !fs.existsSync(manifestPlistPath)) {
+    return null;
+  }
+
+  let deviceName = path.basename(backupDir);
+  let productType = '';
+  let iosVersion = '';
+  let lastBackupDate = '';
+
+  if (fs.existsSync(infoPath)) {
+    try {
+      const infoRaw = fs.readFileSync(infoPath, 'utf8');
+      deviceName = readXmlPlistString(infoRaw, 'Device Name') || deviceName;
+      productType = readXmlPlistString(infoRaw, 'Product Type');
+      iosVersion = readXmlPlistString(infoRaw, 'Product Version');
+      lastBackupDate = readXmlPlistString(infoRaw, 'Last Backup Date');
+    } catch {
+      // Binary plist fallback keeps directory basename
+    }
+  }
+
+  const hasManifestDb = fs.existsSync(manifestDbPath);
+  let encrypted = false;
+  if (hasManifestDb) {
+    try {
+      const fd = fs.openSync(manifestDbPath, 'r');
+      const header = Buffer.alloc(16);
+      const bytesRead = fs.readSync(fd, header, 0, 16, 0);
+      fs.closeSync(fd);
+      encrypted = bytesRead < 16 || !header.equals(SQLITE_MAGIC);
+    } catch {
+      encrypted = true;
+    }
+  } else if (fs.existsSync(manifestPlistPath)) {
+    try {
+      const mText = fs.readFileSync(manifestPlistPath, 'utf8');
+      if (/<key>IsEncrypted<\/key>\s*<true\s*\/>/i.test(mText)) encrypted = true;
+    } catch {
+      // ignore
+    }
+  }
+
+  let mtimeMs = 0;
+  try {
+    mtimeMs = fs.statSync(backupDir).mtimeMs;
+  } catch {
+    mtimeMs = 0;
+  }
+
+  return {
+    id: path.basename(backupDir),
+    path: backupDir,
+    deviceName,
+    productType,
+    iosVersion,
+    lastBackupDate,
+    hasManifestDb,
+    encrypted,
+    mtimeMs,
+  };
+}
+
+function discoverLocalIosBackups() {
+  const roots = [];
+  if (process.platform === 'win32') {
+    if (process.env.APPDATA) roots.push(path.join(process.env.APPDATA, 'Apple Computer', 'MobileSync', 'Backup'));
+    const home = process.env.USERPROFILE || os.homedir();
+    roots.push(path.join(home, 'Apple', 'MobileSync', 'Backup'));
+  } else if (process.platform === 'darwin') {
+    roots.push(path.join(os.homedir(), 'Library', 'Application Support', 'MobileSync', 'Backup'));
+  } else {
+    roots.push(path.join(os.homedir(), '.local', 'share', 'MobileSync', 'Backup'));
+  }
+
+  const found = [];
+  for (const root of roots) {
+    if (!root || !fs.existsSync(root)) continue;
+    try {
+      const entries = fs.readdirSync(root, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const meta = readBackupMetadata(path.join(root, entry.name));
+        if (meta) found.push(meta);
+      }
+    } catch {
+      // ignore inaccessible dirs
+    }
+  }
+  return found.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, 8);
+}
+
+function parseKeyValueLines(raw) {
+  const out = {};
+  for (const line of String(raw || '').split(/\r?\n/)) {
+    const idx = line.indexOf(':');
+    if (idx <= 0) continue;
+    const k = line.slice(0, idx).trim();
+    const v = line.slice(idx + 1).trim();
+    if (k) out[k] = v;
+  }
+  return out;
+}
+
+ipcMain.handle('omega:ios-status', async () => {
+  const localBackups = discoverLocalIosBackups();
+  const appleSupport = hasAppleMobileDeviceSupport();
+  const tools = await resolveIosTools();
+
+  if (!tools) {
+    return {
+      tools_available: false,
+      tool_name: null,
+      apple_driver_present: appleSupport,
+      connected: false,
+      status_code: 'TOOLS_MISSING',
+      device: null,
+      local_backups: localBackups,
+      reason:
+        process.platform === 'win32' && !appleSupport
+          ? 'Faltan Apple Mobile Device Support (usbmuxd) y CLI iOS (pymobiledevice3 o libimobiledevice) para lectura USB directa.'
+          : 'No se detectó pymobiledevice3 ni libimobiledevice (idevice_id) para consulta USB en vivo. Puedes analizar sysdiagnose o backups locales igualmente.',
+    };
+  }
+
+  try {
+    let udids = [];
+    if (tools.kind === 'libimobiledevice') {
+      const { stdout } = await execFileAsync('idevice_id', ['-l'], { timeout: 4000 });
+      udids = stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    } else {
+      const { stdout } = await execFileAsync(tools.cmd, [...tools.prefix, 'usbmux', 'list'], { timeout: 5000 });
+      const parsed = JSON.parse(stdout);
+      if (Array.isArray(parsed)) {
+        udids = parsed
+          .filter((d) => !d.ConnectionType || String(d.ConnectionType).toUpperCase() === 'USB')
+          .map((d) => d.UniqueDeviceID || d.Identifier)
+          .filter(Boolean);
+      }
+    }
+
+    if (!udids.length) {
+      return {
+        tools_available: true,
+        tool_name: tools.kind,
+        apple_driver_present: appleSupport,
+        connected: false,
+        status_code: 'NO_DEVICE',
+        device: null,
+        local_backups: localBackups,
+        reason: `Puente ${tools.kind} listo. Conecta un iPhone/iPad por USB y pulsa "Confiar en esta computadora".`,
+      };
+    }
+
+    const udid = udids[0];
+    let infoObj = {};
+    let backupInfo = {};
+    try {
+      if (tools.kind === 'libimobiledevice') {
+        const [{ stdout: mainOut }, { stdout: bakOut }] = await Promise.all([
+          execFileAsync('ideviceinfo', ['-u', udid], { timeout: 5000 }),
+          execFileAsync('ideviceinfo', ['-u', udid, '-q', 'com.apple.mobile.backup'], { timeout: 4000 }).catch(() => ({ stdout: '' })),
+        ]);
+        infoObj = parseKeyValueLines(mainOut);
+        backupInfo = parseKeyValueLines(bakOut);
+      } else {
+        const { stdout } = await execFileAsync(tools.cmd, [...tools.prefix, 'lockdown', 'info', '--udid', udid], { timeout: 5000 });
+        infoObj = JSON.parse(stdout);
+        try {
+          const { stdout: bakOut } = await execFileAsync(
+            tools.cmd,
+            [...tools.prefix, 'lockdown', 'info', '--udid', udid, '--domain', 'com.apple.mobile.backup'],
+            { timeout: 4000 },
+          );
+          backupInfo = JSON.parse(bakOut);
+        } catch {
+          backupInfo = {};
+        }
+      }
+    } catch (err) {
+      return {
+        tools_available: true,
+        tool_name: tools.kind,
+        apple_driver_present: appleSupport,
+        connected: false,
+        status_code: 'UNPAIRED',
+        device: { udid },
+        local_backups: localBackups,
+        reason:
+          err?.message?.includes('Pair') || err?.message?.includes('Trust') || err?.message?.includes('InvalidHostID')
+            ? 'iPhone conectado sin emparejar. Desbloquea el teléfono y acepta "Confiar en esta computadora".'
+            : `No se pudo consultar Lockdown en el iPhone (${err?.message || 'sin emparejar'}).`,
+      };
+    }
+
+    return {
+      tools_available: true,
+      tool_name: tools.kind,
+      apple_driver_present: appleSupport,
+      connected: true,
+      status_code: 'READY',
+      local_backups: localBackups,
+      device: {
+        platform: 'ios',
+        udid,
+        name: infoObj.DeviceName || 'iPhone / iPad',
+        model: infoObj.ProductType || infoObj.DeviceClass || 'iOS Device',
+        ios_version: infoObj.ProductVersion || '',
+        build_version: infoObj.BuildVersion || '',
+        backup_encrypted: backupInfo.WillEncrypt ?? infoObj.WillEncrypt ?? null,
+        developer_mode: infoObj.DeveloperModeStatus ?? null,
+      },
+      reason: 'iPhone emparejado por Lockdown en modo solo lectura.',
+    };
+  } catch (err) {
+    return {
+      tools_available: true,
+      tool_name: tools.kind,
+      apple_driver_present: appleSupport,
+      connected: false,
+      status_code: 'NO_DEVICE',
+      device: null,
+      local_backups: localBackups,
+      reason: err?.message || 'Error consultando dispositivo iOS por USB.',
+    };
+  }
+});
+
+ipcMain.handle('omega:ios-collect', async (_event, opts = {}) => {
+  const tools = await resolveIosTools();
+  if (!tools) {
+    throw new Error('No se encontró pymobiledevice3 ni libimobiledevice para extracción USB directa en iOS.');
+  }
+  const udid = opts?.udid ? String(opts.udid).trim() : '';
+
+  let infoObj = {};
+  let backupInfo = {};
+  if (tools.kind === 'libimobiledevice') {
+    const scope = udid ? ['-u', udid] : [];
+    const [{ stdout: mainOut }, { stdout: bakOut }] = await Promise.all([
+      execFileAsync('ideviceinfo', scope, { timeout: 6000 }),
+      execFileAsync('ideviceinfo', [...scope, '-q', 'com.apple.mobile.backup'], { timeout: 4000 }).catch(() => ({ stdout: '' })),
+    ]);
+    infoObj = parseKeyValueLines(mainOut);
+    backupInfo = parseKeyValueLines(bakOut);
+  } else {
+    const scope = udid ? ['--udid', udid] : [];
+    const { stdout } = await execFileAsync(tools.cmd, [...tools.prefix, 'lockdown', 'info', ...scope], { timeout: 6000 });
+    infoObj = JSON.parse(stdout);
+    try {
+      const { stdout: bakOut } = await execFileAsync(
+        tools.cmd,
+        [...tools.prefix, 'lockdown', 'info', ...scope, '--domain', 'com.apple.mobile.backup'],
+        { timeout: 4000 },
+      );
+      backupInfo = JSON.parse(bakOut);
+    } catch {
+      backupInfo = {};
+    }
+  }
+
+  // Extraer crashlogs (.ips/.crash) a un buffer efímero limpio en RAM (sin persistencia al finalizar)
+  const crashlogs = [];
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-ios-ram-'));
+  try {
+    if (tools.kind === 'libimobiledevice' && tools.hasCrash) {
+      const args = udid ? ['-u', udid, '-e', tmpDir] : ['-e', tmpDir];
+      await execFileAsync('idevicecrashreport', args, { timeout: 15000 }).catch(() => {});
+    } else if (tools.kind === 'pymobiledevice3') {
+      const args = [...tools.prefix, 'crash', 'pull', tmpDir];
+      if (udid) args.push('--udid', udid);
+      await execFileAsync(tools.cmd, args, { timeout: 15000 }).catch(() => {});
+    }
+
+    const walkLogs = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (crashlogs.length >= 25) return;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walkLogs(full);
+        } else if (/\.(ips|crash|log|json)$/i.test(entry.name)) {
+          try {
+            const st = fs.statSync(full);
+            if (st.size > 0 && st.size <= 3 * 1024 * 1024) {
+              crashlogs.push({
+                filename: entry.name,
+                content: fs.readFileSync(full, 'utf8'),
+              });
+            }
+          } catch {
+            // ignore unreadable item
+          }
+        }
+      }
+    };
+    walkLogs(tmpDir);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  return {
+    platform: 'ios',
+    device: {
+      platform: 'ios',
+      name: infoObj.DeviceName || 'iPhone / iPad',
+      model: infoObj.ProductType || infoObj.DeviceClass || 'iOS Device',
+      ios_version: infoObj.ProductVersion || '',
+      build_version: infoObj.BuildVersion || '',
+      backup_encrypted: backupInfo.WillEncrypt ?? infoObj.WillEncrypt ?? null,
+      developer_mode: infoObj.DeveloperModeStatus ?? null,
+    },
+    crashlogs,
+  };
+});
+
+ipcMain.handle('omega:ios-pick-backup-dir', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  const pick = await dialog.showOpenDialog(win, {
+    title: 'Seleccionar carpeta de respaldo iOS (contiene Manifest.db)',
+    properties: ['openDirectory'],
+  });
+  if (pick.canceled || !pick.filePaths?.length) {
+    return { canceled: true };
+  }
+  const backupPath = pick.filePaths[0];
+  const meta = readBackupMetadata(backupPath);
+  if (!meta) {
+    return {
+      canceled: false,
+      valid: false,
+      error: 'La carpeta seleccionada no contiene Info.plist ni Manifest.db de un respaldo iOS.',
+    };
+  }
+  return { canceled: false, valid: true, backup: meta };
+});
+
+ipcMain.handle('omega:ios-read-backup-manifest', async (_event, backupPath) => {
+  const resolvedDir = path.resolve(String(backupPath || ''));
+  const manifestPath = path.join(resolvedDir, 'Manifest.db');
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error('No se encontró Manifest.db en la carpeta de respaldo seleccionada.');
+  }
+  const stat = fs.statSync(manifestPath);
+  if (stat.size > 64 * 1024 * 1024) {
+    throw new Error('Manifest.db supera el límite de 64 MB en memoria.');
+  }
+  const raw = fs.readFileSync(manifestPath);
+  const meta = readBackupMetadata(resolvedDir);
+  const isEncrypted = raw.length < 16 || !raw.subarray(0, 16).equals(SQLITE_MAGIC);
+  return {
+    backup: meta,
+    encrypted: isEncrypted,
+    manifest_b64: isEncrypted ? null : raw.toString('base64'),
+  };
+});
+
+ipcMain.handle('omega:ios-read-backup-artifacts', async (_event, opts = {}) => {
+  const resolvedDir = path.resolve(String(opts?.backupPath || ''));
+  const targets = Array.isArray(opts?.targets) ? opts.targets.slice(0, 35) : [];
+  const manifestPath = path.join(resolvedDir, 'Manifest.db');
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error('Carpeta de respaldo iOS no válida.');
+  }
+
+  const artifacts = [];
+  let totalBytes = 0;
+  const manifestBuf = fs.readFileSync(manifestPath);
+  if (manifestBuf.length <= 25 * 1024 * 1024) {
+    totalBytes += manifestBuf.length;
+    artifacts.push({
+      filename: 'Manifest.db',
+      content_b64: manifestBuf.toString('base64'),
+    });
+  }
+
+  for (const tgt of targets) {
+    const fileId = String(tgt?.file_id || '').trim();
+    if (!/^[a-f0-9]{32,64}$/i.test(fileId)) continue;
+    const subPath = path.join(resolvedDir, fileId.slice(0, 2), fileId);
+    const flatPath = path.join(resolvedDir, fileId);
+    const chosen = fs.existsSync(subPath) ? subPath : fs.existsSync(flatPath) ? flatPath : null;
+    if (!chosen) continue;
+    try {
+      const st = fs.statSync(chosen);
+      if (!st.isFile() || st.size <= 0 || st.size > 25 * 1024 * 1024) continue;
+      if (totalBytes + st.size > 85 * 1024 * 1024) break;
+      totalBytes += st.size;
+      const rel = String(tgt?.relative_path || fileId).replace(/^\/+/, '');
+      artifacts.push({
+        filename: path.posix.basename(rel) || fileId,
+        content_b64: fs.readFileSync(chosen).toString('base64'),
+      });
+    } catch {
+      // ignore single unreadable target
+    }
+  }
+
+  const meta = readBackupMetadata(resolvedDir);
+  return {
+    platform: 'ios',
+    device: {
+      platform: 'ios',
+      name: meta?.deviceName || 'Respaldo iOS',
+      model: meta?.productType || 'iPhone Backup',
+      ios_version: meta?.iosVersion || '',
+      backup_encrypted: false,
+    },
+    binary_artifacts: artifacts,
+  };
+});
+
+ipcMain.handle('omega:open-external', async (_event, targetUrl) => {
+  const raw = String(targetUrl || '').trim();
+  if (!raw.startsWith('https://')) {
+    throw new Error('Solo se permiten URLs HTTPS seguras.');
+  }
+  await shell.openExternal(raw);
+  return { opened: true };
 });
 
 function isPublicRoutableIp(ip) {

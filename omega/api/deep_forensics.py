@@ -5,6 +5,7 @@ Opera íntegramente en memoria volátil (RNF4) sin persistencia en disco ni root
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 import ipaddress
 import json
@@ -355,6 +356,94 @@ def inspect_ios_manifest_db(filename: str, raw_bytes: bytes) -> list[dict[str, A
     return findings
 
 
+def extract_ios_manifest_targets(raw_bytes: bytes, limit: int = 35) -> dict[str, Any]:
+    """Inspecciona Manifest.db en RAM para localizar fileIDs forenses (SMS, Safari, TCC, DataUsage, crashes) sin leer medios personales."""
+    if len(raw_bytes) < 16 or not raw_bytes.startswith(b"SQLite format 3\x00"):
+        return {
+            "encrypted": True,
+            "total_files": 0,
+            "targets": [],
+            "detail": "Manifest.db está cifrado por iOS (sin cabecera SQLite en claro). Desencripta el backup primero con mvt-ios decrypt-backup o analiza un sysdiagnose.",
+        }
+
+    conn: sqlite3.Connection | None = None
+    targets: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    total_files = 0
+    try:
+        conn = sqlite3.connect(":memory:")
+        conn.deserialize(raw_bytes)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Files';")
+        if not cur.fetchone():
+            return {
+                "encrypted": False,
+                "total_files": 0,
+                "targets": [],
+                "detail": "La base SQLite no contiene la tabla Files esperada de un Manifest.db de iOS.",
+            }
+
+        cur.execute("SELECT COUNT(*) FROM Files;")
+        row_cnt = cur.fetchone()
+        total_files = int(row_cnt[0]) if row_cnt else 0
+
+        cur.execute(
+            """
+            SELECT fileID, domain, relativePath
+            FROM Files
+            WHERE relativePath IS NOT NULL AND relativePath != ''
+              AND (
+                LOWER(relativePath) LIKE '%sms.db'
+                OR LOWER(relativePath) LIKE '%history.db'
+                OR LOWER(relativePath) LIKE '%datausage.sqlite'
+                OR LOWER(relativePath) LIKE '%netusage.sqlite'
+                OR LOWER(relativePath) LIKE '%tcc.db'
+                OR LOWER(relativePath) LIKE '%shutdown.log%'
+                OR LOWER(relativePath) LIKE '%.ips'
+                OR LOWER(relativePath) LIKE '%.crash'
+                OR LOWER(relativePath) LIKE '%var/tmp/%'
+                OR LOWER(relativePath) LIKE '%/tmp/%'
+                OR LOWER(relativePath) LIKE '%roleabout%'
+                OR LOWER(relativePath) LIKE '%pcsd%'
+                OR LOWER(relativePath) LIKE '%ckdiscretionaryd%'
+                OR LOWER(relativePath) LIKE '%bridgepd%'
+                OR LOWER(relativePath) LIKE '%.pkpass'
+              )
+            LIMIT ?;
+            """,
+            (max(1, min(limit, 60)),),
+        )
+        for file_id, domain, rel_path in cur.fetchall():
+            fid = str(file_id or "").strip()
+            if not fid or fid in seen_ids:
+                continue
+            seen_ids.add(fid)
+            targets.append(
+                {
+                    "file_id": fid,
+                    "domain": str(domain or ""),
+                    "relative_path": str(rel_path or ""),
+                }
+            )
+    except (sqlite3.Error, ValueError) as exc:
+        return {
+            "encrypted": True,
+            "total_files": 0,
+            "targets": [],
+            "detail": f"No se pudo abrir Manifest.db en RAM ({exc}).",
+        }
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return {
+        "encrypted": False,
+        "total_files": total_files,
+        "targets": targets,
+        "detail": f"Manifest.db indexa {total_files} entradas; {len(targets)} artefacto(s) forense(s) seleccionado(s).",
+    }
+
+
 def _load_db_yara_iocs() -> list[tuple[bytes, str, str, str]]:
     """Carga IOCs de cadena y red desde PostgreSQL para caza binaria en RAM."""
     records: list[tuple[bytes, str, str, str]] = []
@@ -465,9 +554,11 @@ def run_live_yara_hunt(artifacts: list[dict]) -> list[dict]:
 
 
 def build_adb_artifacts_in_ram(snapshot: dict[str, Any]) -> list[dict]:
-    """Estandariza la telemetría viva USB/ADB en la entrada única RAM [{"filename", "bytes"}] (Capa 2)."""
+    """Estandariza telemetría viva USB (Android ADB o iOS USB/Backup) en memoria RAM (Capa 2)."""
     artifacts: list[dict] = []
-    device = snapshot.get("device") or {}
+    device = dict(snapshot.get("device") or {})
+    if snapshot.get("platform") and "platform" not in device:
+        device["platform"] = str(snapshot.get("platform")).lower()
     if device:
         artifacts.append(
             {
@@ -488,11 +579,145 @@ def build_adb_artifacts_in_ram(snapshot: dict[str, Any]) -> list[dict]:
         if raw_text:
             artifacts.append({"filename": fname, "bytes": raw_text.encode("utf-8")})
 
+    for idx, item in enumerate((snapshot.get("crashlogs") or [])[:60]):
+        if not isinstance(item, dict):
+            continue
+        fname = str(item.get("filename") or f"crashlog_{idx}.ips").strip()
+        if item.get("content_b64"):
+            try:
+                raw_b = base64.b64decode(str(item["content_b64"]), validate=False)
+                if raw_b:
+                    artifacts.append({"filename": fname, "bytes": raw_b})
+            except ValueError:
+                continue
+        else:
+            raw_text = str(item.get("content") or "")
+            if raw_text.strip():
+                artifacts.append({"filename": fname, "bytes": raw_text.encode("utf-8", errors="ignore")})
+
+    for idx, item in enumerate((snapshot.get("binary_artifacts") or [])[:45]):
+        if not isinstance(item, dict):
+            continue
+        fname = str(item.get("filename") or f"ios_artifact_{idx}.bin").strip()
+        b64 = item.get("content_b64")
+        if not b64:
+            continue
+        try:
+            raw_b = base64.b64decode(str(b64), validate=False)
+            if raw_b:
+                artifacts.append({"filename": fname, "bytes": raw_b})
+        except ValueError:
+            continue
+
     return artifacts
 
 
+def _evaluate_ios_posture(dev: dict[str, Any]) -> tuple[list[dict], list[dict]]:
+    """Evalúa postura defensiva de iPhone/iPad (versión iOS, cifrado de backup, modo desarrollador y Lockdown)."""
+    hardening_checks: list[dict] = []
+    abuse_alerts: list[dict] = []
+
+    ios_ver = str(dev.get("ios_version") or "").strip()
+    build_ver = str(dev.get("build_version") or "").strip()
+    major = 0
+    if ios_ver:
+        try:
+            major = int(ios_ver.split(".", 1)[0])
+        except ValueError:
+            major = 0
+
+    if ios_ver:
+        outdated = major > 0 and major < 17
+        hardening_checks.append(
+            {
+                "control": "Versión de sistema iOS y parches",
+                "status": "WARN" if outdated else "OK",
+                "value": f"iOS {ios_ver}" + (f" ({build_ver})" if build_ver else ""),
+                "detail": (
+                    "Versión heredada con mayor exposición histórica a cadenas 0-click WebKit/IMTranscoderAgent/PassKit."
+                    if outdated
+                    else "Rama iOS moderna; verifica en Ajustes tener el último parche de seguridad rápido."
+                ),
+            }
+        )
+    else:
+        hardening_checks.append(
+            {
+                "control": "Versión de sistema iOS y parches",
+                "status": "UNKNOWN",
+                "value": "N/D",
+                "detail": "No se pudo leer la versión exacta de iOS desde Lockdown.",
+            }
+        )
+
+    will_encrypt = dev.get("backup_encrypted")
+    if will_encrypt is True or str(will_encrypt).lower() in ("true", "1"):
+        hardening_checks.append(
+            {
+                "control": "Cifrado de respaldo local iOS",
+                "status": "OK",
+                "value": "Cifrado activo",
+                "detail": "Los respaldos USB locales incluyen bases completas protegidas mediante contraseña.",
+            }
+        )
+    elif will_encrypt is False or str(will_encrypt).lower() in ("false", "0"):
+        hardening_checks.append(
+            {
+                "control": "Cifrado de respaldo local iOS",
+                "status": "WARN",
+                "value": "Sin cifrar",
+                "detail": "Respaldo USB sin contraseña: Apple excluye ciertos llaveros y deja bases locales legibles en PC.",
+            }
+        )
+
+    dev_mode = dev.get("developer_mode")
+    if dev_mode is True or str(dev_mode).lower() in ("true", "1", "enabled"):
+        hardening_checks.append(
+            {
+                "control": "Modo Desarrollador (iOS Developer Mode)",
+                "status": "WARN",
+                "value": "Habilitado",
+                "detail": "Amplía la superficie de ejecución local; desactívalo si no desarrollas apps en este dispositivo.",
+            }
+        )
+        abuse_alerts.append(
+            {
+                "severity": "HIGH",
+                "category": "Superficie USB/Depuración Ampliada",
+                "indicator": "DeveloperModeStatus = true",
+                "detail": "El Modo Desarrollador está habilitado en el iPhone; confirma si fue autorizado intencionalmente.",
+            }
+        )
+    elif dev_mode is False or str(dev_mode).lower() in ("false", "0", "disabled"):
+        hardening_checks.append(
+            {
+                "control": "Modo Desarrollador (iOS Developer Mode)",
+                "status": "OK",
+                "value": "Desactivado",
+                "detail": "Superficie de depuración y carga lateral restringida por el sistema.",
+            }
+        )
+
+    hardening_checks.append(
+        {
+            "control": "Arquitectura iOS y alcance USB (Lockdown)",
+            "status": "OK",
+            "value": str(dev.get("model") or "iPhone/iPad").strip(),
+            "detail": (
+                "Sin jailbreak, iOS bloquea acceso shell/kernel tipo ADB; OMEGA evalúa postura Lockdown, crashlogs .ips/.crash "
+                "y artefactos de respaldo (Manifest.db, TCC.db, DataUsage.sqlite). Activa Modo de Aislamiento si eres objetivo de riesgo."
+            ),
+        }
+    )
+
+    return hardening_checks, abuse_alerts
+
+
 def evaluate_device_posture(dev: dict[str, Any], device_admins_raw: str) -> tuple[list[dict], list[dict]]:
-    """Evalúa postura defensiva Android (Parche, SELinux, Accesibilidad, Device Admins, DoT, Sideloading)."""
+    """Evalúa postura defensiva móvil (Android ADB o iOS Lockdown/Backup)."""
+    if str(dev.get("platform") or "").strip().lower() == "ios":
+        return _evaluate_ios_posture(dev)
+
     hardening_checks: list[dict] = []
     abuse_alerts: list[dict] = []
 

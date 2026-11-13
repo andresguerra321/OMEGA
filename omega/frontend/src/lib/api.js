@@ -121,6 +121,21 @@ export async function analyzeLiveDeviceSnapshot(snapshot) {
   return parseJsonOrThrow(res, 'Error analizando la captura viva del dispositivo');
 }
 
+export async function resolveIosManifestTargets(manifestBase64) {
+  const binary = atob(manifestBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const formData = new FormData();
+  formData.append('manifest', new Blob([bytes], { type: 'application/x-sqlite3' }), 'Manifest.db');
+  const res = await fetch(`${API_BASE}/triage/ios-manifest-targets`, {
+    method: 'POST',
+    body: formData,
+  });
+  return parseJsonOrThrow(res, 'Error inspeccionando Manifest.db de iOS en RAM');
+}
+
 export async function syncStixFeeds() {
   const res = await fetch(`${API_BASE}/corpus/sync-stix2`, {
     method: 'POST',

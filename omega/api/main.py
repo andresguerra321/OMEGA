@@ -26,7 +26,7 @@ from services import (
 from forensic_engine import analyze_forensic_payload
 from triage_orchestrator import run_parallel_forensic_triage
 from stix_ingestor import sync_stix2_directory
-from deep_forensics import build_adb_artifacts_in_ram
+from deep_forensics import build_adb_artifacts_in_ram, extract_ios_manifest_targets
 from detection_engineering import generate_mvt_triage_script, generate_yara_for_campaign
 from link_verifier import inspect_suspicious_link
 from web_intel_loader import load_cti_url_in_ram
@@ -207,18 +207,37 @@ def trigger_stix2_sync():
 
 
 class LiveDeviceSnapshot(BaseModel):
+    platform: str = "android"
     device: dict
     device_admins_raw: str = ""
     packages_text: str = ""
     processes_text: str = ""
     proc_net_raw: str = ""
     dns_resolver_raw: str = ""
+    crashlogs: list[dict] = Field(default_factory=list)
+    binary_artifacts: list[dict] = Field(default_factory=list)
+
+
+@app.post("/api/triage/ios-manifest-targets")
+async def ios_manifest_targets(manifest: UploadFile = File(...)):
+    """Resuelve en RAM los fileIDs forenses relevantes desde un Manifest.db de iOS."""
+    raw_bytes = await manifest.read()
+    if len(raw_bytes) > 64 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Manifest.db excede el límite permitido (64 MB).")
+    try:
+        return extract_ios_manifest_targets(raw_bytes)
+    finally:
+        raw_bytes = b""
 
 
 @app.post("/api/triage/device-live")
 async def live_device_triage(payload: LiveDeviceSnapshot):
-    """Capa 2 unificada: normaliza telemetría ADB USB a RAM y ejecuta todo triage_orchestrator."""
-    artifacts = build_adb_artifacts_in_ram(payload.model_dump())
+    """Capa 2 unificada: normaliza telemetría USB (Android ADB o iOS) a RAM y ejecuta triage_orchestrator."""
+    dump = payload.model_dump()
+    device_summary = dict(payload.device or {})
+    device_summary.setdefault("platform", payload.platform)
+    dump["device"] = device_summary
+    artifacts = build_adb_artifacts_in_ram(dump)
 
     try:
         triage_report = await run_parallel_forensic_triage(artifacts)
@@ -228,7 +247,7 @@ async def live_device_triage(payload: LiveDeviceSnapshot):
         artifacts.clear()
 
     return {
-        "device_summary": payload.device,
+        "device_summary": device_summary,
         "hardening_checks": triage_report.get("hardening_checks", []),
         "abuse_alerts": triage_report.get("abuse_alerts", []),
         "live_sockets": triage_report.get("live_sockets", []),
