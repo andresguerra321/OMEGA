@@ -23,7 +23,7 @@ function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
             type="button"
             onClick={() => onSelectCitation(target)}
             title={`${target.title} — Pág. ${target.page}`}
-            className="font-tech mx-0.5 inline-flex items-center rounded-[4px] border border-[#2F6FED]/50 bg-[#15223D] px-1.5 py-0 text-[11px] font-medium text-[#7AA7FF] hover:border-[#2F6FED] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+            className="mx-0.5 inline-flex items-center rounded-[4px] border border-[#232329] bg-[#191B22] px-1.5 py-0 text-[11px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/50 hover:bg-[#1C1C22] transition-colors cursor-pointer"
           >
             [{num}]
           </button>
@@ -31,11 +31,10 @@ function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
       }
     }
 
-    // 2. Identificadores técnicos (CVEs, SHA-256, dominios) en JetBrains Mono
+    // 2. Identificadores técnicos (CVEs y hashes SHA-256) exclusivamente en JetBrains Mono
     if (
       /^CVE-\d{4}-\d{4,7}$/i.test(part) ||
-      /^[a-f0-9]{64}$/i.test(part) ||
-      /^(?:[a-z0-9-]+\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu)$/i.test(part)
+      /^[a-f0-9]{64}$/i.test(part)
     ) {
       return (
         <span

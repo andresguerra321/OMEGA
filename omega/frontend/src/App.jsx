@@ -457,15 +457,15 @@ export default function App() {
       <aside
         className={`${
           sidebarCollapsed ? 'w-[56px]' : 'w-[268px]'
-        } shrink-0 border-r border-[#232329] bg-[#0A0A0C] flex flex-col justify-between transition-[width] duration-150`}
+        } shrink-0 border-r border-[#232329] bg-[#111115] flex flex-col justify-between transition-[width] duration-150`}
       >
         <div className="flex flex-col min-h-0 flex-1">
           {/* Cabecera (48px) */}
           <div className="h-12 px-3 border-b border-[#232329] flex items-center justify-between">
             {!sidebarCollapsed && (
               <div className="flex items-center gap-2.5 pl-1">
-                <div className="h-5 w-5 rounded-[4px] border border-[#2F6FED] bg-[#15223D] flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-[2px] border border-[#7AA7FF] bg-[#2F6FED]" />
+                <div className="h-5 w-5 rounded-[4px] border border-[#232329] bg-[#141418] flex items-center justify-center">
+                  <div className="h-2 w-2 rounded-[2px] bg-[#2F6FED]" />
                 </div>
                 <span className="text-[13px] font-semibold tracking-wider text-[#F2F2F4]">
                   OMEGA
@@ -495,7 +495,7 @@ export default function App() {
                 type="button"
                 onClick={startNewChat}
                 title="Nueva consulta"
-                className="w-full h-9 flex items-center justify-center rounded-[4px] bg-[#2F6FED] text-[#F2F2F4] hover:bg-[#255ED4] transition-colors cursor-pointer"
+                className="w-full h-9 flex items-center justify-center rounded-[5px] bg-[#F2F2F4] text-[#0A0A0C] font-medium hover:bg-[#E4E4E8] transition-colors cursor-pointer"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -510,10 +510,10 @@ export default function App() {
                       type="button"
                       onClick={() => setActiveNav(item.id)}
                       title={`${item.label} — ${item.subtitle}`}
-                      className={`w-full h-9 flex items-center justify-center rounded-[4px] border transition-colors cursor-pointer ${
+                      className={`w-full h-9 flex items-center justify-center rounded-[4px] border-l-2 transition-colors cursor-pointer ${
                         isActive
-                          ? 'bg-[#15223D] border-[#2F6FED]/40 text-[#2F6FED]'
-                          : 'border-transparent text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4]'
+                          ? 'bg-[#191B22] border-l-[#2F6FED] text-[#F2F2F4]'
+                          : 'border-l-transparent text-[#8E8E96] hover:bg-[#191B22]/60 hover:text-[#F2F2F4]'
                       }`}
                     >
                       <Icon className="h-4 w-4" />
@@ -529,7 +529,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={startNewChat}
-                  className="w-full flex items-center justify-center gap-2 rounded-[4px] bg-[#2F6FED] px-3 py-2 text-[12px] font-medium text-[#F2F2F4] hover:bg-[#255ED4] transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 rounded-[5px] bg-[#F2F2F4] px-3 py-2 text-[12px] font-medium text-[#0A0A0C] hover:bg-[#E4E4E8] transition-colors cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Nueva consulta</span>
@@ -543,7 +543,7 @@ export default function App() {
                     value={historyFilter}
                     onChange={(e) => setHistoryFilter(e.target.value)}
                     placeholder="Buscar en historial..."
-                    className="w-full rounded-[4px] border border-[#232329] bg-[#141418] py-1.5 pl-8 pr-11 text-[12px] text-[#F2F2F4] placeholder-[#8E8E96] focus:border-[#2F6FED] focus:outline-none"
+                    className="w-full rounded-[4px] border border-[#232329] bg-[#141418] py-1.5 pl-8 pr-11 text-[12px] text-[#F2F2F4] placeholder-[#8E8E96] focus:border-[#32323A] focus:outline-none"
                   />
                   <span className="font-tech absolute right-2 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-1.5 py-0.5 text-[10px] text-[#8E8E96] pointer-events-none">
                     ⌘K
@@ -561,15 +561,15 @@ export default function App() {
                       key={item.id}
                       type="button"
                       onClick={() => setActiveNav(item.id)}
-                      className={`w-full flex items-center gap-2.5 rounded-[4px] px-2.5 py-2 text-left transition-colors cursor-pointer ${
+                      className={`w-full flex items-center gap-2.5 rounded-[4px] border-l-2 px-2.5 py-2 text-left transition-colors cursor-pointer ${
                         isActive
-                          ? 'bg-[#15223D] text-[#F2F2F4] border border-[#2F6FED]/40'
-                          : 'text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4] border border-transparent'
+                          ? 'bg-[#191B22] border-l-[#2F6FED] text-[#F2F2F4]'
+                          : 'border-l-transparent text-[#8E8E96] hover:bg-[#191B22]/60 hover:text-[#F2F2F4]'
                       }`}
                     >
                       <Icon
                         className={`h-4 w-4 shrink-0 ${
-                          isActive ? 'text-[#2F6FED]' : 'text-[#8E8E96]'
+                          isActive ? 'text-[#F2F2F4]' : 'text-[#8E8E96]'
                         }`}
                       />
                       <div className="min-w-0 flex-1">
@@ -602,10 +602,10 @@ export default function App() {
                               setCurrentSessionId(sess.id);
                               setActiveNav('preguntar');
                             }}
-                            className={`group flex items-center justify-between rounded-[4px] px-2.5 py-1.5 text-[12px] cursor-pointer transition-colors border ${
+                            className={`group flex items-center justify-between rounded-[4px] px-2.5 py-1.5 text-[12px] cursor-pointer transition-colors ${
                               selected
-                                ? 'bg-[#141418] text-[#F2F2F4] border-[#232329]'
-                                : 'border-transparent text-[#8E8E96] hover:bg-[#141418]/70 hover:text-[#F2F2F4]'
+                                ? 'bg-[#191B22] text-[#F2F2F4]'
+                                : 'text-[#8E8E96] hover:bg-[#191B22]/60 hover:text-[#F2F2F4]'
                             }`}
                           >
                             <span className="truncate pr-2">{sess.title}</span>
@@ -629,7 +629,7 @@ export default function App() {
         </div>
 
         {/* Footer de Sidebar */}
-        <div className="p-3 border-t border-[#232329] bg-[#141418] flex items-center justify-between text-[11px]">
+        <div className="p-3 border-t border-[#232329] bg-[#111115] flex items-center justify-between text-[11px]">
           {sidebarCollapsed ? (
             <div className="mx-auto h-2 w-2 rounded-[2px] bg-[#2F6FED]" title="Modo Defensivo · RNF1" />
           ) : (
@@ -638,7 +638,7 @@ export default function App() {
                 <span className="h-2 w-2 rounded-[2px] bg-[#2F6FED]" />
                 <span>Sesión local</span>
               </div>
-              <span className="font-tech text-[10px] text-[#8E8E96]">Modo Defensivo · RNF1</span>
+              <span className="text-[10px] text-[#8E8E96]">Modo Defensivo · RNF1</span>
             </>
           )}
         </div>
@@ -675,7 +675,7 @@ export default function App() {
               type="button"
               onClick={handleExportSession}
               disabled={messages.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] text-[#F2F2F4] hover:border-[#2F6FED] hover:bg-[#15223D] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12px] text-[#F2F2F4] hover:border-[#32323A] hover:bg-[#191B22] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
             >
               <Download className="h-3.5 w-3.5 text-[#8E8E96]" />
               <span>Exportar sesión (.md)</span>
@@ -688,15 +688,35 @@ export default function App() {
           <main className="flex-1 flex flex-col min-h-0">
             {messages.length === 0 ? (
               /* Estado A: Pantalla Inicial Centrada */
-              <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6 py-12">
-                <div className="w-full max-w-[720px] space-y-8">
-                  <div className="space-y-1.5">
-                    <p className="text-[14px] text-[#8E8E96]">
-                      Plataforma defensiva de inteligencia de amenazas
-                    </p>
-                    <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#F2F2F4]">
-                      ¿Qué campaña o indicador deseas investigar?
-                    </h1>
+              <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6 py-10">
+                <div className="w-full max-w-[680px] space-y-6">
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    {/* Emblema geométrico minimalista */}
+                    <div
+                      aria-hidden="true"
+                      className="h-9 w-9 rounded-[6px] border border-[#232329] bg-[#141418] flex items-center justify-center"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <rect
+                          x="2.25"
+                          y="2.25"
+                          width="13.5"
+                          height="13.5"
+                          rx="2"
+                          stroke="#232329"
+                          strokeWidth="1.25"
+                        />
+                        <rect x="6" y="6" width="6" height="6" rx="1" fill="#2F6FED" />
+                      </svg>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[15px] text-[#8E8E96]">
+                        Plataforma defensiva de inteligencia de amenazas
+                      </p>
+                      <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[#F2F2F4]">
+                        ¿Qué campaña o indicador deseas investigar?
+                      </h1>
+                    </div>
                   </div>
 
                   {/* Composer Central */}
@@ -705,28 +725,28 @@ export default function App() {
                       e.preventDefault();
                       handleSend();
                     }}
-                    className="rounded-[6px] border border-[#232329] bg-[#141418] focus-within:border-[#2F6FED] transition-colors"
+                    className="rounded-[6px] border border-[#232329] bg-[#141418] focus-within:border-[#32323A] transition-colors"
                   >
                     <textarea
-                      rows={3}
+                      rows={2}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Pregunta sobre CVEs, vectores zero-click, campañas o indicadores..."
-                      className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14px] text-[#F2F2F4] placeholder-[#8E8E96] focus:outline-none"
+                      className="min-h-[64px] w-full resize-none bg-transparent p-4 text-[14px] leading-relaxed text-[#F2F2F4] placeholder-[#8E8E96] focus:outline-none"
                     />
 
                     <div className="flex items-center justify-between border-t border-[#232329] px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-1 text-[11px] font-medium text-[#7AA7FF]">
-                          <ShieldCheck className="h-3 w-3" />
+                        <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#1C1C22] px-2 py-1 text-[11px] font-medium text-[#8E8E96]">
+                          <ShieldCheck className="h-3 w-3 text-[#8E8E96]" />
                           <span>Citas obligatorias</span>
                         </span>
 
                         <select
                           value={topK}
                           onChange={(e) => setTopK(Number(e.target.value))}
-                          className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-1 text-[11px] text-[#8E8E96] focus:border-[#2F6FED] focus:outline-none"
+                          className="rounded-[4px] border border-[#232329] bg-[#1C1C22] px-2 py-1 text-[11px] text-[#8E8E96] focus:border-[#32323A] focus:outline-none"
                         >
                           <option value={4}>4 fuentes</option>
                           <option value={6}>6 fuentes</option>
@@ -735,14 +755,14 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center gap-2.5">
-                        <span className="font-tech hidden sm:inline text-[11px] text-[#8E8E96]">
+                        <span className="hidden sm:inline text-[11px] text-[#8E8E96]">
                           Enter ↵
                         </span>
                         <button
                           type="submit"
                           disabled={loadingChat || !input.trim()}
                           aria-label="Enviar consulta"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] bg-[#2F6FED] text-[#F2F2F4] hover:bg-[#255ED4] disabled:opacity-40 transition-colors cursor-pointer"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] bg-[#2F6FED] text-[#F2F2F4] hover:bg-[#255ED4] disabled:opacity-40 transition-colors cursor-pointer"
                         >
                           <CornerDownLeft className="h-3.5 w-3.5" />
                         </button>
@@ -759,16 +779,14 @@ export default function App() {
                           key={card.title}
                           type="button"
                           onClick={() => handleSend(card.prompt)}
-                          className="flex flex-col items-start justify-between rounded-[6px] border border-[#232329] bg-[#141418] p-4 text-left hover:border-[#2F6FED] hover:bg-[#15223D]/35 transition-colors cursor-pointer"
+                          className="group flex flex-col items-start justify-between rounded-[6px] border border-[#232329] bg-[#141418] p-3.5 text-left hover:border-[#32323A] hover:bg-[#191B22] transition-colors cursor-pointer"
                         >
-                          <div className="space-y-2.5">
-                            <div className="inline-flex rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-1.5 text-[#2F6FED]">
-                              <CardIcon className="h-4 w-4" />
-                            </div>
+                          <div className="space-y-2">
+                            <CardIcon className="h-4 w-4 text-[#8E8E96] group-hover:text-[#2F6FED] transition-colors" />
                             <h2 className="text-[13px] font-semibold text-[#F2F2F4]">
                               {card.title}
                             </h2>
-                            <p className="text-[12px] leading-relaxed text-[#8E8E96]">
+                            <p className="line-clamp-2 text-[12px] leading-[1.45] text-[#8E8E96]">
                               {card.description}
                             </p>
                           </div>
@@ -817,13 +835,13 @@ export default function App() {
                                     key={cit.index}
                                     type="button"
                                     onClick={() => setSelectedCitation(cit)}
-                                    className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1 text-[11px] text-[#F2F2F4] hover:border-[#2F6FED] hover:bg-[#15223D] transition-colors cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1 text-[11px] text-[#F2F2F4] hover:border-[#32323A] hover:bg-[#191B22] transition-colors cursor-pointer"
                                   >
-                                    <span className="font-tech font-medium text-[#7AA7FF]">
+                                    <span className="font-medium text-[#8E8E96]">
                                       [{cit.index}]
                                     </span>
                                     <span className="max-w-[220px] truncate">{cit.title}</span>
-                                    <span className="font-tech text-[#8E8E96]">· p.{cit.page}</span>
+                                    <span className="text-[#8E8E96]">· p.{cit.page}</span>
                                   </button>
                                 ))}
                               </div>
@@ -848,7 +866,7 @@ export default function App() {
                       e.preventDefault();
                       handleSend();
                     }}
-                    className="mx-auto max-w-[740px] flex items-center gap-2 rounded-[6px] border border-[#232329] bg-[#141418] px-3 py-2 focus-within:border-[#2F6FED] transition-colors"
+                    className="mx-auto max-w-[740px] flex items-center gap-2 rounded-[6px] border border-[#232329] bg-[#141418] px-3 py-2 focus-within:border-[#32323A] transition-colors"
                   >
                     <input
                       type="text"
@@ -857,14 +875,14 @@ export default function App() {
                       placeholder="Realiza una pregunta de seguimiento sobre esta evidencia..."
                       className="flex-1 bg-transparent text-[13px] text-[#F2F2F4] placeholder-[#8E8E96] focus:outline-none"
                     />
-                    <span className="font-tech hidden sm:inline text-[11px] text-[#8E8E96]">
+                    <span className="hidden sm:inline text-[11px] text-[#8E8E96]">
                       Enter ↵
                     </span>
                     <button
                       type="submit"
                       disabled={loadingChat || !input.trim()}
                       aria-label="Enviar seguimiento"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-[4px] bg-[#2F6FED] text-[#F2F2F4] hover:bg-[#255ED4] disabled:opacity-40 transition-colors cursor-pointer"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] bg-[#2F6FED] text-[#F2F2F4] hover:bg-[#255ED4] disabled:opacity-40 transition-colors cursor-pointer"
                     >
                       <CornerDownLeft className="h-3.5 w-3.5" />
                     </button>

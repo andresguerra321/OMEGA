@@ -10,7 +10,7 @@ export function CitationDrawer({ citation, onClose }) {
           <div className="flex items-center gap-2 text-[12px] font-medium text-[#F2F2F4]">
             <ShieldCheck className="h-4 w-4 text-[#2F6FED]" />
             <span>Fuente Verificada</span>
-            <span className="font-tech rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0.5 text-[11px] text-[#7AA7FF]">
+            <span className="rounded-[4px] border border-[#232329] bg-[#191B22] px-1.5 py-0.5 text-[11px] font-medium text-[#F2F2F4]">
               [{citation.index}]
             </span>
           </div>
@@ -31,10 +31,10 @@ export function CitationDrawer({ citation, onClose }) {
             <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#F2F2F4]">
               {citation.organization}
             </span>
-            <span className="font-tech rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
+            <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
               p.{citation.page}
             </span>
-            <span className="font-tech rounded-[4px] border border-[#2F6FED]/30 bg-[#15223D] px-2 py-0.5 text-[#7AA7FF]">
+            <span className="rounded-[4px] border border-[#232329] bg-[#191B22] px-2 py-0.5 text-[#F2F2F4]">
               Similitud {(citation.similarity * 100).toFixed(1)}%
             </span>
             {citation.retrieval_method && (
@@ -68,7 +68,7 @@ export function CitationDrawer({ citation, onClose }) {
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         ) : (
-          <p className="font-tech text-center text-[11px] text-[#8E8E96] truncate">
+          <p className="text-center text-[11px] text-[#8E8E96] truncate">
             {citation.source_url}
           </p>
         )}
