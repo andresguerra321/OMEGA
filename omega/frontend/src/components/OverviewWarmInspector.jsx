@@ -32,7 +32,7 @@ function extractPcVerdictInfo(pcAudit) {
 }
 
 function HardwareHeroGraphic({ subject = 'windows', healthy = false, alert = false }) {
-  const ledColor = alert ? '#FF453A' : healthy ? '#22C55E' : '#F5A623';
+  const ledColor = alert ? '#DC2626' : healthy ? '#15803D' : '#F5A623';
 
   if (subject === 'usb') {
     return (
@@ -50,6 +50,51 @@ function HardwareHeroGraphic({ subject = 'windows', healthy = false, alert = fal
         <circle cx="84" cy="54" r="5" fill={ledColor} />
         <line x1="66" y1="84" x2="102" y2="84" stroke="#363D4A" strokeWidth="3" strokeLinecap="round" />
         <line x1="72" y1="93" x2="96" y2="93" stroke="#282E38" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (subject === 'link') {
+    return (
+      <svg
+        width="196"
+        height="128"
+        viewBox="0 0 196 128"
+        aria-hidden="true"
+        className="mx-auto drop-shadow-[0_14px_20px_rgba(20,22,26,0.14)]"
+      >
+        <rect x="28" y="24" width="140" height="80" rx="16" fill="#1D2129" />
+        <rect x="33" y="29" width="130" height="70" rx="12" fill="#12151B" />
+        <line x1="64" y1="64" x2="132" y2="64" stroke="#2D3340" strokeWidth="2" strokeDasharray="4 4" />
+        <rect x="48" y="50" width="32" height="28" rx="8" fill="#1E242E" stroke="#3A4252" strokeWidth="1.5" />
+        <rect x="116" y="50" width="32" height="28" rx="8" fill="#1E242E" stroke="#3A4252" strokeWidth="1.5" />
+        <circle cx="98" cy="64" r="14" fill="#171A21" stroke={ledColor} strokeWidth="2.5" />
+        <circle cx="98" cy="64" r="4" fill={ledColor} />
+      </svg>
+    );
+  }
+
+  if (subject === 'corpus') {
+    return (
+      <svg
+        width="180"
+        height="128"
+        viewBox="0 0 180 128"
+        aria-hidden="true"
+        className="mx-auto drop-shadow-[0_14px_20px_rgba(20,22,26,0.15)]"
+      >
+        <path
+          d="M90 14L142 32V64C142 91 119 109 90 118C61 109 38 91 38 64V32L90 14Z"
+          fill="#1B1F27"
+        />
+        <path
+          d="M90 21L135 36.5V63.5C135 86.5 115 102 90 110C65 102 45 86.5 45 63.5V36.5L90 21Z"
+          fill="#12151C"
+          stroke="#2E3543"
+          strokeWidth="1.2"
+        />
+        <circle cx="90" cy="62" r="18" fill="rgba(48,209,88,0.08)" stroke={ledColor} strokeWidth="2.2" />
+        <circle cx="90" cy="62" r="4.5" fill={ledColor} />
       </svg>
     );
   }
@@ -140,8 +185,11 @@ export function OverviewWarmInspector({
       return {
         kind: 'usb',
         title: usbName,
-        badge: androidConnected || iosConnected ? 'USB Conectado' : 'USB #En espera',
-        badgeTone: androidConnected || iosConnected ? 'bg-[#30D158] text-[#0B1710]' : 'bg-[#F5A623] text-[#17191E]',
+        badge: androidConnected || iosConnected ? 'USB Conectado' : 'USB en espera',
+        badgeTone:
+          androidConnected || iosConnected
+            ? 'bg-[#DCFCE7] text-[#14532D] border border-[#16A34A]/25'
+            : 'bg-[#F5A623] text-[#17191E]',
         checkTitle: 'Inspección USB',
         checkTime: androidConnected || iosConnected ? 'Cable activo' : 'Sin cable',
         origin: androidConnected ? 'ADB local' : iosConnected ? 'Respaldo iOS' : 'Puerto USB',
@@ -153,12 +201,12 @@ export function OverviewWarmInspector({
 
     if (selectedNodeId === 'link') {
       return {
-        kind: 'windows',
+        kind: 'link',
         title: 'Escudo de Enlaces',
-        badge: lastLinkResult?.risk_level === 'HIGH' ? 'Riesgo Alto' : 'Pasivo #Cero HTTP',
+        badge: lastLinkResult?.risk_level === 'HIGH' ? 'Riesgo Alto' : 'Pasivo · Cero HTTP',
         badgeTone:
           lastLinkResult?.risk_level === 'HIGH'
-            ? 'bg-[#FF453A] text-white'
+            ? 'bg-[#B91C1C] text-white'
             : 'bg-[#F5A623] text-[#17191E]',
         checkTitle: 'Último enlace',
         checkTime: lastLinkResult ? 'Analizado' : 'En espera',
@@ -169,6 +217,23 @@ export function OverviewWarmInspector({
       };
     }
 
+    if (selectedNodeId === 'corpus') {
+      return {
+        kind: 'corpus',
+        title: 'Base Forense STIX2',
+        badge: apiOnline ? 'Motor Local Activo' : 'Sin conexión API',
+        badgeTone: apiOnline
+          ? 'bg-[#DCFCE7] text-[#14532D] border border-[#16A34A]/25'
+          : 'bg-[#F5A623] text-[#17191E]',
+        checkTitle: 'Corpus e indicadores',
+        checkTime: `${reportsCount} reportes`,
+        origin: 'STIX 2.1',
+        dest: `${iocsCount.toLocaleString('en-US')} firmas`,
+        ctaLabel: syncingStix ? 'Sincronizando STIX2...' : 'Actualizar firmas STIX2',
+        onPrimaryAction: () => onSyncStix?.(),
+      };
+    }
+
     return {
       kind: 'windows',
       title: 'Esta PC — Windows',
@@ -176,11 +241,11 @@ export function OverviewWarmInspector({
         ? `Alerta (${pcInfo.findingsCount})`
         : pcHealthy
           ? 'Verificado · 100%'
-          : 'Host #Local',
+          : 'Host local · RAM',
       badgeTone: pcAlert
-        ? 'bg-[#FF453A] text-white'
+        ? 'bg-[#B91C1C] text-white'
         : pcHealthy
-          ? 'bg-[#22C55E] text-white'
+          ? 'bg-[#DCFCE7] text-[#14532D] border border-[#16A34A]/25'
           : 'bg-[#F5A623] text-[#17191E]',
       checkTitle: 'Último chequeo PC',
       checkTime: pcScannedAt ? `Hoy · ${pcScannedAt}` : 'Listo en RAM',
@@ -212,6 +277,11 @@ export function OverviewWarmInspector({
     pcScannedAt,
     scanningPc,
     isDesktop,
+    apiOnline,
+    reportsCount,
+    iocsCount,
+    syncingStix,
+    onSyncStix,
     onRunPcScan,
     onNavigate,
   ]);
@@ -318,8 +388,12 @@ export function OverviewWarmInspector({
 
           <button
             type="button"
-            onClick={() => onNavigate?.('equipo', { tab: selectedNodeId === 'usb' ? 'android' : 'pc' })}
-            aria-label="Abrir vista detallada de equipos"
+            onClick={() => {
+              if (selectedNodeId === 'link') onNavigate?.('enlace');
+              else if (selectedNodeId === 'corpus') onNavigate?.('amenazas');
+              else onNavigate?.('equipo', { tab: selectedNodeId === 'usb' ? (iosConnected ? 'ios' : 'android') : 'pc' });
+            }}
+            aria-label="Abrir vista detallada de la superficie seleccionada"
             className="h-8 w-8 rounded-full bg-white/80 hover:bg-white border border-black/[0.06] inline-flex items-center justify-center text-[#191C22] cursor-pointer"
           >
             <ArrowRight className="h-4 w-4" />
@@ -363,7 +437,11 @@ export function OverviewWarmInspector({
                       : 'bg-[#FEF3DC] text-[#B56904]'
                 }`}
               >
-                {pcHealthy ? (
+                {selectedNodeId === 'link' ? (
+                  <Link2 className="h-3.5 w-3.5" />
+                ) : selectedNodeId === 'corpus' ? (
+                  <Database className="h-3.5 w-3.5" />
+                ) : pcHealthy ? (
                   <ShieldCheck className="h-3.5 w-3.5" />
                 ) : selectedNodeId === 'usb' ? (
                   <Smartphone className="h-3.5 w-3.5" />

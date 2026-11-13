@@ -416,14 +416,14 @@
 }
 
 /* =========================================================
-   ROAM SPATIAL HYBRID ARCHITECTURE (DARK STAGE + WARM STONE)
+   SPATIAL HYBRID ARCHITECTURE (DARK ATMOSPHERE + WARM STONE)
    ========================================================= */
 .omega-stage-bg {
-  background-color: #0e1317;
+  background-color: #0b0e13;
   background-image:
-    radial-gradient(64% 52% at 32% 38%, rgba(44, 58, 70, 0.34), transparent 72%),
-    radial-gradient(50% 45% at 74% 72%, rgba(28, 36, 44, 0.55), transparent 78%),
-    linear-gradient(155deg, #10151a 0%, #0b0f13 55%, #12181d 100%);
+    radial-gradient(64% 52% at 32% 38%, rgba(44, 58, 70, 0.28), transparent 72%),
+    radial-gradient(50% 45% at 80% 82%, rgba(28, 36, 44, 0.5), transparent 78%),
+    linear-gradient(155deg, #0d1117 0%, #090c11 55%, #0e1319 100%);
 }
 
 .roam-pill-nav {
@@ -467,13 +467,6 @@
   color: #f4f6fa;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 10px 24px rgba(17, 20, 24, 0.16);
-}
-
-.roam-node-popover {
-  background-color: #ffffff;
-  color: #17191e;
-  border: 1px solid rgba(20, 22, 26, 0.08);
-  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.52);
 }
 
 @keyframes omegaCaretPulse {

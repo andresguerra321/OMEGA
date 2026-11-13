@@ -27,7 +27,7 @@ import {
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaLogo } from './components/OmegaLogo';
 import { SpatialNavPill } from './components/SpatialNavPill';
-import { TelemetryMapStage } from './components/TelemetryMapStage';
+import { SecurityPostureStage } from './components/SecurityPostureStage';
 import { OverviewWarmInspector } from './components/OverviewWarmInspector';
 import { CopilotDrawer } from './components/CopilotDrawer';
 import { ChatWorkspace } from './components/ChatWorkspace';
@@ -632,8 +632,8 @@ export default function App() {
   const showLeftStage = !stageCollapsed;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col md:flex-row bg-[#0E1317] text-[#F4F6FA] select-none">
-      {/* Panel Izquierdo: Lienzo Oscuro Topográfico / Rail Ambiental en Módulos */}
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col md:flex-row bg-[#0B0E13] text-[#F4F6FA] select-none">
+      {/* Panel Izquierdo: Postura de Seguridad Atmosférica / Rail Sereno en Módulos */}
       {showLeftStage && (
         <div
           className={`relative min-w-0 min-h-0 shrink-0 transition-[width,height] duration-300 ease-out ${
@@ -642,7 +642,7 @@ export default function App() {
               : 'hidden xl:flex xl:w-[27%] xl:max-w-[360px] h-full'
           }`}
         >
-          <TelemetryMapStage
+          <SecurityPostureStage
             activeNav={activeNav}
             onSelectNav={(id) => handleNavigate(id)}
             isCompactRail={!isHome}
@@ -656,11 +656,8 @@ export default function App() {
             technicalMode={technicalMode}
             apiOnline={apiOnline}
             isLoadingChat={loadingChat}
-            scanningPc={scanningPc}
             syncingStix={syncingStix}
-            onRunPcScan={handleRunPcScan}
             onSyncStix={handleSyncStix}
-            onOpenCopilot={() => setIsCopilotOpen(true)}
             onOpenCommandPalette={() => {
               setCommandOpen(true);
               setCommandQuery('');
@@ -676,8 +673,8 @@ export default function App() {
         <button
           type="button"
           onClick={() => setStageCollapsed((v) => !v)}
-          aria-label={stageCollapsed ? 'Mostrar mapa topográfico lateral' : 'Ocultar mapa topográfico lateral'}
-          title={stageCollapsed ? 'Expandir mapa espacial' : 'Contraer mapa y ampliar hoja'}
+          aria-label={stageCollapsed ? 'Mostrar panel lateral de postura' : 'Ocultar panel lateral de postura'}
+          title={stageCollapsed ? 'Expandir panel lateral' : 'Contraer panel y ampliar inspector'}
           className={`hidden ${
             isHome ? 'md:flex' : 'xl:flex'
           } items-center justify-center absolute z-30 top-1/2 -translate-y-1/2 ${
