@@ -122,7 +122,7 @@ ipcMain.handle('omega:adb-status', async (_event, customPath = '') => {
         status_code: 'ADB_NOT_FOUND',
         adb_path: null,
         devices: [],
-        reason: 'ADB no encontrado en el sistema ni en rutas estándar de Android Platform Tools.',
+        reason: 'Tu computadora aún no tiene instalado el conector gratuito de Google para leer teléfonos Android.',
       };
     }
 
@@ -137,13 +137,13 @@ ipcMain.handle('omega:adb-status', async (_event, customPath = '') => {
       const unauthorized = devices.find((d) => d.state === 'unauthorized');
       const offline = devices.find((d) => d.state === 'offline');
       let status_code = 'NO_DEVICE';
-      let reason = 'ADB listo, pero no hay ningún teléfono Android conectado por USB.';
+      let reason = 'Computadora lista. Ahora enchufa tu teléfono Android con el cable USB (como en la imagen 2).';
       if (unauthorized) {
         status_code = 'UNAUTHORIZED';
-        reason = 'Teléfono detectado sin autorizar. Desbloquea la pantalla y acepta la huella RSA ("¿Permitir depuración por USB?").';
+        reason = '¡Teléfono detectado! Desbloquéalo y toca "Permitir" en el aviso que acaba de salir en su pantalla.';
       } else if (offline) {
         status_code = 'OFFLINE';
-        reason = 'Dispositivo detectado en estado offline. Desconecta y reconecta el cable en modo Transferencia de archivos.';
+        reason = 'El cable respondió lento. Desconéctalo, elige "Transferencia de archivos" en tu teléfono y vuelve a enchufar.';
       }
       return {
         available: true,
@@ -171,7 +171,7 @@ ipcMain.handle('omega:adb-status', async (_event, customPath = '') => {
       status_code: 'ADB_NOT_FOUND',
       adb_path: null,
       devices: [],
-      reason: err?.message || 'No se pudo consultar Android Platform Tools (ADB).',
+      reason: err?.message || 'No se pudo iniciar el conector de Android en esta computadora.',
     };
   }
 });
@@ -466,8 +466,8 @@ ipcMain.handle('omega:ios-status', async () => {
       local_backups: localBackups,
       reason:
         process.platform === 'win32' && !appleSupport
-          ? 'Faltan Apple Mobile Device Support (usbmuxd) y CLI iOS (pymobiledevice3 o libimobiledevice) para lectura USB directa.'
-          : 'No se detectó pymobiledevice3 ni libimobiledevice (idevice_id) para consulta USB en vivo. Puedes analizar sysdiagnose o backups locales igualmente.',
+          ? 'Por seguridad de Apple, un iPhone no deja revisar archivos por cable sin drivers de iTunes/Dispositivos Apple. No pasa nada: puedes revisarlo igual con un reporte rápido (Paso 1 abajo) o una copia de seguridad en esta PC.'
+          : 'No hace falta instalar cables extra para revisar tu iPhone: genera el reporte rápido en tu teléfono o elige abajo una copia de seguridad guardada en esta computadora.',
     };
   }
 
@@ -496,7 +496,7 @@ ipcMain.handle('omega:ios-status', async () => {
         status_code: 'NO_DEVICE',
         device: null,
         local_backups: localBackups,
-        reason: `Puente ${tools.kind} listo. Conecta un iPhone/iPad por USB y pulsa "Confiar en esta computadora".`,
+        reason: 'Computadora lista para iPhone. Conéctalo por cable y toca "Confiar" en su pantalla (como en la imagen 2), o elige abajo una copia de seguridad.',
       };
     }
 
@@ -536,8 +536,8 @@ ipcMain.handle('omega:ios-status', async () => {
         local_backups: localBackups,
         reason:
           err?.message?.includes('Pair') || err?.message?.includes('Trust') || err?.message?.includes('InvalidHostID')
-            ? 'iPhone conectado sin emparejar. Desbloquea el teléfono y acepta "Confiar en esta computadora".'
-            : `No se pudo consultar Lockdown en el iPhone (${err?.message || 'sin emparejar'}).`,
+            ? '¡iPhone conectado! Desbloquea su pantalla y toca "Confiar" cuando pregunte si confías en esta computadora.'
+            : `Tu iPhone aún no autoriza a esta computadora (${err?.message || 'toca "Confiar" en la pantalla del iPhone'}).`,
       };
     }
 

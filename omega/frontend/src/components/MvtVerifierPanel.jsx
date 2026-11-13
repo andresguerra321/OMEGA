@@ -21,6 +21,7 @@ import {
   syncStixFeeds,
   verifyMvtText,
 } from '../lib/api';
+import { AndroidStepVisual, IosStepVisual } from './DeviceSetupVisuals';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
@@ -217,7 +218,8 @@ export function MvtVerifierPanel({ onAskInChat }) {
   const [refreshingUsb, setRefreshingUsb] = useState(false);
   const [scanningUsb, setScanningUsb] = useState(false);
   const [scanningIos, setScanningIos] = useState(false);
-  const [showAndroidGuide, setShowAndroidGuide] = useState(false);
+  const [showAndroidGuide, setShowAndroidGuide] = useState(true);
+  const [showAdvancedCmds, setShowAdvancedCmds] = useState(false);
   const [copiedHintKey, setCopiedHintKey] = useState('');
   const [hardeningReport, setHardeningReport] = useState(null);
   const [confirmingDns, setConfirmingDns] = useState(false);
@@ -1067,18 +1069,18 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
   // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente) ---
   return (
-    <div className="omega-fade-up flex-1 flex flex-col items-center justify-center py-6">
-      <div className="w-full max-w-[620px]">
-        <header className="text-center mb-7">
-          <h1 className="text-[28px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+    <div className="omega-fade-up flex-1 flex flex-col items-center justify-center py-3">
+      <div className="w-full max-w-[740px]">
+        <header className="text-center mb-3.5">
+          <h1 className="text-[26px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
             Verificar integridad del dispositivo
           </h1>
-          <p className="mt-2.5 text-[14px] text-[#8E8E93] leading-[1.55] max-w-[510px] mx-auto">
-            Audita un teléfono conectado por USB o analiza respaldos en memoria RAM sin escribir datos en disco.
+          <p className="mt-1.5 text-[13.5px] text-[#8E8E93] leading-[1.5] max-w-[540px] mx-auto">
+            Revisa tu celular por cable USB o con una copia guardada. Todo se analiza de forma temporal, sin guardar tus fotos ni archivos en esta computadora.
           </p>
         </header>
 
-        {/* Disparador 1: Analizar dispositivo USB (Android ADB + iOS Lockdown/Backup) */}
+        {/* Disparador 1: Analizar dispositivo USB (Android + iPhone / iPad guiado) */}
         {(() => {
           const isMac = desktopPlatform === 'darwin';
           const installAdbCmd = isMac
@@ -1088,39 +1090,39 @@ export function MvtVerifierPanel({ onAskInChat }) {
             ? 'pip3 install pymobiledevice3'
             : 'pip install pymobiledevice3';
 
-          let statusPillLabel = 'Solo Desktop';
+          let statusPillLabel = 'Solo app Desktop';
           let statusPillTone = 'border-white/[0.08] bg-white/[0.04] text-[#8E8E93]';
           if (hasDesktopBridge) {
             if (deviceTab === 'android') {
               if (usbDevice?.connected) {
-                statusPillLabel = `Listo · ${usbDevice.model || 'Android'}`;
+                statusPillLabel = `Conectado · ${usbDevice.model || 'Android'}`;
                 statusPillTone = 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]';
               } else if (usbDevice?.status_code === 'UNAUTHORIZED') {
-                statusPillLabel = 'Autorizar RSA en teléfono';
+                statusPillLabel = 'Toca "Permitir" en tu celular';
                 statusPillTone = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
               } else if (usbDevice?.status_code === 'ADB_NOT_FOUND') {
-                statusPillLabel = 'ADB no detectado';
+                statusPillLabel = 'Falta conector USB en PC';
                 statusPillTone = 'border-[#FF9F0A]/30 bg-[#FF9F0A]/10 text-[#FFD60A]';
               } else {
-                statusPillLabel = 'USB ADB · En espera';
+                statusPillLabel = 'Esperando cable USB';
               }
             } else if (iosStatus?.connected) {
-              statusPillLabel = `Listo · ${iosStatus.device?.name || 'iPhone'}`;
+              statusPillLabel = `Conectado · ${iosStatus.device?.name || 'iPhone'}`;
               statusPillTone = 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]';
             } else if (iosStatus?.status_code === 'UNPAIRED') {
-              statusPillLabel = 'Confiar en PC pendiente';
+              statusPillLabel = 'Toca "Confiar" en tu iPhone';
               statusPillTone = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
             } else if (iosStatus?.tools_available) {
-              statusPillLabel = 'Lockdown · En espera';
+              statusPillLabel = 'Esperando cable USB';
             } else {
-              statusPillLabel = 'Backup / sysdiagnose';
+              statusPillLabel = 'Guía por archivo o copia';
             }
           } else if (deviceTab === 'ios') {
-            statusPillLabel = 'Subir sysdiagnose abajo';
+            statusPillLabel = 'Sube tu archivo abajo';
           }
 
           return (
-            <div className="apple-group mb-3.5 rounded-[14px] p-4 space-y-3.5">
+            <div className="apple-group mb-3.5 rounded-[14px] p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
@@ -1139,7 +1141,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                       <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
                         Analizar dispositivo USB
                       </span>
-                      <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${statusPillTone}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${statusPillTone}`}>
                         {statusPillLabel}
                       </span>
                     </div>
@@ -1157,7 +1159,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           : 'text-[#8E8E93] hover:text-[#F5F5F7]'
                       }`}
                     >
-                      Android (ADB)
+                      Android
                     </button>
                     <button
                       type="button"
@@ -1177,8 +1179,8 @@ export function MvtVerifierPanel({ onAskInChat }) {
                       type="button"
                       disabled={refreshingUsb}
                       onClick={() => fetchUsbStatuses(customAdbPath, deviceTab === 'ios', true)}
-                      title="Verificar conexión USB"
-                      aria-label="Verificar conexión USB"
+                      title="Volver a buscar teléfono conectado"
+                      aria-label="Volver a buscar teléfono conectado"
                       className="h-7 w-7 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#8E8E93] hover:text-[#F5F5F7] disabled:opacity-50 transition-colors cursor-pointer"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#8AB4FF]' : ''}`} />
@@ -1194,7 +1196,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[12.5px] font-medium text-[#F5F5F7]">
-                            {usbDevice.model || 'Dispositivo Android'}
+                            {usbDevice.model || 'Teléfono Android'}
                           </span>
                           <span className="font-tech text-[11px] text-[#8E8E93]">
                             {selectedSerial || usbDevice.serial}
@@ -1216,7 +1218,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           )}
                         </div>
                         <p className="text-[12px] text-[#8E8E93]">
-                          Lectura volátil de kernel <span className="font-tech text-[#D1D1D6]">/proc/net/tcp</span>, caché DNS, <span className="font-tech text-[#D1D1D6]">SELinux</span>, Accesibilidad y administradores de dispositivo.
+                          Teléfono listo. OMEGA revisará conexiones activas, permisos especiales y protección del sistema sin borrar ni cambiar nada.
                         </p>
                       </div>
 
@@ -1227,16 +1229,16 @@ export function MvtVerifierPanel({ onAskInChat }) {
                         className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        <span>{scanningUsb ? 'Extrayendo RAM...' : 'Analizar dispositivo USB'}</span>
+                        <span>{scanningUsb ? 'Revisando teléfono...' : 'Iniciar revisión segura'}</span>
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      <div className="flex flex-wrap items-start justify-between gap-2.5 rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
                         <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed flex-1 min-w-[220px]">
                           {hasDesktopBridge
-                            ? usbDevice?.reason || 'Detectando Android Platform Tools (ADB)...'
-                            : 'La conexión USB directa se ejecuta desde OMEGA Desktop (Electron) para usar ADB local en solo lectura. En navegador puedes subir volcados MVT abajo.'}
+                            ? usbDevice?.reason || 'Buscando conector USB de Android en tu computadora...'
+                            : 'Para revisar un Android por cable USB necesitas la app de escritorio OMEGA. En navegador web, puedes subir una copia abajo.'}
                         </p>
 
                         <button
@@ -1245,68 +1247,119 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#8AB4FF] hover:bg-white/[0.08] transition-colors cursor-pointer"
                         >
                           <HelpCircle className="h-3.5 w-3.5" />
-                          <span>{showAndroidGuide || usbDevice?.status_code === 'ADB_NOT_FOUND' ? 'Ocultar guía' : 'Cómo conectar'}</span>
+                          <span>
+                            {showAndroidGuide ||
+                            usbDevice?.status_code === 'ADB_NOT_FOUND' ||
+                            usbDevice?.status_code === 'UNAUTHORIZED'
+                              ? 'Ocultar pasos'
+                              : 'Ver guía visual'}
+                          </span>
                         </button>
                       </div>
 
                       {(showAndroidGuide ||
                         usbDevice?.status_code === 'ADB_NOT_FOUND' ||
                         usbDevice?.status_code === 'UNAUTHORIZED') && (
-                        <div className="rounded-[11px] border border-white/[0.06] bg-black/30 px-3.5 py-3 space-y-2.5 text-[12px] text-[#8E8E93]">
-                          <ol className="space-y-1.5 list-decimal list-inside">
-                            <li>
-                              <span className="text-[#E5E5EA]">En el teléfono Android:</span>{' '}
-                              Ajustes → Acerca del teléfono (toca 7 veces <em>Número de compilación</em>) → Opciones de desarrollador → activa <span className="text-[#F5F5F7]">Depuración USB</span>.
-                            </li>
-                            <li>
-                              <span className="text-[#E5E5EA]">En este equipo:</span>{' '}
-                              {usbDevice?.adb_path
-                                ? <>ADB detectado en <span className="font-tech text-[#30D158]">{usbDevice.adb_path}</span>.</>
-                                : 'necesitas Android Platform Tools (adb).'}
-                            </li>
-                            <li>
-                              <span className="text-[#E5E5EA]">Al conectar el cable:</span>{' '}
-                              desbloquea el teléfono y pulsa <span className="text-[#F5F5F7]">Permitir</span> en el aviso de huella RSA.
-                            </li>
-                          </ol>
+                        <div className="rounded-[12px] border border-white/[0.06] bg-black/30 p-3 space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                            <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                              <AndroidStepVisual step={1} />
+                              <div>
+                                <div className="text-[12px] font-medium text-[#F5F5F7]">
+                                  1. Activa el modo revisión
+                                </div>
+                                <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                                  En tu teléfono ve a <span className="text-[#D1D1D6]">Ajustes → Acerca del teléfono</span>, toca 7 veces <span className="text-[#D1D1D6]">N.º de compilación</span> y enciende <span className="text-[#D1D1D6]">Depuración USB</span>.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                              <AndroidStepVisual step={2} adbReady={Boolean(usbDevice?.adb_path)} />
+                              <div>
+                                <div className="text-[12px] font-medium text-[#F5F5F7]">
+                                  2. Conecta tu cable USB
+                                </div>
+                                <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                                  {usbDevice?.adb_path
+                                    ? 'Tu computadora ya está lista. Conecta el teléfono con cable de datos y elige "Transferir archivos".'
+                                    : 'Usa un cable USB de datos (no solo de carga) y descarga o señala el conector gratuito abajo.'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                              <AndroidStepVisual step={3} />
+                              <div>
+                                <div className="text-[12px] font-medium text-[#F5F5F7]">
+                                  3. Toca “Permitir”
+                                </div>
+                                <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                                  Desbloquea la pantalla del teléfono. Cuando salga la ventana de permiso, marca confiar y pulsa <span className="text-[#D1D1D6]">Permitir</span>.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
 
                           {hasDesktopBridge && (
-                            <div className="pt-1 flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={handlePickAdbBinary}
-                                className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 transition-colors cursor-pointer"
-                              >
-                                <FolderOpen className="h-3.5 w-3.5" />
-                                <span>Ubicar adb.exe manualmente</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleCopyCommand('adb', installAdbCmd)}
-                                className="font-tech inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
-                              >
-                                {copiedHintKey === 'adb' ? (
-                                  <Check className="h-3 w-3 text-[#30D158]" />
-                                ) : (
-                                  <Copy className="h-3 w-3 text-[#8E8E93]" />
-                                )}
-                                <span>{installAdbCmd}</span>
-                              </button>
-
-                              {window.omegaDesktop?.openExternalUrl && (
+                            <div className="pt-0.5 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    window.omegaDesktop.openExternalUrl(
-                                      'https://developer.android.com/tools/releases/platform-tools',
-                                    )
-                                  }
-                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11.5px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+                                  onClick={handlePickAdbBinary}
+                                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 transition-colors cursor-pointer"
                                 >
-                                  <ExternalLink className="h-3 w-3" />
-                                  <span>Descargar ZIP oficial</span>
+                                  <FolderOpen className="h-3.5 w-3.5" />
+                                  <span>
+                                    {usbDevice?.adb_path ? 'Cambiar conector adb.exe' : 'Elegir adb.exe en mi PC'}
+                                  </span>
                                 </button>
+
+                                {window.omegaDesktop?.openExternalUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      window.omegaDesktop.openExternalUrl(
+                                        'https://developer.android.com/tools/releases/platform-tools',
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    <span>Descargar conector oficial (Google)</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAdvancedCmds((v) => !v)}
+                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer"
+                                >
+                                  <span>{showAdvancedCmds ? 'Ocultar comandos' : 'Opciones para técnicos'}</span>
+                                </button>
+                              </div>
+
+                              {showAdvancedCmds && (
+                                <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#8E8E93]">
+                                  <span>Instalar por terminal:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyCommand('adb', installAdbCmd)}
+                                    className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                                  >
+                                    {copiedHintKey === 'adb' ? (
+                                      <Check className="h-3 w-3 text-[#30D158]" />
+                                    ) : (
+                                      <Copy className="h-3 w-3 text-[#8E8E93]" />
+                                    )}
+                                    <span>{installAdbCmd}</span>
+                                  </button>
+                                  {usbDevice?.adb_path && (
+                                    <span className="font-tech text-[#30D158] truncate max-w-full">
+                                      Detectado: {usbDevice.adb_path}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}
@@ -1329,7 +1382,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           </span>
                         </div>
                         <p className="text-[12px] text-[#8E8E93]">
-                          Lectura por Lockdown ({iosStatus.tool_name}) + extracción efímera de crashlogs <span className="font-tech text-[#D1D1D6]">.ips / .crash</span> en RAM.
+                          iPhone conectado por cable. Revisaremos reportes internos recientes y registro de fallos en memoria temporal sin tocar tus fotos ni mensajes.
                         </p>
                       </div>
 
@@ -1340,47 +1393,99 @@ export function MvtVerifierPanel({ onAskInChat }) {
                         className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningIos && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        <span>{scanningIos ? 'Extrayendo RAM...' : 'Auditar iPhone USB'}</span>
+                        <span>{scanningIos ? 'Revisando iPhone...' : 'Iniciar revisión de iPhone'}</span>
                       </button>
                     </div>
                   ) : (
-                    <div className="rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5 space-y-2">
+                    <div className="rounded-[12px] border border-white/[0.06] bg-black/30 p-3 space-y-3">
                       <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
                         {hasDesktopBridge
-                          ? iosStatus?.reason || 'Sin jailbreak, iOS bloquea shell/ADB por USB. OMEGA audita respaldos locales (Manifest.db, TCC.db, DataUsage.sqlite) o archivos sysdiagnose en RAM.'
-                          : 'iOS bloquea shell directo desde navegador. Genera un sysdiagnose en tu iPhone o selecciona un respaldo en OMEGA Desktop.'}
+                          ? iosStatus?.reason || 'Apple bloquea el análisis directo sin permisos especiales. Sigue estas 3 imágenes para revisar tu iPhone sin riesgo:'
+                          : 'Por seguridad de Apple, el navegador web no puede leer un iPhone por cable. Sigue estos 3 pasos fáciles en tu iPhone y sube el archivo abajo:'}
                       </p>
 
-                      {hasDesktopBridge && (
-                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                          <button
-                            type="button"
-                            disabled={scanningIos || isAnalyzing}
-                            onClick={handlePickIosBackupDir}
-                            className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 transition-colors cursor-pointer"
-                          >
-                            {scanningIos ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <FolderOpen className="h-3.5 w-3.5" />
-                            )}
-                            <span>Explorar carpeta de respaldo iOS</span>
-                          </button>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                          <IosStepVisual step={1} />
+                          <div>
+                            <div className="text-[12px] font-medium text-[#F5F5F7]">
+                              1. Genera el archivo en iPhone
+                            </div>
+                            <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                              Ve a <span className="text-[#D1D1D6]">Ajustes → Privacidad y seguridad → Análisis y mejoras → Datos de análisis</span>, o pulsa <span className="text-[#D1D1D6]">Vol+ · Vol- + Lateral</span> 1 segundo.
+                            </p>
+                          </div>
+                        </div>
 
-                          {!iosStatus?.tools_available && (
+                        <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                          <IosStepVisual step={2} />
+                          <div>
+                            <div className="text-[12px] font-medium text-[#F5F5F7]">
+                              2. O usa una copia en PC
+                            </div>
+                            <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                              Si conectas tu iPhone por cable para hacer una copia en esta PC, desbloquéalo y toca <span className="text-[#D1D1D6]">Confiar</span> con tu código PIN.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
+                          <IosStepVisual step={3} />
+                          <div>
+                            <div className="text-[12px] font-medium text-[#F5F5F7]">
+                              3. Súbelo sin guardar nada
+                            </div>
+                            <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                              Envía el archivo de diagnóstico a tu PC o elige la carpeta de respaldo. Se revisa al instante y no se guarda nada privado.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {hasDesktopBridge && (
+                        <div className="pt-0.5 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => handleCopyCommand('ios', installIosCmd)}
-                              className="font-tech inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
-                              title="Opcional para conexión USB Lockdown directa en Desktop (requiere Apple Devices / usbmuxd)"
+                              disabled={scanningIos || isAnalyzing}
+                              onClick={handlePickIosBackupDir}
+                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 transition-colors cursor-pointer"
                             >
-                              {copiedHintKey === 'ios' ? (
-                                <Check className="h-3 w-3 text-[#30D158]" />
+                              {scanningIos ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <Copy className="h-3 w-3 text-[#8E8E93]" />
+                                <FolderOpen className="h-3.5 w-3.5" />
                               )}
-                              <span>USB en vivo: {installIosCmd}</span>
+                              <span>Elegir carpeta de respaldo iPhone</span>
                             </button>
+
+                            {!iosStatus?.tools_available && (
+                              <button
+                                type="button"
+                                onClick={() => setShowAdvancedCmds((v) => !v)}
+                                className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer"
+                              >
+                                <span>{showAdvancedCmds ? 'Ocultar comandos' : 'Opciones para técnicos (cable directo)'}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {showAdvancedCmds && !iosStatus?.tools_available && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#8E8E93]">
+                              <span>Para conexión USB Lockdown directa (requiere Apple Devices / iTunes):</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyCommand('ios', installIosCmd)}
+                                className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                              >
+                                {copiedHintKey === 'ios' ? (
+                                  <Check className="h-3 w-3 text-[#30D158]" />
+                                ) : (
+                                  <Copy className="h-3 w-3 text-[#8E8E93]" />
+                                )}
+                                <span>{installIosCmd}</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
@@ -1390,7 +1495,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                   {hasDesktopBridge && iosStatus?.local_backups?.length > 0 && (
                     <div className="rounded-[11px] border border-white/[0.06] bg-black/30 divide-y divide-white/[0.05] overflow-hidden">
                       <div className="px-3 py-1.5 text-[11px] font-medium text-[#8E8E93]">
-                        Respaldos locales detectados en este equipo ({iosStatus.local_backups.length})
+                        Copias de seguridad encontradas en tu computadora ({iosStatus.local_backups.length})
                       </div>
                       {iosStatus.local_backups.slice(0, 3).map((bk) => (
                         <div key={bk.id} className="px-3 py-2 flex items-center justify-between gap-2">
@@ -1406,7 +1511,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                               )}
                               {bk.encrypted && (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-[#FF9F0A]/30 bg-[#FF9F0A]/10 px-1.5 py-0.5 text-[10px] text-[#FFD60A]">
-                                  <Lock className="h-2.5 w-2.5" /> Cifrado
+                                  <Lock className="h-2.5 w-2.5" /> Protegida con clave
                                 </span>
                               )}
                             </div>
@@ -1420,9 +1525,10 @@ export function MvtVerifierPanel({ onAskInChat }) {
                                   `mvt-ios decrypt-backup -d ./ios_decrypted "${bk.path}"`,
                                 )
                               }
-                              className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[10.5px] text-[#D1D1D6] hover:bg-white/[0.08] cursor-pointer"
+                              className="shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10.5px] text-[#D1D1D6] hover:bg-white/[0.08] cursor-pointer"
+                              title="Desmarca cifrado al crear la copia o copia este comando para descifrarla localmente"
                             >
-                              {copiedHintKey === `dec-${bk.id}` ? 'Copiado' : 'Copiar mvt-ios decrypt'}
+                              {copiedHintKey === `dec-${bk.id}` ? 'Comando copiado' : 'Copiar comando de descifrado'}
                             </button>
                           ) : (
                             <button
@@ -1431,18 +1537,13 @@ export function MvtVerifierPanel({ onAskInChat }) {
                               onClick={() => analyzeIosBackupDirectory(bk.path)}
                               className="shrink-0 rounded-[7px] bg-[#2F6FED] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 cursor-pointer"
                             >
-                              Analizar en RAM
+                              Revisar copia ahora
                             </button>
                           )}
                         </div>
                       ))}
                     </div>
                   )}
-
-                  <div className="rounded-[10px] border border-white/[0.05] bg-black/25 px-3 py-2 text-[11.5px] text-[#8E8E93] leading-relaxed">
-                    <span className="text-[#E5E5EA] font-medium">Vía rápida iPhone sin cables ni drivers:</span>{' '}
-                    en iOS ve a <em>Ajustes → Privacidad y seguridad → Análisis y mejoras → Datos de análisis</em> (o pulsa Vol+ / Vol- / Encendido para generar un <span className="font-tech text-[#8AB4FF]">sysdiagnose</span>) y arrastra el <span className="font-tech text-[#D1D1D6]">.tar.gz</span> o <span className="font-tech text-[#D1D1D6]">.ips</span> abajo.
-                  </div>
                 </div>
               )}
             </div>
@@ -1460,15 +1561,15 @@ export function MvtVerifierPanel({ onAskInChat }) {
               type="button"
               disabled={syncingStix}
               onClick={handleSyncStix}
-              title="Sincronizar feeds STIX 2.1 locales (Amnesty Tech / Cytrox / NoviSpy) hacia PostgreSQL"
+              title="Actualizar base de amenazas conocidas en memoria"
               className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
             >
               <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#5E9BFF]' : ''}`} />
-              <span>{stixSyncNote || (syncingStix ? 'Sincronizando STIX2...' : 'Feeds STIX 2.1')}</span>
+              <span>{stixSyncNote || (syncingStix ? 'Actualizando...' : 'Feeds STIX 2.1')}</span>
             </button>
           </div>
 
-          <div className="mb-3.5">
+          <div className="mb-3">
             <div className="apple-segmented inline-flex rounded-[9px] p-0.5">
               <button
                 type="button"
@@ -1482,7 +1583,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                     : 'text-[#8E8E93] hover:text-[#F5F5F7]'
                 }`}
               >
-                Subir archivo MVT
+                Subir archivo del teléfono
               </button>
               <button
                 type="button"
@@ -1496,7 +1597,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                     : 'text-[#8E8E93] hover:text-[#F5F5F7]'
                 }`}
               >
-                Pegar indicadores
+                Pegar enlaces o datos sospechosos
               </button>
             </div>
           </div>
@@ -1518,7 +1619,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                   analyzeFiles(e.dataTransfer.files);
                 }
               }}
-              className={`rounded-[12px] border border-dashed py-11 px-6 flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer ${
+              className={`rounded-[12px] border border-dashed py-5 px-6 flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer ${
                 isDragging
                   ? 'border-[#2F6FED] bg-[#2F6FED]/12'
                   : 'border-white/[0.12] bg-black/25 hover:border-[#2F6FED]/55 hover:bg-black/35'
@@ -1533,7 +1634,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 className="hidden"
               />
 
-              <div className="mb-3 h-10 w-10 rounded-[11px] bg-white/[0.045] border border-white/[0.08] flex items-center justify-center">
+              <div className="mb-2.5 h-10 w-10 rounded-[11px] bg-white/[0.045] border border-white/[0.08] flex items-center justify-center">
                 {isAnalyzing ? (
                   <Loader2 className="h-5 w-5 text-[#5E9BFF] animate-spin" />
                 ) : (
@@ -1543,13 +1644,13 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
               <p className="text-[13.5px] font-medium text-[#F5F5F7]">
                 {isAnalyzing
-                  ? 'Analizando artefactos en memoria RAM...'
-                  : 'Arrastra tu volcado MVT o sysdiagnose aquí'}
+                  ? 'Revisando archivos en memoria temporal...'
+                  : 'Arrastra aquí el archivo de diagnóstico o copia de tu celular'}
               </p>
 
               {!isAnalyzing && (
-                <p className="font-tech mt-1 text-[11.5px] text-[#8E8E93]">
-                  .json · .db · .tar.gz · .zip
+                <p className="mt-1 text-[11.5px] text-[#8E8E93]">
+                  Acepta reportes de iPhone (.tar.gz, .ips), respaldos (.db, .zip) o archivos de análisis (.json)
                 </p>
               )}
 
@@ -1557,7 +1658,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 type="button"
                 disabled={isAnalyzing}
                 onClick={handleRunSample}
-                className="mt-3.5 rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-1 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/20 disabled:opacity-50 transition-colors cursor-pointer"
+                className="mt-3 rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-1 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/20 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 Probar con muestra de ejemplo
               </button>
@@ -1569,14 +1670,14 @@ export function MvtVerifierPanel({ onAskInChat }) {
                   rows={4}
                   value={manualText}
                   onChange={(e) => setManualText(e.target.value)}
-                  placeholder={'free247downloads.com\n185.220.101.44\n4a7f... (SHA-256) o proceso anómalo'}
+                  placeholder={'https://enlace-sospechoso.com\n185.220.101.44\nPega un dominio, dirección IP o texto extraño por línea'}
                   className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
                 />
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-3">
                 <span className="text-[12px] text-[#8E8E93]">
-                  Uno por línea · Dominios, IPs, URLs o hashes
+                  Uno por línea · Enlaces web, dominios, IPs o códigos
                 </span>
                 <button
                   type="submit"
@@ -1584,7 +1685,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                   className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Analizar</span>
+                  <span>Revisar</span>
                 </button>
               </div>
             </form>
