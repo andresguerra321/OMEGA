@@ -2,191 +2,325 @@ import { useState } from 'react';
 import {
   Upload,
   Lock,
-  ShieldAlert,
   ShieldCheck,
-  AlertTriangle,
-  Cpu,
-  Network,
-  Database,
-  CheckCircle2,
+  Download,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
-import { runParallelTriage } from '../lib/api';
-
-const AGENT_ICONS = {
-  subagent_a_messaging: Database,
-  subagent_b_network: Network,
-  subagent_c_processes: Cpu,
-};
+import { verifyMvtFile, verifyMvtText } from '../lib/api';
 
 export function MvtVerifierPanel() {
+  const [textInput, setTextInput] = useState('');
+  const [analyzedLabel, setAnalyzedLabel] = useState('');
   const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingMode, setLoadingMode] = useState(''); // '' | 'file' | 'text'
+  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleMultiUpload(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    setLoading(true);
+  async function processFile(file) {
+    if (!file || loadingMode) return;
+    setLoadingMode('file');
     setError('');
+    setAnalyzedLabel(file.name);
     try {
-      const data = await runParallelTriage(files);
+      const data = await verifyMvtFile(file);
       setResult(data);
     } catch (err) {
-      setError(err.message);
+      setResult(null);
+      setError(err?.message || 'Error analizando el archivo.');
     } finally {
-      setLoading(false);
-      e.target.value = '';
+      setLoadingMode('');
     }
   }
 
-  const verdictStyles = {
-    CLEAN: 'border-emerald-800/60 bg-emerald-950/25 text-emerald-200',
-    LIKELY_FALSE_POSITIVE: 'border-amber-700/60 bg-amber-950/25 text-amber-200',
-    SUSPICIOUS_SINGLE_VECTOR: 'border-orange-700/60 bg-orange-950/25 text-orange-200',
-    CORROBORATED_INFECTION_PATTERN: 'border-rose-700/70 bg-rose-950/30 text-rose-200',
-  };
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    await processFile(file);
+  }
+
+  async function handleDrop(e) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer?.files?.[0];
+    await processFile(file);
+  }
+
+  async function handleTextSubmit(e) {
+    e.preventDefault();
+    const clean = textInput.trim();
+    if (clean.length < 3 || loadingMode) return;
+    setLoadingMode('text');
+    setError('');
+    setAnalyzedLabel('consulta_manual.txt');
+    try {
+      const data = await verifyMvtText(clean);
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setError(err?.message || 'Error analizando los indicadores.');
+    } finally {
+      setLoadingMode('');
+    }
+  }
+
+  function handleExportReport() {
+    if (!result) return;
+    const lines = [
+      `# Informe de Verificación Forense — OMEGA`,
+      '',
+      `- **Origen:** ${analyzedLabel || 'Entrada manual'}`,
+      `- **Formato detectado:** ${result.detected_format}`,
+      `- **Indicadores evaluados:** ${result.analyzed_indicators}`,
+      `- **Coincidencias:** ${result.total_matches}`,
+      `- **Desglose:** Dominios ${result.breakdown?.domains ?? 0} · IPs ${result.breakdown?.ips ?? 0} · SHA-256 ${result.breakdown?.sha256 ?? 0} · Procesos/URLs ${result.breakdown?.processes_or_urls ?? 0}`,
+      '',
+    ];
+
+    if (result.matches?.length > 0) {
+      lines.push('## Coincidencias detectadas');
+      result.matches.forEach((m) => {
+        lines.push(
+          `- **[${m.ioc_type.toUpperCase()}]** \`${m.ioc_value}\` (${m.match_precision} · ${m.spyware_family}) — ${m.campaign} | Origen: \`${m.artifact_origin}\` | Fuente: ${m.organization} (${m.source_report})`
+        );
+      });
+    } else {
+      lines.push('Sin coincidencias con los indicadores públicos indexados.');
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `omega_verificacion_${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const isLoading = Boolean(loadingMode);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+    <div className="max-w-[840px] mx-auto space-y-6">
+      {/* Cabecera */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-[#232329] pb-5">
         <div className="space-y-1">
-          <h2 className="text-base font-semibold">
-            Orquestador de Triage Forense Paralelo (3 Subagentes)
-          </h2>
-          <p className="text-xs text-zinc-400">
-            Carga simultáneamente respaldos SQLite (<code className="text-zinc-300">sms.db</code>, <code className="text-zinc-300">History.db</code>), logs DNS/red y volcados de procesos (<code className="text-zinc-300">shutdown_log.json</code>, <code className="text-zinc-300">.ips</code>) para correlación multi-vectorial.
+          <h1 className="text-[20px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
+            Revisar mi equipo
+          </h1>
+          <p className="text-[13px] text-[#8E8E96]">
+            Cruza volcados de Mobile Verification Toolkit (MVT) o indicadores manuales contra la base pública de spyware.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-3 py-1.5 text-[11px] text-emerald-300">
-          <Lock className="h-3.5 w-3.5" />
-          <span>SQLite y JSON en RAM (RNF4)</span>
+
+        <div className="shrink-0 inline-flex items-center gap-1.5 rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2.5 py-1.5 text-[11px] font-medium text-[#7AA7FF]">
+          <Lock className="h-3.5 w-3.5 shrink-0" />
+          <span>En RAM · Sin guardado en disco</span>
         </div>
       </div>
 
-      {/* Zona de carga múltiple */}
-      <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/20 p-8 text-center hover:border-emerald-500/50 hover:bg-zinc-900/40 transition">
-        <Upload className="mb-2.5 h-7 w-7 text-emerald-400" />
-        <span className="text-sm font-medium text-zinc-100">
-          {loading
-            ? 'Orquestando Subagentes A, B y C en paralelo...'
-            : 'Seleccionar uno o varios artefactos forenses (JSON, SQLite .db, .ips, .txt)'}
-        </span>
-        <span className="mt-1 text-xs text-zinc-500">
-          El orquestador enruta cada evidencia al subagente especializado y evalúa convergencia de patrones
-        </span>
-        <input
-          type="file"
-          multiple
-          accept=".json,.db,.sqlite,.sqlite3,.ips,.txt,.log,.csv"
-          onChange={handleMultiUpload}
-          className="hidden"
-        />
-      </label>
+      {/* Zona de Entrada Dual */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Carga de archivo MVT */}
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`flex flex-col items-center justify-center text-center rounded-[6px] border border-dashed bg-[#141418] p-6 transition-colors cursor-pointer ${
+            isDragging
+              ? 'border-[#2F6FED] bg-[#15223D]/25'
+              : 'border-[#232329] hover:border-[#2F6FED]'
+          }`}
+        >
+          <Upload className="h-5 w-5 text-[#8E8E96] mb-3" />
+          <span className="text-[13px] font-medium text-[#F2F2F4]">
+            {loadingMode === 'file'
+              ? `Analizando ${analyzedLabel}...`
+              : 'Seleccionar o arrastrar salida MVT'}
+          </span>
+          <span className="mt-1.5 font-tech text-[11px] text-[#8E8E96]">
+            safari_history.json · sms.json · shutdown_log.json
+          </span>
+          <span className="mt-2 font-tech text-[10.5px] text-[#8E8E96]/70">
+            .json · .txt · .log · .ips
+          </span>
+          <input
+            type="file"
+            accept=".json,.txt,.log,.ips,.csv"
+            onChange={handleFileChange}
+            disabled={isLoading}
+            className="hidden"
+          />
+        </label>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+        {/* Pegado rápido de indicadores */}
+        <form
+          onSubmit={handleTextSubmit}
+          className="rounded-[6px] border border-[#232329] bg-[#141418] p-4 flex flex-col justify-between gap-3"
+        >
+          <div className="space-y-2">
+            <label
+              htmlFor="manual-ioc-input"
+              className="block text-[11.5px] font-medium text-[#8E8E96]"
+            >
+              O pegar indicadores (uno por línea)
+            </label>
+            <textarea
+              id="manual-ioc-input"
+              rows={4}
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="dominios (ej. evil[.]domain[.]com), IPs, SHA-256 o procesos..."
+              className="w-full resize-none rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-2.5 font-tech text-[12px] leading-relaxed text-[#F2F2F4] placeholder-[#8E8E96]/70 focus:border-[#2F6FED] focus:outline-none"
+            />
+          </div>
 
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isLoading || textInput.trim().length < 3}
+              className="rounded-[4px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:bg-[#255ED4] disabled:bg-[#1C1C22] disabled:text-[#8E8E96] transition-colors cursor-pointer disabled:cursor-not-allowed"
+            >
+              {loadingMode === 'text' ? 'Cruzando...' : 'Cruzar indicadores'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Error real de conexión o entrada */}
+      {error && (
+        <div className="rounded-[6px] border border-[#5C2128] bg-[#1F1215] px-4 py-3 flex items-center gap-2 text-[12.5px] text-[#F87171]">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Resultados forenses */}
       {result && (
-        <div className="space-y-5">
-          {/* Diagnóstico Principal: Falso Positivo vs Infección Real */}
-          <div
-            className={`rounded-2xl border p-5 space-y-3 ${
-              verdictStyles[result.diagnosis?.verdict_code] || 'border-zinc-800 bg-zinc-900/40'
-            }`}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                {result.diagnosis?.verdict_code === 'CLEAN' ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                ) : result.diagnosis?.is_likely_false_positive ? (
-                  <AlertTriangle className="h-5 w-5 text-amber-400" />
-                ) : (
-                  <ShieldAlert className="h-5 w-5 text-rose-400" />
+        <div className="space-y-3.5">
+          {/* Barra de resumen */}
+          <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-[13.5px] font-medium text-[#F2F2F4]">
+                  {result.detected_format}
+                </p>
+                {analyzedLabel && (
+                  <p className="font-tech text-[11.5px] text-[#8E8E96] truncate">
+                    {analyzedLabel}
+                  </p>
                 )}
-                <h3 className="text-sm font-semibold">{result.diagnosis?.verdict_label}</h3>
               </div>
-              <span className="rounded-md border border-current/30 px-2.5 py-0.5 text-[11px] font-medium">
-                Confianza: {result.diagnosis?.confidence} · {result.total_matches} IOCs · {result.total_indicators_analyzed} evaluados
-              </span>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={`font-tech rounded-[4px] border px-2.5 py-1 text-[11px] font-medium ${
+                    result.total_matches > 0
+                      ? 'border-[#5C2128] bg-[#1F1215] text-[#F87171]'
+                      : 'border-[#2F6FED]/40 bg-[#15223D] text-[#7AA7FF]'
+                  }`}
+                >
+                  {result.total_matches === 0
+                    ? '0 coincidencias'
+                    : `${result.total_matches} ${
+                        result.total_matches === 1
+                          ? 'coincidencia detectada'
+                          : 'coincidencias detectadas'
+                      }`}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleExportReport}
+                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2.5 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED] transition-colors cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#8E8E96]" />
+                  <span>Exportar (.md)</span>
+                </button>
+              </div>
             </div>
 
-            <p className="text-xs leading-relaxed opacity-90">{result.diagnosis?.rationale}</p>
-
-            {result.diagnosis?.recommended_actions?.length > 0 && (
-              <div className="pt-1 space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider opacity-75">
-                  Acciones defensivas recomendadas:
-                </p>
-                <ul className="list-disc pl-4 space-y-1 text-xs opacity-90">
-                  {result.diagnosis.recommended_actions.map((act, i) => (
-                    <li key={i}>{act}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="border-t border-[#232329] pt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-tech text-[11px] text-[#8E8E96]">
+              <span>Evaluados: {result.analyzed_indicators}</span>
+              <span>·</span>
+              <span>Dominios: {result.breakdown?.domains ?? 0}</span>
+              <span>·</span>
+              <span>IPs: {result.breakdown?.ips ?? 0}</span>
+              <span>·</span>
+              <span>SHA-256: {result.breakdown?.sha256 ?? 0}</span>
+              <span>·</span>
+              <span>Procesos/URLs: {result.breakdown?.processes_or_urls ?? 0}</span>
+            </div>
           </div>
 
-          {/* Tarjetas de estado de los 3 Subagentes Paralelos */}
-          <div className="grid gap-3 md:grid-cols-3">
-            {result.subagents?.map((ag) => {
-              const Icon = AGENT_ICONS[ag.agent_id] || ShieldCheck;
-              return (
+          {/* Estado limpio vs Coincidencias */}
+          {result.total_matches === 0 ? (
+            <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-4 flex items-center gap-2.5 text-[13px] text-[#F2F2F4]">
+              <ShieldCheck className="h-4 w-4 text-[#2F6FED] shrink-0" />
+              <span>
+                No se detectaron coincidencias con los indicadores públicos de spyware comercial indexados.
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {result.matches.map((m, idx) => (
                 <div
-                  key={ag.agent_id}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2.5 text-xs"
+                  key={`${m.ioc_type}-${m.ioc_value}-${idx}`}
+                  className="rounded-[6px] border border-[#5C2128] border-l-2 border-l-[#F87171] bg-[#141418] p-4 space-y-2.5"
                 >
-                  <div className="flex items-center justify-between">
-                    <Icon className="h-4 w-4 text-emerald-400" />
-                    <span
-                      className={`rounded px-2 py-0.5 font-mono text-[10px] ${
-                        ag.matches_count > 0
-                          ? 'bg-rose-950 text-rose-300 border border-rose-800/50'
-                          : 'bg-zinc-800 text-zinc-400'
-                      }`}
-                    >
-                      {ag.matches_count} hits
-                    </span>
-                  </div>
-                  <p className="font-semibold text-zinc-100 leading-snug">{ag.agent_name}</p>
-                  <p className="text-[11px] text-zinc-400">
-                    Archivos: {ag.files_processed} · Artefactos: {ag.indicators_extracted}
-                  </p>
-                  {ag.notes?.length > 0 && (
-                    <p className="text-[11px] text-zinc-500 border-t border-zinc-800/80 pt-2">
-                      {ag.notes[0]}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Detalle de coincidencias por subagente */}
-          {result.subagents?.some((ag) => ag.matches?.length > 0) && (
-            <div className="space-y-2.5 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Evidencia Correlacionada por Vector
-              </h4>
-              {result.subagents.map((ag) =>
-                ag.matches.map((m, idx) => (
-                  <div
-                    key={`${ag.agent_id}-${idx}`}
-                    className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-3.5 text-xs space-y-1"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-mono font-semibold text-rose-200">
-                        [{m.ioc_type.toUpperCase()}] {m.ioc_value}
-                      </span>
-                      <span className="text-[11px] text-emerald-300">{ag.agent_name}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-tech text-[13px] text-[#F2F2F4] break-all">
+                      <span className="text-[#F87171]">[{m.ioc_type.toUpperCase()}]</span>{' '}
+                      {m.ioc_value}
                     </div>
-                    <p className="text-zinc-300">
-                      Origen: {m.artifact_origin} · Campaña: <strong>{m.campaign}</strong> ({m.spyware_family})
-                    </p>
-                    <p className="text-[11px] text-zinc-400">
-                      Fuente: {m.source_report} ({m.organization})
-                    </p>
+
+                    <div className="flex flex-wrap items-center gap-1.5 font-tech text-[10.5px]">
+                      <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
+                        {m.match_precision}
+                      </span>
+                      <span className="rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-0.5 text-[#7AA7FF]">
+                        {m.spyware_family}
+                      </span>
+                    </div>
                   </div>
-                ))
-              )}
+
+                  <div className="grid gap-2 sm:grid-cols-2 text-[12px]">
+                    <div className="space-y-0.5">
+                      <span className="text-[#8E8E96]">Ubicación en dump: </span>
+                      <span className="font-tech text-[#F2F2F4]">{m.artifact_origin}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[#8E8E96]">Campaña vinculada: </span>
+                      <span className="font-medium text-[#F2F2F4]">{m.campaign}</span>
+                    </div>
+                  </div>
+
+                  {m.context && (
+                    <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-2.5 text-[12px] text-[#8E8E96]">
+                      {m.context}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#8E8E96]">
+                    <span>
+                      Fuente: {m.organization} — {m.source_report}
+                    </span>
+                    {m.source_url?.startsWith('http') && (
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[#7AA7FF] hover:underline underline-offset-2"
+                      >
+                        <span>Ver reporte original</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
