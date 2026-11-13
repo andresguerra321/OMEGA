@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (isFileProtocol ? 'http://localhost:8000/api' : '/api');
 
 export function getWorkspaceId() {
   let wsId = localStorage.getItem('omega_workspace_id');

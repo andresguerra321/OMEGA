@@ -455,7 +455,7 @@ export default function App() {
         isError: true,
         retryQuery: query,
         sourceScope: effectiveScope,
-        content: err?.message || 'No fue posible conectar con el motor RAG en http://localhost:8000.',
+        content: err?.message || 'No fue posible conectar con el motor RAG de OMEGA.',
         citations: [],
       };
       setSessions((prev) =>

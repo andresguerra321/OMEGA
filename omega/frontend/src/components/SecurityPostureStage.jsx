@@ -230,10 +230,10 @@ export function SecurityPostureStage({
   return (
     <section
       aria-label="Cabina de postura OMEGA"
-      className="omega-studio-bg relative h-full w-full overflow-hidden flex flex-col justify-between select-none text-[#F8FAFC]"
+      className="omega-studio-bg relative min-h-full md:h-full w-full overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col justify-between select-none text-[#F8FAFC]"
     >
-      {/* Escenario WebGL de estudio a pantalla completa (cuadrícula en perspectiva + objeto 3D) */}
-      <div className="pointer-events-none absolute inset-0 z-0">
+      {/* Escenario WebGL de estudio a pantalla completa (cuadrícula en perspectiva + logo OMEGA futurista) */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[100dvh] md:inset-0 md:h-full z-0">
         <SecurityCenterpiece3D
           surfaceId={activeSurface.id}
           healthy={
@@ -379,8 +379,8 @@ export function SecurityPostureStage({
         />
       </div>
 
-      {/* Escenario Central del Sujeto 3D */}
-      <div className="pointer-events-none relative z-10 flex-1 min-h-0 flex flex-col items-center justify-between px-4 sm:px-8 pt-4 pb-2">
+      {/* Escenario Central del Logo OMEGA Futurista */}
+      <div className="pointer-events-none relative z-10 flex-1 min-h-[415px] md:min-h-0 flex flex-col items-center justify-between px-4 sm:px-8 pt-4 pb-2">
         {/* Selector de superficie centrado sin eyebrow decorativo */}
         <div ref={menuRef} className="pointer-events-auto relative z-20 flex flex-col items-center text-center">
           <div className="flex items-center justify-center gap-2.5 flex-wrap">

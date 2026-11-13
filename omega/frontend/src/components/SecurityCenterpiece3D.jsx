@@ -4,287 +4,364 @@ import * as THREE from 'three';
 const SURFACE_COLORS = {
   clean: {
     rim: 0x3b82f6,
-    bevel: 0x2563eb,
-    bevelEmissive: 0x1d4ed8,
-    core: 0x22c55e,
+    bevel: 0x22c55e,
+    bevelEmissive: 0x15803d,
+    core: 0x4ade80,
     ring: 0x22c55e,
+    wire: 0x86efac,
   },
   alert: {
     rim: 0x3b82f6,
     bevel: 0xef4444,
-    bevelEmissive: 0x7f1d1d,
-    core: 0xef4444,
+    bevelEmissive: 0x991b1b,
+    core: 0xf87171,
     ring: 0xef4444,
+    wire: 0xfca5a5,
   },
   standby: {
     rim: 0x3b82f6,
-    bevel: 0x3b82f6,
+    bevel: 0x2563eb,
     bevelEmissive: 0x1d4ed8,
     core: 0x60a5fa,
     ring: 0x2563eb,
+    wire: 0x93c5fd,
   },
 };
 
-function buildSurfaceMeshGroup(surfaceId, palette, disposables) {
-  const group = new THREE.Group();
+const SURFACE_RING_ORIENTATION = {
+  windows: { tiltX: 0.14, tiltY: -0.2, secondaryZ: 0 },
+  usb: { tiltX: 0.36, tiltY: 0.24, secondaryZ: 0.28 },
+  link: { tiltX: -0.16, tiltY: 0.42, secondaryZ: -0.22 },
+  corpus: { tiltX: 0.48, tiltY: -0.12, secondaryZ: 0.16 },
+};
 
-  const obsidianMat = new THREE.MeshStandardMaterial({
-    color: 0x1e293b,
-    metalness: 0.78,
-    roughness: 0.24,
-  });
-  const brushedSteelMat = new THREE.MeshStandardMaterial({
-    color: 0xcbd5e1,
-    metalness: 0.88,
-    roughness: 0.2,
-  });
-  const deckMat = new THREE.MeshStandardMaterial({
-    color: 0x273549,
-    metalness: 0.62,
-    roughness: 0.3,
-  });
-  const royalBevelMat = new THREE.MeshStandardMaterial({
-    color: palette.bevel,
-    metalness: 0.3,
-    roughness: 0.22,
-    emissive: palette.bevelEmissive,
-    emissiveIntensity: 0.95,
-  });
-  const coreCrystalMat = new THREE.MeshStandardMaterial({
-    color: 0xf8fafc,
-    metalness: 0.42,
-    roughness: 0.16,
-    emissive: palette.core,
-    emissiveIntensity: 0.72,
-    flatShading: true,
-  });
-  disposables.push(obsidianMat, brushedSteelMat, deckMat, royalBevelMat, coreCrystalMat);
+const LOGO_SCALE = 0.036;
+const mx = (x) => (x - 40) * LOGO_SCALE;
+const my = (y) => (40 - y) * LOGO_SCALE;
 
-  const registerGeo = (geo) => {
-    disposables.push(geo);
-    return geo;
+function createShieldShape() {
+  const s = new THREE.Shape();
+  s.moveTo(mx(40), my(5.8));
+  s.bezierCurveTo(mx(45.8), my(9.6), mx(54.2), my(12.1), mx(65.5), my(13.6));
+  s.lineTo(mx(65.5), my(37.2));
+  s.bezierCurveTo(mx(65.5), my(53.8), mx(54.6), my(66.5), mx(40), my(73.6));
+  s.bezierCurveTo(mx(25.4), my(66.5), mx(14.5), my(53.8), mx(14.5), my(37.2));
+  s.lineTo(mx(14.5), my(13.6));
+  s.bezierCurveTo(mx(25.8), my(12.1), mx(34.2), my(9.6), mx(40), my(5.8));
+  return s;
+}
+
+function createInnerCavityPoints(zPos) {
+  const c = new THREE.Shape();
+  c.moveTo(mx(40), my(10.2));
+  c.bezierCurveTo(mx(45.2), my(13.3), mx(52.4), my(15.4), mx(61.5), my(16.8));
+  c.lineTo(mx(61.5), my(37));
+  c.bezierCurveTo(mx(61.5), my(51.3), mx(52.2), my(62.3), mx(40), my(68.4));
+  c.bezierCurveTo(mx(27.8), my(62.3), mx(18.5), my(51.3), mx(18.5), my(37));
+  c.lineTo(mx(18.5), my(16.8));
+  c.bezierCurveTo(mx(27.6), my(15.4), mx(34.8), my(13.3), mx(40), my(10.2));
+  return c.getPoints(96).map((p) => new THREE.Vector3(p.x, p.y, zPos));
+}
+
+function createOmegaGlyphShape() {
+  const g = new THREE.Shape();
+  g.moveTo(mx(34.2), my(54.2));
+  g.lineTo(mx(23.6), my(54.2));
+  g.lineTo(mx(23.6), my(47.2));
+  g.lineTo(mx(29.4), my(47.2));
+  g.bezierCurveTo(mx(26.1), my(43.9), mx(24.2), my(39.4), mx(24.2), my(34.3));
+  g.bezierCurveTo(mx(24.2), my(25.1), mx(31.1), my(18.2), mx(40), my(18.2));
+  g.bezierCurveTo(mx(48.9), my(18.2), mx(55.8), my(25.1), mx(55.8), my(34.3));
+  g.bezierCurveTo(mx(55.8), my(39.4), mx(53.9), my(43.9), mx(50.6), my(47.2));
+  g.lineTo(mx(56.4), my(47.2));
+  g.lineTo(mx(56.4), my(54.2));
+  g.lineTo(mx(45.8), my(54.2));
+  g.lineTo(mx(45.8), my(46.8));
+  g.bezierCurveTo(mx(48.7), my(44.1), mx(50.3), my(39.9), mx(50.3), my(34.7));
+  g.bezierCurveTo(mx(50.3), my(28), mx(45.8), my(23.2), mx(40), my(23.2));
+  g.bezierCurveTo(mx(34.2), my(23.2), mx(29.7), my(28), mx(29.7), my(34.7));
+  g.bezierCurveTo(mx(29.7), my(39.9), mx(31.3), my(44.1), mx(34.2), my(46.8));
+  g.lineTo(mx(34.2), my(54.2));
+  return g;
+}
+
+function attachScanDiscardShader(material, sharedUniforms, lagWorld = 0.28) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uScanOrigin = sharedUniforms.uScanOrigin;
+    shader.uniforms.uScanRadius = sharedUniforms.uScanRadius;
+    shader.uniforms.uScanEnabled = sharedUniforms.uScanEnabled;
+    shader.uniforms.uScanLag = { value: lagWorld };
+
+    shader.vertexShader = `varying vec3 vScanWorldPos;\n${shader.vertexShader}`.replace(
+      '#include <project_vertex>',
+      `#include <project_vertex>\n  vScanWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+    );
+
+    shader.fragmentShader = `
+uniform vec3 uScanOrigin;
+uniform float uScanRadius;
+uniform float uScanEnabled;
+uniform float uScanLag;
+varying vec3 vScanWorldPos;
+${shader.fragmentShader}`.replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>
+  if (uScanEnabled > 0.5) {
+    float scanWobble =
+      sin(vScanWorldPos.y * 5.0 + vScanWorldPos.x * 3.4) * 0.08 +
+      sin(vScanWorldPos.z * 6.4 + vScanWorldPos.y * 5.2) * 0.04;
+    if (distance(vScanWorldPos, uScanOrigin) > (uScanRadius - uScanLag + scanWobble)) {
+      discard;
+    }
+  }`,
+    );
+  };
+  material.customProgramCacheKey = () => `omega-scan-${lagWorld}`;
+}
+
+function createWireCageMaterial(sharedUniforms, colorHex) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uScanOrigin: sharedUniforms.uScanOrigin,
+      uScanRadius: sharedUniforms.uScanRadius,
+      uWireOpacity: sharedUniforms.uWireOpacity,
+      uWireColor: { value: new THREE.Color(colorHex) },
+    },
+    vertexShader: `
+varying vec3 vScanWorldPos;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vScanWorldPos = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`,
+    fragmentShader: `
+uniform vec3 uScanOrigin;
+uniform float uScanRadius;
+uniform float uWireOpacity;
+uniform vec3 uWireColor;
+varying vec3 vScanWorldPos;
+void main() {
+  float d = distance(vScanWorldPos, uScanOrigin);
+  float rim = exp(-pow((d - uScanRadius) / 0.38, 2.0));
+  float ahead = smoothstep(uScanRadius + 1.8, uScanRadius + 0.1, d) * 0.28;
+  float trail = smoothstep(uScanRadius + 0.15, uScanRadius - 1.85, d) * 0.48;
+  float alpha = (rim * 1.4 + trail + ahead) * uWireOpacity;
+  if (alpha < 0.015) discard;
+  gl_FragColor = vec4(uWireColor, clamp(alpha, 0.0, 1.0));
+}`,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+}
+
+function buildOmegaCrestAssembly(palette, scanUniforms, disposables) {
+  const emblemPivot = new THREE.Group();
+  const cageGroup = new THREE.Group();
+
+  const reg = (item) => {
+    disposables.push(item);
+    return item;
   };
 
-  if (surfaceId === 'usb') {
-    // Dispositivo móvil esculpido con anillos de inspección coaxiales
-    const phoneBody = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(1.16, 2.15, 0.14)),
-      obsidianMat,
-    );
-    phoneBody.rotation.z = -0.14;
-    phoneBody.rotation.x = 0.08;
-    phoneBody.castShadow = true;
-    group.add(phoneBody);
+  // Materiales arquitectónicos Negro · Blanco · Azul Rey con shader de revelación wireframe
+  const obsidianShieldMat = reg(
+    new THREE.MeshStandardMaterial({
+      color: 0x0b1220,
+      metalness: 0.86,
+      roughness: 0.17,
+      emissive: 0x07122a,
+      emissiveIntensity: 0.38,
+    }),
+  );
+  attachScanDiscardShader(obsidianShieldMat, scanUniforms, 0.28);
 
-    const screenBezel = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(1.04, 1.98, 0.15)),
-      deckMat,
-    );
-    screenBezel.rotation.copy(phoneBody.rotation);
-    group.add(screenBezel);
+  const titaniumGlyphMat = reg(
+    new THREE.MeshStandardMaterial({
+      color: 0xf8fafc,
+      metalness: 0.64,
+      roughness: 0.18,
+      emissive: palette.core,
+      emissiveIntensity: 0.16,
+    }),
+  );
+  attachScanDiscardShader(titaniumGlyphMat, scanUniforms, 0.22);
 
-    const sideFrame = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(1.2, 2.19, 0.09)),
-      brushedSteelMat,
-    );
-    sideFrame.rotation.copy(phoneBody.rotation);
-    group.add(sideFrame);
+  // 1. Escudo OMEGA mecanizado en obsidiana (biseñado fino sin apariencia cartoon)
+  const shieldGeo = reg(
+    new THREE.ExtrudeGeometry(createShieldShape(), {
+      depth: 0.056,
+      bevelEnabled: true,
+      bevelThickness: 0.014,
+      bevelSize: 0.012,
+      bevelSegments: 4,
+      curveSegments: 28,
+    }),
+  );
+  shieldGeo.translate(0, 0, -0.028);
+  const shieldMesh = new THREE.Mesh(shieldGeo, obsidianShieldMat);
+  shieldMesh.castShadow = true;
+  emblemPivot.add(shieldMesh);
 
-    const coreBeacon = new THREE.Mesh(
-      registerGeo(new THREE.OctahedronGeometry(0.28, 0)),
-      coreCrystalMat,
-    );
-    coreBeacon.position.set(0, 0.05, 0.16);
-    group.add(coreBeacon);
+  // Arista plateada ultrafina alrededor del bisel del escudo
+  const shieldEdgesGeo = reg(new THREE.EdgesGeometry(shieldGeo, 18));
+  const shieldRimMat = reg(
+    new THREE.LineBasicMaterial({
+      color: 0xe2e8f0,
+      transparent: true,
+      opacity: 0.44,
+    }),
+  );
+  emblemPivot.add(new THREE.LineSegments(shieldEdgesGeo, shieldRimMat));
 
-    const lockRing = new THREE.Mesh(
-      registerGeo(new THREE.TorusGeometry(1.52, 0.025, 20, 96)),
-      royalBevelMat,
-    );
-    lockRing.rotation.x = Math.PI * 0.42;
-    lockRing.rotation.y = 0.22;
-    group.add(lockRing);
-
-    const outerRing = new THREE.Mesh(
-      registerGeo(new THREE.TorusGeometry(1.78, 0.014, 16, 96)),
-      brushedSteelMat,
-    );
-    outerRing.rotation.x = Math.PI * 0.56;
-    outerRing.rotation.z = -0.25;
-    group.add(outerRing);
-
-    return { group, rotatingParts: [lockRing, outerRing, coreBeacon] };
+  // Cavidad óptica interior Azul Rey / verde / rojo en frente y reverso
+  const cavityLineMat = reg(
+    new THREE.LineBasicMaterial({
+      color: palette.bevel,
+      transparent: true,
+      opacity: 0.88,
+    }),
+  );
+  for (const zOff of [0.046, -0.046]) {
+    const cavGeo = reg(new THREE.BufferGeometry().setFromPoints(createInnerCavityPoints(zOff)));
+    emblemPivot.add(new THREE.LineLoop(cavGeo, cavityLineMat));
   }
 
-  if (surfaceId === 'link') {
-    // Dos compuertas prismáticas separadas por puente óptico pasivo
-    const leftGate = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(0.95, 1.65, 0.22)),
-      obsidianMat,
-    );
-    leftGate.position.set(-1.12, 0, 0.15);
-    leftGate.rotation.y = 0.36;
-    leftGate.castShadow = true;
-    group.add(leftGate);
+  // 2. Monograma Ω esculpido en titanio blanco frontal y reverso simétrico para giro 360°
+  const omegaGeo = reg(
+    new THREE.ExtrudeGeometry(createOmegaGlyphShape(), {
+      depth: 0.022,
+      bevelEnabled: true,
+      bevelThickness: 0.007,
+      bevelSize: 0.006,
+      bevelSegments: 3,
+      curveSegments: 28,
+    }),
+  );
+  const omegaFront = new THREE.Mesh(omegaGeo, titaniumGlyphMat);
+  omegaFront.position.z = 0.038;
+  omegaFront.castShadow = true;
+  emblemPivot.add(omegaFront);
 
-    const rightGate = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(0.95, 1.65, 0.22)),
-      obsidianMat,
-    );
-    rightGate.position.set(1.12, 0, -0.15);
-    rightGate.rotation.y = -0.36;
-    rightGate.castShadow = true;
-    group.add(rightGate);
+  const omegaBack = new THREE.Mesh(omegaGeo, titaniumGlyphMat);
+  omegaBack.position.z = -0.038;
+  omegaBack.rotation.y = Math.PI;
+  emblemPivot.add(omegaBack);
 
-    const leftTrim = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(0.99, 1.69, 0.16)),
-      brushedSteelMat,
-    );
-    leftTrim.position.copy(leftGate.position);
-    leftTrim.rotation.copy(leftGate.rotation);
-    group.add(leftTrim);
+  // 3. Jaula temporal CAD wireframe (malla completa + contorno limpio) que conduce el barrido futurista
+  const wireMat = reg(createWireCageMaterial(scanUniforms, palette.wire));
+  const shieldWireGeo = reg(new THREE.WireframeGeometry(shieldGeo));
+  const shieldWire = new THREE.LineSegments(shieldWireGeo, wireMat);
+  shieldWire.scale.setScalar(1.003);
+  cageGroup.add(shieldWire);
 
-    const rightTrim = new THREE.Mesh(
-      registerGeo(new THREE.BoxGeometry(0.99, 1.69, 0.16)),
-      brushedSteelMat,
-    );
-    rightTrim.position.copy(rightGate.position);
-    rightTrim.rotation.copy(rightGate.rotation);
-    group.add(rightTrim);
+  const omegaEdgesGeo = reg(new THREE.EdgesGeometry(omegaGeo, 16));
+  const omegaWireFront = new THREE.LineSegments(omegaEdgesGeo, wireMat);
+  omegaWireFront.position.z = 0.04;
+  cageGroup.add(omegaWireFront);
 
-    const gatewayRing = new THREE.Mesh(
-      registerGeo(new THREE.TorusGeometry(0.92, 0.032, 24, 96)),
-      royalBevelMat,
-    );
-    gatewayRing.rotation.y = Math.PI * 0.25;
-    group.add(gatewayRing);
+  emblemPivot.add(cageGroup);
 
-    const prismCore = new THREE.Mesh(
-      registerGeo(new THREE.IcosahedronGeometry(0.42, 0)),
-      coreCrystalMat,
-    );
-    prismCore.castShadow = true;
-    group.add(prismCore);
+  // 4. Instrumentación circular futurista tipo cronómetro alrededor del emblema (proporcionada sin tapar <h1> ni <360°>)
+  const dialGroup = new THREE.Group();
 
-    return { group, rotatingParts: [gatewayRing, prismCore] };
+  // Dial radial de 60 marcas de calibración
+  const tickPositions = [];
+  const tickColors = [];
+  for (let i = 0; i < 60; i += 1) {
+    const ang = (i / 60) * Math.PI * 2;
+    const isMajor = i % 5 === 0;
+    const rIn = isMajor ? 1.37 : 1.42;
+    const rOut = 1.48;
+    tickPositions.push(Math.cos(ang) * rIn, Math.sin(ang) * rIn, -0.06);
+    tickPositions.push(Math.cos(ang) * rOut, Math.sin(ang) * rOut, -0.06);
+    const v = isMajor ? 0.62 : 0.22;
+    const b = isMajor ? 0.88 : 0.34;
+    tickColors.push(v, v + 0.05, b, v, v + 0.05, b);
   }
+  const ticksGeo = reg(new THREE.BufferGeometry());
+  ticksGeo.setAttribute('position', new THREE.Float32BufferAttribute(tickPositions, 3));
+  ticksGeo.setAttribute('color', new THREE.Float32BufferAttribute(tickColors, 3));
+  const ticksMat = reg(
+    new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.72,
+    }),
+  );
+  const ticksObj = new THREE.LineSegments(ticksGeo, ticksMat);
+  dialGroup.add(ticksObj);
 
-  if (surfaceId === 'corpus') {
-    // Bóveda forense laminar STIX 2.1 con núcleo cristalino
-    const layers = [-0.52, -0.18, 0.18, 0.52];
-    const plateRadii = [1.35, 1.52, 1.52, 1.35];
-    const rotatingParts = [];
-
-    layers.forEach((yPos, idx) => {
-      const plate = new THREE.Mesh(
-        registerGeo(new THREE.CylinderGeometry(plateRadii[idx], plateRadii[idx] * 0.94, 0.11, 8)),
-        idx === 1 || idx === 2 ? deckMat : obsidianMat,
-      );
-      plate.position.y = yPos;
-      plate.castShadow = true;
-      group.add(plate);
-
-      const trim = new THREE.Mesh(
-        registerGeo(new THREE.TorusGeometry(plateRadii[idx] * 1.02, 0.015, 12, 8)),
-        idx === 1 ? royalBevelMat : brushedSteelMat,
-      );
-      trim.position.y = yPos;
-      trim.rotation.x = Math.PI / 2;
-      group.add(trim);
-    });
-
-    const jewel = new THREE.Mesh(
-      registerGeo(new THREE.OctahedronGeometry(0.56, 0)),
-      coreCrystalMat,
-    );
-    group.add(jewel);
-    rotatingParts.push(jewel);
-
-    const halo = new THREE.Mesh(
-      registerGeo(new THREE.TorusGeometry(1.88, 0.02, 18, 96)),
-      royalBevelMat,
-    );
-    halo.rotation.x = Math.PI * 0.44;
-    halo.rotation.y = -0.18;
-    group.add(halo);
-    rotatingParts.push(halo);
-
-    return { group, rotatingParts };
+  // Arco de retícula en cuatro cuadrantes finos (contra-rotación sutil)
+  const bracketPositions = [];
+  const rBr = 1.24;
+  for (let q = 0; q < 4; q += 1) {
+    const startA = q * (Math.PI / 2) + 0.26;
+    const endA = (q + 1) * (Math.PI / 2) - 0.26;
+    const steps = 14;
+    for (let s = 0; s < steps; s += 1) {
+      const a0 = THREE.MathUtils.lerp(startA, endA, s / steps);
+      const a1 = THREE.MathUtils.lerp(startA, endA, (s + 1) / steps);
+      bracketPositions.push(Math.cos(a0) * rBr, Math.sin(a0) * rBr, -0.04);
+      bracketPositions.push(Math.cos(a1) * rBr, Math.sin(a1) * rBr, -0.04);
+    }
   }
-
-  // 'windows': Estación local de precisión con anillo giroscópico Azul Rey
-  const chassisBase = new THREE.Mesh(
-    registerGeo(new THREE.BoxGeometry(2.55, 0.11, 1.72)),
-    obsidianMat,
+  const bracketGeo = reg(new THREE.BufferGeometry());
+  bracketGeo.setAttribute('position', new THREE.Float32BufferAttribute(bracketPositions, 3));
+  const bracketMat = reg(
+    new THREE.LineBasicMaterial({
+      color: 0xcbd5e1,
+      transparent: true,
+      opacity: 0.38,
+    }),
   );
-  chassisBase.position.set(0, -0.44, 0.18);
-  chassisBase.rotation.x = 0.08;
-  chassisBase.castShadow = true;
-  group.add(chassisBase);
+  const bracketObj = new THREE.LineSegments(bracketGeo, bracketMat);
+  dialGroup.add(bracketObj);
 
-  const chassisTrim = new THREE.Mesh(
-    registerGeo(new THREE.BoxGeometry(2.59, 0.06, 1.76)),
-    brushedSteelMat,
+  // Halo orbital fino Azul Rey reactivo al modo y superficie seleccionada
+  const gyroOrbitGroup = new THREE.Group();
+  gyroOrbitGroup.rotation.set(0.14, -0.2, 0);
+
+  const royalRingGeo = reg(new THREE.TorusGeometry(1.61, 0.0085, 16, 128));
+  const royalRingMat = reg(
+    new THREE.MeshStandardMaterial({
+      color: palette.bevel,
+      metalness: 0.25,
+      roughness: 0.2,
+      emissive: palette.bevelEmissive,
+      emissiveIntensity: 1.05,
+    }),
   );
-  chassisTrim.position.set(0, -0.46, 0.18);
-  chassisTrim.rotation.x = 0.08;
-  group.add(chassisTrim);
+  const royalRingMesh = new THREE.Mesh(royalRingGeo, royalRingMat);
+  gyroOrbitGroup.add(royalRingMesh);
 
-  const deckSurface = new THREE.Mesh(
-    registerGeo(new THREE.BoxGeometry(2.15, 0.02, 1.1)),
-    deckMat,
+  // Nodo trazador micro-satélite desplazándose por el halo
+  const satNodeGeo = reg(new THREE.OctahedronGeometry(0.036, 0));
+  const satNodeMat = reg(
+    new THREE.MeshBasicMaterial({
+      color: 0xf8fafc,
+    }),
   );
-  deckSurface.position.set(0, -0.37, 0.08);
-  deckSurface.rotation.x = 0.08;
-  group.add(deckSurface);
+  const satNode = new THREE.Mesh(satNodeGeo, satNodeMat);
+  satNode.position.set(1.61, 0, 0);
+  gyroOrbitGroup.add(satNode);
 
-  // Pantalla abierta inclinada en ángulo de estudio
-  const lidPivot = new THREE.Group();
-  lidPivot.position.set(0, -0.38, -0.66);
-  lidPivot.rotation.x = -0.24;
+  dialGroup.add(gyroOrbitGroup);
 
-  const lidBody = new THREE.Mesh(
-    registerGeo(new THREE.BoxGeometry(2.52, 1.54, 0.08)),
-    obsidianMat,
-  );
-  lidBody.position.set(0, 0.77, 0);
-  lidBody.castShadow = true;
-  lidPivot.add(lidBody);
-
-  const lidTrim = new THREE.Mesh(
-    registerGeo(new THREE.BoxGeometry(2.56, 1.58, 0.04)),
-    brushedSteelMat,
-  );
-  lidTrim.position.set(0, 0.77, -0.01);
-  lidPivot.add(lidTrim);
-
-  const hingeGlow = new THREE.Mesh(
-    registerGeo(new THREE.BoxGeometry(1.38, 0.055, 0.11)),
-    royalBevelMat,
-  );
-  hingeGlow.position.set(0, 0.03, 0.02);
-  lidPivot.add(hingeGlow);
-
-  const innerBeacon = new THREE.Mesh(
-    registerGeo(new THREE.IcosahedronGeometry(0.24, 0)),
-    coreCrystalMat,
-  );
-  innerBeacon.position.set(0, 0.78, 0.12);
-  lidPivot.add(innerBeacon);
-
-  group.add(lidPivot);
-
-  // Anillo orbital azul rey circundando el equipo sin obstruir lectura
-  const orbitalShield = new THREE.Mesh(
-    registerGeo(new THREE.TorusGeometry(1.94, 0.02, 18, 112)),
-    royalBevelMat,
-  );
-  orbitalShield.position.set(0, 0.16, 0);
-  orbitalShield.rotation.x = Math.PI * 0.47;
-  orbitalShield.rotation.y = 0.16;
-  group.add(orbitalShield);
-
-  return { group, rotatingParts: [innerBeacon, orbitalShield] };
+  return {
+    emblemPivot,
+    cageGroup,
+    dialGroup,
+    ticksObj,
+    bracketObj,
+    gyroOrbitGroup,
+    satNode,
+    shieldRimMat,
+    cavityLineMat,
+    titaniumGlyphMat,
+    royalRingMat,
+    wireMat,
+  };
 }
 
 function buildPerspectiveFloorGrid(disposables) {
@@ -296,8 +373,7 @@ function buildPerspectiveFloorGrid(disposables) {
 
   const pushFadeColor = (x, z, isAccentAxis) => {
     const radial = Math.hypot(x, z * 0.72);
-    // Suave atenúa alrededor del pedestal central (< 2.2) y hacia el horizonte (> 5.5..15)
-    const centerHole = THREE.MathUtils.smoothstep(radial, 1.8, 3.2);
+    const centerHole = THREE.MathUtils.smoothstep(radial, 1.6, 3.0);
     const farFade = 1 - THREE.MathUtils.smoothstep(radial, 5.2, 14.5);
     const intensity = centerHole * farFade;
     const baseR = isAccentAxis ? 0.14 : 0.09;
@@ -346,7 +422,6 @@ function buildAtmosphericMotes(disposables) {
   const colors = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i += 1) {
-    // Distribución determinista para evitar destellos bruscos al cambiar superficie
     const s1 = Math.sin(i * 12.9898) * 43758.5453;
     const s2 = Math.sin(i * 78.233) * 19341.123;
     const s3 = Math.sin(i * 39.425) * 65123.771;
@@ -392,13 +467,20 @@ export function SecurityCenterpiece3D({
   const hostRef = useRef(null);
   const canvasRef = useRef(null);
   const spinTargetRef = useRef(0);
+  const scanResetNonceRef = useRef(spinNonce);
   const lastSpinNonceRef = useRef(spinNonce);
+  const stateRef = useRef({ surfaceId, healthy, alert });
   const [webglUnavailable, setWebglUnavailable] = useState(false);
+
+  useEffect(() => {
+    stateRef.current = { surfaceId, healthy, alert };
+  }, [surfaceId, healthy, alert]);
 
   useEffect(() => {
     if (spinNonce !== lastSpinNonceRef.current) {
       lastSpinNonceRef.current = spinNonce;
       spinTargetRef.current += Math.PI * 2;
+      scanResetNonceRef.current = spinNonce;
     }
   }, [spinNonce]);
 
@@ -423,30 +505,51 @@ export function SecurityCenterpiece3D({
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
-    camera.position.set(0, 1.25, 9.6);
+    camera.position.set(0, 1.18, 10.2);
 
-    const palette = alert
+    const initialPalette = stateRef.current.alert
       ? SURFACE_COLORS.alert
-      : healthy
+      : stateRef.current.healthy
         ? SURFACE_COLORS.clean
         : SURFACE_COLORS.standby;
 
+    const scanUniforms = {
+      uScanOrigin: { value: new THREE.Vector3(-1.35, -1.1, 0.55) },
+      uScanRadius: { value: 0.9 },
+      uScanEnabled: { value: 1 },
+      uWireOpacity: { value: 0 },
+    };
+
     const disposables = [];
     const stageGroup = new THREE.Group();
-    const { group: artifactGroup, rotatingParts } = buildSurfaceMeshGroup(
-      surfaceId,
-      palette,
-      disposables,
-    );
-    artifactGroup.position.set(0, 0.22, 0);
-    artifactGroup.rotation.y = -0.34;
-    stageGroup.add(artifactGroup);
+    const crestCenterGroup = new THREE.Group();
+    crestCenterGroup.position.set(0, 0.08, 0);
+
+    const {
+      emblemPivot,
+      cageGroup,
+      dialGroup,
+      ticksObj,
+      bracketObj,
+      gyroOrbitGroup,
+      satNode,
+      shieldRimMat,
+      cavityLineMat,
+      titaniumGlyphMat,
+      royalRingMat,
+      wireMat,
+    } = buildOmegaCrestAssembly(initialPalette, scanUniforms, disposables);
+
+    emblemPivot.rotation.y = -0.14;
+    crestCenterGroup.add(dialGroup);
+    crestCenterGroup.add(emblemPivot);
+    stageGroup.add(crestCenterGroup);
 
     const perspectiveGrid = buildPerspectiveFloorGrid(disposables);
     stageGroup.add(perspectiveGrid);
@@ -454,22 +557,54 @@ export function SecurityCenterpiece3D({
     const motes = buildAtmosphericMotes(disposables);
     stageGroup.add(motes);
 
-    // Anillo sutil del pedestal sobre el piso del estudio
-    const floorRingGeo = new THREE.RingGeometry(2.05, 2.1, 96);
+    // Anillos de pedestal + cruz de calibración sobre el piso en perspectiva
+    const floorRingGeo = new THREE.RingGeometry(1.76, 1.8, 96);
     const floorRingMat = new THREE.MeshBasicMaterial({
-      color: palette.ring,
+      color: initialPalette.ring,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.24,
       side: THREE.DoubleSide,
     });
-    disposables.push(floorRingGeo, floorRingMat);
+    const innerFloorGeo = new THREE.RingGeometry(1.24, 1.26, 96);
+    const innerFloorMat = new THREE.MeshBasicMaterial({
+      color: 0x94a3b8,
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide,
+    });
+    const crossGeo = new THREE.BufferGeometry().setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [
+          -2.1, -1.245, 0, -1.68, -1.245, 0,
+          1.68, -1.245, 0, 2.1, -1.245, 0,
+          0, -1.245, -2.1, 0, -1.245, -1.68,
+          0, -1.245, 1.68, 0, -1.245, 2.1,
+        ],
+        3,
+      ),
+    );
+    const crossMat = new THREE.LineBasicMaterial({
+      color: 0x94a3b8,
+      transparent: true,
+      opacity: 0.3,
+    });
+    disposables.push(floorRingGeo, floorRingMat, innerFloorGeo, innerFloorMat, crossGeo, crossMat);
+
     const floorRing = new THREE.Mesh(floorRingGeo, floorRingMat);
     floorRing.position.set(0, -1.24, 0);
     floorRing.rotation.x = -Math.PI / 2;
     stageGroup.add(floorRing);
 
+    const innerFloor = new THREE.Mesh(innerFloorGeo, innerFloorMat);
+    innerFloor.position.set(0, -1.24, 0);
+    innerFloor.rotation.x = -Math.PI / 2;
+    stageGroup.add(innerFloor);
+
+    stageGroup.add(new THREE.LineSegments(crossGeo, crossMat));
+
     const shadowPlaneGeo = new THREE.PlaneGeometry(8, 8);
-    const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.42 });
+    const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.36 });
     disposables.push(shadowPlaneGeo, shadowPlaneMat);
     const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
     shadowPlane.position.set(0, -1.25, 0);
@@ -479,24 +614,24 @@ export function SecurityCenterpiece3D({
 
     scene.add(stageGroup);
 
-    // Iluminación de estudio: luz cenital fría, relleno suave y borde Azul Rey
-    const hemi = new THREE.HemisphereLight(0xe2e8f0, 0x050a14, 0.92);
+    // Iluminación de estudio limpia para resaltar biseles del escudo y titanio Ω
+    const hemi = new THREE.HemisphereLight(0xe2e8f0, 0x050a14, 0.95);
     scene.add(hemi);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.75);
-    keyLight.position.set(2.8, 4.8, 5.2);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.9);
+    keyLight.position.set(2.6, 4.6, 5.4);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(1024, 1024);
     keyLight.shadow.camera.near = 1;
     keyLight.shadow.camera.far = 16;
     scene.add(keyLight);
 
-    const royalRim = new THREE.DirectionalLight(palette.rim, 2.45);
-    royalRim.position.set(-4.6, 1.8, -3.2);
+    const royalRim = new THREE.DirectionalLight(initialPalette.rim, 2.6);
+    royalRim.position.set(-4.4, 1.9, -2.6);
     scene.add(royalRim);
 
-    const fillFront = new THREE.DirectionalLight(0x93c5fd, 1.15);
-    fillFront.position.set(0.6, 0.4, 4.8);
+    const fillFront = new THREE.DirectionalLight(0x93c5fd, 1.25);
+    fillFront.position.set(0.4, 0.3, 4.8);
     scene.add(fillFront);
 
     const reduceMotion =
@@ -522,7 +657,7 @@ export function SecurityCenterpiece3D({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(viewport.width, viewport.height, false);
       camera.aspect = viewport.width / viewport.height;
-      camera.position.z = viewport.width < 1100 ? 10.6 : 9.6;
+      camera.position.z = viewport.width < 640 ? 14.2 : viewport.width < 1100 ? 11.2 : 10.2;
       camera.updateProjectionMatrix();
     };
 
@@ -543,7 +678,11 @@ export function SecurityCenterpiece3D({
     };
 
     const onPointerDown = (ev) => {
-      if (ev.target instanceof Element && ev.target.closest('button, a, input, select, form, header, footer, [role="listbox"]')) {
+      if (ev.pointerType === 'touch') return;
+      if (
+        ev.target instanceof Element &&
+        ev.target.closest('button, a, input, select, form, header, footer, [role="listbox"]')
+      ) {
         return;
       }
       dragActive = true;
@@ -568,6 +707,21 @@ export function SecurityCenterpiece3D({
     let rafId = 0;
     let lastTs = performance.now();
     const startTs = lastTs;
+    let scanStartTs = startTs;
+    let appliedScanNonce = scanResetNonceRef.current;
+    const SCAN_DURATION = 1.25;
+    const SCAN_MAX_RADIUS = 4.6;
+
+    const targetBevelColor = new THREE.Color(initialPalette.bevel);
+    const targetEmissiveColor = new THREE.Color(initialPalette.bevelEmissive);
+    const targetCoreColor = new THREE.Color(initialPalette.core);
+    const targetRingColor = new THREE.Color(initialPalette.ring);
+    const targetWireColor = new THREE.Color(initialPalette.wire);
+
+    const smoothstep = (edge0, edge1, x) => {
+      const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+      return t * t * (3 - 2 * t);
+    };
 
     const renderFrame = (now) => {
       const rawDt = (now - lastTs) / 1000;
@@ -575,13 +729,68 @@ export function SecurityCenterpiece3D({
       lastTs = now;
       const elapsed = (now - startTs) / 1000;
 
+      const { surfaceId: curSurface, healthy: curHealthy, alert: curAlert } = stateRef.current;
+      const curPalette = curAlert
+        ? SURFACE_COLORS.alert
+        : curHealthy
+          ? SURFACE_COLORS.clean
+          : SURFACE_COLORS.standby;
+      targetBevelColor.setHex(curPalette.bevel);
+      targetEmissiveColor.setHex(curPalette.bevelEmissive);
+      targetCoreColor.setHex(curPalette.core);
+      targetRingColor.setHex(curPalette.ring);
+      targetWireColor.setHex(curPalette.wire);
+
+      const colorLerp = Math.min(1, dt * 6);
+      cavityLineMat.color.lerp(targetBevelColor, colorLerp);
+      royalRingMat.color.lerp(targetBevelColor, colorLerp);
+      royalRingMat.emissive.lerp(targetEmissiveColor, colorLerp);
+      titaniumGlyphMat.emissive.lerp(targetCoreColor, colorLerp);
+      floorRingMat.color.lerp(targetRingColor, colorLerp);
+      wireMat.uniforms.uWireColor.value.lerp(targetWireColor, colorLerp);
+
+      const targetOrient = SURFACE_RING_ORIENTATION[curSurface] || SURFACE_RING_ORIENTATION.windows;
+      gyroOrbitGroup.rotation.x += (targetOrient.tiltX - gyroOrbitGroup.rotation.x) * Math.min(1, dt * 4);
+      gyroOrbitGroup.rotation.y += (targetOrient.tiltY - gyroOrbitGroup.rotation.y) * Math.min(1, dt * 4);
+
+      if (appliedScanNonce !== scanResetNonceRef.current) {
+        appliedScanNonce = scanResetNonceRef.current;
+        scanStartTs = now;
+      }
+
+      const lookY = viewport.width < 640 ? -1.18 : -0.3;
+
       if (reduceMotion) {
-        camera.position.x = -0.35;
-        camera.position.y = 1.25;
-        camera.lookAt(-0.14, -0.42, 0);
-        artifactGroup.rotation.y = -0.34 + dragRotationOffset + spinTargetRef.current;
+        scanUniforms.uScanEnabled.value = 0;
+        cageGroup.visible = false;
+        shieldRimMat.opacity = 0.44;
+        cavityLineMat.opacity = 0.88;
+        camera.position.x = -0.2;
+        camera.position.y = 1.18;
+        camera.lookAt(-0.08, lookY, 0);
+        emblemPivot.rotation.y = -0.14 + dragRotationOffset + spinTargetRef.current;
         renderer.render(scene, camera);
         return;
+      }
+
+      // Barrido futurista con wireframe completo sincronizado (sin cortes huecos en el borde)
+      const scanElapsed = (now - scanStartTs) / 1000;
+      const e = Math.min(1, scanElapsed / SCAN_DURATION);
+      if (e < 1) {
+        const eased = 0.28 + 0.72 * (1 - Math.pow(1 - e, 1.35));
+        scanUniforms.uScanEnabled.value = 1;
+        scanUniforms.uScanRadius.value = eased * SCAN_MAX_RADIUS;
+        scanUniforms.uWireOpacity.value = Math.min(1, e / 0.08 + 0.35) * (1 - smoothstep(0.68, 1, e));
+        const rimReveal = smoothstep(0.45, 0.98, e);
+        shieldRimMat.opacity = 0.44 * rimReveal;
+        cavityLineMat.opacity = 0.88 * rimReveal;
+        cageGroup.visible = true;
+      } else {
+        scanUniforms.uScanEnabled.value = 0;
+        scanUniforms.uWireOpacity.value = 0;
+        shieldRimMat.opacity = 0.44;
+        cavityLineMat.opacity = 0.88;
+        cageGroup.visible = false;
       }
 
       const alpha = 1 - Math.pow(1 - 0.055, dt * 60);
@@ -589,23 +798,26 @@ export function SecurityCenterpiece3D({
       smoothPointer.y += (pointerTarget.y - smoothPointer.y) * alpha;
       spinCurrent += (spinTargetRef.current - spinCurrent) * 0.09;
 
-      // Paralaje suave de cámara y objeto separado
-      camera.position.x = -smoothPointer.x * 0.55;
-      camera.position.y = 1.25 + smoothPointer.y * 0.24;
-      camera.lookAt(camera.position.x * 0.35, -0.42 + (camera.position.y - 1.25) * 0.35, 0);
+      // Paralaje suave de cámara y escudo OMEGA
+      camera.position.x = -smoothPointer.x * 0.48;
+      camera.position.y = 1.18 + smoothPointer.y * 0.2;
+      camera.lookAt(camera.position.x * 0.3, lookY + (camera.position.y - 1.18) * 0.32, 0);
 
-      artifactGroup.rotation.y =
-        -0.34 + Math.sin(elapsed * 0.35) * 0.07 + smoothPointer.x * 0.14 + dragRotationOffset + spinCurrent;
-      artifactGroup.rotation.x = smoothPointer.y * 0.04;
-      artifactGroup.position.y = 0.22 + Math.sin(elapsed * 1.1) * 0.045;
+      emblemPivot.rotation.y =
+        -0.14 + Math.sin(elapsed * 0.42) * 0.14 + smoothPointer.x * 0.18 + dragRotationOffset + spinCurrent;
+      emblemPivot.rotation.x = smoothPointer.y * 0.05;
+      crestCenterGroup.position.y = 0.08 + Math.sin(elapsed * 1.15) * 0.038;
 
-      // Deriva sutil del piso reticulado y partículas de profundidad
-      perspectiveGrid.position.z = (elapsed * 0.22) % 1.4;
+      // Anillos de calibración tipo cronómetro de precisión
+      ticksObj.rotation.z = elapsed * 0.055;
+      bracketObj.rotation.z = -elapsed * 0.095;
+      gyroOrbitGroup.rotation.z += dt * 0.28;
+      const satAngle = elapsed * 0.65;
+      satNode.position.set(Math.cos(satAngle) * 1.61, Math.sin(satAngle) * 1.61, 0);
+
+      // Deriva continua del piso reticulado y micro-partículas
+      perspectiveGrid.position.z = (elapsed * 0.2) % 1.4;
       motes.rotation.y = elapsed * 0.014;
-
-      rotatingParts.forEach((part, idx) => {
-        part.rotation.z = elapsed * (idx % 2 === 0 ? 0.35 : -0.22);
-      });
 
       renderer.render(scene, camera);
       if (!document.hidden) {
@@ -638,22 +850,47 @@ export function SecurityCenterpiece3D({
       disposables.forEach((item) => item?.dispose?.());
       renderer.dispose();
     };
-  }, [surfaceId, healthy, alert]);
+  }, []);
 
   if (webglUnavailable) {
     return (
       <div className="relative w-full h-full flex items-center justify-center">
         <svg
-          width="260"
-          height="170"
-          viewBox="0 0 260 170"
+          width="220"
+          height="220"
+          viewBox="0 0 220 220"
           aria-hidden="true"
           className="drop-shadow-[0_24px_40px_rgba(29,78,216,0.28)]"
         >
-          <ellipse cx="130" cy="144" rx="92" ry="14" fill="rgba(37,99,235,0.16)" stroke="rgba(59,130,246,0.4)" />
-          <rect x="64" y="34" width="132" height="86" rx="14" fill="#0B1220" stroke="#3B82F6" strokeWidth="1.5" />
-          <circle cx="130" cy="77" r="22" fill="rgba(37,99,235,0.16)" stroke={alert ? '#EF4444' : healthy ? '#22C55E' : '#3B82F6'} strokeWidth="2" />
-          <circle cx="130" cy="77" r="6" fill={alert ? '#EF4444' : healthy ? '#22C55E' : '#3B82F6'} />
+          <circle
+            cx="110"
+            cy="110"
+            r="88"
+            fill="none"
+            stroke="rgba(148,163,184,0.28)"
+            strokeWidth="1"
+            strokeDasharray="3 6"
+          />
+          <circle
+            cx="110"
+            cy="110"
+            r="72"
+            fill="none"
+            stroke={alert ? '#EF4444' : healthy ? '#22C55E' : '#2563EB'}
+            strokeWidth="1.25"
+          />
+          <g transform="translate(70, 70)">
+            <path
+              d="M40 5.8C45.8 9.6 54.2 12.1 65.5 13.6V37.2C65.5 53.8 54.6 66.5 40 73.6C25.4 66.5 14.5 53.8 14.5 37.2V13.6C25.8 12.1 34.2 9.6 40 5.8Z"
+              fill="#0B1220"
+              stroke="rgba(226,232,240,0.45)"
+              strokeWidth="1.25"
+            />
+            <path
+              d="M34.2 54.2H23.6V47.2H29.4C26.1 43.9 24.2 39.4 24.2 34.3C24.2 25.1 31.1 18.2 40 18.2C48.9 18.2 55.8 25.1 55.8 34.3C55.8 39.4 53.9 43.9 50.6 47.2H56.4V54.2H45.8V46.8C48.7 44.1 50.3 39.9 50.3 34.7C50.3 28 45.8 23.2 40 23.2C34.2 23.2 29.7 28 29.7 34.7C29.7 39.9 31.3 44.1 34.2 46.8V54.2Z"
+              fill="#F8FAFC"
+            />
+          </g>
         </svg>
       </div>
     );
@@ -663,9 +900,9 @@ export function SecurityCenterpiece3D({
     <div
       ref={hostRef}
       aria-hidden="true"
-      className="relative w-full h-full cursor-grab active:cursor-grabbing select-none"
+      className="relative w-full h-full touch-pan-y cursor-grab active:cursor-grabbing select-none"
     >
-      <canvas ref={canvasRef} className="block w-full h-full" />
+      <canvas ref={canvasRef} className="block w-full h-full touch-pan-y" />
     </div>
   );
 }

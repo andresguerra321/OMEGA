@@ -15,7 +15,7 @@ related_targets:
 
 ## Direction contract
 
-THESIS: Cabina espacial arquitectónica en paleta estricta Negro (`#05070B`) · Blanco (`#F8FAFC`) · Azul Rey (`#2563EB`), con barra superior segmentada matemáticamente centrada al `50%` en todas las vistas (`md:left-1/2 md:-translate-x-1/2`), escenario WebGL de piso en perspectiva con retícula y motas tenues (`SecurityCenterpiece3D`), rieles laterales técnicos sin gradientes exagerados ni eyecandy difuso, y tipografía autohospedada (`Sora` + `IBM Plex Sans` + `IBM Plex Mono`).
+THESIS: Cabina espacial arquitectónica en paleta estricta Negro (`#05070B`) · Blanco (`#F8FAFC`) · Azul Rey (`#2563EB`), con barra superior segmentada matemáticamente centrada al `50%` en todas las vistas (`md:left-1/2 md:-translate-x-1/2`), emblema oficial OMEGA (`Ω`) esculpido en titanio y vidrio obsidiana rodeado de retícula cronométrica y barrido wireframe futurista (`glass-dark-mode-clock` × `build-wireframe-scan-reveal`), escenario WebGL de piso en perspectiva con motas tenues (`SecurityCenterpiece3D`), rieles laterales técnicos y tipografía autohospedada (`Sora` + `IBM Plex Sans` + `IBM Plex Mono`).
 
 OWN-WORLD: Cabina unificada (`<section aria-label="Cabina de postura OMEGA">`, `.omega-studio-bg`) con haz de luz en ángulo Azul Rey y suelo reflejado; selector superior segmentado con ítem activo ensanchado y barra azul rey; título centrado con selector desplegable entre las cuatro superficies (`PC Windows`, `Celulares Android & iOS`, `Escudo de Enlaces`, `Base Forense STIX 2.1`); escultura 3D reactiva al ratón (`add-mouse-driven-orbit`) sobre arco `< 360° >` punteado; tres tarjetas inferiores de vidrio oscuro (`.omega-glass-card`) con acciones directas y cero saturación visual.
 
