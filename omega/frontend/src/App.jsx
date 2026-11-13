@@ -11,6 +11,8 @@ import {
   Download,
   Trash2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   BookOpen,
   Gauge,
   Sparkles,
@@ -19,11 +21,14 @@ import {
   fetchApiHealth,
   fetchSystemGovernance,
   sendChatQuery,
+  analyzePcLiveSnapshot,
+  syncStixFeeds,
 } from './lib/api';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaLogo } from './components/OmegaLogo';
-import { DockBar } from './components/DockBar';
-import { CommandCenterPanel } from './components/CommandCenterPanel';
+import { SpatialNavPill } from './components/SpatialNavPill';
+import { TelemetryMapStage } from './components/TelemetryMapStage';
+import { OverviewWarmInspector } from './components/OverviewWarmInspector';
 import { CopilotDrawer } from './components/CopilotDrawer';
 import { ChatWorkspace } from './components/ChatWorkspace';
 import { CampaignsPanel } from './components/CampaignsPanel';
@@ -173,16 +178,13 @@ export default function App() {
   const [deviceInitialTab, setDeviceInitialTab] = useState('android');
   const [deviceNavKey, setDeviceNavKey] = useState(0);
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
+  const [selectedNodeId, setSelectedNodeId] = useState('windows');
+  const [stageCollapsed, setStageCollapsed] = useState(false);
+  const [scanningPc, setScanningPc] = useState(false);
+  const [syncingStix, setSyncingStix] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [pinnedCopilotContext, setPinnedCopilotContext] = useState('');
   const [sessionsMenuOpen, setSessionsMenuOpen] = useState(false);
-  const [sessionActivity, setSessionActivity] = useState(() => [
-    {
-      id: 'init-ram',
-      label: 'Instrumentos locales iniciados en RAM (sin rastros en la nube)',
-      time: formatClockTime(),
-    },
-  ]);
   const [sessions, setSessions] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SESSIONS_STORAGE_KEY));
@@ -201,14 +203,6 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const textareaRef = useRef(null);
-
-  const logActivity = useCallback((label) => {
-    if (!label) return;
-    setSessionActivity((prev) => [
-      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label, time: formatClockTime() },
-      ...prev.slice(0, 14),
-    ]);
-  }, []);
 
   const refreshSystemTelemetry = useCallback(async () => {
     try {
@@ -270,6 +264,12 @@ export default function App() {
       clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.omegaDesktop?.setTitleBarTheme) {
+      void window.omegaDesktop.setTitleBarTheme(activeNav === 'inicio' ? 'light' : 'dark');
+    }
+  }, [activeNav]);
 
   useEffect(() => {
     const persistable = sessions.map((s) => ({
@@ -532,6 +532,9 @@ export default function App() {
       setDeviceInitialTab(opts.tab);
       setDeviceNavKey((k) => k + 1);
     }
+    if (opts?.url) {
+      setLinkJump({ url: opts.url, key: Date.now() });
+    }
     setSessionsMenuOpen(false);
     setActiveNav(navId);
   }
@@ -539,15 +542,46 @@ export default function App() {
   function handlePcAuditComplete(analysis) {
     setPcAudit(analysis);
     setPcScannedAt(formatClockTime());
-    const verdictTag = analysis?.triage?.diagnosis?.verdict_label || analysis?.triage?.diagnosis?.verdict_code || 'completado';
-    logActivity(`Escaneo PC: ${verdictTag}`);
+  }
+
+  async function handleRunPcScan() {
+    const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
+    if (scanningPc) return;
+    if (!bridge?.collectPcAuditSnapshot) {
+      handleNavigate('equipo', { tab: 'pc' });
+      return;
+    }
+    setScanningPc(true);
+    try {
+      const col = await bridge.collectPcAuditSnapshot();
+      if (col?.ok && col.snapshot) {
+        const analysis = await analyzePcLiveSnapshot(col.snapshot);
+        handlePcAuditComplete(analysis);
+      } else {
+        handleNavigate('equipo', { tab: 'pc' });
+      }
+    } catch {
+      handleNavigate('equipo', { tab: 'pc' });
+    } finally {
+      setScanningPc(false);
+    }
+  }
+
+  async function handleSyncStix() {
+    if (syncingStix) return;
+    setSyncingStix(true);
+    try {
+      await syncStixFeeds();
+      await refreshSystemTelemetry();
+    } catch {
+      // Silencioso en barra espacial: el nodo STIX refleja estado offline
+    } finally {
+      setSyncingStix(false);
+    }
   }
 
   function handleLinkVerified(res) {
     setLastLinkResult(res);
-    if (res?.normalized_url || res?.verdict) {
-      logActivity(`Enlace verificado (${res.verdict || res.risk_level || 'revisado'})`);
-    }
   }
 
   function handleOpenCopilot(opts = {}) {
@@ -562,7 +596,6 @@ export default function App() {
       handleSend(opts.prompt, 'Todas las fuentes', {
         forceNewSession: Boolean(opts.forceNewSession || !currentSessionId),
       });
-      logActivity(`Copiloto: ${opts.prompt.slice(0, 48)}`);
     }
   }
 
@@ -585,7 +618,6 @@ export default function App() {
       setIsCopilotOpen(true);
     }
     handleSend(cleanPrompt, 'Todas las fuentes', { forceNewSession: true });
-    logActivity(`Consulta copiloto: ${firstLine}`);
   }
 
   const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
@@ -596,314 +628,412 @@ export default function App() {
   const pcVerdict = pcRawVerdict ? String(pcRawVerdict).toLowerCase() : null;
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
   const drawerFailedPrompt = lastMsg?.isError ? lastMsg.retryQuery : '';
+  const isHome = activeNav === 'inicio';
+  const showLeftStage = !stageCollapsed;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#090A0D] omega-chassis-grid text-[#F4F6FA] select-none">
-      <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
-
-      {/* Barra Superior de Ventana Nativa (48px) */}
-      <header
-        className={`omega-titlebar relative z-20 min-h-[48px] h-[48px] shrink-0 px-4 sm:px-6 flex items-center justify-between gap-3 ${
-          isDesktop
-            ? 'pr-40 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
-            : ''
-        }`}
-      >
-        {/* Identidad OMEGA + módulo actual */}
-        <div className="min-w-0 flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => handleNavigate('inicio')}
-            className="titlebar-no-drag inline-flex items-center gap-2 rounded-[9px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
-            title="Ir al Centro de Protección"
-          >
-            <OmegaLogo size={24} isThinking={loadingChat} />
-            <span className="text-[13px] font-semibold tracking-[0.13em] text-[#F4F6FA]">
-              OMEGA
-            </span>
-          </button>
-
-          <span className="text-white/25 text-[13px]">/</span>
-          <span className="text-[13px] font-medium text-[#D6DAE2] truncate">
-            {activeNavItem.label}
-          </span>
-        </div>
-
-        {/* Controles instrumentales de ventana */}
-        <div className="titlebar-no-drag flex items-center gap-2 shrink-0">
-          {activeNav === 'preguntar' && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setSessionsMenuOpen((v) => !v)}
-                className="h-8 max-w-[190px] px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[12px] text-[#E4E8F0] transition-colors cursor-pointer"
-              >
-                <MessageSquare className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
-                <span className="truncate">
-                  {activeSession?.title || 'Nueva consulta'}
-                </span>
-                <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
-              </button>
-
-              {sessionsMenuOpen && (
-                <div className="apple-popover absolute right-0 mt-2 w-[300px] rounded-[13px] p-1.5 z-50 space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSessionsMenuOpen(false);
-                      startNewInvestigation();
-                    }}
-                    className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Nueva consulta limpia</span>
-                  </button>
-
-                  <div className="h-px bg-white/[0.07] my-1" />
-
-                  <div className="max-h-[240px] overflow-y-auto space-y-0.5">
-                    {sessions.map((sess) => {
-                      const selected = sess.id === currentSessionId;
-                      return (
-                        <div
-                          key={sess.id}
-                          className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
-                            selected
-                              ? 'bg-white/[0.08] text-[#F4F6FA]'
-                              : 'text-[#C4CAD4] hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCurrentSessionId(sess.id);
-                              setSelectedCitation(null);
-                              setSessionsMenuOpen(false);
-                            }}
-                            className="flex-1 min-w-0 text-left truncate cursor-pointer"
-                          >
-                            <span className="block truncate font-medium">{sess.title}</span>
-                            <span className="font-tech text-[10.5px] text-[#9097A5]">
-                              {formatRelativeTime(sess.updatedAt)}
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => deleteSession(e, sess.id)}
-                            title="Eliminar conversación"
-                            aria-label="Eliminar conversación"
-                            className="p-1 rounded-[6px] text-[#9097A5] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeNav === 'preguntar' && messages.length > 0 && activeConversationCitations.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setIsSourcesPanelOpen((v) => !v)}
-              className={`h-8 px-2.5 rounded-[8px] border flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
-                isSourcesPanelOpen
-                  ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
-                  : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
-              }`}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Fuentes ({activeConversationCitations.length})</span>
-            </button>
-          )}
-
-          {activeNav === 'preguntar' && messages.length > 0 && (
-            <button
-              type="button"
-              onClick={handleExportSession}
-              className="h-8 px-2.5 rounded-[8px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[12px] font-medium text-[#F4F6FA] transition-colors cursor-pointer"
-            >
-              <Download className="h-3.5 w-3.5 text-[#9BA2B0]" />
-              <span className="hidden sm:inline">Exportar</span>
-            </button>
-          )}
-
-          {/* Indicador de motor local en vivo */}
-          <div
-            className="hidden lg:inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-2.5 h-8 text-[11.5px] text-[#C4CAD4]"
-            title={apiOnline ? 'Motor local CTI activo' : 'Motor local no responde'}
-          >
-            <span
-              aria-hidden="true"
-              className={`h-1.5 w-1.5 rounded-full ${
-                apiOnline ? 'bg-[#30D158]' : 'bg-[#FF9F0A]'
-              }`}
-            />
-            <span className="font-tech">
-              {apiOnline ? `${reportsCount} rep` : 'Sin API'}
-            </span>
-          </div>
-
-          {/* Selector global Simple / Técnico */}
-          <div
-            role="group"
-            aria-label="Nivel de detalle"
-            className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
-          >
-            <button
-              type="button"
-              onClick={() => setTechnicalMode(false)}
-              className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
-                !technicalMode
-                  ? 'apple-segmented-active'
-                  : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
-              }`}
-            >
-              Simple
-            </button>
-            <button
-              type="button"
-              onClick={() => setTechnicalMode(true)}
-              className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
-                technicalMode
-                  ? 'apple-segmented-active'
-                  : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
-              }`}
-            >
-              Técnico
-            </button>
-          </div>
-
-          {/* Disparador del Copiloto deslizante */}
-          <button
-            type="button"
-            onClick={() => setIsCopilotOpen((v) => !v)}
-            aria-label="Abrir o cerrar copiloto lateral"
-            title="Copiloto deslizable (Ctrl+J)"
-            className={`h-8 px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
-              isCopilotOpen
-                ? 'border-[#5E9BFF]/55 bg-[#2F6FED]/20 text-[#9EC1FF]'
-                : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
-            }`}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
-            <span className="hidden md:inline">Copiloto</span>
-          </button>
-
-          {/* Paleta rápida */}
-          <button
-            type="button"
-            onClick={() => {
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col md:flex-row bg-[#0E1317] text-[#F4F6FA] select-none">
+      {/* Panel Izquierdo: Lienzo Oscuro Topográfico / Rail Ambiental en Módulos */}
+      {showLeftStage && (
+        <div
+          className={`relative min-w-0 min-h-0 shrink-0 transition-[width,height] duration-300 ease-out ${
+            isHome
+              ? 'w-full h-[46%] md:h-full md:w-[56%] lg:w-[58%] xl:w-[60%]'
+              : 'hidden xl:flex xl:w-[27%] xl:max-w-[360px] h-full'
+          }`}
+        >
+          <TelemetryMapStage
+            activeNav={activeNav}
+            onSelectNav={(id) => handleNavigate(id)}
+            isCompactRail={!isHome}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={setSelectedNodeId}
+            pcAudit={pcAudit}
+            pcScannedAt={pcScannedAt}
+            usbStatus={usbStatus}
+            lastLinkResult={lastLinkResult}
+            govStats={govStats}
+            technicalMode={technicalMode}
+            apiOnline={apiOnline}
+            isLoadingChat={loadingChat}
+            scanningPc={scanningPc}
+            syncingStix={syncingStix}
+            onRunPcScan={handleRunPcScan}
+            onSyncStix={handleSyncStix}
+            onOpenCopilot={() => setIsCopilotOpen(true)}
+            onOpenCommandPalette={() => {
               setCommandOpen(true);
               setCommandQuery('');
             }}
-            aria-label="Abrir búsqueda rápida (⌘K)"
-            title="Saltar a módulo o acción (⌘K)"
-            className="h-8 px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-[11.5px] text-[#B4BAC6] hover:text-[#F4F6FA] transition-colors cursor-pointer"
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span className="font-tech hidden sm:inline">⌘K</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Lienzo Central Principal con reserva inferior para el Dock */}
-      <main className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden pb-[74px] select-text">
-        {activeNav === 'inicio' ? (
-          <CommandCenterPanel
-            isDesktop={isDesktop}
-            technicalMode={technicalMode}
-            apiOnline={apiOnline}
-            govStats={govStats}
-            usbStatus={usbStatus}
-            pcAudit={pcAudit}
-            pcScannedAt={pcScannedAt}
-            lastLinkResult={lastLinkResult}
-            sessionActivity={sessionActivity}
-            onPcAuditComplete={handlePcAuditComplete}
             onNavigate={handleNavigate}
-            onOpenCopilot={handleOpenCopilot}
-            onSyncComplete={refreshSystemTelemetry}
-            onVerifyLinkJump={(url) => {
-              setLinkJump({ url, key: Date.now() });
-              setActiveNav('enlace');
-            }}
-            onLinkVerified={handleLinkVerified}
-            onLogActivity={logActivity}
           />
-        ) : activeNav === 'preguntar' ? (
-          <ChatWorkspace
-            messages={messages}
-            loading={loadingChat}
-            sourceScope={sourceScope}
-            onChangeSourceScope={setSourceScope}
-            onSendMessage={handleSend}
-            onRetryFailedTurn={handleRetryFailedTurn}
-            chatContext={activeChatContext}
-            lastRewrittenQuery={activeSession?.lastRewrittenQuery || null}
-            onUpdateChatContext={handleUpdateChatContext}
-            onClearChatContext={handleClearChatContext}
-            activeCitation={selectedCitation}
-            onSelectCitation={handleSelectCitation}
-            isSourcesOpen={isSourcesPanelOpen}
-            onToggleSources={() => setIsSourcesPanelOpen((v) => !v)}
-            onCloseSources={() => setIsSourcesPanelOpen(false)}
-            allConversationCitations={activeConversationCitations}
-            hasHistory={sessions.length > 0}
-            onResumeLastSession={() => {
-              if (sessions.length > 0) {
-                setCurrentSessionId(sessions[0].id);
-                setSelectedCitation(null);
-              }
-            }}
-            textareaRef={textareaRef}
-          />
-        ) : activeNav === 'amenazas' ? (
-          <CampaignsPanel onAskInChat={askInChat} />
-        ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col">
-            {activeNav === 'equipo' && (
-              <MvtVerifierPanel
-                key={`mvt-${deviceNavKey}`}
-                onAskInChat={askInChat}
-                initialTab={deviceInitialTab}
-                preloadedAudit={pcAudit}
-                onAuditUpdate={handlePcAuditComplete}
-              />
-            )}
-            {activeNav === 'exposicion' && <OsintPanel onAskInChat={askInChat} />}
-            {activeNav === 'enlace' && (
-              <LinkVerifierPanel
-                onAskInChat={askInChat}
-                initialUrl={linkJump.url}
-                initialCheckKey={linkJump.key}
+        </div>
+      )}
+
+      {/* Hoja Curva Derecha: Piedra Cálida en Inicio · Obsidiana en Instrumentos */}
+      <div className="relative flex-1 min-w-0 min-h-0 flex">
+        {/* Lengüeta interactiva de unión sobre el borde curvo */}
+        <button
+          type="button"
+          onClick={() => setStageCollapsed((v) => !v)}
+          aria-label={stageCollapsed ? 'Mostrar mapa topográfico lateral' : 'Ocultar mapa topográfico lateral'}
+          title={stageCollapsed ? 'Expandir mapa espacial' : 'Contraer mapa y ampliar hoja'}
+          className={`hidden ${
+            isHome ? 'md:flex' : 'xl:flex'
+          } items-center justify-center absolute z-30 top-1/2 -translate-y-1/2 ${
+            showLeftStage ? '-left-3' : 'left-2'
+          } w-6 h-12 rounded-full border shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-all cursor-pointer ${
+            isHome
+              ? 'bg-[#FFFFFF] border-black/10 text-[#191C22] hover:scale-105'
+              : 'bg-[#1D222B] border-white/15 text-[#E4E8F0] hover:bg-[#272D38] hover:scale-105'
+          }`}
+        >
+          {stageCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" />
+          )}
+        </button>
+
+        <main
+          className={`relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text shadow-[-16px_0_48px_rgba(0,0,0,0.45)] ${
+            showLeftStage
+              ? isHome
+                ? 'rounded-t-[26px] md:rounded-t-none md:rounded-l-[28px]'
+                : 'xl:rounded-l-[28px]'
+              : ''
+          }`}
+        >
+          {isHome ? (
+            <>
+              {isDesktop && (
+                <div className="hidden md:block absolute top-0 left-0 right-0 h-10 z-20 titlebar-drag" />
+              )}
+              <OverviewWarmInspector
+                isDesktop={isDesktop}
+                selectedNodeId={selectedNodeId}
+                technicalMode={technicalMode}
+                onToggleTechnicalMode={setTechnicalMode}
+                apiOnline={apiOnline}
+                govStats={govStats}
+                usbStatus={usbStatus}
+                pcAudit={pcAudit}
+                pcScannedAt={pcScannedAt}
+                lastLinkResult={lastLinkResult}
+                scanningPc={scanningPc}
+                syncingStix={syncingStix}
+                onRunPcScan={handleRunPcScan}
+                onSyncStix={handleSyncStix}
+                onNavigate={handleNavigate}
+                onOpenCopilot={handleOpenCopilot}
+                onOpenCommandPalette={() => {
+                  setCommandOpen(true);
+                  setCommandQuery('');
+                }}
                 onLinkVerified={handleLinkVerified}
               />
-            )}
-          </div>
-        ) : (
-          <SettingsPanel
-            topK={topK}
-            onChangeTopK={setTopK}
-            sourceScope={sourceScope}
-            onChangeSourceScope={setSourceScope}
-          />
-        )}
-      </main>
+            </>
+          ) : (
+            <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
+              <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
 
-      {/* Dock Táctil Flotante Inferior */}
-      <DockBar
-        activeNav={activeNav}
-        onSelectNav={(id) => handleNavigate(id)}
-        pcVerdict={pcVerdict}
-        usbConnected={usbConnected}
-        apiOnline={apiOnline}
-        isLoadingChat={loadingChat}
-      />
+              {/* Barra Instrumental Compacta sobre la Hoja Obsidiana */}
+              <header
+                className={`relative z-20 min-h-[52px] h-[52px] shrink-0 px-4 sm:px-6 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
+                  isDesktop
+                    ? 'pr-40 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
+                    : ''
+                }`}
+              >
+                <div className="min-w-0 flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate('inicio')}
+                    className={`${
+                      showLeftStage ? 'xl:hidden ' : ''
+                    }titlebar-no-drag inline-flex items-center gap-1.5 rounded-[9px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer`}
+                    title="Volver a Inicio"
+                  >
+                    <OmegaLogo size={20} isThinking={loadingChat} />
+                    <span className="hidden sm:inline text-[12.5px] font-semibold tracking-[0.12em] text-[#F4F6FA]">
+                      OMEGA
+                    </span>
+                  </button>
+
+                  <span
+                    className={`${
+                      showLeftStage ? 'xl:hidden ' : ''
+                    }hidden sm:inline text-white/25 text-[12px]`}
+                  >
+                    /
+                  </span>
+                  <span className="text-[13px] font-medium text-[#E4E8F0] truncate max-w-[115px] xl:max-w-none">
+                    {activeNavItem.label}
+                  </span>
+                </div>
+
+                {/* Cápsula circular flotante siempre accesible en vistas especializadas */}
+                <div className="titlebar-no-drag hidden md:flex items-center justify-center shrink-0">
+                  <SpatialNavPill
+                    compact
+                    activeNav={activeNav}
+                    onSelectNav={(id) => handleNavigate(id)}
+                    pcVerdict={pcVerdict}
+                    usbConnected={usbConnected}
+                    apiOnline={apiOnline}
+                    isLoadingChat={loadingChat}
+                  />
+                </div>
+
+                {/* Controles contextuales del instrumento */}
+                <div className="titlebar-no-drag flex items-center gap-1.5 shrink-0">
+                  {activeNav === 'preguntar' && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setSessionsMenuOpen((v) => !v)}
+                        className="h-8 max-w-[125px] xl:max-w-[180px] px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[12px] text-[#E4E8F0] transition-colors cursor-pointer"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
+                        <span className="truncate">
+                          {activeSession?.title || 'Nueva consulta'}
+                        </span>
+                        <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+                      </button>
+
+                      {sessionsMenuOpen && (
+                        <div className="apple-popover absolute right-0 mt-2 w-[300px] rounded-[13px] p-1.5 z-50 space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSessionsMenuOpen(false);
+                              startNewInvestigation();
+                            }}
+                            className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Nueva consulta limpia</span>
+                          </button>
+
+                          <div className="h-px bg-white/[0.07] my-1" />
+
+                          <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                            {sessions.map((sess) => {
+                              const selected = sess.id === currentSessionId;
+                              return (
+                                <div
+                                  key={sess.id}
+                                  className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
+                                    selected
+                                      ? 'bg-white/[0.08] text-[#F4F6FA]'
+                                      : 'text-[#C4CAD4] hover:bg-white/[0.05]'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCurrentSessionId(sess.id);
+                                      setSelectedCitation(null);
+                                      setSessionsMenuOpen(false);
+                                    }}
+                                    className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                                  >
+                                    <span className="block truncate font-medium">{sess.title}</span>
+                                    <span className="font-tech text-[10.5px] text-[#9097A5]">
+                                      {formatRelativeTime(sess.updatedAt)}
+                                    </span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => deleteSession(e, sess.id)}
+                                    title="Eliminar conversación"
+                                    aria-label="Eliminar conversación"
+                                    className="p-1 rounded-[6px] text-[#9097A5] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeNav === 'preguntar' && messages.length > 0 && activeConversationCitations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSourcesPanelOpen((v) => !v)}
+                      title={`Fuentes (${activeConversationCitations.length})`}
+                      className={`h-8 px-2 rounded-[8px] border flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                        isSourcesPanelOpen
+                          ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                          : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <BookOpen className="h-3.5 w-3.5" />
+                      <span className="hidden xl:inline">Fuentes ({activeConversationCitations.length})</span>
+                    </button>
+                  )}
+
+                  {activeNav === 'preguntar' && messages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleExportSession}
+                      title="Exportar investigación"
+                      aria-label="Exportar investigación"
+                      className="h-8 px-2 rounded-[8px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[12px] font-medium text-[#F4F6FA] transition-colors cursor-pointer"
+                    >
+                      <Download className="h-3.5 w-3.5 text-[#9BA2B0]" />
+                      <span className="hidden xl:inline">Exportar</span>
+                    </button>
+                  )}
+
+                  {/* Selector global Simple / Técnico */}
+                  <div
+                    role="group"
+                    aria-label="Nivel de detalle"
+                    className={`apple-segmented ${
+                      activeNav === 'preguntar' ? 'hidden xl:inline-flex' : 'hidden lg:inline-flex'
+                    } items-center rounded-[9px] p-0.5 h-8`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setTechnicalMode(false)}
+                      className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                        !technicalMode
+                          ? 'apple-segmented-active'
+                          : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                      }`}
+                    >
+                      Simple
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTechnicalMode(true)}
+                      className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                        technicalMode
+                          ? 'apple-segmented-active'
+                          : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                      }`}
+                    >
+                      Técnico
+                    </button>
+                  </div>
+
+                  {/* Disparador del Copiloto deslizante */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCopilotOpen((v) => !v)}
+                    aria-label="Abrir o cerrar copiloto lateral"
+                    title="Copiloto deslizable (Ctrl+J)"
+                    className={`h-8 px-2 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                      isCopilotOpen
+                        ? 'border-[#5E9BFF]/55 bg-[#2F6FED]/20 text-[#9EC1FF]'
+                        : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
+                    <span className="hidden xl:inline">Copiloto</span>
+                  </button>
+
+                  {/* Paleta rápida */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommandOpen(true);
+                      setCommandQuery('');
+                    }}
+                    aria-label="Abrir búsqueda rápida (⌘K)"
+                    title="Saltar a módulo o acción (⌘K)"
+                    className="h-8 px-2 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-[11.5px] text-[#B4BAC6] hover:text-[#F4F6FA] transition-colors cursor-pointer"
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                    <span className="font-tech hidden sm:inline">⌘K</span>
+                  </button>
+                </div>
+              </header>
+
+              {/* Navegación móvil en anchos estrechos */}
+              <div className="md:hidden shrink-0 border-b border-white/[0.06] py-1.5 flex justify-center">
+                <SpatialNavPill
+                  compact
+                  activeNav={activeNav}
+                  onSelectNav={(id) => handleNavigate(id)}
+                  pcVerdict={pcVerdict}
+                  usbConnected={usbConnected}
+                  apiOnline={apiOnline}
+                  isLoadingChat={loadingChat}
+                />
+              </div>
+
+              {/* Contenido del instrumento activo */}
+              <div className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
+                {activeNav === 'preguntar' ? (
+                  <ChatWorkspace
+                    messages={messages}
+                    loading={loadingChat}
+                    sourceScope={sourceScope}
+                    onChangeSourceScope={setSourceScope}
+                    onSendMessage={handleSend}
+                    onRetryFailedTurn={handleRetryFailedTurn}
+                    chatContext={activeChatContext}
+                    lastRewrittenQuery={activeSession?.lastRewrittenQuery || null}
+                    onUpdateChatContext={handleUpdateChatContext}
+                    onClearChatContext={handleClearChatContext}
+                    activeCitation={selectedCitation}
+                    onSelectCitation={handleSelectCitation}
+                    isSourcesOpen={isSourcesPanelOpen}
+                    onToggleSources={() => setIsSourcesPanelOpen((v) => !v)}
+                    onCloseSources={() => setIsSourcesPanelOpen(false)}
+                    allConversationCitations={activeConversationCitations}
+                    hasHistory={sessions.length > 0}
+                    onResumeLastSession={() => {
+                      if (sessions.length > 0) {
+                        setCurrentSessionId(sessions[0].id);
+                        setSelectedCitation(null);
+                      }
+                    }}
+                    textareaRef={textareaRef}
+                  />
+                ) : activeNav === 'amenazas' ? (
+                  <CampaignsPanel onAskInChat={askInChat} />
+                ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
+                  <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col">
+                    {activeNav === 'equipo' && (
+                      <MvtVerifierPanel
+                        key={`mvt-${deviceNavKey}`}
+                        onAskInChat={askInChat}
+                        initialTab={deviceInitialTab}
+                        preloadedAudit={pcAudit}
+                        onAuditUpdate={handlePcAuditComplete}
+                      />
+                    )}
+                    {activeNav === 'exposicion' && <OsintPanel onAskInChat={askInChat} />}
+                    {activeNav === 'enlace' && (
+                      <LinkVerifierPanel
+                        onAskInChat={askInChat}
+                        initialUrl={linkJump.url}
+                        initialCheckKey={linkJump.key}
+                        onLinkVerified={handleLinkVerified}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <SettingsPanel
+                    topK={topK}
+                    onChangeTopK={setTopK}
+                    sourceScope={sourceScope}
+                    onChangeSourceScope={setSourceScope}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Panel Deslizable No Destructivo de Copiloto */}
       <CopilotDrawer

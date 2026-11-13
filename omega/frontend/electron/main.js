@@ -1265,19 +1265,43 @@ ipcMain.handle('omega:pc-audit-collect', async () => {
   }
 });
 
+ipcMain.handle('omega:set-titlebar-theme', (event, theme = 'light') => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && typeof win.setTitleBarOverlay === 'function') {
+      if (theme === 'light') {
+        win.setTitleBarOverlay({
+          color: '#EAEAE6',
+          symbolColor: '#191C22',
+          height: 40,
+        });
+      } else {
+        win.setTitleBarOverlay({
+          color: '#101319',
+          symbolColor: '#A1A7B4',
+          height: 40,
+        });
+      }
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+});
+
 function createMainWindow() {
   const win = new BrowserWindow({
     width: 1380,
     height: 860,
-    minWidth: 1080,
-    minHeight: 700,
-    backgroundColor: '#08080A',
+    minWidth: 960,
+    minHeight: 680,
+    backgroundColor: '#0D1115',
     title: 'OMEGA — Cyber Threat Intelligence',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0C0E13',
-      symbolColor: '#A1A7B4',
-      height: 48,
+      color: '#EAEAE6',
+      symbolColor: '#191C22',
+      height: 40,
     },
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

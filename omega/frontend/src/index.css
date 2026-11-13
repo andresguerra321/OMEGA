@@ -415,6 +415,67 @@
   animation: omegaTextSettle 160ms var(--ease-apple) both;
 }
 
+/* =========================================================
+   ROAM SPATIAL HYBRID ARCHITECTURE (DARK STAGE + WARM STONE)
+   ========================================================= */
+.omega-stage-bg {
+  background-color: #0e1317;
+  background-image:
+    radial-gradient(64% 52% at 32% 38%, rgba(44, 58, 70, 0.34), transparent 72%),
+    radial-gradient(50% 45% at 74% 72%, rgba(28, 36, 44, 0.55), transparent 78%),
+    linear-gradient(155deg, #10151a 0%, #0b0f13 55%, #12181d 100%);
+}
+
+.roam-pill-nav {
+  background: linear-gradient(180deg, rgba(28, 34, 41, 0.78) 0%, rgba(16, 20, 26, 0.84) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 14px 36px rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+}
+
+.roam-stone-sheet {
+  background-color: #eaeae6;
+  color: #17191e;
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.42);
+}
+
+.roam-stone-sheet *:focus-visible {
+  outline: 2px solid #191c22;
+  outline-offset: 2px;
+}
+
+.roam-obsidian-sheet {
+  background: linear-gradient(180deg, #101319 0%, #0b0d12 100%);
+  color: #f4f6fa;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.52);
+}
+
+.roam-white-card {
+  background-color: #ffffff;
+  border: 1px solid rgba(20, 22, 26, 0.06);
+  box-shadow:
+    0 14px 32px rgba(20, 22, 26, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.roam-dark-strip {
+  background: linear-gradient(145deg, #1e2229 0%, #14171c 100%);
+  color: #f4f6fa;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 10px 24px rgba(17, 20, 24, 0.16);
+}
+
+.roam-node-popover {
+  background-color: #ffffff;
+  color: #17191e;
+  border: 1px solid rgba(20, 22, 26, 0.08);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.52);
+}
+
 @keyframes omegaCaretPulse {
   0%,
   100% {

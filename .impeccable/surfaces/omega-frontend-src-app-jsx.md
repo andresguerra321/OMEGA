@@ -2,24 +2,27 @@
 version: 1
 slug: "omega-frontend-src-app-jsx"
 primary_target: "omega/frontend/src/App.jsx"
-related_targets: []
+related_targets:
+  - "omega/frontend/src/components/SpatialNavPill.jsx"
+  - "omega/frontend/src/components/TelemetryMapStage.jsx"
+  - "omega/frontend/src/components/OverviewWarmInspector.jsx"
 ---
 
-# Surface Brief — OMEGA Desktop Shell & Protection Center
+# Surface Brief — OMEGA Desktop Spatial Hybrid Shell
 
-- **Scope:** `omega/frontend/src/App.jsx` y shell principal (`DockBar.jsx`, `CommandCenterPanel.jsx`, `CopilotDrawer.jsx`, `index.css`)
+- **Scope:** `omega/frontend/src/App.jsx`, `SpatialNavPill.jsx`, `TelemetryMapStage.jsx`, `OverviewWarmInspector.jsx`, `CopilotDrawer.jsx`, `electron/main.js`, `electron/preload.cjs`, `index.css`
 - **Mode:** `operate`
 
 ## Direction contract
 
-THESIS: Sustituir el esquema genérico de barra lateral izquierda de página web por una estación de seguridad táctil e industrial de escritorio centrada en un Dock flotante inferior, una cabecera de ventana nativa con sensores reales y un centro unificado de protección en vivo que explica los hallazgos en lenguaje claro por defecto y mantiene el detalle forense expandible sin destruir el análisis abierto al consultar al Copiloto.
+THESIS: Sustituir cualquier esquema de barra lateral o dock inferior convencional por una arquitectura espacial dual de escritorio (inspiración táctil espacial Roam) que contrasta un lienzo topográfico oscuro en vivo con una hoja curva de piedra cálida en `Inicio` y transiciona sin fricción a una hoja curva obsidiana para los instrumentos forenses profundos, manteniendo navegación circular flotante en cápsula y Copiloto lateral no destructivo.
 
-OWN-WORLD: Chasis grafito anodizado profundo (`#090A0D` / `#121419`) con matriz micro-punteada tenue (`20px`), cavidades empotradas (`#07080B`) con bisel superior 1px y teclas táctiles moldeadas; azul cobalto (`#2F6FED`) para acción primaria y foco de módulo, más LEDs semánticos estrictos (`#30D158` limpio, `#FF9F0A` preventivo, `#FF453A` crítico) sobre texto marfil de alto contraste (`#F4F4F6`).
+OWN-WORLD: Escenario oscuro topográfico (`#0E1317`) con curvas de nivel, rutas punteadas vivas y acentos ámbar (`#F5A623`); hoja derecha de piedra arquitectónica cálida (`#EAEAE6`, `.roam-stone-sheet`) con tarjetas elevadas `#FFFFFF`, objeto cenital minimal y tiras oscuras invertidas (`#191C22`, `.roam-dark-strip`) en `Inicio`, alternando automáticamente a obsidiana (`.roam-obsidian-sheet`, `#101319`) con `titleBarOverlay` sincronizado (`light` / `dark`) en los módulos especializados.
 
-STORY: Al abrir la aplicación, cualquier persona confirma en segundos si el entorno OMEGA, su PC y sus sensores USB/CTI están listos, puede lanzar una auditoría local en 1 clic, pegar un enlace sospechoso o conectar un celular sin jerga opaca, y si detecta una anomalía puede abrir el cajón lateral del Copiloto sin perder el reporte de fondo ni navegar fuera.
+STORY: Al abrir la aplicación, la persona ve simultáneamente la topología viva de sensores de su equipo (PC Windows, USB Android/iPhone, Enlaces, Corpus STIX2 y Amenazas) y un inspector cálido y claro listo para auditar la PC en 1 clic, verificar un enlace al instante o revisar los últimos chequeos locales sin ruido técnico innecesario, pudiendo saltar por la cápsula circular superior a cualquier instrumento o abrir el Copiloto sin perder lo que ya estaba auditando.
 
-FIRST VIEWPORT: Cabecera de ventana de 48px integrada con los controles nativos (marca OMEGA, módulo activo, pastillas vivas de PC/USB/YARA+CTI, selector Simple/Técnico, botón Copiloto y `⌘K`); zona principal asimétrica con consola superior de postura del sistema + dial vectorial de estado y botón táctil `Analizar esta PC ahora`, seguida de una matriz de sensores interactiva a la izquierda (7 cols) y bitácora volátil + atajos del Copiloto a la derecha (5 cols); dock flotante inferior centrado con los módulos de trabajo.
+FIRST VIEWPORT: Split espacial `58% / 42%` (`md:` en adelante) con borde curvo izquierdo (`rounded-l-[28px]`) y lengüeta vertical colapsable: mapa topográfico oscuro a la izquierda con marca `OMEGA`, cápsula flotante circular de navegación centrada y tarjetita blanca de nodo seleccionable; hoja `#EAEAE6` a la derecha con píldora de búsqueda blanca (`⌘K`), campana de Copiloto, selector `Simple | Técnico`, gráfico cenital minimalista sobre la piedra, tarjeta blanca solapada con acción `Analizar esta PC ahora` / `Enlace` y bloque inferior oscuro `Últimos análisis`.
 
-FORM: Estación táctil de escritorio estilo instrumentación de precisión (Teenage Engineering / Nothing OS) adaptada al marco Electron nativo (cabecera + centro vivo asimétrico + cajón deslizable de Copiloto + dock inferior flotante).
+FORM: Estación espacial híbrida nativa en Electron (`minWidth: 960`, `titleBarStyle: 'hidden'`) sin barra lateral genérica y con total paridad en escritorio Electron y navegador web.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and verified desktop Electron screenshots

@@ -93,7 +93,11 @@ export function CopilotDrawer({
       />
 
       {/* Cajón lateral deslizable */}
-      <aside className="relative h-full w-full max-w-[470px] border-l border-white/[0.1] bg-gradient-to-b from-[#13161E]/98 to-[#0B0D12]/98 backdrop-blur-2xl shadow-[-18px_0_48px_rgba(0,0,0,0.68)] flex flex-col">
+      <aside
+        className={`relative h-full w-full max-w-[470px] border-l border-white/[0.1] bg-gradient-to-b from-[#13161E]/98 to-[#0B0D12]/98 backdrop-blur-2xl shadow-[-18px_0_48px_rgba(0,0,0,0.68)] flex flex-col ${
+          typeof window !== 'undefined' && window.omegaDesktop?.isDesktop ? 'pt-9' : ''
+        }`}
+      >
         {/* Cabecera del copiloto */}
         <div className="h-14 shrink-0 border-b border-white/[0.08] px-4 flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">

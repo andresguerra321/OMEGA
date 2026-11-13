@@ -17,5 +17,6 @@ contextBridge.exposeInMainWorld('omegaDesktop', {
   collectPcAuditSnapshot: () => ipcRenderer.invoke('omega:pc-audit-collect'),
   openExternalUrl: (targetUrl) => ipcRenderer.invoke('omega:open-external', targetUrl),
   inspectLinkEphemeral: (targetUrl) => ipcRenderer.invoke('omega:ephemeral-link-inspect', targetUrl),
+  setTitleBarTheme: (theme) => ipcRenderer.invoke('omega:set-titlebar-theme', theme),
 });
 

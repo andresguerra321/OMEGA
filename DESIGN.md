@@ -1,34 +1,32 @@
 # OMEGA Desktop Design System (`DESIGN.md`)
 
 ## 1. Visual World & Product Character
-**Anodized Precision Security Instrument** — inspired by tactile studio hardware and clean desktop operating systems (Teenage Engineering hardware minimalism / Nothing OS telemetry × OMEGA Cobalt). Designed as a standalone native Electron/React desktop instrument rather than a dark SaaS dashboard or web chat wrapper.
+**Spatial Telemetry Hybrid Instrument** — inspired by tactile spatial hardware interfaces (Roam spatial split × precision security instrumentation). Contrasts an atmospheric dark topographic live telemetry canvas (`#0E1317`) on the left with a curved (`rounded-l-[28px]`) sculpted warm architectural stone inspector sheet (`#EAEAE6`) on `Inicio`, transitioning seamlessly to a high-contrast dark obsidian workbench sheet (`.roam-obsidian-sheet`, `#101319`) for deep forensic investigation modules.
 
-## 2. Shell & Navigation Architecture
-- **No left navigation rail:** Primary modules live in a centered, floating anodized glass bottom Dock (`DockBar.jsx`) over a dedicated `74px` dock bay (`<main pb-[74px]>`), keeping zero visual collision with pinned inputs or scrollable lists.
-  - Primary sensors: `Inicio` (Centro de Protección), `Equipos` (PC Windows / Android ADB / iPhone), `Enlaces` (Verificación pasiva), `Amenazas` (Campañas y STIX2), `Exposición` (OSINT autorizado).
-  - Utility divider + studio tools: `Asistente` (vista completa de consulta con citas), `Ajustes` (preferencias sin barra lateral secundaria).
-- **Native 48px Top Window Bar (`App.jsx` + `electron/main.js`):** Blends seamlessly into Windows `titleBarOverlay` (`#0C0E13`, `height: 48`, `pr-40` caption clearance when `isDesktop`), exposing module context, live API/corpus health pill, global `Simple / Técnico` clarity switch, `Copiloto` drawer trigger (`Ctrl+J`), and Spotlight palette trigger (`⌘K`).
-- **Non-destructive Slide-Over Copilot (`CopilotDrawer.jsx`):** Slides in at `max-w-[470px]` over any active module (`role="dialog" aria-modal="true"`) with optional pinned finding context, preserving underlying scans or link traces cleanly when dismissed (`Escape` or backdrop click).
+## 2. Shell & Navigation Architecture (`App.jsx` + `electron/main.js`)
+- **Zero generic left sidebar or stacked bottom dock:** Navigation lives inside a floating frosted dark circular icon capsule (`SpatialNavPill.jsx`, `aria-label="Navegación espacial OMEGA"`), pinned top-center over the left topographic canvas on `Inicio` and centered inside the 52px instrument bar on specialized views. Active destination highlights in solid crisp ivory (`#F4F4EF`) with `#14171D` foreground and live LED indicators (`pcVerdict`, `usbConnected`, `apiOnline`, `isLoadingChat`).
+- **Dual Spatial Split (`Inicio`):**
+  - **Left Pane (`TelemetryMapStage.jsx`, `56%–60%` desktop width):** `#0E1317` topographic vector map with contour splines, amber directional core pointer (`#F5A623`), interactive sensor nodes (`#01 Esta PC · Windows`, `#02 Celular por USB`, `#03 Escudo de enlaces`, `#04 Corpus STIX2`, `#05 Amenazas`), floating crisp `#FFFFFF` node popover with sparkline, quick CTA & `✕` dismiss control, bottom-left volatile RAM readout pill, and bottom-right circular zoom/recenter/scan controls.
+  - **Right Curved Sheet (`OverviewWarmInspector.jsx`, `.roam-stone-sheet`, `#EAEAE6`):** Curved left border seam (`rounded-l-[28px]`) with interactive vertical seam collapse/expand toggle pill, pure white search pill (`⌘K`), circular alert/Copiloto bell button (`Bell` + count badge), global `Simple | Técnico` toggle, overhead minimal hardware vector graphic directly on `#EAEAE6`, overlapping `#FFFFFF` trajectory card (`Analizar esta PC ahora` + inline quick link verify), and inverted dark charcoal `#191C22` recent analysis cards (`.roam-dark-strip`).
+- **Specialized Workbench Modules (`equipo`, `enlace`, `amenazas`, `exposicion`, `preguntar`, `ajustes`):**
+  - Left topographic canvas narrows on `xl` screens (`27%`, `max-w-[360px]`) into a serene ambient strip (collapsible via the vertical seam grabber button) while the right sheet transitions cleanly into `.roam-obsidian-sheet` (`#101319`) hosting the interactive dark-mode workbenches with zero contrast loss.
+- **Dynamic Native Electron TitleBar (`electron/main.js` + `preload.cjs`):** `titleBarStyle: 'hidden'` + dynamic `omega:set-titlebar-theme` IPC overlay syncing Windows `- □ ✕` chrome seamlessly between light warm-stone (`#EAEAE6` / `#191C22`, `height: 40`) on `Inicio` and obsidian (`#101319` / `#A1A7B4`, `height: 40`) on all other modules, with `pt-11` / `pr-40` caption clearance when `isDesktop` is true.
+- **Non-destructive Slide-Over Copilot (`CopilotDrawer.jsx`):** Slides in at `max-w-[470px]` over any active view (`pt-9` desktop clearance under `- □ ✕`) with pinned context support, preserving underlying scans or audits on dismiss (`Escape` or backdrop click).
 
 ## 3. Surfaces, Elevation & Color Roles (`index.css`)
-- **Primary Chassis Ground:** `#090A0D` with subtle `22px` machined dot-matrix grid (`.omega-chassis-grid`).
-- **Molded Surfaces (`.apple-group` / `.tactile-chassis`):** Linear obsidian gradient `#14171F` → `#101218` with top specular edge (`inset 0 1px 0 rgba(255,255,255,0.06)`) and calibrated drop shadow.
-- **Recessed Instrument Wells (`.apple-well` / `.tactile-well`):** `#0A0C10` inset bay (`inset 0 2px 6px rgba(0,0,0,0.65)`) for telemetry logs, inputs, and code/IOC readouts.
-- **Foreground & Contrast Floor (WCAG AA `>= 4.5:1`):**
-  - Primary text: `#F4F6FA`
-  - Secondary body text: `#C4CAD4` / `#D6DAE2`
-  - Muted telemetry labels & placeholders: `#9097A5` / `#9BA2B0` (avoiding dim gray `< 4.5:1` on dark)
-- **Status & Semantic Signal Accents:**
-  - OMEGA Cobalt Action: `#2F6FED` / `#5E9BFF`
-  - Verified / Online LED: `#30D158` / `#5EE07E`
-  - Caution / Review LED: `#FF9F0A` / `#FFD60A`
-  - High Risk / Alert LED: `#FF453A` / `#FF7A73`
+- **Topographic Canvas Ground:** `#0E1317` radial vignette + `#0C1014` (`omega-stage-bg`) with crisp `#F4F6FA` wordmark and `rgba(182, 200, 214, 0.085)` contour splines.
+- **Warm Stone Inspector (`.roam-stone-sheet`):** `#EAEAE6` primary shell paired with crisp `#FFFFFF` elevated trajectory cards (`.roam-white-card`), inverted `#191C22` strip blocks (`.roam-dark-strip`), high-contrast `#17191E` ink, `#454A54` secondary metadata, and Amber `#F5A623` accent highlights.
+- **Obsidian Workbench Sheet (`.roam-obsidian-sheet`):** `#101319` → `#0C0E14` gradient with hairline left border `rgba(255,255,255,0.08)`, molded dark surfaces (`.apple-group`), and recessed telemetry wells (`.apple-well`).
+- **Semantic Status Accents:**
+  - Verified / Clean: `#22C55E` / `#30D158`
+  - Caution / Host Accent: `#F5A623`
+  - High Risk / Alert: `#FF453A`
+  - OMEGA Cobalt Secondary / Focus: `#2F6FED` / `#5E9BFF`
 
 ## 4. Typography & Clarity Modes
-- **UI Sans (`Inter`):** Tight negative display tracking (`-0.025em`) for instrument verdicts and clear `13.5px–15px` Spanish prose.
-- **Technical Mono (`JetBrains Mono`, `.font-tech`):** Applied strictly to live sensor metrics, CVEs, SHAs, URLs, timestamps, and keycap hints (`⌘K`, `ESC`, `16 REP`).
-- **Global `Simple` / `Técnico` Toggle:** Defaults to plain everyday Spanish in `CommandCenterPanel.jsx`, swapping seamlessly to raw technical telemetry identifiers (`yara_matches`, `sockets`, `corpus_iocs`) on demand.
+- **UI Sans (`Inter`):** Clean editorial contrast with `-0.025em` display tracking (`Esta PC — Windows`, `Últimos análisis`) and readable Spanish copy.
+- **Technical Mono (`JetBrains Mono`, `.font-tech`):** Applied strictly to live sensor counts, CVEs, hashes, URLs, timestamps, and keycap hints (`⌘K`, `ESC`, `RAM`).
+- **Global `Simple` / `Técnico` Toggle:** Available directly on both the `Inicio` stone header and the dark obsidian header; switches seamlessly between everyday Spanish clarity and technical telemetry (`sockets`, `hits YARA`, raw verdicts).
 
 ## 5. Tactile Controls & Accessibility
-- Physical keycap press physics (`.tactile-key`, `.tactile-key-primary`, `.tactile-key-ivory`) with `1px` vertical depression on `:active` and distinct disabled legibility (`disabled:bg-[#1E222B] disabled:text-[#9097A5]`).
-- Mandatory `:focus-visible` `2px` `#5E9BFF` outline (`outline-offset: 2px`), keyboard shortcuts (`⌘K`, `⌘J`, `Esc`), and full `@media (prefers-reduced-motion: reduce)` guards disabling animations/transitions.
+- Physical press feedback, explicit keyboard navigation (`⌘K`, `Ctrl+J`, `Esc`), semantic landmarks (`<section aria-label="Mapa topográfico de telemetría">`, `<aside aria-label="Panel inspector de protección">`, `<nav aria-label="Navegación espacial OMEGA">`, `<main>`), WCAG AA focus rings (`2px` `#191C22` on stone, `#5E9BFF` on dark), and complete `@media (prefers-reduced-motion: reduce)` guards.
