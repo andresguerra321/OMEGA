@@ -2,23 +2,22 @@
 
 @layer base {
   :root {
-    --bg-canvas: #0D0F12;
-    --bg-sidebar: #111318;
-    --bg-surface: #171A20;
-    --bg-surface-inset: #13161B;
-    --border-subtle: #262B33;
-    --text-primary: #F0F2F5;
-    --text-secondary: #929BAA;
-    --accent-blue: #3978F6;
+    --bg-canvas: #0A0A0C;
+    --bg-surface: #141418;
+    --border-subtle: #232329;
+    --text-primary: #F2F2F4;
+    --text-secondary: #8E8E96;
+    --accent-blue: #2F6FED;
+    --accent-muted: #15223D;
   }
 
   * {
-    border-color: #262B33;
+    border-color: #232329;
   }
 
   body {
-    background-color: #0D0F12;
-    color: #F0F2F5;
+    background-color: #0A0A0C;
+    color: #F2F2F4;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
@@ -27,19 +26,19 @@
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
-  /* Scrollbars discretos estilo consola de escritorio */
+  /* Scrollbars discretos estilo escritorio */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #0D0F12;
+    background: #0A0A0C;
   }
   ::-webkit-scrollbar-thumb {
-    background: #262B33;
+    background: #232329;
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #353C47;
+    background: #34343D;
   }
 }
