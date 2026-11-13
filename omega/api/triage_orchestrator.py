@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from groq import Groq
 
 from behavioral_forensics import run_behavioral_forensics, unpack_forensic_archives_in_ram
+from deep_forensics import inspect_ios_manifest_db, run_live_yara_hunt
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -32,6 +33,8 @@ URL_RE = re.compile(r"https?://[^\s\"'<>\]\)]+", re.IGNORECASE)
 DOMAIN_RE = re.compile(r"\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,15}\b", re.IGNORECASE)
 IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 SHA256_RE = re.compile(r"\b[a-f0-9]{64}\b", re.IGNORECASE)
+PACKAGE_ID_RE = re.compile(r"\b(?:com|org|net|io|me|dev|info|biz|ru|rs|il)\.[a-z0-9_]+(?:\.[a-z0-9_]+){1,6}\b", re.IGNORECASE)
+STAGING_PATH_RE = re.compile(r"(?:/private/var/tmp/|/private/var/logs/|/data/local/tmp/|/var/tmp/)[A-Za-z0-9._/\-]{1,120}")
 
 # Procesos y servicios críticos asociados a cadenas zero-click (FORCEDENTRY, BLASTPASS, Pegasus)
 KNOWN_CRASH_TARGETS = {
@@ -102,6 +105,14 @@ def _collect_tokens(text: str, origin: str, bucket: dict[str, dict]):
 
     for sha in SHA256_RE.findall(clean):
         bucket.setdefault(sha.lower(), {"type": "sha256", "origin": origin, "derived": False})
+
+    for pkg in PACKAGE_ID_RE.findall(clean):
+        pkg_low = pkg.lower()
+        if not any(pkg_low.endswith(f".{n}") or pkg_low == n for n in NOISE_DOMAINS):
+            bucket.setdefault(pkg_low, {"type": "package", "origin": origin, "derived": False})
+
+    for st_path in STAGING_PATH_RE.findall(clean):
+        bucket.setdefault(st_path.lower().rstrip(".,;:\"'`)"), {"type": "file_path", "origin": origin, "derived": False})
 
 
 # =====================================================================
@@ -387,80 +398,115 @@ def _diagnose_verdict(agent_reports: list[dict], crash_anomalies: list[str]) -> 
     }
 
 
+def _run_ios_manifests_in_ram(expanded_artifacts: list[dict]) -> list[dict]:
+    """Deserializa archivos Manifest.db (y respaldos SQLite) en RAM para detectar artefactos iOS."""
+    findings: list[dict] = []
+    for art in expanded_artifacts:
+        raw_bytes = art.get("bytes") or b""
+        if len(raw_bytes) >= 16 and raw_bytes.startswith(b"SQLite format 3\x00"):
+            findings.extend(inspect_ios_manifest_db(art.get("filename", "Manifest.db"), raw_bytes))
+    return findings
+
+
 async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
-    """Orquestador asíncrono: desempaqueta en RAM y ejecuta CTI + análisis conductual."""
+    """Orquestador asíncrono: desempaqueta en RAM y ejecuta CTI, conductual, Manifest.db y YARA."""
     expanded_artifacts = await asyncio.to_thread(unpack_forensic_archives_in_ram, artifacts)
 
-    res_a, res_b, res_c, behavioral_anomalies = await asyncio.gather(
-        asyncio.to_thread(_worker_a_messaging_sqlite, expanded_artifacts),
-        asyncio.to_thread(_worker_b_network_dns, expanded_artifacts),
-        asyncio.to_thread(_worker_c_process_crashlogs, expanded_artifacts),
-        asyncio.to_thread(run_behavioral_forensics, expanded_artifacts),
-    )
-
-    raw_agents = [res_a, res_b, res_c]
-    agent_summaries = []
-    total_unique_tokens = 0
-
-    for ag in raw_agents:
-        matches = await asyncio.to_thread(_correlate_with_cti_db, ag["tokens"])
-        unique_count = len([v for v in ag["tokens"].values() if not v.get("derived")])
-        total_unique_tokens += unique_count
-        agent_summaries.append(
-            {
-                "agent_id": ag["agent_id"],
-                "agent_name": ag["agent_name"],
-                "files_processed": ag["files_processed"],
-                "indicators_extracted": unique_count,
-                "matches_count": len(matches),
-                "matches": matches,
-                "notes": ag["notes"],
-            }
+    try:
+        res_a, res_b, res_c, behavioral_raw, manifest_findings, yara_hits = await asyncio.gather(
+            asyncio.to_thread(_worker_a_messaging_sqlite, expanded_artifacts),
+            asyncio.to_thread(_worker_b_network_dns, expanded_artifacts),
+            asyncio.to_thread(_worker_c_process_crashlogs, expanded_artifacts),
+            asyncio.to_thread(run_behavioral_forensics, expanded_artifacts),
+            asyncio.to_thread(_run_ios_manifests_in_ram, expanded_artifacts),
+            asyncio.to_thread(run_live_yara_hunt, expanded_artifacts),
         )
 
-    crash_anomalies = list(res_c.get("crash_anomalies", []))
-    for anom in behavioral_anomalies:
-        summary_line = f"[{anom['severity']}] {anom['category']} ({anom['artifact']}): {anom['indicator']} — {anom['detail']}"
-        if summary_line not in crash_anomalies:
-            crash_anomalies.append(summary_line)
-
-    diagnosis = _diagnose_verdict(agent_summaries, crash_anomalies)
-    critical_behavioral = [a for a in behavioral_anomalies if a.get("severity") == "CRITICAL"]
-    total_cti_matches = sum(a["matches_count"] for a in agent_summaries)
-
-    if total_cti_matches == 0 and critical_behavioral and diagnosis.get("verdict_code") in (
-        "CLEAN",
-        "LIKELY_FALSE_POSITIVE",
-    ):
-        categories_preview = ", ".join(
-            dict.fromkeys(a["category"] for a in critical_behavioral[:3])
-        )
-        diagnosis = {
-            "verdict_code": "BEHAVIORAL_ZERO_DAY_SUSPICION",
-            "verdict_label": "Anomalía Conductual Crítica — Posible Spyware Zero-Day (Sin IOCs Públicos)",
-            "confidence": "Alta",
-            "is_likely_false_positive": False,
-            "rationale": (
-                f"No hubo coincidencias contra IOCs públicos documentados, pero el análisis conductual en RAM "
-                f"detectó {len(critical_behavioral)} anomalía(s) crítica(s) ({categories_preview}). "
-                "Este patrón sugiere persistencia o abuso zero-day aún no catalogado en feeds CTI."
-            ),
-            "recommended_actions": [
-                "Preservar el respaldo completo (sysdiagnose y dump MVT) sin reiniciar ni restaurar el dispositivo.",
-                "Activar Modo de Aislamiento (Lockdown Mode) y rotar credenciales desde un dispositivo limpio.",
-                "Escalar la evidencia conductual a un equipo forense especializado (CERT / Citizen Lab / Amnesty Tech).",
-            ],
+        # Fusionar hallazgos de Manifest.db sin duplicados dentro de anomalías conductuales
+        behavioral_anomalies = list(behavioral_raw)
+        seen_anom = {
+            (a.get("category"), str(a.get("indicator", "")).lower(), str(a.get("artifact", "")).lower())
+            for a in behavioral_anomalies
         }
+        for mf in manifest_findings:
+            key = (mf.get("category"), str(mf.get("indicator", "")).lower(), str(mf.get("artifact", "")).lower())
+            if key not in seen_anom:
+                seen_anom.add(key)
+                behavioral_anomalies.append(mf)
+
+        raw_agents = [res_a, res_b, res_c]
+        agent_summaries = []
+        total_unique_tokens = 0
+
+        for ag in raw_agents:
+            matches = await asyncio.to_thread(_correlate_with_cti_db, ag["tokens"])
+            unique_count = len([v for v in ag["tokens"].values() if not v.get("derived")])
+            total_unique_tokens += unique_count
+            agent_summaries.append(
+                {
+                    "agent_id": ag["agent_id"],
+                    "agent_name": ag["agent_name"],
+                    "files_processed": ag["files_processed"],
+                    "indicators_extracted": unique_count,
+                    "matches_count": len(matches),
+                    "matches": matches,
+                    "notes": ag["notes"],
+                }
+            )
+
+        crash_anomalies = list(res_c.get("crash_anomalies", []))
+        for anom in behavioral_anomalies:
+            summary_line = f"[{anom['severity']}] {anom['category']} ({anom['artifact']}): {anom['indicator']} — {anom['detail']}"
+            if summary_line not in crash_anomalies:
+                crash_anomalies.append(summary_line)
+
+        diagnosis = _diagnose_verdict(agent_summaries, crash_anomalies)
+        critical_behavioral = [a for a in behavioral_anomalies if a.get("severity") == "CRITICAL"]
+        total_cti_matches = sum(a["matches_count"] for a in agent_summaries)
+
+        if total_cti_matches == 0 and (critical_behavioral or yara_hits) and diagnosis.get("verdict_code") in (
+            "CLEAN",
+            "LIKELY_FALSE_POSITIVE",
+        ):
+            previews = list(dict.fromkeys(a["category"] for a in critical_behavioral[:3]))
+            for yh in yara_hits[:2]:
+                if yh["rule_name"] not in previews:
+                    previews.append(yh["rule_name"])
+            categories_preview = ", ".join(previews)
+            diagnosis = {
+                "verdict_code": "BEHAVIORAL_ZERO_DAY_SUSPICION",
+                "verdict_label": "Detección Forense Crítica — Firma YARA / Anomalía en RAM",
+                "confidence": "Alta",
+                "is_likely_false_positive": False,
+                "rationale": (
+                    f"El motor en RAM detectó {len(critical_behavioral)} anomalía(s) crítica(s) "
+                    f"y {len(yara_hits)} coincidencia(s) YARA ({categories_preview}). "
+                    "Este patrón sugiere persistencia o vector de explotación activo."
+                ),
+                "recommended_actions": [
+                    "Preservar el respaldo completo (sysdiagnose y dump MVT) sin reiniciar ni restaurar el dispositivo.",
+                    "Activar Modo de Aislamiento (Lockdown Mode) o DNS cifrado DoT y rotar credenciales desde un dispositivo limpio.",
+                    "Escalar la evidencia conductual/YARA a un equipo forense especializado (CERT / Citizen Lab / Amnesty Tech).",
+                ],
+            }
+
+        total_files = len(expanded_artifacts)
+    finally:
+        for art in expanded_artifacts:
+            art["bytes"] = b""
+        expanded_artifacts.clear()
 
     return {
-        "pipeline_mode": "Parallel Multi-Agent Triage (3 CTI Workers + Behavioral Forensics RAM)",
-        "total_files": len(expanded_artifacts),
+        "pipeline_mode": "Parallel Multi-Agent Triage (3 CTI Workers + Behavioral + Manifest.db + YARA RAM)",
+        "total_files": total_files,
         "total_indicators_analyzed": total_unique_tokens,
         "total_matches": total_cti_matches,
         "crash_anomalies": crash_anomalies,
         "behavioral_anomalies": behavioral_anomalies,
+        "manifest_findings": manifest_findings,
+        "yara_hits": yara_hits,
         "diagnosis": diagnosis,
         "subagents": agent_summaries,
-        "ephemeral_notice": "Triage paralelo y análisis conductual ejecutados 100% en memoria volátil (RAM). Archivos y SQLite analizados sin guardado en disco (RNF4).",
+        "ephemeral_notice": "Triage paralelo, análisis de Manifest.db y caza YARA ejecutados 100% en memoria volátil (RAM) sin persistencia en disco (RNF4).",
     }
 

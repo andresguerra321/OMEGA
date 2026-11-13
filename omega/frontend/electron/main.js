@@ -70,7 +70,7 @@ ipcMain.handle('omega:adb-status', async () => {
   }
 });
 
-// 2. Extracción forense volátil de solo lectura (procesos, paquetes y postura de seguridad)
+// 2. Extracción forense volátil de solo lectura (sockets kernel, DNS, accesibilidad, SELinux, procesos y paquetes)
 ipcMain.handle('omega:adb-collect', async () => {
   const [
     model,
@@ -80,8 +80,15 @@ ipcMain.handle('omega:adb-collect', async () => {
     privateDnsMode,
     privateDnsSpecifier,
     unknownSourcesRaw,
+    selinuxStatus,
+    verifiedBootState,
+    accessibilityServices,
+    deviceAdmins,
     packagesRaw,
     processesRaw,
+    procNetTcp,
+    procNetTcp6,
+    dnsResolverDump,
   ] = await Promise.all([
     runAdb(['shell', 'getprop', 'ro.product.model']).catch(() => 'Desconocido'),
     runAdb(['shell', 'getprop', 'ro.product.manufacturer']).catch(() => ''),
@@ -90,8 +97,15 @@ ipcMain.handle('omega:adb-collect', async () => {
     runAdb(['shell', 'settings', 'get', 'global', 'private_dns_mode']).catch(() => 'off'),
     runAdb(['shell', 'settings', 'get', 'global', 'private_dns_specifier']).catch(() => ''),
     runAdb(['shell', 'settings', 'get', 'secure', 'install_non_market_apps']).catch(() => ''),
+    runAdb(['shell', 'getenforce']).catch(() => 'Unknown'),
+    runAdb(['shell', 'getprop', 'ro.boot.verifiedbootstate']).catch(() => 'unknown'),
+    runAdb(['shell', 'settings', 'get', 'secure', 'enabled_accessibility_services']).catch(() => 'null'),
+    runAdb(['shell', 'dumpsys', 'device_policy']).catch(() => ''),
     runAdb(['shell', 'pm', 'list', 'packages', '-3']).catch(() => ''),
     runAdb(['shell', 'ps', '-A', '-o', 'USER,PID,PPID,NAME,ARGS']).catch(() => ''),
+    runAdb(['shell', 'cat', '/proc/net/tcp']).catch(() => ''),
+    runAdb(['shell', 'cat', '/proc/net/tcp6']).catch(() => ''),
+    runAdb(['shell', 'dumpsys', 'dnsresolver']).catch(() => ''),
   ]);
 
   const cleanPackages = packagesRaw
@@ -109,9 +123,34 @@ ipcMain.handle('omega:adb-collect', async () => {
       private_dns_mode: privateDnsMode.trim(),
       private_dns_specifier: privateDnsSpecifier.trim(),
       install_non_market_apps: unknownSourcesRaw.trim(),
+      selinux_status: selinuxStatus.trim(),
+      verified_boot_state: verifiedBootState.trim(),
+      accessibility_services: accessibilityServices.trim(),
     },
+    device_admins_raw: deviceAdmins,
     packages_text: cleanPackages,
     processes_text: processesRaw,
+    proc_net_raw: `${procNetTcp}\n${procNetTcp6}`,
+    dns_resolver_raw: dnsResolverDump,
+  };
+});
+
+// 3. Contramedida defensiva explícita: forzar DNS-over-TLS cifrado (Quad9)
+ipcMain.handle('omega:adb-harden-dns', async (_event, opts) => {
+  if (!opts?.confirmed) {
+    throw new Error('Se requiere confirmación explícita del analista antes de modificar ajustes de red.');
+  }
+  await runAdb(['shell', 'settings', 'put', 'global', 'private_dns_mode', 'hostname'], 5000);
+  await runAdb(['shell', 'settings', 'put', 'global', 'private_dns_specifier', 'dns.quad9.net'], 5000);
+  const [appliedMode, appliedSpecifier] = await Promise.all([
+    runAdb(['shell', 'settings', 'get', 'global', 'private_dns_mode'], 4000).catch(() => ''),
+    runAdb(['shell', 'settings', 'get', 'global', 'private_dns_specifier'], 4000).catch(() => ''),
+  ]);
+  return {
+    applied: appliedMode.trim() === 'hostname' && appliedSpecifier.trim() === 'dns.quad9.net',
+    mode: appliedMode.trim(),
+    specifier: appliedSpecifier.trim(),
+    provider: 'dns.quad9.net (DNS-over-TLS)',
   };
 });
 
@@ -121,12 +160,12 @@ function createMainWindow() {
     height: 860,
     minWidth: 1080,
     minHeight: 700,
-    backgroundColor: '#0A0A0C',
+    backgroundColor: '#08080A',
     title: 'OMEGA — Cyber Threat Intelligence',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0A0A0C',
-      symbolColor: '#8E8E96',
+      color: '#08080A',
+      symbolColor: '#8E8E93',
       height: 48,
     },
     webPreferences: {

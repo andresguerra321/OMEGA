@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Loader2, ShieldCheck, Smartphone, Upload } from 'lucide-react';
-import { analyzeLiveDeviceSnapshot, runParallelTriage, verifyMvtText } from '../lib/api';
+import { ArrowLeft, Download, Loader2, RefreshCw, ShieldCheck, Smartphone, Upload } from 'lucide-react';
+import {
+  analyzeLiveDeviceSnapshot,
+  runParallelTriage,
+  syncStixFeeds,
+  verifyMvtText,
+} from '../lib/api';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
   [
@@ -67,6 +72,7 @@ function normalizeParallelResult(res, files = [], customSourceLabel = '') {
     filesAnalyzed: res.total_files ?? files.length,
     matchesCount: findings.length,
     behavioralAnomalies: res.behavioral_anomalies || [],
+    yaraHits: res.yara_hits || [],
     verdictCode: res.diagnosis?.verdict_code || (findings.length > 0 ? 'DETECTED' : 'CLEAN'),
     rationale: res.diagnosis?.rationale || '',
     findings,
@@ -79,10 +85,87 @@ function normalizeManualResult(res) {
     sourceLabel: 'indicadores_manuales.txt',
     analyzedCount: res.analyzed_indicators ?? 0,
     matchesCount: findings.length,
+    behavioralAnomalies: [],
+    yaraHits: [],
     verdictCode: findings.length > 0 ? 'DETECTED' : 'CLEAN',
     rationale: '',
     findings,
   };
+}
+
+function buildForensicMarkdownReport(result, hardeningReport) {
+  const anomalies = result.behavioralAnomalies || [];
+  const yaraHits = result.yaraHits || [];
+  const checks = hardeningReport?.hardening_checks || [];
+  const alerts = hardeningReport?.abuse_alerts || [];
+  const sockets = hardeningReport?.live_sockets || [];
+
+  const lines = [
+    '# OMEGA · Verificación de Integridad del Dispositivo',
+    `- **Origen:** \`${result.sourceLabel}\``,
+    `- **Artefactos evaluados:** ${result.filesAnalyzed || 1}`,
+    `- **Indicadores evaluados:** ${result.analyzedCount}`,
+    `- **Coincidencias CTI:** ${result.matchesCount}`,
+    `- **Firmas YARA detectadas:** ${yaraHits.length}`,
+    `- **Anomalías conductuales / Manifest.db:** ${anomalies.length}`,
+    `- **Almacenamiento:** 0 bytes guardados en disco`,
+    '',
+  ];
+
+  if (checks.length > 0) {
+    lines.push('## Postura de Endurecimiento del Dispositivo (ADB USB)');
+    checks.forEach((chk) => {
+      lines.push(`- [${chk.status}] **${chk.control}** (\`${chk.value}\`): ${chk.detail}`);
+    });
+    lines.push('');
+  }
+
+  if (alerts.length > 0) {
+    lines.push('## Alertas de Accesibilidad, Privilegios y Red');
+    alerts.forEach((al, idx) => {
+      lines.push(`${idx + 1}. [${al.severity}] **${al.category}** — \`${al.indicator}\`: ${al.detail}`);
+    });
+    lines.push('');
+  }
+
+  if (yaraHits.length > 0) {
+    lines.push('## Caza de Firmas YARA en RAM');
+    yaraHits.forEach((yh, idx) => {
+      lines.push(
+        `${idx + 1}. \`${yh.rule_name}\` — **${yh.spyware_family}** (${yh.cve}) en \`${yh.artifact}\` [${(yh.matched_strings || []).join(', ')}]: ${yh.description}`,
+      );
+    });
+    lines.push('');
+  }
+
+  if (sockets.length > 0) {
+    lines.push(`## Sockets Públicos de Kernel (${hardeningReport?.live_sockets_total || sockets.length})`);
+    sockets.slice(0, 25).forEach((s) => {
+      const flag = s.cti_match ? ` [CTI MATCH: ${s.spyware_family}]` : '';
+      lines.push(`- \`${s.remote_ip}:${s.remote_port}\` (${s.state})${flag}`);
+    });
+    lines.push('');
+  }
+
+  if (result.findings.length === 0 && anomalies.length === 0 && yaraHits.length === 0) {
+    lines.push('## Resultado\nSin indicadores de compromiso detectados frente al corpus CTI público ni anomalías conductuales.');
+  } else {
+    if (result.findings.length > 0) {
+      lines.push('## Coincidencias CTI Detectadas');
+      result.findings.forEach((f, idx) => {
+        lines.push(`${idx + 1}. \`${f.ioc_value}\` — **${f.spyware_family}** (${f.artifact_origin})`);
+      });
+      lines.push('');
+    }
+    if (anomalies.length > 0) {
+      lines.push('## Anomalías Conductuales y Manifest.db Detectadas (RAM)');
+      anomalies.forEach((a, idx) => {
+        lines.push(`${idx + 1}. [${a.severity}] \`${a.indicator}\` — **${a.category}** (\`${a.artifact}\`): ${a.detail}`);
+      });
+    }
+  }
+
+  return lines.join('\n');
 }
 
 export function MvtVerifierPanel({ onAskInChat }) {
@@ -97,6 +180,11 @@ export function MvtVerifierPanel({ onAskInChat }) {
   const [usbDevice, setUsbDevice] = useState(null);
   const [scanningUsb, setScanningUsb] = useState(false);
   const [hardeningReport, setHardeningReport] = useState(null);
+  const [confirmingDns, setConfirmingDns] = useState(false);
+  const [hardeningDns, setHardeningDns] = useState(false);
+  const [dnsAppliedNote, setDnsAppliedNote] = useState('');
+  const [syncingStix, setSyncingStix] = useState(false);
+  const [stixSyncNote, setStixSyncNote] = useState('');
 
   const hasDesktopBridge =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
@@ -134,17 +222,76 @@ export function MvtVerifierPanel({ onAskInChat }) {
     if (!window.omegaDesktop?.collectDeviceSnapshot || scanningUsb || isAnalyzing) return;
     setScanningUsb(true);
     setErrorMsg('');
+    setConfirmingDns(false);
+    setDnsAppliedNote('');
     try {
       const snapshot = await window.omegaDesktop.collectDeviceSnapshot();
       const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
       const dev = liveRes.device_summary || snapshot.device || {};
       const label = [dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || 'Dispositivo Android';
       setHardeningReport(liveRes);
-      setResult(normalizeParallelResult(liveRes.triage, [], `${label} (ADB USB)`));
+      const normalized = normalizeParallelResult(liveRes.triage, [], `${label} (ADB USB)`);
+      if (liveRes.yara_hits?.length && normalized.yaraHits.length === 0) {
+        normalized.yaraHits = liveRes.yara_hits;
+      }
+      setResult(normalized);
     } catch (err) {
       setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
     } finally {
       setScanningUsb(false);
+    }
+  }
+
+  async function handleConfirmHardenDns() {
+    if (!window.omegaDesktop?.hardenPrivateDns || hardeningDns) return;
+    setHardeningDns(true);
+    setErrorMsg('');
+    try {
+      const res = await window.omegaDesktop.hardenPrivateDns();
+      setConfirmingDns(false);
+      if (res?.applied) {
+        setDnsAppliedNote('DNS Privado cifrado (dns.quad9.net) aplicado en el dispositivo.');
+        setHardeningReport((prev) => {
+          if (!prev?.hardening_checks) return prev;
+          return {
+            ...prev,
+            hardening_checks: prev.hardening_checks.map((chk) =>
+              chk.control.includes('DNS Privado')
+                ? {
+                    ...chk,
+                    status: 'OK',
+                    value: 'dns.quad9.net',
+                    detail: 'Resoluciones DNS cifradas mediante dns.quad9.net (DoT aplicado).',
+                  }
+                : chk,
+            ),
+          };
+        });
+      }
+    } catch (err) {
+      setErrorMsg(err?.message || 'No se pudo configurar el DNS Privado en el dispositivo.');
+    } finally {
+      setHardeningDns(false);
+    }
+  }
+
+  async function handleSyncStix() {
+    if (syncingStix) return;
+    setSyncingStix(true);
+    setErrorMsg('');
+    try {
+      const res = await syncStixFeeds();
+      const inserted = res.iocs_inserted ?? 0;
+      const total = res.total_db_iocs ?? res.iocs_parsed ?? 0;
+      setStixSyncNote(
+        inserted > 0
+          ? `+${inserted} IOCs nuevos · ${total} activos (${res.files_scanned} feeds STIX2)`
+          : `${total} IOCs STIX2 activos`,
+      );
+    } catch (err) {
+      setErrorMsg(err?.message || 'Error sincronizando feeds STIX 2.1.');
+    } finally {
+      setSyncingStix(false);
     }
   }
 
@@ -154,6 +301,8 @@ export function MvtVerifierPanel({ onAskInChat }) {
     setIsAnalyzing(true);
     setErrorMsg('');
     setHardeningReport(null);
+    setConfirmingDns(false);
+    setDnsAppliedNote('');
     try {
       const apiRes = await runParallelTriage(files);
       setResult(normalizeParallelResult(apiRes, files));
@@ -193,55 +342,15 @@ export function MvtVerifierPanel({ onAskInChat }) {
   function handleReset() {
     setResult(null);
     setHardeningReport(null);
+    setConfirmingDns(false);
+    setDnsAppliedNote('');
     setErrorMsg('');
   }
 
   function handleExportMarkdown() {
     if (!result) return;
-    const anomalies = result.behavioralAnomalies || [];
-    const checks = hardeningReport?.hardening_checks || [];
-    const lines = [
-      '# OMEGA · Verificación de Integridad del Dispositivo',
-      `- **Origen:** \`${result.sourceLabel}\``,
-      `- **Artefactos evaluados:** ${result.filesAnalyzed || 1}`,
-      `- **Indicadores evaluados:** ${result.analyzedCount}`,
-      `- **Coincidencias CTI:** ${result.matchesCount}`,
-      `- **Anomalías conductuales:** ${anomalies.length}`,
-      `- **Almacenamiento:** 0 bytes guardados en disco`,
-      '',
-    ];
-
-    if (checks.length > 0) {
-      lines.push('## Postura de Endurecimiento del Dispositivo (ADB USB)');
-      checks.forEach((chk) => {
-        lines.push(`- [${chk.status}] **${chk.control}** (\`${chk.value}\`): ${chk.detail}`);
-      });
-      lines.push('');
-    }
-
-    if (result.findings.length === 0 && anomalies.length === 0) {
-      lines.push('## Resultado\nSin indicadores de compromiso detectados frente al corpus CTI público ni anomalías conductuales.');
-    } else {
-      if (result.findings.length > 0) {
-        lines.push('## Coincidencias CTI Detectadas');
-        result.findings.forEach((f, idx) => {
-          lines.push(
-            `${idx + 1}. \`${f.ioc_value}\` — **${f.spyware_family}** (${f.artifact_origin})`,
-          );
-        });
-        lines.push('');
-      }
-      if (anomalies.length > 0) {
-        lines.push('## Anomalías Conductuales Detectadas (RAM)');
-        anomalies.forEach((a, idx) => {
-          lines.push(
-            `${idx + 1}. [${a.severity}] \`${a.indicator}\` — **${a.category}** (\`${a.artifact}\`): ${a.detail}`,
-          );
-        });
-      }
-    }
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const md = buildForensicMarkdownReport(result, hardeningReport);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -265,12 +374,25 @@ export function MvtVerifierPanel({ onAskInChat }) {
   function handleInvestigateAnomaly(anom) {
     if (!onAskInChat) return;
     const prompt = [
-      `Investiga esta anomalía conductual detectada en memoria RAM sin IOCs públicos conocidos:`,
+      `Investiga esta anomalía conductual detectada en memoria RAM:`,
       `- Categoría: ${anom.category} (${anom.severity})`,
       `- Indicador: ${anom.indicator}`,
-      `- Artefacto: ${anom.artifact}`,
+      `- Artefacto: ${anom.artifact || 'Dispositivo USB ADB'}`,
       `- Detalle: ${anom.detail}`,
       `¿Cómo se asocia este patrón con implantes como Pegasus o Predator en Citizen Lab / Amnesty Tech y qué pasos forenses recomiendas para validarlo?`,
+    ].join('\n');
+    onAskInChat(prompt);
+  }
+
+  function handleInvestigateYara(hit) {
+    if (!onAskInChat) return;
+    const prompt = [
+      `Investiga esta detección de firma YARA en RAM:`,
+      `- Regla: ${hit.rule_name}`,
+      `- Familia / Vector: ${hit.spyware_family} (${hit.cve})`,
+      `- Artefacto: ${hit.artifact}`,
+      `- Cadenas coincidentes: ${(hit.matched_strings || []).join(', ')}`,
+      `¿Qué técnica de explotación o persistencia representa en reportes de Citizen Lab / Amnesty Tech y qué contención inmediata aplicaría?`,
     ].join('\n');
     onAskInChat(prompt);
   }
@@ -279,38 +401,56 @@ export function MvtVerifierPanel({ onAskInChat }) {
   if (result) {
     const hasMatches = result.matchesCount > 0;
     const behavioralAnomalies = result.behavioralAnomalies || [];
+    const yaraHits = result.yaraHits || [];
+    const abuseAlerts = hardeningReport?.abuse_alerts || [];
+    const liveSockets = hardeningReport?.live_sockets || [];
+
     const hasBehavioral = behavioralAnomalies.length > 0;
+    const hasYara = yaraHits.length > 0;
+    const hasCriticalAlert =
+      abuseAlerts.some((a) => a.severity === 'CRITICAL') ||
+      hardeningReport?.hardening_checks?.some((c) => c.status === 'CRITICAL');
     const hasCriticalBehavioral =
       behavioralAnomalies.some((a) => a.severity === 'CRITICAL') ||
       result.verdictCode === 'BEHAVIORAL_ZERO_DAY_SUSPICION';
 
     let verdictDot = 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.5)]';
     let verdictHeadingTone = 'text-[#F5F5F7]';
-    if (hasMatches || hasCriticalBehavioral) {
+    if (hasMatches || hasCriticalBehavioral || hasYara || hasCriticalAlert) {
       verdictDot = 'bg-[#FF453A] shadow-[0_0_10px_rgba(255,69,58,0.55)]';
       verdictHeadingTone = 'text-[#FF6961]';
-    } else if (hasBehavioral) {
+    } else if (hasBehavioral || abuseAlerts.length > 0) {
       verdictDot = 'bg-[#FF9F0A] shadow-[0_0_10px_rgba(255,159,10,0.45)]';
       verdictHeadingTone = 'text-[#FFD60A]';
     }
 
     let verdictTitle = 'Sin indicadores de spyware detectados';
-    if (hasMatches && hasBehavioral) {
-      verdictTitle = `Se detectaron ${result.matchesCount} coincidencia${result.matchesCount === 1 ? '' : 's'} CTI y ${behavioralAnomalies.length} anomalía${behavioralAnomalies.length === 1 ? '' : 's'} conductual${behavioralAnomalies.length === 1 ? '' : 'es'}`;
-    } else if (hasMatches) {
-      verdictTitle = `Se detectaron ${result.matchesCount} coincidencia${result.matchesCount === 1 ? '' : 's'} con campañas de spyware`;
-    } else if (hasBehavioral) {
-      verdictTitle = `${behavioralAnomalies.length} anomalía${behavioralAnomalies.length === 1 ? '' : 's'} conductual${behavioralAnomalies.length === 1 ? '' : 'es'} sin IOCs públicos conocidos`;
+    const signalParts = [];
+    if (hasMatches) signalParts.push(`${result.matchesCount} coincidencia${result.matchesCount === 1 ? '' : 's'} CTI`);
+    if (hasYara) signalParts.push(`${yaraHits.length} firma${yaraHits.length === 1 ? '' : 's'} YARA`);
+    if (hasBehavioral) signalParts.push(`${behavioralAnomalies.length} anomalía${behavioralAnomalies.length === 1 ? '' : 's'} en RAM`);
+    if (abuseAlerts.length > 0) signalParts.push(`${abuseAlerts.length} alerta${abuseAlerts.length === 1 ? '' : 's'} de dispositivo`);
+    if (signalParts.length > 0) {
+      verdictTitle = `Detectado: ${signalParts.join(' · ')}`;
     }
 
+    const hasAnyThreatSignal = hasMatches || hasBehavioral || hasYara || abuseAlerts.length > 0 || hasCriticalAlert;
+    const isCriticalOverall = hasMatches || hasCriticalBehavioral || hasYara || hasCriticalAlert;
+
     let verdictBody =
-      'Ninguno de los artefactos analizados coincide con dominios, procesos ni hashes públicos asociados a spyware comercial conocidos por OMEGA.';
-    if (hasBehavioral && result.rationale) {
+      'Ninguno de los artefactos analizados coincide con dominios, procesos, firmas YARA ni hashes públicos asociados a spyware comercial conocidos por OMEGA.';
+    if ((hasBehavioral || hasYara) && result.rationale) {
       verdictBody = result.rationale;
     } else if (hasMatches) {
       verdictBody =
         'Los indicadores listados abajo coinciden con infraestructura o artefactos documentados en investigaciones públicas. Revisa el origen exacto para descartar navegación incidental antes de tomar medidas de contención.';
+    } else if (abuseAlerts.length > 0) {
+      verdictBody =
+        'Se detectaron privilegios activos de accesibilidad, administración de dispositivo o conexiones kernel anómalas que requieren verificación inmediata.';
     }
+
+    const canHardenDnsInDesktop =
+      typeof window !== 'undefined' && Boolean(window.omegaDesktop?.hardenPrivateDns);
 
     return (
       <div className="omega-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6">
@@ -335,15 +475,15 @@ export function MvtVerifierPanel({ onAskInChat }) {
           </button>
         </div>
 
-        {/* Bloque de Veredicto Apple Glass (sin borde lateral grueso) */}
+        {/* Bloque de Veredicto Apple Glass */}
         <section className="apple-group rounded-[15px] p-5">
           <div className="flex items-center gap-2.5">
-            {!hasMatches && !hasBehavioral ? (
+            {!hasAnyThreatSignal ? (
               <ShieldCheck className="h-5 w-5 text-[#30D158] shrink-0" />
             ) : (
               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictDot}`} />
             )}
-            <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${verdictHeadingTone}`}>
+            <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${isCriticalOverall ? 'text-[#FF6961]' : verdictHeadingTone}`}>
               {verdictTitle}
             </h2>
           </div>
@@ -355,9 +495,23 @@ export function MvtVerifierPanel({ onAskInChat }) {
           <div className="font-tech mt-4 pt-3 border-t border-white/[0.06] text-[11.5px] text-[#8E8E93]">
             {result.sourceLabel}
             {result.filesAnalyzed ? ` · ${result.filesAnalyzed} artefacto(s) en RAM` : ''}
-            {` · ${result.analyzedCount} indicadores evaluados · 0 bytes guardados`}
+            {` · ${result.analyzedCount} indicadores evaluados`}
+            {hardeningReport?.cached_dns_count > 0 ? ` · ${hardeningReport.cached_dns_count} DNS en caché` : ''}
+            {' · 0 bytes guardados'}
           </div>
         </section>
+
+        {(errorMsg || dnsAppliedNote) && (
+          <div
+            className={`rounded-[12px] border px-4 py-2.5 text-[12.5px] ${
+              errorMsg
+                ? 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FF6961]'
+                : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#30D158]'
+            }`}
+          >
+            {errorMsg || dnsAppliedNote}
+          </div>
+        )}
 
         {/* Postura de Endurecimiento (ADB USB) */}
         {hardeningReport?.hardening_checks?.length > 0 && (
@@ -378,31 +532,219 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
                 if (chk.status === 'OK') {
                   badgeCls = 'border-[#30D158]/35 bg-[#30D158]/12 text-[#30D158]';
+                } else if (chk.status === 'CRITICAL') {
+                  badgeCls = 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]';
                 } else if (chk.status === 'WARN') {
                   badgeCls = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
                 }
 
+                const showDnsAction =
+                  canHardenDnsInDesktop &&
+                  chk.control.includes('DNS Privado') &&
+                  chk.status !== 'OK';
+
                 return (
-                  <div key={chk.control} className="px-4 py-3.5 flex items-start justify-between gap-4">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
-                          {chk.status}
-                        </span>
-                        <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                          {chk.control}
-                        </span>
+                  <div key={chk.control} className="px-4 py-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
+                            {chk.status}
+                          </span>
+                          <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                            {chk.control}
+                          </span>
+                        </div>
+                        <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
+                          {chk.detail}
+                        </p>
                       </div>
-                      <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
-                        {chk.detail}
-                      </p>
+                      <span className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
+                        {chk.value}
+                      </span>
                     </div>
-                    <span className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
-                      {chk.value}
-                    </span>
+
+                    {showDnsAction && (
+                      <div className="pt-1 flex flex-wrap items-center gap-2">
+                        {!confirmingDns ? (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDns(true)}
+                            className="rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                          >
+                            Activar DNS Privado (Quad9 DoT)
+                          </button>
+                        ) : (
+                          <>
+                            <span className="text-[12px] text-[#D1D1D6]">
+                              ¿Forzar <span className="font-tech text-[#F5F5F7]">dns.quad9.net</span> por USB?
+                            </span>
+                            <button
+                              type="button"
+                              disabled={hardeningDns}
+                              onClick={handleConfirmHardenDns}
+                              className="rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
+                            >
+                              {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" />}
+                              <span>Confirmar</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={hardeningDns}
+                              onClick={() => setConfirmingDns(false)}
+                              className="rounded-[8px] border border-white/[0.1] px-2.5 py-1 text-[12px] text-[#8E8E93] hover:text-[#F5F5F7] cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
+            </div>
+          </section>
+        )}
+
+        {/* Alertas de Accesibilidad, Device Admin y C2 */}
+        {abuseAlerts.length > 0 && (
+          <section className="space-y-2">
+            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+              Alertas de accesibilidad y privilegios ({abuseAlerts.length})
+            </span>
+            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+              {abuseAlerts.map((al, idx) => (
+                <div key={`${al.indicator}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
+                          al.severity === 'CRITICAL'
+                            ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
+                            : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
+                        }`}
+                      >
+                        {al.severity}
+                      </span>
+                      <span className="text-[13px] font-medium text-[#F5F5F7]">
+                        {al.category}
+                      </span>
+                    </div>
+                    <div className="font-tech text-[12.5px] text-[#E5E5EA] break-all">
+                      {al.indicator}
+                    </div>
+                    <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
+                      {al.detail}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!onAskInChat}
+                    onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
+                    className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  >
+                    Investigar en Preguntar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Firmas YARA en RAM */}
+        {hasYara && (
+          <section className="space-y-2">
+            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+              Caza de firmas YARA en RAM ({yaraHits.length})
+            </span>
+            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+              {yaraHits.map((hit, idx) => (
+                <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-tech text-[13px] font-medium text-[#F5F5F7]">
+                        {hit.rule_name}
+                      </span>
+                      <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
+                        {hit.spyware_family}
+                      </span>
+                      {hit.cve && (
+                        <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
+                          {hit.cve}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
+                      {hit.description}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {(hit.matched_strings || []).map((tok) => (
+                        <span
+                          key={tok}
+                          className="font-tech rounded-[5px] border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[11px] text-[#8AB4FF]"
+                        >
+                          {tok}
+                        </span>
+                      ))}
+                      <span className="font-tech text-[11px] text-[#8E8E93] truncate">
+                        · {hit.artifact}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!onAskInChat}
+                    onClick={() => handleInvestigateYara(hit)}
+                    className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  >
+                    Investigar en Preguntar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Sockets Públicos de Kernel (ADB USB) */}
+        {liveSockets.length > 0 && (
+          <section className="space-y-2">
+            <div className="px-1 flex items-center justify-between gap-3">
+              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+                Sockets salientes de kernel ({hardeningReport?.live_sockets_total || liveSockets.length})
+              </span>
+              <span className="font-tech text-[11.5px] text-[#8E8E93]">
+                {hardeningReport?.cached_dns_count || 0} dominios DNS en caché
+              </span>
+            </div>
+            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden max-h-[260px] overflow-y-auto">
+              {liveSockets.slice(0, 20).map((sock, idx) => (
+                <div
+                  key={`${sock.remote_ip}-${sock.remote_port}-${idx}`}
+                  className="px-4 py-2.5 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                        sock.cti_match ? 'bg-[#FF453A]' : 'bg-[#8E8E93]/60'
+                      }`}
+                    />
+                    <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate">
+                      {sock.remote_ip}:{sock.remote_port}
+                    </span>
+                    {sock.cti_match && (
+                      <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
+                        CTI · {sock.spyware_family}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-tech shrink-0 text-[11px] text-[#8E8E93]">
+                    {sock.state} · local:{sock.local_port}
+                  </span>
+                </div>
+              ))}
             </div>
           </section>
         )}
@@ -568,8 +910,8 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
         {/* Contenedor Principal Apple Glass */}
         <div className="omega-capsule rounded-[16px] p-4">
-          {/* Selector Segmentado macOS */}
-          <div className="flex items-center justify-between mb-4">
+          {/* Selector Segmentado macOS + Sincronizador STIX 2.1 */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div className="apple-segmented inline-flex rounded-[9px] p-0.5">
               <button
                 type="button"
@@ -600,6 +942,17 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 Pegar indicadores
               </button>
             </div>
+
+            <button
+              type="button"
+              disabled={syncingStix}
+              onClick={handleSyncStix}
+              title="Sincronizar feeds STIX 2.1 locales (Amnesty Tech / Cytrox / NoviSpy) hacia PostgreSQL"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+            >
+              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#5E9BFF]' : ''}`} />
+              <span>{stixSyncNote || (syncingStix ? 'Sincronizando STIX2...' : 'Feeds STIX 2.1')}</span>
+            </button>
           </div>
 
           {inputMode === 'upload' ? (
@@ -629,7 +982,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".json,.db,.sqlite,.sqlite3,.txt,.log,.ips,.crash,.tar.gz,.tgz,.tar,.zip"
+                accept=".json,.db,.sqlite,.sqlite3,.txt,.log,.ips,.crash,.tar.gz,.tgz,.tar,.zip,.pkpass,.pdf,.gif"
                 onChange={(e) => analyzeFiles(e.target.files)}
                 className="hidden"
               />

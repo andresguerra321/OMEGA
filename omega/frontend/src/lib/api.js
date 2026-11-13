@@ -112,6 +112,13 @@ export async function analyzeLiveDeviceSnapshot(snapshot) {
   return parseJsonOrThrow(res, 'Error analizando la captura viva del dispositivo');
 }
 
+export async function syncStixFeeds() {
+  const res = await fetch(`${API_BASE}/corpus/sync-stix2`, {
+    method: 'POST',
+  });
+  return parseJsonOrThrow(res, 'Error sincronizando feeds STIX 2.1');
+}
+
 // ============================================================================
 // 4. MI EXPOSICIÓN (OSINT Pasivo con Consentimiento Explícito RNF8)
 // ============================================================================

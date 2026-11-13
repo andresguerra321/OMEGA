@@ -30,6 +30,7 @@ services:
       - "8000:8000"
     volumes:
       - omega_hf_cache:/root/.cache/huggingface
+      - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
     depends_on:
       omega-db:
         condition: service_healthy
