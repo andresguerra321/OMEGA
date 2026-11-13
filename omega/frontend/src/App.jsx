@@ -464,14 +464,14 @@ export default function App() {
         {/* Footer Sidebar */}
         <div className="p-3 border-t border-[#232329] bg-[#111115] flex items-center justify-between text-[11px] text-[#8E8E96]">
           {sidebarCollapsed ? (
-            <span className="h-1.5 w-1.5 mx-auto rounded-full bg-[#2F6FED]" title="Modo Defensivo · RNF1" />
+            <span className="h-1.5 w-1.5 mx-auto rounded-full bg-[#2F6FED]" title="Modo Defensivo" />
           ) : (
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2F6FED]" />
                 <span>Modo Defensivo</span>
               </div>
-              <span className="font-tech text-[10px]">RNF1</span>
+              <span className="font-tech text-[10px] text-[#8E8E96]/75">CTI</span>
             </>
           )}
         </div>
@@ -491,12 +491,16 @@ export default function App() {
               : 'border-b border-[#232329]'
           }`}
         >
-          <div className="flex items-center gap-2.5 text-[12px]">
-            <span className="text-[#8E8E96]">Plataforma de Investigación</span>
-            <span className="text-[#232329]">/</span>
-            <span className="font-medium text-[#F2F2F4]">
-              {NAV_ITEMS.find((n) => n.id === activeNav)?.label}
-            </span>
+          <div className="flex items-center gap-2 text-[12px]">
+            {activeNav === 'preguntar' && messages.length === 0 ? null : (
+              <>
+                <span className="text-[#8E8E96]">OMEGA</span>
+                <span className="text-[#232329]">/</span>
+                <span className="font-medium text-[#F2F2F4]">
+                  {NAV_ITEMS.find((n) => n.id === activeNav)?.label}
+                </span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -515,12 +519,11 @@ export default function App() {
               </button>
             )}
 
-            {activeNav === 'preguntar' && (
+            {activeNav === 'preguntar' && messages.length > 0 && (
               <button
                 type="button"
                 onClick={handleExportSession}
-                disabled={messages.length === 0}
-                className="h-[30px] px-3 rounded-[5px] bg-[#141418] border border-[#232329] flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/45 disabled:opacity-35 disabled:pointer-events-none transition-colors cursor-pointer"
+                className="h-[30px] px-3 rounded-[5px] bg-[#141418] border border-[#232329] flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/45 transition-colors cursor-pointer"
               >
                 <Download className="h-3.5 w-3.5 text-[#8E8E96]" />
                 <span>Exportar (.md)</span>
@@ -534,8 +537,6 @@ export default function App() {
           <ChatWorkspace
             messages={messages}
             loading={loadingChat}
-            topK={topK}
-            onChangeTopK={setTopK}
             sourceScope={sourceScope}
             onChangeSourceScope={setSourceScope}
             onSendMessage={handleSend}

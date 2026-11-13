@@ -138,8 +138,8 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
 
       {/* Footer del panel */}
       <div className="p-3 border-t border-[#232329] bg-[#0A0A0C] flex items-center justify-between text-[11px] text-[#8E8E96]">
-        <span>Trazabilidad estricta RNF1</span>
-        <span className="font-tech text-[#8E8E96]/75">Corpus Auditado</span>
+        <span>Fragmentos verificados</span>
+        <span className="font-tech text-[#8E8E96]/75">Corpus público</span>
       </div>
     </aside>
   );
