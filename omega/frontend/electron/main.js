@@ -1275,8 +1275,8 @@ function createMainWindow() {
     title: 'OMEGA — Cyber Threat Intelligence',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#08080A',
-      symbolColor: '#8E8E93',
+      color: '#0C0E13',
+      symbolColor: '#A1A7B4',
       height: 48,
     },
     webPreferences: {

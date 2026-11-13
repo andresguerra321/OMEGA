@@ -229,6 +229,11 @@ export async function resolveEncryptedIosManifestTargets(manifestPlistB64, manif
   return parseJsonOrThrow(res, 'No se pudo desbloquear la copia de seguridad en memoria');
 }
 
+export async function fetchApiHealth() {
+  const res = await fetch(`${API_BASE}/health`);
+  return parseJsonOrThrow(res, 'API no disponible');
+}
+
 export async function analyzePcLiveSnapshot(snapshot) {
   const res = await fetch(`${API_BASE}/triage/pc-live`, {
     method: 'POST',

@@ -193,7 +193,7 @@ export function CampaignsPanel({ onAskInChat }) {
   if (campaigns.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-        <Shield className="h-6 w-6 text-[#6E6E73] mb-2" />
+        <Shield className="h-6 w-6 text-[#9097A5] mb-2" />
         <p className="text-[13.5px] text-[#8E8E93]">No hay amenazas registradas.</p>
       </div>
     );
@@ -216,7 +216,7 @@ export function CampaignsPanel({ onAskInChat }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar amenaza o CVE..."
-              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED]/65 focus:outline-none transition-colors"
+              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none transition-colors"
             />
           </div>
 
@@ -452,7 +452,7 @@ export function CampaignsPanel({ onAskInChat }) {
                         value={cveSearch}
                         onChange={(e) => setCveSearch(e.target.value)}
                         placeholder="Filtrar CVE..."
-                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED]/65 focus:outline-none"
+                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none"
                       />
                     </div>
                   )}
@@ -577,7 +577,7 @@ export function CampaignsPanel({ onAskInChat }) {
                             value={iocSearch}
                             onChange={(e) => setIocSearch(e.target.value)}
                             placeholder="Filtrar indicador..."
-                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED]/65 focus:outline-none"
+                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none"
                           />
                         </div>
                       </div>

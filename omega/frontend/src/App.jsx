@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Plus,
   Search,
@@ -10,13 +10,21 @@ import {
   Settings,
   Download,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   BookOpen,
+  Gauge,
+  Sparkles,
 } from 'lucide-react';
-import { sendChatQuery } from './lib/api';
+import {
+  fetchApiHealth,
+  fetchSystemGovernance,
+  sendChatQuery,
+} from './lib/api';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaLogo } from './components/OmegaLogo';
+import { DockBar } from './components/DockBar';
+import { CommandCenterPanel } from './components/CommandCenterPanel';
+import { CopilotDrawer } from './components/CopilotDrawer';
 import { ChatWorkspace } from './components/ChatWorkspace';
 import { CampaignsPanel } from './components/CampaignsPanel';
 import { MvtVerifierPanel } from './components/MvtVerifierPanel';
@@ -25,11 +33,12 @@ import { LinkVerifierPanel } from './components/LinkVerifierPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 
 const NAV_ITEMS = [
-  { id: 'preguntar', label: 'Preguntar', subtitle: 'Consultas con citas', icon: MessageSquare },
-  { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
-  { id: 'equipo', label: 'Revisar mi equipo', subtitle: 'Verificación forense', icon: Laptop },
-  { id: 'exposicion', label: 'Mi exposición', subtitle: 'Qué hay público sobre mí', icon: Radar },
+  { id: 'inicio', label: 'Centro de Protección', subtitle: 'Estado en vivo y escudos', icon: Gauge },
+  { id: 'equipo', label: 'Revisar mi equipo', subtitle: 'PC Windows, Android e iPhone', icon: Laptop },
   { id: 'enlace', label: 'Verificar enlace', subtitle: 'Antes de abrirlo', icon: Link2 },
+  { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
+  { id: 'exposicion', label: 'Mi exposición', subtitle: 'Qué hay público sobre mí', icon: Radar },
+  { id: 'preguntar', label: 'Preguntar', subtitle: 'Consultas con citas', icon: MessageSquare },
   { id: 'ajustes', label: 'Ajustes', subtitle: 'Cuenta y permisos', icon: Settings },
 ];
 
@@ -139,11 +148,41 @@ function formatRelativeTime(isoString) {
   return `Hace ${diffDays} d`;
 }
 
+function formatClockTime(date = new Date()) {
+  try {
+    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return 'ahora';
+  }
+}
+
 export default function App() {
-  const [activeNav, setActiveNav] = useState('preguntar');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [activeNav, setActiveNav] = useState('inicio');
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
+  const [technicalMode, setTechnicalMode] = useState(false);
+  const [apiOnline, setApiOnline] = useState(true);
+  const [govStats, setGovStats] = useState(null);
+  const [usbStatus, setUsbStatus] = useState({
+    android: { connected: false },
+    ios: { connected: false },
+  });
+  const [pcAudit, setPcAudit] = useState(null);
+  const [pcScannedAt, setPcScannedAt] = useState('');
+  const [lastLinkResult, setLastLinkResult] = useState(null);
+  const [deviceInitialTab, setDeviceInitialTab] = useState('android');
+  const [deviceNavKey, setDeviceNavKey] = useState(0);
+  const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [pinnedCopilotContext, setPinnedCopilotContext] = useState('');
+  const [sessionsMenuOpen, setSessionsMenuOpen] = useState(false);
+  const [sessionActivity, setSessionActivity] = useState(() => [
+    {
+      id: 'init-ram',
+      label: 'Instrumentos locales iniciados en RAM (sin rastros en la nube)',
+      time: formatClockTime(),
+    },
+  ]);
   const [sessions, setSessions] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SESSIONS_STORAGE_KEY));
@@ -163,6 +202,75 @@ export default function App() {
 
   const textareaRef = useRef(null);
 
+  const logActivity = useCallback((label) => {
+    if (!label) return;
+    setSessionActivity((prev) => [
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label, time: formatClockTime() },
+      ...prev.slice(0, 14),
+    ]);
+  }, []);
+
+  const refreshSystemTelemetry = useCallback(async () => {
+    try {
+      const [health, gov] = await Promise.all([
+        fetchApiHealth(),
+        fetchSystemGovernance().catch(() => null),
+      ]);
+      setApiOnline(Boolean(health && health.status === 'ok'));
+      if (gov) setGovStats(gov);
+    } catch {
+      setApiOnline(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const initTimer = setTimeout(() => {
+      void refreshSystemTelemetry();
+    }, 0);
+    const timer = setInterval(() => {
+      void refreshSystemTelemetry();
+    }, 15000);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(timer);
+    };
+  }, [refreshSystemTelemetry]);
+
+  useEffect(() => {
+    const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
+    if (!bridge?.isDesktop) return undefined;
+    let cancelled = false;
+
+    const pollUsb = async () => {
+      try {
+        let customPath = '';
+        try {
+          customPath = localStorage.getItem('omega_custom_adb_path') || '';
+        } catch {
+          customPath = '';
+        }
+        const [adb, ios] = await Promise.all([
+          bridge.checkAdbStatus ? bridge.checkAdbStatus(customPath).catch(() => null) : null,
+          bridge.checkIosStatus ? bridge.checkIosStatus().catch(() => null) : null,
+        ]);
+        if (cancelled) return;
+        setUsbStatus({
+          android: adb || { connected: false },
+          ios: ios || { connected: false },
+        });
+      } catch {
+        // Ignore transient bridge errors
+      }
+    };
+
+    void pollUsb();
+    const timer = setInterval(pollUsb, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     const persistable = sessions.map((s) => ({
       ...s,
@@ -177,8 +285,14 @@ export default function App() {
         e.preventDefault();
         setCommandOpen((prev) => !prev);
         setCommandQuery('');
+        setSessionsMenuOpen(false);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setIsCopilotOpen((prev) => !prev);
+        setSessionsMenuOpen(false);
       } else if (e.key === 'Escape') {
         setCommandOpen(false);
+        setSessionsMenuOpen(false);
       }
     }
     window.addEventListener('keydown', onKeyDown);
@@ -190,7 +304,7 @@ export default function App() {
     [sessions, currentSessionId]
   );
 
-  const messages = activeSession?.messages || [];
+  const messages = useMemo(() => activeSession?.messages || [], [activeSession]);
 
   // Recopilar citas únicas de la conversación activa para el panel lateral
   const activeConversationCitations = useMemo(() => {
@@ -413,338 +527,315 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  function askInChat(promptText) {
+  function handleNavigate(navId, opts = {}) {
+    if (opts?.tab) {
+      setDeviceInitialTab(opts.tab);
+      setDeviceNavKey((k) => k + 1);
+    }
+    setSessionsMenuOpen(false);
+    setActiveNav(navId);
+  }
+
+  function handlePcAuditComplete(analysis) {
+    setPcAudit(analysis);
+    setPcScannedAt(formatClockTime());
+    const verdictTag = analysis?.triage?.diagnosis?.verdict_label || analysis?.triage?.diagnosis?.verdict_code || 'completado';
+    logActivity(`Escaneo PC: ${verdictTag}`);
+  }
+
+  function handleLinkVerified(res) {
+    setLastLinkResult(res);
+    if (res?.normalized_url || res?.verdict) {
+      logActivity(`Enlace verificado (${res.verdict || res.risk_level || 'revisado'})`);
+    }
+  }
+
+  function handleOpenCopilot(opts = {}) {
+    if (opts?.pinnedContext) {
+      setPinnedCopilotContext(opts.pinnedContext);
+    }
+    setSessionsMenuOpen(false);
+    setIsCopilotOpen(true);
+    if (opts?.prompt) {
+      setSelectedCitation(null);
+      setSourceScope('Todas las fuentes');
+      handleSend(opts.prompt, 'Todas las fuentes', {
+        forceNewSession: Boolean(opts.forceNewSession || !currentSessionId),
+      });
+      logActivity(`Copiloto: ${opts.prompt.slice(0, 48)}`);
+    }
+  }
+
+  function askInChat(promptText, opts = {}) {
+    const cleanPrompt = String(promptText || '').trim();
+    if (!cleanPrompt) return;
+    const firstLine = cleanPrompt
+      .split('\n')[0]
+      .replace(/^[#*\-\s]+/, '')
+      .slice(0, 72);
     setSelectedCitation(null);
     setIsSourcesPanelOpen(false);
     setSourceScope('Todas las fuentes');
-    setActiveNav('preguntar');
-    handleSend(promptText, 'Todas las fuentes', { forceNewSession: true });
+
+    if (opts?.fullPage) {
+      setActiveNav('preguntar');
+      setIsCopilotOpen(false);
+    } else {
+      setPinnedCopilotContext(opts?.pinnedContext || firstLine);
+      setIsCopilotOpen(true);
+    }
+    handleSend(cleanPrompt, 'Todas las fuentes', { forceNewSession: true });
+    logActivity(`Consulta copiloto: ${firstLine}`);
   }
 
   const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
+  const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
+  const reportsCount = Number(govStats?.corpus_stats?.reports ?? 26);
+  const usbConnected = Boolean(usbStatus?.android?.connected || usbStatus?.ios?.connected);
+  const pcRawVerdict = pcAudit?.triage?.diagnosis?.verdict_code || pcAudit?.verdict;
+  const pcVerdict = pcRawVerdict ? String(pcRawVerdict).toLowerCase() : null;
+  const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+  const drawerFailedPrompt = lastMsg?.isError ? lastMsg.retryQuery : '';
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-[#08080A] text-[#F5F5F7]">
-      {/* Rail Lateral Apple Vibrancy Izquierdo (72px compacto / 272px expandido) */}
-      <aside
-        aria-label="Navegación principal"
-        className={`${
-          sidebarCollapsed ? 'w-[72px]' : 'w-[272px]'
-        } shrink-0 h-screen apple-vibrancy border-r border-white/[0.07] flex flex-col justify-between transition-[width] duration-[200ms] ease-apple z-30 select-none`}
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#090A0D] omega-chassis-grid text-[#F4F6FA] select-none">
+      <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
+
+      {/* Barra Superior de Ventana Nativa (48px) */}
+      <header
+        className={`omega-titlebar relative z-20 min-h-[48px] h-[48px] shrink-0 px-4 sm:px-6 flex items-center justify-between gap-3 ${
+          isDesktop
+            ? 'pr-40 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
+            : ''
+        }`}
       >
-        {/* Zona Superior + Navegación Principal */}
-        <div className="flex flex-col min-h-0 flex-1">
-          {/* Identidad OMEGA sin jaula de bordes */}
-          <div
-            className={`titlebar-drag pt-4 pb-3.5 px-3.5 flex items-center ${
-              sidebarCollapsed ? 'justify-center' : 'gap-3 px-4'
-            }`}
-          >
-            <div className="titlebar-no-drag relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <OmegaLogo size={25} isThinking={loadingChat} />
-            </div>
-
-            {!sidebarCollapsed && (
-              <div className="min-w-0 flex items-center gap-2">
-                <span className="text-[13.5px] font-semibold tracking-[0.14em] text-[#F5F5F7]">
-                  OMEGA
-                </span>
-                <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]/90 shadow-[0_0_8px_rgba(48,209,88,0.55)]" />
-              </div>
-            )}
-          </div>
-
-          {/* Módulos + Divisor + Acciones Rápidas */}
-          <div
-            className={`pt-2 flex flex-col items-center gap-1.5 ${
-              sidebarCollapsed ? 'px-3.5' : 'px-3'
-            }`}
-          >
-            <nav className="w-full flex flex-col items-center gap-1.5">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeNav === item.id;
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveNav(item.id)}
-                    aria-label={`${item.label} — ${item.subtitle}`}
-                    className={`relative group h-10 rounded-[11px] transition-[transform,color] duration-150 ease-apple active:scale-[0.96] cursor-pointer flex items-center ${
-                      sidebarCollapsed
-                        ? 'w-10 justify-center'
-                        : 'w-full px-3 justify-start gap-3 text-left'
-                    } ${
-                      isActive
-                        ? sidebarCollapsed
-                          ? 'bg-[#2F6FED] text-white shadow-[0_6px_18px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)]'
-                          : 'bg-[#2F6FED]/16 text-[#F5F5F7] ring-1 ring-inset ring-[#2F6FED]/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                        : 'text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7]'
-                    }`}
-                  >
-                    <Icon
-                      strokeWidth={isActive ? 1.85 : 1.65}
-                      className={`h-[19px] w-[19px] shrink-0 transition-colors duration-200 ${
-                        isActive && !sidebarCollapsed ? 'text-[#5E9BFF]' : ''
-                      }`}
-                    />
-
-                    {!sidebarCollapsed && (
-                      <div className="min-w-0 flex-1 leading-none">
-                        <div className="truncate text-[13px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                          {item.label}
-                        </div>
-                        <div
-                          className={`truncate text-[11px] mt-1 ${
-                            isActive ? 'text-[#A9C7FF]/85' : 'text-[#8E8E93]'
-                          }`}
-                        >
-                          {item.subtitle}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Popover flotante estilo macOS en modo compacto */}
-                    {sidebarCollapsed && (
-                      <div
-                        role="tooltip"
-                        className="apple-tooltip pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-[opacity,transform] duration-150 ease-apple absolute left-full ml-4 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-[10px] px-3 py-2 text-left"
-                      >
-                        <div className="text-[12.5px] font-medium leading-tight text-[#F5F5F7]">
-                          {item.label}
-                        </div>
-                        <div className="text-[11px] leading-tight text-[#8E8E93] mt-0.5">
-                          {item.subtitle}
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-
-            {/* Divisor sutil */}
-            <div
-              className={`${sidebarCollapsed ? 'w-5' : 'w-full'} h-px bg-white/[0.075] my-2`}
-            />
-
-            {/* Botón utilitario + (Nueva consulta rápida) */}
-            <button
-              type="button"
-              onClick={startNewInvestigation}
-              aria-label="Nueva consulta rápida"
-              className={`relative group h-10 rounded-[11px] text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7] active:scale-[0.96] transition-[transform,background-color,color] duration-200 ease-apple cursor-pointer flex items-center ${
-                sidebarCollapsed
-                  ? 'w-10 justify-center'
-                  : 'w-full px-3 justify-start gap-3'
-              }`}
-            >
-              <Plus strokeWidth={1.7} className="h-[19px] w-[19px] shrink-0" />
-              {!sidebarCollapsed && (
-                <span className="truncate text-[13px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                  Nueva consulta
-                </span>
-              )}
-              {sidebarCollapsed && (
-                <div
-                  role="tooltip"
-                  className="apple-tooltip pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-[opacity,transform] duration-150 ease-apple absolute left-full ml-4 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-[10px] px-3 py-2 text-left"
-                >
-                  <div className="text-[12.5px] font-medium leading-tight text-[#F5F5F7]">
-                    Nueva consulta
-                  </div>
-                  <div className="text-[11px] leading-tight text-[#8E8E93] mt-0.5">
-                    Iniciar hilo limpio en Preguntar
-                  </div>
-                </div>
-              )}
-            </button>
-
-            {/* Botón utilitario ⌘K (Paleta Spotlight) */}
-            <button
-              type="button"
-              onClick={() => {
-                setCommandOpen(true);
-                setCommandQuery('');
-              }}
-              aria-label="Abrir búsqueda rápida (⌘K)"
-              className={`relative group h-10 rounded-[11px] text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7] active:scale-[0.96] transition-[transform,background-color,color] duration-200 ease-apple cursor-pointer flex items-center ${
-                sidebarCollapsed
-                  ? 'w-10 justify-center'
-                  : 'w-full px-3 justify-between'
-              }`}
-            >
-              <span className="inline-flex items-center gap-3 min-w-0">
-                <Search strokeWidth={1.7} className="h-[18px] w-[18px] shrink-0" />
-                {!sidebarCollapsed && (
-                  <span className="truncate text-[13px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                    Búsqueda rápida
-                  </span>
-                )}
-              </span>
-
-              {!sidebarCollapsed && (
-                <span className="font-tech shrink-0 rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10.5px] text-[#8E8E93]">
-                  ⌘K
-                </span>
-              )}
-
-              {sidebarCollapsed && (
-                <div
-                  role="tooltip"
-                  className="apple-tooltip pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-[opacity,transform] duration-150 ease-apple absolute left-full ml-4 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap rounded-[10px] px-3 py-2 text-left flex items-center gap-2.5"
-                >
-                  <div>
-                    <div className="text-[12.5px] font-medium leading-tight text-[#F5F5F7]">
-                      Búsqueda rápida
-                    </div>
-                    <div className="text-[11px] leading-tight text-[#8E8E93] mt-0.5">
-                      Saltar a módulo o sesión
-                    </div>
-                  </div>
-                  <span className="font-tech rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10px] text-[#8E8E93]">
-                    ⌘K
-                  </span>
-                </div>
-              )}
-            </button>
-          </div>
-
-          {/* Historial de consultas recientes (visible al expandir) */}
-          {!sidebarCollapsed && (
-            <div className="mt-5 px-3 flex-1 min-h-0 flex flex-col">
-              <div className="px-2 pb-1.5 text-[11px] font-semibold tracking-[0.02em] text-[#6E6E73]">
-                Recientes
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-0.5 pr-0.5">
-                {sessions.map((sess) => {
-                  const isSelected = activeNav === 'preguntar' && sess.id === currentSessionId;
-
-                  return (
-                    <div
-                      key={sess.id}
-                      onClick={() => {
-                        setCurrentSessionId(sess.id);
-                        setSelectedCitation(null);
-                        setActiveNav('preguntar');
-                      }}
-                      className={`group flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-[9px] text-[12.5px] cursor-pointer transition-colors duration-150 ${
-                        isSelected
-                          ? 'bg-white/[0.08] text-[#F5F5F7]'
-                          : 'text-[#8E8E93] hover:bg-white/[0.045] hover:text-[#F5F5F7]'
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="truncate leading-snug font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                          {sess.title}
-                        </p>
-                        <p className="font-tech text-[10.5px] text-[#6E6E73]">
-                          {formatRelativeTime(sess.updatedAt)}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => deleteSession(e, sess.id)}
-                        title="Eliminar sesión"
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-[6px] text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] transition-all cursor-pointer"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Zona Inferior — Expansión silenciosa */}
-        <div
-          className={`pt-2 pb-4 px-3.5 flex items-center ${
-            sidebarCollapsed ? 'justify-center' : 'justify-between px-4'
-          }`}
-        >
-          {!sidebarCollapsed && (
-            <span className="text-[11px] font-medium text-[#6E6E73]">
-              Operación pasiva
-            </span>
-          )}
+        {/* Identidad OMEGA + módulo actual */}
+        <div className="min-w-0 flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setSidebarCollapsed((v) => !v)}
-            aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-            title={sidebarCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-            className="h-9 w-9 shrink-0 rounded-[10px] flex items-center justify-center text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7] active:scale-[0.94] transition-[transform,background-color,color] duration-200 ease-apple cursor-pointer"
+            onClick={() => handleNavigate('inicio')}
+            className="titlebar-no-drag inline-flex items-center gap-2 rounded-[9px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
+            title="Ir al Centro de Protección"
           >
-            {sidebarCollapsed ? (
-              <ChevronRight strokeWidth={1.7} className="h-4 w-4" />
-            ) : (
-              <ChevronLeft strokeWidth={1.7} className="h-4 w-4" />
-            )}
+            <OmegaLogo size={24} isThinking={loadingChat} />
+            <span className="text-[13px] font-semibold tracking-[0.13em] text-[#F4F6FA]">
+              OMEGA
+            </span>
+          </button>
+
+          <span className="text-white/25 text-[13px]">/</span>
+          <span className="text-[13px] font-medium text-[#D6DAE2] truncate">
+            {activeNavItem.label}
+          </span>
+        </div>
+
+        {/* Controles instrumentales de ventana */}
+        <div className="titlebar-no-drag flex items-center gap-2 shrink-0">
+          {activeNav === 'preguntar' && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSessionsMenuOpen((v) => !v)}
+                className="h-8 max-w-[190px] px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[12px] text-[#E4E8F0] transition-colors cursor-pointer"
+              >
+                <MessageSquare className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
+                <span className="truncate">
+                  {activeSession?.title || 'Nueva consulta'}
+                </span>
+                <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+              </button>
+
+              {sessionsMenuOpen && (
+                <div className="apple-popover absolute right-0 mt-2 w-[300px] rounded-[13px] p-1.5 z-50 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSessionsMenuOpen(false);
+                      startNewInvestigation();
+                    }}
+                    className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Nueva consulta limpia</span>
+                  </button>
+
+                  <div className="h-px bg-white/[0.07] my-1" />
+
+                  <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                    {sessions.map((sess) => {
+                      const selected = sess.id === currentSessionId;
+                      return (
+                        <div
+                          key={sess.id}
+                          className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
+                            selected
+                              ? 'bg-white/[0.08] text-[#F4F6FA]'
+                              : 'text-[#C4CAD4] hover:bg-white/[0.05]'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCurrentSessionId(sess.id);
+                              setSelectedCitation(null);
+                              setSessionsMenuOpen(false);
+                            }}
+                            className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                          >
+                            <span className="block truncate font-medium">{sess.title}</span>
+                            <span className="font-tech text-[10.5px] text-[#9097A5]">
+                              {formatRelativeTime(sess.updatedAt)}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => deleteSession(e, sess.id)}
+                            title="Eliminar conversación"
+                            aria-label="Eliminar conversación"
+                            className="p-1 rounded-[6px] text-[#9097A5] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeNav === 'preguntar' && messages.length > 0 && activeConversationCitations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsSourcesPanelOpen((v) => !v)}
+              className={`h-8 px-2.5 rounded-[8px] border flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                isSourcesPanelOpen
+                  ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                  : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Fuentes ({activeConversationCitations.length})</span>
+            </button>
+          )}
+
+          {activeNav === 'preguntar' && messages.length > 0 && (
+            <button
+              type="button"
+              onClick={handleExportSession}
+              className="h-8 px-2.5 rounded-[8px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[12px] font-medium text-[#F4F6FA] transition-colors cursor-pointer"
+            >
+              <Download className="h-3.5 w-3.5 text-[#9BA2B0]" />
+              <span className="hidden sm:inline">Exportar</span>
+            </button>
+          )}
+
+          {/* Indicador de motor local en vivo */}
+          <div
+            className="hidden lg:inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-2.5 h-8 text-[11.5px] text-[#C4CAD4]"
+            title={apiOnline ? 'Motor local CTI activo' : 'Motor local no responde'}
+          >
+            <span
+              aria-hidden="true"
+              className={`h-1.5 w-1.5 rounded-full ${
+                apiOnline ? 'bg-[#30D158]' : 'bg-[#FF9F0A]'
+              }`}
+            />
+            <span className="font-tech">
+              {apiOnline ? `${reportsCount} rep` : 'Sin API'}
+            </span>
+          </div>
+
+          {/* Selector global Simple / Técnico */}
+          <div
+            role="group"
+            aria-label="Nivel de detalle"
+            className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
+          >
+            <button
+              type="button"
+              onClick={() => setTechnicalMode(false)}
+              className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                !technicalMode
+                  ? 'apple-segmented-active'
+                  : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+              }`}
+            >
+              Simple
+            </button>
+            <button
+              type="button"
+              onClick={() => setTechnicalMode(true)}
+              className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                technicalMode
+                  ? 'apple-segmented-active'
+                  : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+              }`}
+            >
+              Técnico
+            </button>
+          </div>
+
+          {/* Disparador del Copiloto deslizante */}
+          <button
+            type="button"
+            onClick={() => setIsCopilotOpen((v) => !v)}
+            aria-label="Abrir o cerrar copiloto lateral"
+            title="Copiloto deslizable (Ctrl+J)"
+            className={`h-8 px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+              isCopilotOpen
+                ? 'border-[#5E9BFF]/55 bg-[#2F6FED]/20 text-[#9EC1FF]'
+                : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
+            <span className="hidden md:inline">Copiloto</span>
+          </button>
+
+          {/* Paleta rápida */}
+          <button
+            type="button"
+            onClick={() => {
+              setCommandOpen(true);
+              setCommandQuery('');
+            }}
+            aria-label="Abrir búsqueda rápida (⌘K)"
+            title="Saltar a módulo o acción (⌘K)"
+            className="h-8 px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-[11.5px] text-[#B4BAC6] hover:text-[#F4F6FA] transition-colors cursor-pointer"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="font-tech hidden sm:inline">⌘K</span>
           </button>
         </div>
-      </aside>
+      </header>
 
-      {/* Área Principal Unificada (Lienzo Obsidiana + Atmósfera Continua) */}
-      <div className="relative flex-1 h-full flex flex-col min-w-0 bg-[#08080A]">
-        <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
-
-        {/* Barra Superior Translúcida (48px) */}
-        <header
-          className={`relative z-10 h-12 shrink-0 px-6 flex items-center justify-between transition-colors duration-300 ease-apple ${
-            isDesktop
-              ? 'pr-40 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
-              : ''
-          } ${
-            activeNav === 'preguntar' && messages.length === 0
-              ? 'border-b border-transparent'
-              : 'border-b border-white/[0.06] bg-[#08080A]/65 backdrop-blur-xl'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-[13px] tracking-[-0.01em]">
-            {activeNav === 'preguntar' && messages.length === 0 ? null : (
-              <>
-                <span className="text-[#8E8E93] font-medium">OMEGA</span>
-                <span className="text-white/20">/</span>
-                <span className="font-semibold text-[#F5F5F7]">
-                  {NAV_ITEMS.find((n) => n.id === activeNav)?.label}
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="titlebar-no-drag flex items-center gap-2">
-            {activeNav === 'preguntar' && messages.length > 0 && activeConversationCitations.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsSourcesPanelOpen((v) => !v)}
-                className={`titlebar-no-drag h-8 px-3 rounded-[8px] border flex items-center gap-1.5 text-[12.5px] font-medium active:scale-[0.97] transition-[transform,background-color,border-color,color] duration-150 cursor-pointer ${
-                  isSourcesPanelOpen
-                    ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
-                    : 'border-white/[0.08] bg-white/[0.045] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
-                }`}
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                <span>Fuentes ({activeConversationCitations.length})</span>
-              </button>
-            )}
-
-            {activeNav === 'preguntar' && messages.length > 0 && (
-              <button
-                type="button"
-                onClick={handleExportSession}
-                className="titlebar-no-drag h-8 px-3 rounded-[8px] bg-white/[0.045] hover:bg-white/[0.08] border border-white/[0.08] flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5F5F7] active:scale-[0.97] transition-[transform,background-color,border-color] duration-150 cursor-pointer"
-              >
-                <Download className="h-3.5 w-3.5 text-[#8E8E93]" />
-                <span>Exportar</span>
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* Contenido Dinámico */}
-        {activeNav === 'preguntar' ? (
+      {/* Lienzo Central Principal con reserva inferior para el Dock */}
+      <main className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden pb-[74px] select-text">
+        {activeNav === 'inicio' ? (
+          <CommandCenterPanel
+            isDesktop={isDesktop}
+            technicalMode={technicalMode}
+            apiOnline={apiOnline}
+            govStats={govStats}
+            usbStatus={usbStatus}
+            pcAudit={pcAudit}
+            pcScannedAt={pcScannedAt}
+            lastLinkResult={lastLinkResult}
+            sessionActivity={sessionActivity}
+            onPcAuditComplete={handlePcAuditComplete}
+            onNavigate={handleNavigate}
+            onOpenCopilot={handleOpenCopilot}
+            onSyncComplete={refreshSystemTelemetry}
+            onVerifyLinkJump={(url) => {
+              setLinkJump({ url, key: Date.now() });
+              setActiveNav('enlace');
+            }}
+            onLinkVerified={handleLinkVerified}
+            onLogActivity={logActivity}
+          />
+        ) : activeNav === 'preguntar' ? (
           <ChatWorkspace
             messages={messages}
             loading={loadingChat}
@@ -772,27 +863,75 @@ export default function App() {
             textareaRef={textareaRef}
           />
         ) : activeNav === 'amenazas' ? (
-          <main className="relative z-10 flex-1 min-h-0 flex flex-col">
-            <CampaignsPanel onAskInChat={askInChat} />
-          </main>
+          <CampaignsPanel onAskInChat={askInChat} />
         ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
-          <main className="relative z-10 flex-1 overflow-y-auto px-6 py-8 flex flex-col">
-            {activeNav === 'equipo' && <MvtVerifierPanel onAskInChat={askInChat} />}
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col">
+            {activeNav === 'equipo' && (
+              <MvtVerifierPanel
+                key={`mvt-${deviceNavKey}`}
+                onAskInChat={askInChat}
+                initialTab={deviceInitialTab}
+                preloadedAudit={pcAudit}
+                onAuditUpdate={handlePcAuditComplete}
+              />
+            )}
             {activeNav === 'exposicion' && <OsintPanel onAskInChat={askInChat} />}
-            {activeNav === 'enlace' && <LinkVerifierPanel onAskInChat={askInChat} />}
-          </main>
+            {activeNav === 'enlace' && (
+              <LinkVerifierPanel
+                onAskInChat={askInChat}
+                initialUrl={linkJump.url}
+                initialCheckKey={linkJump.key}
+                onLinkVerified={handleLinkVerified}
+              />
+            )}
+          </div>
         ) : (
-          /* Ajustes (Layout macOS System Settings) */
-          <main className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
-            <SettingsPanel
-              topK={topK}
-              onChangeTopK={setTopK}
-              sourceScope={sourceScope}
-              onChangeSourceScope={setSourceScope}
-            />
-          </main>
+          <SettingsPanel
+            topK={topK}
+            onChangeTopK={setTopK}
+            sourceScope={sourceScope}
+            onChangeSourceScope={setSourceScope}
+          />
         )}
-      </div>
+      </main>
+
+      {/* Dock Táctil Flotante Inferior */}
+      <DockBar
+        activeNav={activeNav}
+        onSelectNav={(id) => handleNavigate(id)}
+        pcVerdict={pcVerdict}
+        usbConnected={usbConnected}
+        apiOnline={apiOnline}
+        isLoadingChat={loadingChat}
+      />
+
+      {/* Panel Deslizable No Destructivo de Copiloto */}
+      <CopilotDrawer
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        onOpenFullWorkspace={() => handleNavigate('preguntar')}
+        activeSession={activeSession}
+        isLoading={loadingChat}
+        failedPrompt={drawerFailedPrompt}
+        onRetryFailedTurn={() =>
+          lastMsg?.isError &&
+          handleRetryFailedTurn(messages.length - 1, lastMsg.retryQuery, lastMsg.sourceScope)
+        }
+        activeCitation={selectedCitation}
+        onSelectCitation={(cit) => {
+          handleSelectCitation(cit);
+          setIsCopilotOpen(false);
+          setActiveNav('preguntar');
+        }}
+        onSendPrompt={(promptText) =>
+          handleSend(promptText, 'Todas las fuentes', {
+            forceNewSession: !currentSessionId,
+          })
+        }
+        pinnedContext={pinnedCopilotContext}
+        onClearPinnedContext={() => setPinnedCopilotContext('')}
+        reportsCount={reportsCount}
+      />
 
       {/* Paleta Spotlight (⌘K) */}
       {commandOpen && (
@@ -802,26 +941,26 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="apple-modal-in w-full max-w-[520px] rounded-[16px] border border-white/[0.12] bg-[#141419]/88 backdrop-blur-2xl shadow-[0_32px_84px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.09)] overflow-hidden"
+            className="apple-modal-in w-full max-w-[540px] rounded-[16px] border border-white/[0.12] bg-[#14171F]/94 backdrop-blur-2xl shadow-[0_32px_84px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.09)] overflow-hidden"
           >
             <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3.5">
-              <Search strokeWidth={1.7} className="h-[18px] w-[18px] text-[#8E8E93] shrink-0" />
+              <Search strokeWidth={1.7} className="h-[18px] w-[18px] text-[#9BA2B0] shrink-0" />
               <input
                 type="text"
                 autoFocus
                 value={commandQuery}
                 onChange={(e) => setCommandQuery(e.target.value)}
-                placeholder="Ir a módulo o investigación reciente..."
-                className="flex-1 bg-transparent text-[14.5px] tracking-[-0.01em] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+                placeholder="Ir a módulo, herramienta o conversación reciente..."
+                className="flex-1 bg-transparent text-[14.5px] tracking-[-0.01em] text-[#F4F6FA] placeholder-[#9097A5] focus:outline-none"
               />
-              <span className="font-tech rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10.5px] text-[#8E8E93]">
+              <span className="font-tech rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10.5px] text-[#9BA2B0]">
                 ESC
               </span>
             </div>
 
             <div className="max-h-[460px] overflow-y-auto p-2 pb-2.5 space-y-1">
-              <p className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#6E6E73]">
-                Módulos
+              <p className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9097A5]">
+                Instrumentos y módulos
               </p>
               {NAV_ITEMS.filter(
                 (item) =>
@@ -835,23 +974,57 @@ export default function App() {
                     key={item.id}
                     type="button"
                     onClick={() => {
-                      setActiveNav(item.id);
+                      handleNavigate(item.id);
                       setCommandOpen(false);
                     }}
-                    className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F5F5F7] hover:bg-white/[0.07] transition-colors duration-150 cursor-pointer"
+                    className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors duration-150 cursor-pointer"
                   >
                     <span className="inline-flex items-center gap-3">
-                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#5E9BFF]" />
+                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#8AB4FF]" />
                       <span className="font-medium tracking-[-0.01em]">{item.label}</span>
                     </span>
-                    <span className="text-[11.5px] text-[#8E8E93]">{item.subtitle}</span>
+                    <span className="text-[11.5px] text-[#9BA2B0]">{item.subtitle}</span>
                   </button>
                 );
               })}
 
+              <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9097A5]">
+                Acciones rápidas
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCopilotOpen(true);
+                  setCommandOpen(false);
+                }}
+                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors cursor-pointer"
+              >
+                <span className="inline-flex items-center gap-3">
+                  <Sparkles className="h-4 w-4 text-[#8AB4FF]" />
+                  <span>Abrir Copiloto lateral</span>
+                </span>
+                <span className="font-tech text-[11px] text-[#9BA2B0]">⌘J</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTechnicalMode((v) => !v);
+                  setCommandOpen(false);
+                }}
+                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors cursor-pointer"
+              >
+                <span className="inline-flex items-center gap-3">
+                  <Gauge className="h-4 w-4 text-[#8AB4FF]" />
+                  <span>
+                    Cambiar a modo {technicalMode ? 'Simple (lenguaje claro)' : 'Técnico'}
+                  </span>
+                </span>
+                <span className="text-[11.5px] text-[#9BA2B0]">Vista actual</span>
+              </button>
+
               {sessions.length > 0 && (
                 <>
-                  <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#6E6E73]">
+                  <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9097A5]">
                     Investigaciones recientes
                   </p>
                   {sessions
@@ -869,9 +1042,9 @@ export default function App() {
                           setActiveNav('preguntar');
                           setCommandOpen(false);
                         }}
-                        className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[12.5px] text-[#D1D1D6] hover:bg-white/[0.07] hover:text-[#F5F5F7] transition-colors duration-150 cursor-pointer"
+                        className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[12.5px] text-[#D6DAE2] hover:bg-white/[0.07] hover:text-[#F4F6FA] transition-colors duration-150 cursor-pointer"
                       >
-                        <MessageSquare strokeWidth={1.65} className="h-3.5 w-3.5 text-[#8E8E93] shrink-0" />
+                        <MessageSquare strokeWidth={1.65} className="h-3.5 w-3.5 text-[#9BA2B0] shrink-0" />
                         <span className="truncate">{s.title}</span>
                       </button>
                     ))}

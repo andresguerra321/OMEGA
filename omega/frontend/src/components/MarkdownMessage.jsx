@@ -180,16 +180,22 @@ export function MarkdownMessage({
               {enhance(children)}
             </blockquote>
           ),
-          code: ({ inline, children }) =>
-            inline ? (
-              <code className="font-tech rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]">
+          pre: ({ children }) => (
+            <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-4 text-[12.5px] leading-[1.6] text-[#F5F5F7]">
+              {children}
+            </pre>
+          ),
+          code: ({ className, children }) => {
+            const isBlock = Boolean(className?.startsWith('language-') || String(children || '').includes('\n'));
+            if (isBlock) {
+              return <code className={className}>{children}</code>;
+            }
+            return (
+              <code className="font-tech whitespace-nowrap rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]">
                 {children}
               </code>
-            ) : (
-              <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-4 text-[12.5px] leading-[1.6] text-[#F5F5F7]">
-                <code>{children}</code>
-              </pre>
-            ),
+            );
+          },
         }}
       >
         {sanitized}

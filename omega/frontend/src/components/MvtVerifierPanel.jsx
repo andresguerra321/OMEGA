@@ -202,10 +202,16 @@ function buildForensicMarkdownReport(result, hardeningReport) {
 
 const ADB_PATH_STORAGE_KEY = 'omega_custom_adb_path';
 
-export function MvtVerifierPanel({ onAskInChat }) {
+export function MvtVerifierPanel({
+  onAskInChat,
+  initialTab = 'android',
+  preloadedAudit = null,
+  onAuditUpdate,
+}) {
   const fileInputRef = useRef(null);
+  const lastPreloadedRef = useRef(null);
 
-  const [deviceTab, setDeviceTab] = useState('android');
+  const [deviceTab, setDeviceTab] = useState(initialTab || 'android');
   const [inputMode, setInputMode] = useState('upload');
   const [manualText, setManualText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -305,29 +311,46 @@ export function MvtVerifierPanel({ onAskInChat }) {
     };
   }, [customAdbPath, deviceTab, fetchUsbStatuses]);
 
-  function applyLiveDeviceResult(liveRes, fallbackLabel) {
-    const dev = liveRes.device_summary || {};
-    const unifiedSource = liveRes.triage
-      ? {
-          ...liveRes.triage,
-          yara_hits: liveRes.yara_hits?.length ? liveRes.yara_hits : liveRes.triage.yara_hits,
-          behavioral_anomalies: liveRes.behavioral_anomalies?.length
-            ? liveRes.behavioral_anomalies
-            : liveRes.triage.behavioral_anomalies,
-          timeline: liveRes.timeline?.length ? liveRes.timeline : liveRes.triage.timeline,
-          timeline_summary: liveRes.timeline_summary || liveRes.triage.timeline_summary,
-        }
-      : {};
-    let computedLabel = `${[dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || fallbackLabel} (ADB USB)`;
-    if (dev.platform === 'ios') {
-      computedLabel = `${[dev.name, dev.ios_version ? `iOS ${dev.ios_version}` : ''].filter(Boolean).join(' · ') || fallbackLabel}`;
-    } else if (dev.platform === 'pc') {
-      const osTag = dev.host_os === 'win32' ? 'Windows' : dev.host_os === 'darwin' ? 'macOS' : 'PC';
-      computedLabel = `${osTag} · ${dev.hostname || 'Esta computadora'}`;
+  const applyLiveDeviceResult = useCallback(
+    (liveRes, fallbackLabel, notifyParent = true) => {
+      const dev = liveRes.device_summary || {};
+      const unifiedSource = liveRes.triage
+        ? {
+            ...liveRes.triage,
+            yara_hits: liveRes.yara_hits?.length ? liveRes.yara_hits : liveRes.triage.yara_hits,
+            behavioral_anomalies: liveRes.behavioral_anomalies?.length
+              ? liveRes.behavioral_anomalies
+              : liveRes.triage.behavioral_anomalies,
+            timeline: liveRes.timeline?.length ? liveRes.timeline : liveRes.triage.timeline,
+            timeline_summary: liveRes.timeline_summary || liveRes.triage.timeline_summary,
+          }
+        : {};
+      let computedLabel = `${[dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || fallbackLabel} (ADB USB)`;
+      if (dev.platform === 'ios') {
+        computedLabel = `${[dev.name, dev.ios_version ? `iOS ${dev.ios_version}` : ''].filter(Boolean).join(' · ') || fallbackLabel}`;
+      } else if (dev.platform === 'pc') {
+        const osTag = dev.host_os === 'win32' ? 'Windows' : dev.host_os === 'darwin' ? 'macOS' : 'PC';
+        computedLabel = `${osTag} · ${dev.hostname || 'Esta computadora'}`;
+      }
+      setHardeningReport(liveRes);
+      setResult(normalizeParallelResult(unifiedSource, [], computedLabel));
+      if (notifyParent) {
+        onAuditUpdate?.(liveRes);
+      }
+    },
+    [onAuditUpdate]
+  );
+
+  useEffect(() => {
+    if (preloadedAudit && preloadedAudit !== lastPreloadedRef.current) {
+      lastPreloadedRef.current = preloadedAudit;
+      const t = setTimeout(() => {
+        applyLiveDeviceResult(preloadedAudit, 'Auditoría Local PC (en RAM)', false);
+      }, 0);
+      return () => clearTimeout(t);
     }
-    setHardeningReport(liveRes);
-    setResult(normalizeParallelResult(unifiedSource, [], computedLabel));
-  }
+    return undefined;
+  }, [preloadedAudit, applyLiveDeviceResult]);
 
   async function handleCopyCommand(key, value) {
     try {
@@ -1773,7 +1796,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           value={backupPassword}
                           onChange={(e) => setBackupPassword(e.target.value)}
                           placeholder="Contraseña de respaldo iTunes / Finder"
-                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED] focus:outline-none"
+                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED] focus:outline-none"
                         />
                         <button
                           type="submit"
@@ -1986,7 +2009,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                   value={manualText}
                   onChange={(e) => setManualText(e.target.value)}
                   placeholder={'https://enlace-sospechoso.com\n185.220.101.44\nPega un dominio, dirección IP o texto extraño por línea'}
-                  className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+                  className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
                 />
               </div>
 
@@ -1997,7 +2020,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 <button
                   type="submit"
                   disabled={isAnalyzing || !manualText.trim()}
-                  className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
+                  className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Revisar</span>

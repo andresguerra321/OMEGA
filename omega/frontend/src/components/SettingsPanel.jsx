@@ -245,10 +245,13 @@ export function SettingsPanel({
   const sources = effectiveGov.indexed_sources || FALLBACK_GOVERNANCE.indexed_sources;
 
   return (
-    <div className="h-full flex">
-      {/* Columna Izquierda: macOS System Settings Sidebar */}
-      <aside className="w-[228px] shrink-0 apple-vibrancy border-r border-white/[0.07] p-3 hidden md:block">
-        <nav className="space-y-1">
+    <div className="h-full flex flex-col min-h-0">
+      {/* Barra superior segmentada (reemplaza cualquier menú lateral secundario) */}
+      <div className="shrink-0 border-b border-white/[0.07] bg-[#0C0E13]/85 backdrop-blur-xl px-4 sm:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
+        <nav
+          aria-label="Secciones de configuración"
+          className="apple-segmented inline-flex flex-wrap items-center gap-1 rounded-[11px] p-1"
+        >
           {CONFIG_SECTIONS.map((sec) => {
             const Icon = sec.icon;
             const isActive = activeSection === sec.id;
@@ -257,69 +260,50 @@ export function SettingsPanel({
                 key={sec.id}
                 type="button"
                 onClick={() => scrollToSection(sec.id)}
-                className={`w-full flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] transition-all duration-150 cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] transition-all duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-[#2F6FED]/18 text-[#F5F5F7] font-medium ring-1 ring-inset ring-[#2F6FED]/35'
-                    : 'text-[#8E8E93] hover:bg-white/[0.055] hover:text-[#F5F5F7]'
+                    ? 'apple-segmented-active'
+                    : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
                 }`}
               >
-                <span
-                  className={`h-6 w-6 rounded-[7px] inline-flex items-center justify-center shrink-0 transition-colors ${
-                    isActive
-                      ? 'bg-[#2F6FED] text-white shadow-[0_2px_8px_rgba(47,111,237,0.35)]'
-                      : 'bg-white/[0.06] text-[#8E8E93]'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="truncate tracking-[-0.01em]">{sec.label}</span>
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="whitespace-nowrap">{sec.label}</span>
               </button>
             );
           })}
         </nav>
-      </aside>
 
-      {/* Columna Derecha: Lienzo de Ajustes */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
-        {/* Barra Superior de Acción */}
-        <div className="h-12 shrink-0 border-b border-white/[0.06] bg-[#08080A]/60 backdrop-blur-xl px-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[12.5px]">
-            <span className="text-[#8E8E93]">Ajustes</span>
-            <span className="text-white/25">›</span>
-            <span className="text-[#F5F5F7] font-medium">Cuenta y permisos</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleDiscardChanges}
-              className="text-[12.5px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
-            >
-              Descartar
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveChanges}
-              className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] px-3.5 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
-            >
-              {savedFeedback ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  <span>Guardado</span>
-                </>
-              ) : (
-                <span>Guardar cambios</span>
-              )}
-            </button>
-          </div>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleDiscardChanges}
+            className="text-[12.5px] text-[#A9B0BE] hover:text-[#F4F6FA] px-2 py-1 transition-colors cursor-pointer"
+          >
+            Descartar
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveChanges}
+            className="tactile-key-primary rounded-[9px] px-3.5 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            {savedFeedback ? (
+              <>
+                <Check className="h-3.5 w-3.5" />
+                <span>Guardado</span>
+              </>
+            ) : (
+              <span>Guardar cambios</span>
+            )}
+          </button>
         </div>
+      </div>
 
-        {/* Área Scrollable */}
-        <div className="flex-1 overflow-y-auto px-8 py-7">
-          <div className="omega-fade-up max-w-[780px] space-y-8 pb-8">
-            <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#F5F5F7]">
-              Configuración del espacio de trabajo
-            </h1>
+      {/* Área Scrollable con despeje inferior para el Dock */}
+      <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6">
+        <div className="omega-fade-up mx-auto max-w-[820px] space-y-8 pb-24">
+          <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#F4F6FA]">
+            Configuración del espacio de trabajo
+          </h1>
 
             {/* Bloque 1 — Identidad de Sesión Local */}
             <section ref={cuentaRef} className="space-y-3 scroll-mt-6">
@@ -585,7 +569,6 @@ export function SettingsPanel({
                 subtitle="Analiza un reporte técnico externo directamente en memoria para extraer IPv4 (net4), dominios y CVEs y cruzarlos con el catálogo."
               />
             </section>
-          </div>
         </div>
       </div>
     </div>

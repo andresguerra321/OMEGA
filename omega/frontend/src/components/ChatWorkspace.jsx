@@ -303,13 +303,13 @@ export function ChatWorkspace({
               }
             }}
             placeholder="CVE-2023-41064, dominio o hash..."
-            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED]/70 focus:outline-none transition-colors"
+            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/70 focus:outline-none transition-colors"
           />
           <button
             type="button"
             onClick={() => insertIocValue(iocDraft)}
             disabled={!iocDraft.trim()}
-            className="rounded-[8px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:bg-white/[0.06] disabled:text-[#6E6E73] active:scale-[0.96] transition-all cursor-pointer"
+            className="rounded-[8px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:bg-white/[0.06] disabled:text-[#9097A5] active:scale-[0.96] transition-all cursor-pointer"
           >
             Usar
           </button>
@@ -393,7 +393,7 @@ export function ChatWorkspace({
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Pregunta por Pegasus, un CVE, dominio o artefacto forense..."
-                  className="w-full resize-none bg-transparent px-1 pt-0.5 pb-2.5 text-[15px] leading-[1.58] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+                  className="w-full resize-none bg-transparent px-1 pt-0.5 pb-2.5 text-[15px] leading-[1.58] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
                 />
 
                 {(detectedIoc || iocFeedback) && (
@@ -433,7 +433,7 @@ export function ChatWorkspace({
                       disabled={loading || !input.trim()}
                       title="Analizar (Enter)"
                       aria-label="Analizar"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                     >
                       <ArrowRight className="h-4 w-4" />
                     </button>
@@ -457,7 +457,7 @@ export function ChatWorkspace({
                       <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#5E9BFF]">
                         {item.tag}
                       </span>
-                      <ArrowRight className="h-3.5 w-3.5 text-[#6E6E73] group-hover:text-[#F5F5F7] group-hover:translate-x-0.5 transition-all duration-200 ease-apple" />
+                      <ArrowRight className="h-3.5 w-3.5 text-[#9097A5] group-hover:text-[#F5F5F7] group-hover:translate-x-0.5 transition-all duration-200 ease-apple" />
                     </div>
                     <p className="mt-1.5 text-[13.5px] font-medium tracking-[-0.01em] leading-[1.42] text-[#D1D1D6] group-hover:text-[#F5F5F7] transition-colors">
                       {item.title}
@@ -573,14 +573,14 @@ export function ChatWorkspace({
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Haz una pregunta de seguimiento..."
-                    className="flex-1 resize-none bg-transparent px-1.5 py-1 text-[15px] leading-[1.55] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+                    className="flex-1 resize-none bg-transparent px-1.5 py-1 text-[15px] leading-[1.55] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
                   />
 
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
                     aria-label="Enviar"
-                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
+                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                   >
                     <ArrowRight className="h-4 w-4" />
                   </button>

@@ -388,13 +388,13 @@ export function OsintPanel({ onAskInChat }) {
                   ? 'prensa@organizacion.org'
                   : 'organizacion.org'
               }
-              className="font-tech flex-1 min-w-[180px] h-9 bg-transparent px-2 text-[13.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+              className="font-tech flex-1 min-w-[180px] h-9 bg-transparent px-2 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
             />
 
             <button
               type="submit"
               disabled={!assetValue.trim() || !consentChecked || isScanning}
-              className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+              className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
             >
               {isScanning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               <span>Auditar</span>

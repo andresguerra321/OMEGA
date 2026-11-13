@@ -85,12 +85,12 @@ export function OmegaWebIntelCard({
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
           placeholder="https://citizenlab.ca/... o https://blog.google/threat-analysis-group/..."
-          className="font-tech flex-1 min-w-0 h-8 bg-transparent px-2 text-[12.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+          className="font-tech flex-1 min-w-0 h-8 bg-transparent px-2 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
         />
         <button
           type="submit"
           disabled={loading || !urlInput.trim()}
-          className="h-8 rounded-[8px] bg-[#2F6FED] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          className="h-8 rounded-[8px] bg-[#2F6FED] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
         >
           {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           <span>{activeNet4Ips.length > 0 ? 'Cruzar IPv4' : 'Extraer en RAM'}</span>

@@ -57,7 +57,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filtrar por término u organización..."
-                className="apple-well w-full rounded-[9px] py-1.5 pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED]/65 focus:outline-none transition-colors duration-150"
+                className="apple-well w-full rounded-[9px] py-1.5 pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none transition-colors duration-150"
               />
             </div>
           </div>

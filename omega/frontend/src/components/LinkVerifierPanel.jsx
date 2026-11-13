@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ExternalLink, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
 
@@ -24,8 +24,13 @@ function getVerdictPresentation(result) {
   };
 }
 
-export function LinkVerifierPanel({ onAskInChat }) {
-  const [urlInput, setUrlInput] = useState('');
+export function LinkVerifierPanel({
+  onAskInChat,
+  initialUrl = '',
+  initialCheckKey = 0,
+  onLinkVerified,
+}) {
+  const [urlInput, setUrlInput] = useState(initialUrl || '');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -33,9 +38,50 @@ export function LinkVerifierPanel({ onAskInChat }) {
   const [traceResult, setTraceResult] = useState(null);
   const [traceError, setTraceError] = useState('');
   const [finalCheckResult, setFinalCheckResult] = useState(null);
+  const lastCheckKeyRef = useRef(0);
 
   const canTraceInRam =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.inspectLinkEphemeral);
+
+  useEffect(() => {
+    if (!initialCheckKey || !initialUrl || initialCheckKey === lastCheckKeyRef.current) {
+      return undefined;
+    }
+    lastCheckKeyRef.current = initialCheckKey;
+    const cleaned = initialUrl.trim();
+    if (!cleaned) return undefined;
+    let cancelled = false;
+
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setUrlInput(cleaned);
+      setLoading(true);
+      setError('');
+      setTraceResult(null);
+      setTraceError('');
+      setFinalCheckResult(null);
+
+      verifySuspiciousLink(cleaned)
+        .then((data) => {
+          if (cancelled) return;
+          setResult(data);
+          onLinkVerified?.(data);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setError(err?.message || 'No se pudo inspeccionar el enlace.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [initialCheckKey, initialUrl, onLinkVerified]);
 
   async function handleCheck(e) {
     e.preventDefault();
@@ -49,6 +95,7 @@ export function LinkVerifierPanel({ onAskInChat }) {
     try {
       const data = await verifySuspiciousLink(cleaned);
       setResult(data);
+      onLinkVerified?.(data);
     } catch (err) {
       setError(err?.message || 'No se pudo inspeccionar el enlace.');
     } finally {
@@ -364,13 +411,13 @@ export function LinkVerifierPanel({ onAskInChat }) {
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="https://enlace-sospechoso.ejemplo/ruta"
-            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2.5 text-[13.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:outline-none"
+            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2.5 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
           />
 
           <button
             type="submit"
             disabled={loading || !urlInput.trim()}
-            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#6E6E73] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Verificar</span>

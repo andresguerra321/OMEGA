@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'IBM Plex Sans', 'Segoe UI', Roboto, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'IBM Plex Mono', SFMono-Regular, monospace;
 
-  --color-obsidian: #08080A;
-  --color-surface: #121216;
+  --color-obsidian: #090A0D;
+  --color-surface: #12141A;
   --color-cobalt: #2F6FED;
-  --color-ink-primary: #F5F5F7;
-  --color-ink-secondary: #98989F;
+  --color-ink-primary: #F4F5F7;
+  --color-ink-secondary: #989DA8;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
-    --bg-canvas: #08080A;
-    --bg-elevated: rgba(20, 20, 24, 0.74);
-    --bg-well: rgba(0, 0, 0, 0.34);
-    --border-hairline: rgba(255, 255, 255, 0.085);
-    --border-subtle: rgba(255, 255, 255, 0.065);
+    --bg-canvas: #090A0D;
+    --bg-elevated: rgba(19, 21, 28, 0.88);
+    --bg-well: #07080B;
+    --border-hairline: rgba(255, 255, 255, 0.09);
+    --border-subtle: rgba(255, 255, 255, 0.06);
     --accent-cobalt: #2F6FED;
-    --accent-cobalt-tint: rgba(47, 111, 237, 0.16);
-    --text-primary: #F5F5F7;
-    --text-secondary: #98989F;
+    --accent-cobalt-tint: rgba(47, 111, 237, 0.18);
+    --text-primary: #F4F5F7;
+    --text-secondary: #989DA8;
     --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
     --ease-kowalski: cubic-bezier(0.22, 1, 0.36, 1);
   }
@@ -42,23 +42,40 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    caret-color: #5E9BFF;
     overflow: hidden;
   }
 
   ::selection {
-    background: rgba(47, 111, 237, 0.34);
-    color: #F5F5F7;
+    background: rgba(47, 111, 237, 0.36);
+    color: #F4F5F7;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid rgba(94, 155, 255, 0.85);
+    outline-offset: 2px;
   }
 }
 
-/* Tipografía Monospace estricta para identificadores forenses y registros */
+/* Tipografía Monospace estricta para telemetría, IPs, hashes y marcas de tiempo */
 .font-tech {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.015em;
 }
 
-/* Scrollbar estilo macOS — sutil, translúcido y silencioso */
+/* Textura micro-punteada de chasis de instrumentación */
+.omega-chassis-grid {
+  background-color: #090A0D;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Scrollbar silencioso */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -69,15 +86,15 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.28);
 }
 
-/* Integración nativa de ventana Electron macOS / Windows */
+/* Integración nativa de ventana Electron Windows / macOS */
 .titlebar-drag {
   -webkit-app-region: drag;
 }
@@ -86,125 +103,199 @@
   -webkit-app-region: no-drag;
 }
 
-/* Curva de desaceleración Apple CoreAnimation */
 .ease-apple,
 .ease-kowalski {
   transition-timing-function: var(--ease-apple);
 }
 
-/* Materiales Ópticos — Apple Obsidian Vibrancy (estándar backdrop-filter al final para Vite/LightningCSS) */
+/* Chasis anodizado táctil y cavidades empotradas */
 .apple-vibrancy {
-  background: rgba(16, 16, 20, 0.78);
-  -webkit-backdrop-filter: blur(28px) saturate(1.45);
-  backdrop-filter: blur(28px) saturate(1.45);
+  background: rgba(14, 16, 21, 0.88);
+  -webkit-backdrop-filter: blur(26px) saturate(1.35);
+  backdrop-filter: blur(26px) saturate(1.35);
 }
 
-.apple-group {
-  background: rgba(255, 255, 255, 0.032);
-  border: 1px solid rgba(255, 255, 255, 0.085);
+.apple-group,
+.tactile-chassis {
+  background: linear-gradient(180deg, #151820 0%, #101218 100%);
+  border: 1px solid rgba(255, 255, 255, 0.095);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    0 10px 32px rgba(0, 0, 0, 0.26);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.075),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 16px 38px rgba(0, 0, 0, 0.42);
 }
 
-.apple-well {
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+.apple-well,
+.tactile-well {
+  background: #07080B;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.tactile-key {
+  background: linear-gradient(180deg, #1E222B 0%, #15171E 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 4px 12px rgba(0, 0, 0, 0.36);
+  transition:
+    transform 140ms var(--ease-apple),
+    background 160ms var(--ease-apple),
+    border-color 160ms var(--ease-apple);
+}
+
+.tactile-key:hover:not(:disabled) {
+  background: linear-gradient(180deg, #252A35 0%, #1A1D26 100%);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.tactile-key:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.45),
+    0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.tactile-key-primary {
+  background: linear-gradient(180deg, #3A7BFF 0%, #2660D6 100%);
+  border: 1px solid rgba(138, 180, 255, 0.42);
+  color: #FFFFFF;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 20px rgba(47, 111, 237, 0.28);
+  transition:
+    transform 140ms var(--ease-apple),
+    filter 160ms var(--ease-apple),
+    box-shadow 160ms var(--ease-apple);
+}
+
+.tactile-key-primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.tactile-key-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.tactile-key-ivory {
+  background: linear-gradient(180deg, #F4F5F8 0%, #DFDFE6 100%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  color: #090A0D;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 6px 18px rgba(0, 0, 0, 0.38);
+  transition:
+    transform 140ms var(--ease-apple),
+    filter 160ms var(--ease-apple);
+}
+
+.tactile-key-ivory:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+.tactile-key-ivory:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Dock flotante inferior nativo */
+.omega-dock {
+  background: linear-gradient(180deg, rgba(24, 27, 35, 0.92) 0%, rgba(13, 15, 20, 0.96) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.55),
+    0 22px 54px rgba(0, 0, 0, 0.72);
+  -webkit-backdrop-filter: blur(26px) saturate(1.4);
+  backdrop-filter: blur(26px) saturate(1.4);
 }
 
 .apple-segmented {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.28);
+  background: #08090C;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .apple-segmented-active {
-  background: rgba(255, 255, 255, 0.12);
-  color: #F5F5F7;
+  background: linear-gradient(180deg, #252A36 0%, #1B1E27 100%);
+  color: #F4F5F7;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 1px 3px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 .apple-tooltip {
-  background: rgba(24, 24, 30, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 22, 29, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 14px 36px rgba(0, 0, 0, 0.65);
+    0 14px 36px rgba(0, 0, 0, 0.68);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   backdrop-filter: blur(20px) saturate(1.4);
 }
 
-/* Cápsula flotante estilo macOS Spotlight para entrada primaria */
+/* Cápsula de consulta */
 .omega-capsule {
-  background: rgba(22, 22, 27, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(22, 25, 33, 0.92) 0%, rgba(14, 16, 22, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 20px 54px rgba(0, 0, 0, 0.56);
-  -webkit-backdrop-filter: blur(26px) saturate(1.4);
-  backdrop-filter: blur(26px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.35);
+  backdrop-filter: blur(24px) saturate(1.35);
   transition:
-    border-color 200ms var(--ease-apple),
-    background-color 200ms var(--ease-apple),
-    box-shadow 240ms var(--ease-apple);
+    border-color 180ms var(--ease-apple),
+    box-shadow 220ms var(--ease-apple);
 }
 
 .omega-capsule:focus-within {
-  background: rgba(24, 24, 30, 0.9);
-  border-color: rgba(47, 111, 237, 0.6);
+  border-color: rgba(47, 111, 237, 0.65);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 0 3px rgba(47, 111, 237, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    0 0 0 3px rgba(47, 111, 237, 0.16),
     0 24px 64px rgba(0, 0, 0, 0.64);
 }
 
-/* Sugerencias flotantes de bienvenida */
 .omega-prompt-tile {
-  background: rgba(255, 255, 255, 0.028);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
+  background: linear-gradient(180deg, rgba(24, 27, 35, 0.88) 0%, rgba(16, 18, 24, 0.92) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 22px rgba(0, 0, 0, 0.34);
   transition:
-    transform 200ms var(--ease-apple),
-    border-color 200ms var(--ease-apple),
-    background-color 200ms var(--ease-apple),
-    box-shadow 200ms var(--ease-apple);
+    transform 180ms var(--ease-apple),
+    border-color 180ms var(--ease-apple),
+    box-shadow 180ms var(--ease-apple);
 }
 
 .omega-prompt-tile:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.052);
-  border-color: rgba(47, 111, 237, 0.38);
+  transform: translateY(-1.5px);
+  border-color: rgba(47, 111, 237, 0.45);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 32px rgba(0, 0, 0, 0.38);
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 12px 28px rgba(0, 0, 0, 0.42);
 }
 
 .omega-prompt-tile:active {
-  transform: scale(0.985);
+  transform: translateY(0.5px);
 }
 
-/* Micro-animaciones nítidas estilo macOS */
+/* Micro-animaciones precisas */
 .omega-core-pulse {
   animation: omegaCorePulse 2.2s ease-in-out infinite;
 }
 
 .omega-fade-up {
-  animation: omegaFadeUp 180ms var(--ease-apple) both;
+  animation: omegaFadeUp 170ms var(--ease-apple) both;
 }
 
 .omega-panel-in {
-  animation: omegaPanelIn 220ms var(--ease-apple) both;
+  animation: omegaPanelIn 200ms var(--ease-apple) both;
 }
 
 .apple-modal-in {
-  animation: appleModalIn 180ms var(--ease-apple) both;
+  animation: appleModalIn 160ms var(--ease-apple) both;
 }
 
 .omega-ray-drift {
@@ -225,7 +316,7 @@
 
 @keyframes omegaFadeUp {
   from {
-    opacity: 0.35;
+    opacity: 0.4;
     transform: translateY(4px);
   }
   to {
@@ -237,7 +328,7 @@
 @keyframes omegaPanelIn {
   from {
     opacity: 0;
-    transform: translateX(12px);
+    transform: translateX(14px);
   }
   to {
     opacity: 1;
@@ -290,13 +381,16 @@
   }
 
   .omega-prompt-tile,
-  .omega-capsule {
+  .omega-capsule,
+  .tactile-key,
+  .tactile-key-primary,
+  .tactile-key-ivory {
     transition: none !important;
     transform: none !important;
   }
 }
 
-/* Simulación elegante de escritura en respuestas solo texto (sin gradientes exagerados) */
+/* Escritura asistida */
 .omega-prose-typing > :last-child:not(ul):not(ol):not(pre):not(blockquote)::after,
 .omega-prose-typing > ul:last-child > li:last-child::after,
 .omega-prose-typing > ol:last-child > li:last-child::after,
