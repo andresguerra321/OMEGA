@@ -29,10 +29,10 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
         <div className="h-12 px-4 border-b border-[#232329] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-[#2F6FED]" />
-            <span className="text-[13px] font-semibold text-[#F2F2F4]">
+            <span className="text-[14px] font-semibold text-[#F5F7FA]">
               Evidencia Documental
             </span>
-            <span className="font-tech text-[11px] rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0.5 text-[#7AA7FF]">
+            <span className="font-tech text-[12px] rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0.5 text-[#8AB4FF]">
               {citations.length}
             </span>
           </div>
@@ -41,7 +41,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
             type="button"
             onClick={onClose}
             aria-label="Cerrar panel de fuentes"
-            className="h-7 w-7 inline-flex items-center justify-center rounded-[4px] text-[#8E8E96] hover:bg-[#0A0A0C] hover:text-[#F2F2F4] active:scale-[0.94] transition-all duration-150 ease-kowalski cursor-pointer"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-[4px] text-[#9CA3B0] hover:bg-[#0A0A0C] hover:text-[#F2F4F8] active:scale-[0.94] transition-all duration-150 ease-kowalski cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -51,13 +51,13 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
         {citations.length > 3 && (
           <div className="p-3 border-b border-[#232329]">
             <div className="relative flex items-center">
-              <Search className="absolute left-3 h-3.5 w-3.5 text-[#8E8E96] pointer-events-none" />
+              <Search className="absolute left-3 h-3.5 w-3.5 text-[#9CA3B0] pointer-events-none" />
               <input
                 type="text"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filtrar por término u organización..."
-                className="w-full rounded-[4px] border border-[#232329] bg-[#0A0A0C] py-1.5 pl-8 pr-3 text-[12px] text-[#F2F2F4] placeholder-[#8E8E96] focus:border-[#2F6FED] focus:outline-none transition-colors duration-150"
+                className="w-full rounded-[4px] border border-[#232329] bg-[#0A0A0C] py-2 pl-8 pr-3 text-[13px] text-[#F2F4F8] placeholder-[#949CA9] focus:border-[#2F6FED] focus:outline-none transition-colors duration-150"
               />
             </div>
           </div>
@@ -66,7 +66,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
         {/* Lista de fragmentos */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {filtered.length === 0 ? (
-            <p className="p-4 text-center text-[12px] text-[#8E8E96]">
+            <p className="p-4 text-center text-[13px] text-[#9CA3B0]">
               No hay fuentes coincidentes con el filtro.
             </p>
           ) : (
@@ -89,32 +89,32 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                       : 'border-[#232329] bg-[#0A0A0C]/65 hover:border-[#2F6FED]/55 hover:bg-[#141418]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center justify-between gap-2 text-[12px]">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-tech font-medium text-[#7AA7FF] bg-[#15223D] border border-[#2F6FED]/40 px-1.5 py-0.5 rounded-[4px]">
+                      <span className="font-tech font-medium text-[#8AB4FF] bg-[#15223D] border border-[#2F6FED]/40 px-1.5 py-0.5 rounded-[4px]">
                         [{cit.index}]
                       </span>
-                      <span className="font-medium text-[#F2F2F4] truncate">
+                      <span className="font-medium text-[#F2F4F8] truncate">
                         {cit.organization}
                       </span>
                     </div>
-                    <span className="font-tech text-[#8E8E96] shrink-0">
+                    <span className="font-tech text-[#9CA3B0] shrink-0">
                       Pág. {cit.page}
                     </span>
                   </div>
 
-                  <h4 className="text-[12.5px] font-semibold text-[#F2F2F4] leading-snug">
+                  <h4 className="text-[13.5px] font-semibold text-[#F5F7FA] leading-snug">
                     {cit.title}
                   </h4>
 
-                  <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-2.5 text-[12px] leading-relaxed text-[#F2F2F4]/85">
+                  <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-3 text-[13px] leading-[1.62] text-[#DCE1EA]">
                     “{cit.snippet}”
                   </div>
 
-                  <div className="flex items-center justify-between pt-0.5 text-[11px] text-[#8E8E96]">
-                    <span className="font-tech text-[#7AA7FF]">
+                  <div className="flex items-center justify-between pt-0.5 text-[11.5px] text-[#9CA3B0]">
+                    <span className="font-tech text-[#8AB4FF]">
                       {(Number(cit.similarity || 0) * 100).toFixed(1)}% match ·{' '}
-                      <span className="text-[#8E8E96]">{cit.retrieval_method || 'RRF'}</span>
+                      <span className="text-[#9CA3B0]">{cit.retrieval_method || 'RRF'}</span>
                     </span>
                     {cit.source_url?.startsWith('http') && (
                       <a
@@ -122,7 +122,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-[#7AA7FF] hover:text-[#9FC0FF] hover:underline underline-offset-2 transition-colors"
+                        className="inline-flex items-center gap-1 text-[#8AB4FF] hover:text-[#A9C7FF] hover:underline underline-offset-2 transition-colors"
                       >
                         <span>Abrir reporte</span>
                         <ExternalLink className="h-3 w-3" />
@@ -137,9 +137,9 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
       </div>
 
       {/* Footer del panel */}
-      <div className="p-3 border-t border-[#232329] bg-[#0A0A0C] flex items-center justify-between text-[11px] text-[#8E8E96]">
+      <div className="p-3 border-t border-[#232329] bg-[#0A0A0C] flex items-center justify-between text-[12px] text-[#9CA3B0]">
         <span>Fragmentos verificados</span>
-        <span className="font-tech text-[#8E8E96]/75">Corpus público</span>
+        <span className="font-tech text-[#9CA3B0]">Corpus público</span>
       </div>
     </aside>
   );

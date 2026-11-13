@@ -204,16 +204,16 @@ export function CampaignsPanel({ onAskInChat }) {
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden bg-[#0A0A0C]">
       {/* Lista izquierda compacta */}
-      <aside className="w-[304px] shrink-0 border-r border-[#232329] bg-[#0A0A0C] flex flex-col min-h-0">
-        <div className="p-3 border-b border-[#232329] space-y-2">
+      <aside className="w-[316px] shrink-0 border-r border-[#232329] bg-[#0A0A0C] flex flex-col min-h-0">
+        <div className="p-3 border-b border-[#232329] space-y-2.5">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8E8E96]" />
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#9CA3B0]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar amenaza o CVE..."
-              className="w-full h-8 rounded-[4px] border border-[#232329] bg-[#141418] pl-8 pr-2.5 text-[12px] text-[#F2F2F4] placeholder-[#8E8E96] focus:border-[#2F6FED] focus:outline-none"
+              className="w-full h-9 rounded-[4px] border border-[#232329] bg-[#141418] pl-8 pr-2.5 text-[13px] text-[#F2F4F8] placeholder-[#949CA9] focus:border-[#2F6FED] focus:outline-none"
             />
           </div>
 
@@ -226,10 +226,10 @@ export function CampaignsPanel({ onAskInChat }) {
                     key={fam}
                     type="button"
                     onClick={() => setFamilyFilter(fam)}
-                    className={`rounded-[4px] px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer ${
+                    className={`rounded-[4px] px-2.5 py-1 text-[12px] font-medium transition-colors cursor-pointer ${
                       active
-                        ? 'bg-[#15223D] text-[#7AA7FF]'
-                        : 'text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4]'
+                        ? 'bg-[#15223D] text-[#8AB4FF]'
+                        : 'text-[#9CA3B0] hover:bg-[#141418] hover:text-[#F2F4F8]'
                     }`}
                   >
                     {fam === 'ALL' ? `Todas (${campaigns.length})` : fam}
@@ -242,7 +242,7 @@ export function CampaignsPanel({ onAskInChat }) {
 
         <div className="flex-1 overflow-y-auto divide-y divide-[#232329]/70">
           {filteredCampaigns.length === 0 ? (
-            <div className="p-4 text-[12px] text-[#8E8E96]">Sin resultados.</div>
+            <div className="p-4 text-[13px] text-[#9CA3B0]">Sin resultados.</div>
           ) : (
             filteredCampaigns.map((camp) => {
               const isSelected = camp.id === selectedId;
@@ -255,18 +255,18 @@ export function CampaignsPanel({ onAskInChat }) {
                   key={camp.id}
                   type="button"
                   onClick={() => setSelectedId(camp.id)}
-                  className={`w-full px-3.5 py-3 text-left transition-colors cursor-pointer block border-l-2 ${
+                  className={`w-full px-3.5 py-3.5 text-left transition-colors cursor-pointer block border-l-2 ${
                     isSelected
                       ? 'bg-[#15223D]/55 border-l-[#2F6FED]'
                       : 'bg-transparent border-l-transparent hover:bg-[#141418]'
                   }`}
                 >
-                  <p className="text-[12.5px] font-medium leading-snug text-[#F2F2F4] line-clamp-2">
+                  <p className="text-[13.5px] font-medium leading-[1.42] text-[#F5F7FA] line-clamp-2">
                     {camp.name}
                   </p>
-                  <div className="mt-1.5 flex items-center justify-between gap-2 font-tech text-[10.5px] text-[#8E8E96]">
+                  <div className="mt-1.5 flex items-center justify-between gap-2 font-tech text-[11.5px] text-[#9CA3B0]">
                     <span className="truncate">
-                      <span className="text-[#7AA7FF]">{camp.spyware_family}</span>
+                      <span className="text-[#8AB4FF]">{camp.spyware_family}</span>
                       {stats.length > 0 && ` · ${stats.join(' · ')}`}
                     </span>
                     {camp.first_seen_date && (
@@ -283,11 +283,11 @@ export function CampaignsPanel({ onAskInChat }) {
       {/* Dossier derecho limpio y plano */}
       <section className="flex-1 overflow-y-auto bg-[#0A0A0C] px-8 py-6">
         {loadingDetail ? (
-          <div className="max-w-[820px] mx-auto py-10 text-[12.5px] text-[#8E8E96]">
+          <div className="max-w-[820px] mx-auto py-10 text-[13.5px] text-[#9CA3B0]">
             Cargando detalle...
           </div>
         ) : !detail ? (
-          <div className="max-w-[820px] mx-auto py-16 text-center text-[13px] text-[#8E8E96]">
+          <div className="max-w-[820px] mx-auto py-16 text-center text-[14px] text-[#9CA3B0]">
             Selecciona una amenaza.
           </div>
         ) : (
@@ -295,17 +295,17 @@ export function CampaignsPanel({ onAskInChat }) {
             {/* Cabecera */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1.5 min-w-0">
-                <div className="flex items-center gap-2 font-tech text-[11px]">
+                <div className="flex items-center gap-2 font-tech text-[12px]">
                   {detail.spyware_family && (
-                    <span className="rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-0.5 text-[#7AA7FF]">
+                    <span className="rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-0.5 text-[#8AB4FF]">
                       {detail.spyware_family}
                     </span>
                   )}
                   {detail.first_seen_date && (
-                    <span className="text-[#8E8E96]">{detail.first_seen_date}</span>
+                    <span className="text-[#9CA3B0]">{detail.first_seen_date}</span>
                   )}
                 </div>
-                <h1 className="text-[19px] font-semibold tracking-[-0.015em] leading-snug text-[#F2F2F4]">
+                <h1 className="text-[21px] font-semibold tracking-[-0.01em] leading-[1.3] text-[#F5F7FA]">
                   {detail.name}
                 </h1>
               </div>
@@ -315,7 +315,7 @@ export function CampaignsPanel({ onAskInChat }) {
                   type="button"
                   onClick={handleExportDossier}
                   title="Exportar ficha en Markdown"
-                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1.5 text-[12px] text-[#8E8E96] hover:border-[#2F6FED] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12.5px] text-[#9CA3B0] hover:border-[#2F6FED] hover:text-[#F2F4F8] transition-colors cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span>.md</span>
@@ -329,7 +329,7 @@ export function CampaignsPanel({ onAskInChat }) {
                         `Analiza en detalle la campaña "${detail.name}"${detail.spyware_family ? ` (${detail.spyware_family})` : ''}.`
                       )
                     }
-                    className="inline-flex items-center gap-1.5 rounded-[4px] bg-[#2F6FED] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:bg-[#255ED4] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[4px] bg-[#2F6FED] px-3.5 py-1.5 text-[13px] font-medium text-[#F5F7FA] hover:bg-[#255ED4] transition-colors cursor-pointer"
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                     <span>Investigar en chat</span>
@@ -340,31 +340,31 @@ export function CampaignsPanel({ onAskInChat }) {
 
             {/* Síntesis directa (sin caja extra) */}
             {detail.summary && (
-              <p className="text-[13.5px] leading-[1.65] text-[#F2F2F4]/85">
+              <p className="max-w-[68ch] text-[15px] leading-[1.7] text-[#DCE1EA]">
                 {detail.summary}
               </p>
             )}
 
             {/* Ficha plana de atribución (líneas 1px, sin tarjetas apiladas) */}
             {hasAttribution && (
-              <dl className="grid gap-4 sm:grid-cols-3 border-y border-[#232329] py-3.5 text-[12.5px]">
+              <dl className="grid gap-4 sm:grid-cols-3 border-y border-[#232329] py-4 text-[13.5px]">
                 {detail.suspected_actor && (
-                  <div className="space-y-0.5">
-                    <dt className="text-[11px] text-[#8E8E96]">Actor</dt>
-                    <dd className="font-medium text-[#F2F2F4]">{detail.suspected_actor}</dd>
+                  <div className="space-y-1">
+                    <dt className="text-[12px] text-[#9CA3B0]">Actor</dt>
+                    <dd className="font-medium text-[#F5F7FA]">{detail.suspected_actor}</dd>
                   </div>
                 )}
                 {detail.target_sector && (
-                  <div className="space-y-0.5">
-                    <dt className="text-[11px] text-[#8E8E96]">Objetivo</dt>
-                    <dd className="font-medium text-[#F2F2F4]">{detail.target_sector}</dd>
+                  <div className="space-y-1">
+                    <dt className="text-[12px] text-[#9CA3B0]">Objetivo</dt>
+                    <dd className="font-medium text-[#F5F7FA]">{detail.target_sector}</dd>
                   </div>
                 )}
                 {detail.target_regions?.length > 0 && (
-                  <div className="space-y-0.5">
-                    <dt className="text-[11px] text-[#8E8E96]">Regiones</dt>
+                  <div className="space-y-1">
+                    <dt className="text-[12px] text-[#9CA3B0]">Regiones</dt>
                     <dd
-                      className="font-medium text-[#F2F2F4]"
+                      className="font-medium text-[#F5F7FA]"
                       title={detail.target_regions.join(', ')}
                     >
                       {detail.target_regions.length > 5
@@ -377,15 +377,15 @@ export function CampaignsPanel({ onAskInChat }) {
             )}
 
             {/* Pestañas limpias */}
-            <div className="space-y-3.5">
-              <div className="flex items-center gap-4 border-b border-[#232329]">
+            <div className="space-y-4">
+              <div className="flex items-center gap-5 border-b border-[#232329]">
                 <button
                   type="button"
                   onClick={() => setDossierTab('cves')}
-                  className={`pb-2 text-[12px] font-medium border-b-2 transition-colors cursor-pointer ${
+                  className={`pb-2.5 text-[13px] font-medium border-b-2 transition-colors cursor-pointer ${
                     dossierTab === 'cves'
-                      ? 'border-[#2F6FED] text-[#F2F2F4]'
-                      : 'border-transparent text-[#8E8E96] hover:text-[#F2F2F4]'
+                      ? 'border-[#2F6FED] text-[#F5F7FA]'
+                      : 'border-transparent text-[#9CA3B0] hover:text-[#F5F7FA]'
                   }`}
                 >
                   CVEs ({detail.cves?.length || 0})
@@ -394,10 +394,10 @@ export function CampaignsPanel({ onAskInChat }) {
                 <button
                   type="button"
                   onClick={() => setDossierTab('iocs')}
-                  className={`pb-2 text-[12px] font-medium border-b-2 transition-colors cursor-pointer ${
+                  className={`pb-2.5 text-[13px] font-medium border-b-2 transition-colors cursor-pointer ${
                     dossierTab === 'iocs'
-                      ? 'border-[#2F6FED] text-[#F2F2F4]'
-                      : 'border-transparent text-[#8E8E96] hover:text-[#F2F2F4]'
+                      ? 'border-[#2F6FED] text-[#F5F7FA]'
+                      : 'border-transparent text-[#9CA3B0] hover:text-[#F5F7FA]'
                   }`}
                 >
                   IOCs ({totalIocCount})
@@ -406,10 +406,10 @@ export function CampaignsPanel({ onAskInChat }) {
                 <button
                   type="button"
                   onClick={() => setDossierTab('sources')}
-                  className={`pb-2 text-[12px] font-medium border-b-2 transition-colors cursor-pointer ${
+                  className={`pb-2.5 text-[13px] font-medium border-b-2 transition-colors cursor-pointer ${
                     dossierTab === 'sources'
-                      ? 'border-[#2F6FED] text-[#F2F2F4]'
-                      : 'border-transparent text-[#8E8E96] hover:text-[#F2F2F4]'
+                      ? 'border-[#2F6FED] text-[#F5F7FA]'
+                      : 'border-transparent text-[#9CA3B0] hover:text-[#F5F7FA]'
                   }`}
                 >
                   Fuentes ({detail.reports?.length || 0})
@@ -433,15 +433,15 @@ export function CampaignsPanel({ onAskInChat }) {
                   )}
 
                   {filteredCves.length === 0 ? (
-                    <p className="text-[12px] text-[#8E8E96] py-2">Sin CVEs vinculados.</p>
+                    <p className="text-[13px] text-[#9CA3B0] py-2">Sin CVEs vinculados.</p>
                   ) : hasCveDescriptions ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2.5 sm:grid-cols-2">
                       {filteredCves.map((cve) => (
                         <div
                           key={cve.cve_code}
-                          className="rounded-[6px] border border-[#232329] bg-[#141418] px-3 py-2.5 flex items-center justify-between gap-2.5"
+                          className="rounded-[6px] border border-[#232329] bg-[#141418] px-3.5 py-3 flex items-center justify-between gap-2.5"
                         >
-                          <div className="min-w-0 space-y-0.5">
+                          <div className="min-w-0 space-y-1">
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
@@ -451,18 +451,18 @@ export function CampaignsPanel({ onAskInChat }) {
                                   )
                                 }
                                 title="Preguntar en chat"
-                                className="font-tech text-[12.5px] font-medium text-[#F2F2F4] hover:text-[#7AA7FF] transition-colors cursor-pointer"
+                                className="font-tech text-[13.5px] font-medium text-[#F5F7FA] hover:text-[#8AB4FF] transition-colors cursor-pointer"
                               >
                                 {cve.cve_code}
                               </button>
                               {cve.cvss_score != null && (
-                                <span className="font-tech rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0.5 text-[10px] text-[#7AA7FF]">
+                                <span className="font-tech rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0.5 text-[11px] text-[#8AB4FF]">
                                   {cve.cvss_score}
                                 </span>
                               )}
                             </div>
                             {cve.description && (
-                              <p className="text-[11.5px] text-[#8E8E96] line-clamp-2">
+                              <p className="text-[12.5px] leading-[1.5] text-[#B6BDC9] line-clamp-2">
                                 {cve.description}
                               </p>
                             )}
@@ -473,7 +473,7 @@ export function CampaignsPanel({ onAskInChat }) {
                             target="_blank"
                             rel="noreferrer"
                             title="Abrir en NIST NVD"
-                            className="shrink-0 p-1.5 rounded-[4px] text-[#8E8E96] hover:bg-[#0A0A0C] hover:text-[#F2F2F4] transition-colors"
+                            className="shrink-0 p-1.5 rounded-[4px] text-[#9CA3B0] hover:bg-[#0A0A0C] hover:text-[#F2F4F8] transition-colors"
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
@@ -481,11 +481,11 @@ export function CampaignsPanel({ onAskInChat }) {
                       ))}
                     </div>
                   ) : (
-                    <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
                       {filteredCves.map((cve) => (
                         <div
                           key={cve.cve_code}
-                          className="group rounded-[4px] border border-[#232329] bg-[#141418]/75 h-8 px-2.5 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/55 transition-colors"
+                          className="group rounded-[4px] border border-[#232329] bg-[#141418]/75 h-9 px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/55 transition-colors"
                         >
                           <button
                             type="button"
@@ -493,13 +493,13 @@ export function CampaignsPanel({ onAskInChat }) {
                               onAskInChat?.(`¿Cómo se explotó ${cve.cve_code} en "${detail.name}"?`)
                             }
                             title={`Preguntar por ${cve.cve_code}`}
-                            className="font-tech text-[12px] text-[#F2F2F4] group-hover:text-[#7AA7FF] truncate transition-colors cursor-pointer"
+                            className="font-tech text-[12.5px] text-[#F5F7FA] group-hover:text-[#8AB4FF] truncate transition-colors cursor-pointer"
                           >
                             {cve.cve_code}
                           </button>
                           <div className="flex items-center gap-1 shrink-0">
                             {cve.cvss_score != null && (
-                              <span className="font-tech text-[10px] text-[#7AA7FF]">
+                              <span className="font-tech text-[11px] text-[#8AB4FF]">
                                 {cve.cvss_score}
                               </span>
                             )}
@@ -508,9 +508,9 @@ export function CampaignsPanel({ onAskInChat }) {
                               target="_blank"
                               rel="noreferrer"
                               title="Ver en NIST NVD"
-                              className="text-[#8E8E96] hover:text-[#F2F2F4] transition-colors"
+                              className="text-[#9CA3B0] hover:text-[#F2F4F8] transition-colors"
                             >
-                              <ExternalLink className="h-3 w-3" />
+                              <ExternalLink className="h-3.5 w-3.5" />
                             </a>
                           </div>
                         </div>
@@ -564,40 +564,40 @@ export function CampaignsPanel({ onAskInChat }) {
                       )}
 
                       {filteredIocs.length === 0 ? (
-                        <p className="text-[12px] text-[#8E8E96] py-2">Sin coincidencias.</p>
+                        <p className="text-[13px] text-[#9CA3B0] py-2">Sin coincidencias.</p>
                       ) : (
                         <div className="rounded-[6px] border border-[#232329] overflow-hidden">
                           <div className="max-h-[360px] overflow-y-auto">
                             <table className="w-full text-left border-collapse">
-                              <thead className="sticky top-0 bg-[#141418] border-b border-[#232329] text-[11px] font-medium text-[#8E8E96]">
+                              <thead className="sticky top-0 bg-[#141418] border-b border-[#232329] text-[12px] font-medium text-[#9CA3B0]">
                                 <tr>
-                                  <th className="px-3 py-2 w-24">Tipo</th>
-                                  <th className="px-3 py-2">Indicador</th>
-                                  <th className="px-3 py-2 hidden md:table-cell">Contexto</th>
-                                  <th className="px-3 py-2 w-12 text-right" />
+                                  <th className="px-3.5 py-2.5 w-24">Tipo</th>
+                                  <th className="px-3.5 py-2.5">Indicador</th>
+                                  <th className="px-3.5 py-2.5 hidden md:table-cell">Contexto</th>
+                                  <th className="px-3.5 py-2.5 w-12 text-right" />
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#232329] bg-[#0A0A0C] text-[12px]">
+                              <tbody className="divide-y divide-[#232329] bg-[#0A0A0C] text-[13px]">
                                 {filteredIocs.map((ioc, idx) => (
                                   <tr
                                     key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
                                     className="hover:bg-[#141418]/70 transition-colors"
                                   >
-                                    <td className="px-3 py-2 font-tech text-[11px] uppercase text-[#7AA7FF]">
+                                    <td className="px-3.5 py-2.5 font-tech text-[11.5px] uppercase text-[#8AB4FF]">
                                       {ioc.ioc_type}
                                     </td>
-                                    <td className="px-3 py-2 font-tech text-[#F2F2F4] break-all">
+                                    <td className="px-3.5 py-2.5 font-tech text-[#F5F7FA] break-all">
                                       {ioc.ioc_value}
                                     </td>
-                                    <td className="px-3 py-2 text-[#8E8E96] hidden md:table-cell">
+                                    <td className="px-3.5 py-2.5 text-[#B6BDC9] hidden md:table-cell">
                                       {ioc.context || ''}
                                     </td>
-                                    <td className="px-3 py-2 text-right">
+                                    <td className="px-3.5 py-2.5 text-right">
                                       <button
                                         type="button"
                                         onClick={() => handleCopy(ioc.ioc_value)}
                                         title="Copiar"
-                                        className="inline-flex items-center justify-center rounded-[4px] p-1 text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                                        className="inline-flex items-center justify-center rounded-[4px] p-1 text-[#9CA3B0] hover:bg-[#141418] hover:text-[#F2F4F8] transition-colors cursor-pointer"
                                       >
                                         {copiedValue === ioc.ioc_value ? (
                                           <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
@@ -620,23 +620,23 @@ export function CampaignsPanel({ onAskInChat }) {
 
               {/* TAB 3: Fuentes reales */}
               {dossierTab === 'sources' && (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {!detail.reports || detail.reports.length === 0 ? (
-                    <p className="text-[12px] text-[#8E8E96] py-2">Sin fuentes vinculadas.</p>
+                    <p className="text-[13px] text-[#9CA3B0] py-2">Sin fuentes vinculadas.</p>
                   ) : (
                     detail.reports.map((rep) => (
                       <div
                         key={rep.id}
-                        className="rounded-[6px] border border-[#232329] bg-[#141418] px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                        className="rounded-[6px] border border-[#232329] bg-[#141418] px-4 py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <FileText className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
-                            <p className="text-[13px] font-medium text-[#F2F2F4] truncate">
+                            <FileText className="h-4 w-4 text-[#2F6FED] shrink-0" />
+                            <p className="text-[14px] font-medium text-[#F5F7FA] truncate">
                               {rep.title}
                             </p>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 font-tech text-[11px] text-[#8E8E96]">
+                          <div className="flex flex-wrap items-center gap-2 font-tech text-[12px] text-[#9CA3B0]">
                             {rep.organization && <span>{rep.organization}</span>}
                             {rep.publication_date && <span>· {rep.publication_date}</span>}
                             {rep.file_hash && (
@@ -650,10 +650,10 @@ export function CampaignsPanel({ onAskInChat }) {
                             href={rep.source_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex shrink-0 items-center gap-1 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2.5 py-1 text-[11px] text-[#F2F2F4] hover:border-[#2F6FED] transition-colors"
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-3 py-1.5 text-[12px] text-[#F2F4F8] hover:border-[#2F6FED] transition-colors"
                           >
                             <span>Abrir</span>
-                            <ExternalLink className="h-3 w-3 text-[#8E8E96]" />
+                            <ExternalLink className="h-3.5 w-3.5 text-[#9CA3B0]" />
                           </a>
                         )}
                       </div>

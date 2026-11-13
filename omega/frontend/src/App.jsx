@@ -343,7 +343,7 @@ export default function App() {
       {/* Sidebar Fija Izquierda (#111115) */}
       <aside
         className={`${
-          sidebarCollapsed ? 'w-[60px]' : 'w-[244px]'
+          sidebarCollapsed ? 'w-[60px]' : 'w-[252px]'
         } shrink-0 h-full border-r border-[#232329] bg-[#111115] flex flex-col justify-between transition-[width] duration-150 z-10`}
       >
         <div className="flex flex-col min-h-0 flex-1">
@@ -353,10 +353,10 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <OmegaLogo size={24} isThinking={loadingChat} />
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[13px] font-semibold tracking-[0.14em] text-[#F2F2F4]">
+                  <span className="text-[14px] font-semibold tracking-[0.12em] text-[#F5F7FA]">
                     OMEGA
                   </span>
-                  <span className="font-tech rounded-[3px] border border-[#232329] bg-[#141418] px-1 py-0.5 text-[9.5px] text-[#8E8E96]">
+                  <span className="font-tech rounded-[3px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[10.5px] text-[#9CA3B0]">
                     v1.0
                   </span>
                 </div>
@@ -366,7 +366,7 @@ export default function App() {
               type="button"
               onClick={() => setSidebarCollapsed((v) => !v)}
               title={sidebarCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-              className="p-1 rounded-[4px] text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+              className="p-1 rounded-[4px] text-[#9CA3B0] hover:bg-[#141418] hover:text-[#F2F4F8] transition-colors cursor-pointer"
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen className="h-4 w-4" />
@@ -382,11 +382,11 @@ export default function App() {
               type="button"
               onClick={startNewInvestigation}
               title="Nueva investigación"
-              className={`w-full h-8 rounded-[5px] bg-[#F2F2F4] text-[#0A0A0C] flex items-center justify-center gap-2 text-[12px] font-medium hover:bg-white transition-colors cursor-pointer ${
+              className={`w-full h-9 rounded-[5px] bg-[#F2F4F8] text-[#0A0A0C] flex items-center justify-center gap-2 text-[13px] font-medium hover:bg-white transition-colors cursor-pointer ${
                 sidebarCollapsed ? 'px-0' : 'px-3'
               }`}
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-4 w-4" />
               {!sidebarCollapsed && <span>Nueva investigación</span>}
             </button>
           </div>
@@ -402,15 +402,15 @@ export default function App() {
                   type="button"
                   onClick={() => setActiveNav(item.id)}
                   title={item.label}
-                  className={`w-full h-8 flex items-center gap-2.5 px-2.5 rounded-[4px] text-[12.5px] transition-colors cursor-pointer ${
+                  className={`w-full h-9 flex items-center gap-2.5 px-2.5 rounded-[4px] text-[13.5px] transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-[#15223D]/70 border-l-2 border-[#2F6FED] text-[#F2F2F4] font-medium'
-                      : 'border-l-2 border-transparent text-[#8E8E96] hover:bg-[#141418] hover:text-[#F2F2F4]'
+                      ? 'bg-[#15223D]/70 border-l-2 border-[#2F6FED] text-[#F5F7FA] font-medium'
+                      : 'border-l-2 border-transparent text-[#9CA3B0] hover:bg-[#141418] hover:text-[#F5F7FA]'
                   } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                 >
                   <Icon
                     className={`h-4 w-4 shrink-0 ${
-                      isActive ? 'text-[#2F6FED]' : 'text-[#8E8E96]'
+                      isActive ? 'text-[#2F6FED]' : 'text-[#9CA3B0]'
                     }`}
                   />
                   {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
@@ -422,7 +422,7 @@ export default function App() {
           {/* Historial de Investigaciones */}
           {!sidebarCollapsed && (
             <div className="mt-4 px-2.5 flex-1 min-h-0 flex flex-col">
-              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#8E8E96]/70">
+              <div className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9CA3B0]">
                 Historial reciente
               </div>
               <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
@@ -436,15 +436,15 @@ export default function App() {
                         setSelectedCitation(null);
                         setActiveNav('preguntar');
                       }}
-                      className={`group flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-[4px] text-[12px] cursor-pointer transition-colors ${
+                      className={`group flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-[4px] text-[13px] cursor-pointer transition-colors ${
                         isSelected
-                          ? 'bg-[#141418] text-[#F2F2F4]'
-                          : 'text-[#8E8E96] hover:bg-[#141418]/60 hover:text-[#F2F2F4]'
+                          ? 'bg-[#141418] text-[#F5F7FA]'
+                          : 'text-[#B2B9C5] hover:bg-[#141418]/70 hover:text-[#F5F7FA]'
                       }`}
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate leading-tight font-medium">{sess.title}</p>
-                        <p className="font-tech text-[10px] text-[#8E8E96]/60">
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p className="truncate leading-snug font-medium">{sess.title}</p>
+                        <p className="font-tech text-[11px] text-[#8E96A4]">
                           {formatRelativeTime(sess.updatedAt)}
                         </p>
                       </div>
@@ -452,9 +452,9 @@ export default function App() {
                         type="button"
                         onClick={(e) => deleteSession(e, sess.id)}
                         title="Eliminar sesión"
-                        className="opacity-0 group-hover:opacity-100 p-1 text-[#8E8E96] hover:text-[#F2F2F4] transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-[#9CA3B0] hover:text-[#F2F4F8] transition-opacity"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   );
@@ -465,7 +465,7 @@ export default function App() {
         </div>
 
         {/* Footer Sidebar */}
-        <div className="p-3 border-t border-[#232329] bg-[#111115] flex items-center justify-between text-[11px] text-[#8E8E96]">
+        <div className="p-3 border-t border-[#232329] bg-[#111115] flex items-center justify-between text-[12px] text-[#9CA3B0]">
           {sidebarCollapsed ? (
             <span className="h-1.5 w-1.5 mx-auto rounded-full bg-[#2F6FED]" title="Modo Defensivo" />
           ) : (
@@ -474,7 +474,7 @@ export default function App() {
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2F6FED]" />
                 <span>Modo Defensivo</span>
               </div>
-              <span className="font-tech text-[10px] text-[#8E8E96]/75">CTI</span>
+              <span className="font-tech text-[11px] text-[#8E96A4]">CTI</span>
             </>
           )}
         </div>
@@ -494,12 +494,12 @@ export default function App() {
               : 'border-b border-[#232329]'
           }`}
         >
-          <div className="flex items-center gap-2 text-[12px]">
+          <div className="flex items-center gap-2 text-[13px]">
             {activeNav === 'preguntar' && messages.length === 0 ? null : (
               <>
-                <span className="text-[#8E8E96]">OMEGA</span>
+                <span className="text-[#9CA3B0]">OMEGA</span>
                 <span className="text-[#232329]">/</span>
-                <span className="font-medium text-[#F2F2F4]">
+                <span className="font-medium text-[#F5F7FA]">
                   {NAV_ITEMS.find((n) => n.id === activeNav)?.label}
                 </span>
               </>
@@ -511,10 +511,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsSourcesPanelOpen((v) => !v)}
-                className={`h-[30px] px-3 rounded-[5px] border flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                className={`h-8 px-3 rounded-[5px] border flex items-center gap-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
                   isSourcesPanelOpen
-                    ? 'border-[#2F6FED]/60 bg-[#15223D] text-[#7AA7FF]'
-                    : 'border-[#232329] bg-[#141418] text-[#8E8E96] hover:border-[#2F6FED]/45 hover:text-[#F2F2F4]'
+                    ? 'border-[#2F6FED]/60 bg-[#15223D] text-[#8AB4FF]'
+                    : 'border-[#232329] bg-[#141418] text-[#B6BDC9] hover:border-[#2F6FED]/45 hover:text-[#F5F7FA]'
                 }`}
               >
                 <BookOpen className="h-3.5 w-3.5" />
@@ -526,9 +526,9 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleExportSession}
-                className="h-[30px] px-3 rounded-[5px] bg-[#141418] border border-[#232329] flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/45 transition-colors cursor-pointer"
+                className="h-8 px-3 rounded-[5px] bg-[#141418] border border-[#232329] flex items-center gap-1.5 text-[12.5px] font-medium text-[#F2F4F8] hover:border-[#2F6FED]/45 transition-colors cursor-pointer"
               >
-                <Download className="h-3.5 w-3.5 text-[#8E8E96]" />
+                <Download className="h-3.5 w-3.5 text-[#9CA3B0]" />
                 <span>Exportar (.md)</span>
               </button>
             )}

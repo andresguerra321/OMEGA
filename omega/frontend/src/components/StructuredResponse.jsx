@@ -172,21 +172,21 @@ export function StructuredResponse({
   return (
     <div className="space-y-3">
       {/* Barra compacta superior (detalles técnicos colapsados por defecto) */}
-      <div className="rounded-[6px] border border-[#232329] bg-[#141418]/75 overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-[11.5px] text-[#8E8E96]">
+      <div className="rounded-[6px] border border-[#232329] bg-[#141418]/80 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 text-[12.5px] text-[#9CA3B0]">
           <button
             type="button"
             onClick={() => setShowTelemetry((v) => !v)}
             aria-expanded={showTelemetry}
             title="Ver detalle de recuperación"
-            className="flex flex-wrap items-center gap-1.5 text-left hover:text-[#F2F2F4] transition-colors cursor-pointer"
+            className="flex flex-wrap items-center gap-1.5 text-left hover:text-[#F2F4F8] transition-colors cursor-pointer"
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 isExtractiveFallback ? 'bg-amber-400' : 'bg-[#2F6FED]'
               }`}
             />
-            <span className="font-tech text-[#F2F2F4]/90">
+            <span className="font-tech text-[#F2F4F8]">
               {telemetry.fragmentCount} {telemetry.fragmentCount === 1 ? 'fuente' : 'fuentes'}
             </span>
             <span>·</span>
@@ -196,21 +196,21 @@ export function StructuredResponse({
             {message.latency && (
               <>
                 <span>·</span>
-                <span className="font-tech inline-flex items-center gap-1 text-[#7AA7FF]">
+                <span className="font-tech inline-flex items-center gap-1 text-[#8AB4FF]">
                   <Clock className="h-3 w-3" />
                   {message.latency}s
                 </span>
               </>
             )}
             {isExtractiveFallback && (
-              <span className="font-tech ml-1 rounded-[4px] border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+              <span className="font-tech ml-1 rounded-[4px] border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-300">
                 Sin LLM
               </span>
             )}
             {showTelemetry ? (
-              <ChevronUp className="h-3.5 w-3.5 text-[#8E8E96]" />
+              <ChevronUp className="h-3.5 w-3.5 text-[#9CA3B0]" />
             ) : (
-              <ChevronDown className="h-3.5 w-3.5 text-[#8E8E96]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#9CA3B0]" />
             )}
           </button>
 
@@ -219,13 +219,13 @@ export function StructuredResponse({
               <button
                 type="button"
                 onClick={onToggleSources}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] border text-[11px] font-medium active:scale-[0.96] transition-all duration-150 cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] border text-[12px] font-medium active:scale-[0.96] transition-all duration-150 cursor-pointer ${
                   isSourcesOpen
-                    ? 'border-[#2F6FED]/60 bg-[#15223D] text-[#7AA7FF]'
-                    : 'border-[#232329] bg-[#0A0A0C] text-[#F2F2F4]/85 hover:border-[#2F6FED]/45 hover:text-[#F2F2F4]'
+                    ? 'border-[#2F6FED]/60 bg-[#15223D] text-[#8AB4FF]'
+                    : 'border-[#232329] bg-[#0A0A0C] text-[#E6E9EF] hover:border-[#2F6FED]/45 hover:text-white'
                 }`}
               >
-                <BookOpen className="h-3 w-3 text-[#2F6FED]" />
+                <BookOpen className="h-3.5 w-3.5 text-[#2F6FED]" />
                 <span>{isSourcesOpen ? 'Ocultar fuentes' : `Ver fuentes (${citations.length})`}</span>
               </button>
             )}
@@ -235,10 +235,10 @@ export function StructuredResponse({
                 <button
                   type="button"
                   onClick={() => setViewMode('structured')}
-                  className={`px-2 py-0.5 rounded-[3px] text-[11px] font-medium transition-colors cursor-pointer ${
+                  className={`px-2.5 py-0.5 rounded-[3px] text-[12px] font-medium transition-colors cursor-pointer ${
                     viewMode === 'structured'
-                      ? 'bg-[#141418] text-[#F2F2F4]'
-                      : 'text-[#8E8E96] hover:text-[#F2F2F4]'
+                      ? 'bg-[#141418] text-[#F2F4F8]'
+                      : 'text-[#9CA3B0] hover:text-[#F2F4F8]'
                   }`}
                 >
                   Tarjetas
@@ -246,10 +246,10 @@ export function StructuredResponse({
                 <button
                   type="button"
                   onClick={() => setViewMode('markdown')}
-                  className={`px-2 py-0.5 rounded-[3px] text-[11px] font-medium transition-colors cursor-pointer ${
+                  className={`px-2.5 py-0.5 rounded-[3px] text-[12px] font-medium transition-colors cursor-pointer ${
                     viewMode === 'markdown'
-                      ? 'bg-[#141418] text-[#F2F2F4]'
-                      : 'text-[#8E8E96] hover:text-[#F2F2F4]'
+                      ? 'bg-[#141418] text-[#F2F4F8]'
+                      : 'text-[#9CA3B0] hover:text-[#F2F4F8]'
                   }`}
                 >
                   Texto
@@ -262,15 +262,15 @@ export function StructuredResponse({
               onClick={handleCopy}
               title="Copiar respuesta"
               aria-label="Copiar respuesta"
-              className="h-6 px-2 inline-flex items-center gap-1 rounded-[4px] border border-[#232329] bg-[#0A0A0C] text-[11px] text-[#8E8E96] hover:border-[#2F6FED]/45 hover:text-[#F2F2F4] active:scale-[0.94] transition-all duration-150 cursor-pointer"
+              className="h-7 px-2.5 inline-flex items-center gap-1 rounded-[4px] border border-[#232329] bg-[#0A0A0C] text-[12px] text-[#9CA3B0] hover:border-[#2F6FED]/45 hover:text-[#F2F4F8] active:scale-[0.94] transition-all duration-150 cursor-pointer"
             >
               {copied ? (
                 <>
-                  <Check className="h-3 w-3 text-[#2F6FED]" />
-                  <span className="text-[#F2F2F4]">Copiado</span>
+                  <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
+                  <span className="text-[#F2F4F8]">Copiado</span>
                 </>
               ) : (
-                <Copy className="h-3 w-3" />
+                <Copy className="h-3.5 w-3.5" />
               )}
             </button>
           </div>
@@ -278,30 +278,30 @@ export function StructuredResponse({
 
         {/* Telemetría técnica opcional */}
         {showTelemetry && (
-          <div className="border-t border-[#232329] bg-[#0A0A0C]/80 px-3 py-2 text-[11px] text-[#8E8E96] grid gap-1.5 sm:grid-cols-2">
+          <div className="border-t border-[#232329] bg-[#0A0A0C]/80 px-3.5 py-2.5 text-[12px] text-[#9CA3B0] grid gap-1.5 sm:grid-cols-2">
             <div className="flex items-center gap-1.5">
               <Activity className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
               <span>{telemetry.modeLabel}:</span>
-              <span className="font-tech text-[#F2F2F4]">
+              <span className="font-tech text-[#F2F4F8]">
                 {telemetry.hybridCount} híbrido · {telemetry.exactCount} exacto · {telemetry.semanticCount} semántico
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:justify-end">
               <span>Similitud máx:</span>
-              <span className="font-tech text-[#7AA7FF]">
+              <span className="font-tech text-[#8AB4FF]">
                 {(Number(telemetry.maxSimilarity || 0) * 100).toFixed(1)}%
               </span>
             </div>
             {telemetry.orgs.length > 0 && (
               <div className="sm:col-span-2 flex flex-wrap items-center gap-1.5">
                 <span>Publicadores:</span>
-                <span className="text-[#F2F2F4]">{telemetry.orgs.join(', ')}</span>
+                <span className="text-[#F2F4F8]">{telemetry.orgs.join(', ')}</span>
               </div>
             )}
             {message.standaloneQuery && (
               <div className="sm:col-span-2 flex flex-wrap items-center gap-1.5">
                 <span>Consulta:</span>
-                <span className="font-tech text-[#F2F2F4]/85">{message.standaloneQuery}</span>
+                <span className="font-tech text-[#E6E9EF]">{message.standaloneQuery}</span>
               </div>
             )}
           </div>
@@ -318,26 +318,26 @@ export function StructuredResponse({
           />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {/* Respuesta principal directa sin caja ni etiqueta */}
-          <p className="border-l-2 border-[#2F6FED] pl-4 text-[14.5px] leading-[1.68] text-[#F2F2F4]">
+          <p className="max-w-[68ch] border-l-2 border-[#2F6FED] pl-4 text-[16px] leading-[1.72] text-[#F2F4F8]">
             {formatTextWithTechAndCitations(parsedSections.executive, citationMap, onSelectCitation)}
           </p>
 
           {/* Puntos clave escaneables */}
           {parsedSections.findings.length > 0 && (
-            <div className="grid gap-2">
+            <div className="grid gap-2.5">
               {parsedSections.findings.map((f, i) => (
                 <div
                   key={i}
-                  className="rounded-[6px] border border-[#232329] bg-[#141418]/75 px-3.5 py-3 space-y-1 hover:border-[#2F6FED]/45 transition-colors duration-150"
+                  className="rounded-[6px] border border-[#232329] bg-[#141418]/85 px-4 py-3.5 space-y-1.5 hover:border-[#2F6FED]/45 transition-colors duration-150"
                 >
                   {f.title && (
-                    <div className="text-[13px] font-semibold text-[#F2F2F4]">
+                    <div className="text-[14.5px] font-semibold leading-[1.4] text-[#F5F7FA]">
                       {f.title.replace(/`/g, '')}
                     </div>
                   )}
-                  <div className="text-[13px] leading-[1.6] text-[#8E8E96] space-y-1">
+                  <div className="max-w-[68ch] text-[14.5px] leading-[1.68] text-[#CED4DE] space-y-1.5">
                     {f.body
                       .split('\n')
                       .map((line) => line.trim())
@@ -356,17 +356,17 @@ export function StructuredResponse({
           {/* IOCs clicables para copiar rápido */}
           {allIocs.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              <span className="font-tech text-[10.5px] text-[#8E8E96] mr-0.5">IOCs:</span>
+              <span className="font-tech text-[11.5px] text-[#9CA3B0] mr-0.5">IOCs:</span>
               {allIocs.map((ioc) => (
                 <button
                   key={ioc}
                   type="button"
                   onClick={() => handleCopyIoc(ioc)}
                   title="Clic para copiar indicador"
-                  className="font-tech inline-flex items-center gap-1 rounded-[4px] border border-[#232329] bg-[#141418] px-2 py-0.5 text-[11px] text-[#F2F2F4] hover:border-[#2F6FED]/55 transition-colors cursor-pointer max-w-[210px] truncate"
+                  className="font-tech inline-flex items-center gap-1 rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-0.5 text-[12px] text-[#F2F4F8] hover:border-[#2F6FED]/55 transition-colors cursor-pointer max-w-[230px] truncate"
                 >
                   <span className="truncate">{ioc}</span>
-                  {copiedIoc === ioc && <Check className="h-3 w-3 text-[#2F6FED] shrink-0" />}
+                  {copiedIoc === ioc && <Check className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />}
                 </button>
               ))}
             </div>
@@ -385,15 +385,15 @@ export function StructuredResponse({
                 key={`${cit.index}-${cit.title}-${cit.page}`}
                 type="button"
                 onClick={() => onSelectCitation?.(cit)}
-                className={`inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[11px] transition-colors cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 rounded-[4px] border px-2.5 py-1 text-[12px] transition-colors cursor-pointer ${
                   isSelected
-                    ? 'border-[#2F6FED] bg-[#15223D] text-[#F2F2F4]'
-                    : 'border-[#232329] bg-[#141418] text-[#8E8E96] hover:border-[#2F6FED]/55 hover:text-[#F2F2F4]'
+                    ? 'border-[#2F6FED] bg-[#15223D] text-[#F5F7FA]'
+                    : 'border-[#232329] bg-[#141418] text-[#B6BDC9] hover:border-[#2F6FED]/55 hover:text-[#F5F7FA]'
                 }`}
               >
-                <span className="font-tech font-medium text-[#2F6FED]">[{cit.index}]</span>
-                <span className="max-w-[180px] truncate">{cit.title}</span>
-                <span className="font-tech text-[#8E8E96]">p.{cit.page}</span>
+                <span className="font-tech font-medium text-[#7AA7FF]">[{cit.index}]</span>
+                <span className="max-w-[210px] truncate">{cit.title}</span>
+                <span className="font-tech text-[#9CA3B0]">p.{cit.page}</span>
               </button>
             );
           })}

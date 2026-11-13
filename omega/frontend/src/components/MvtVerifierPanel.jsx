@@ -189,10 +189,10 @@ export function MvtVerifierPanel() {
       {/* Cabecera */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between border-b border-[#232329] pb-4">
         <div className="space-y-1">
-          <h1 className="text-[20px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
+          <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-[#F5F7FA]">
             Revisar mi equipo
           </h1>
-          <p className="text-[13px] text-[#8E8E96]">
+          <p className="text-[14px] leading-[1.55] text-[#A2AAB7]">
             Cruza volcados de Mobile Verification Toolkit (MVT) o indicadores manuales contra la base pública de spyware.
           </p>
         </div>
@@ -202,13 +202,13 @@ export function MvtVerifierPanel() {
             type="button"
             onClick={handleRunSampleMvt}
             disabled={isLoading}
-            className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED] disabled:opacity-50 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#141418] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F4F8] hover:border-[#2F6FED] disabled:opacity-50 transition-colors cursor-pointer"
           >
             <FileCode2 className="h-3.5 w-3.5 text-[#2F6FED]" />
             <span>{loadingMode === 'sample' ? 'Analizando muestra...' : 'Cargar muestra MVT de prueba'}</span>
           </button>
 
-          <div className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2.5 py-1.5 text-[11px] font-medium text-[#7AA7FF]">
+          <div className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF]">
             <Lock className="h-3.5 w-3.5 shrink-0" />
             <span>En RAM · Sin guardado en disco</span>
           </div>
@@ -217,14 +217,14 @@ export function MvtVerifierPanel() {
 
       {/* Barra de Flujo Operativo MVT (3 pasos compactos) */}
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-3 flex flex-col justify-between gap-2">
+        <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-3.5 flex flex-col justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-tech text-[10.5px] font-medium text-[#7AA7FF]">PASO 01</span>
-            <span className="text-[12px] font-medium text-[#F2F2F4]">Extracción local</span>
+            <span className="font-tech text-[11px] font-medium text-[#8AB4FF]">PASO 01</span>
+            <span className="text-[13px] font-semibold text-[#F5F7FA]">Extracción local</span>
           </div>
-          <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2.5 py-1.5 flex items-center justify-between gap-2">
+          <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2.5 py-2 flex items-center justify-between gap-2">
             <code
-              className="font-tech text-[11px] text-[#F2F2F4] truncate"
+              className="font-tech text-[12px] text-[#F2F4F8] truncate"
               title={MVT_CLI_COMMAND}
             >
               {MVT_CLI_COMMAND}
@@ -234,7 +234,7 @@ export function MvtVerifierPanel() {
               onClick={handleCopyCommand}
               title="Copiar comando MVT"
               aria-label="Copiar comando MVT"
-              className="shrink-0 text-[#8E8E96] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+              className="shrink-0 text-[#9CA3B0] hover:text-[#F2F4F8] transition-colors cursor-pointer"
             >
               {copiedCmd ? (
                 <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
@@ -245,24 +245,24 @@ export function MvtVerifierPanel() {
           </div>
         </div>
 
-        <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-3 space-y-1.5">
+        <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-3.5 space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="font-tech text-[10.5px] font-medium text-[#7AA7FF]">PASO 02</span>
-            <span className="text-[12px] font-medium text-[#F2F2F4]">Carga volátil</span>
+            <span className="font-tech text-[11px] font-medium text-[#8AB4FF]">PASO 02</span>
+            <span className="text-[13px] font-semibold text-[#F5F7FA]">Carga volátil</span>
           </div>
-          <p className="text-[11.5px] leading-relaxed text-[#8E8E96]">
-            Los JSON (<span className="font-tech text-[#F2F2F4]/85">sms.json</span>,{' '}
-            <span className="font-tech text-[#F2F2F4]/85">safari_history.json</span>,{' '}
-            <span className="font-tech text-[#F2F2F4]/85">shutdown_log.json</span>) se procesan solo en RAM.
+          <p className="text-[12.5px] leading-[1.55] text-[#B6BDC9]">
+            Los JSON (<span className="font-tech text-[#F2F4F8]">sms.json</span>,{' '}
+            <span className="font-tech text-[#F2F4F8]">safari_history.json</span>,{' '}
+            <span className="font-tech text-[#F2F4F8]">shutdown_log.json</span>) se procesan solo en RAM.
           </p>
         </div>
 
-        <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-3 space-y-1.5">
+        <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-3.5 space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="font-tech text-[10.5px] font-medium text-[#7AA7FF]">PASO 03</span>
-            <span className="text-[12px] font-medium text-[#F2F2F4]">Correlación CTI</span>
+            <span className="font-tech text-[11px] font-medium text-[#8AB4FF]">PASO 03</span>
+            <span className="text-[13px] font-semibold text-[#F5F7FA]">Correlación CTI</span>
           </div>
-          <p className="text-[11.5px] leading-relaxed text-[#8E8E96]">
+          <p className="text-[12.5px] leading-[1.55] text-[#B6BDC9]">
             Cruce instantáneo contra IOCs públicos de Citizen Lab, Amnesty Tech y Google TAG.
           </p>
         </div>
@@ -284,16 +284,16 @@ export function MvtVerifierPanel() {
               : 'border-[#232329] hover:border-[#2F6FED]'
           }`}
         >
-          <Upload className="h-5 w-5 text-[#8E8E96] mb-3" />
-          <span className="text-[13px] font-medium text-[#F2F2F4]">
+          <Upload className="h-5 w-5 text-[#9CA3B0] mb-3" />
+          <span className="text-[14px] font-medium text-[#F5F7FA]">
             {loadingMode === 'file'
               ? `Analizando ${analyzedLabel}...`
               : 'Seleccionar o arrastrar salida MVT'}
           </span>
-          <span className="mt-1.5 font-tech text-[11px] text-[#8E8E96]">
+          <span className="mt-1.5 font-tech text-[12px] text-[#9CA3B0]">
             safari_history.json · sms.json · shutdown_log.json
           </span>
-          <span className="mt-2 font-tech text-[10.5px] text-[#8E8E96]/70">
+          <span className="mt-2 font-tech text-[11.5px] text-[#8E96A4]">
             .json · .txt · .log · .ips
           </span>
           <input
@@ -313,7 +313,7 @@ export function MvtVerifierPanel() {
           <div className="space-y-2">
             <label
               htmlFor="manual-ioc-input"
-              className="block text-[11.5px] font-medium text-[#8E8E96]"
+              className="block text-[12.5px] font-medium text-[#B6BDC9]"
             >
               O pegar indicadores (uno por línea)
             </label>
@@ -323,7 +323,7 @@ export function MvtVerifierPanel() {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder="dominios (ej. evil[.]domain[.]com), IPs, SHA-256 o procesos..."
-              className="w-full resize-none rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-2.5 font-tech text-[12px] leading-relaxed text-[#F2F2F4] placeholder-[#8E8E96]/70 focus:border-[#2F6FED] focus:outline-none"
+              className="w-full resize-none rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-3 font-tech text-[13px] leading-[1.6] text-[#F2F4F8] placeholder-[#949CA9] focus:border-[#2F6FED] focus:outline-none"
             />
           </div>
 
@@ -331,7 +331,7 @@ export function MvtVerifierPanel() {
             <button
               type="submit"
               disabled={isLoading || textInput.trim().length < 3}
-              className="rounded-[4px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:bg-[#255ED4] disabled:bg-[#1C1C22] disabled:text-[#8E8E96] transition-colors cursor-pointer disabled:cursor-not-allowed"
+              className="rounded-[4px] bg-[#2F6FED] px-4 py-2 text-[13px] font-medium text-[#F5F7FA] hover:bg-[#255ED4] disabled:bg-[#1C1C22] disabled:text-[#8E8E96] transition-colors cursor-pointer disabled:cursor-not-allowed"
             >
               {loadingMode === 'text' ? 'Cruzando...' : 'Cruzar indicadores'}
             </button>
@@ -341,7 +341,7 @@ export function MvtVerifierPanel() {
 
       {/* Error real de conexión o entrada */}
       {error && (
-        <div className="rounded-[6px] border border-[#5C2128] bg-[#1F1215] px-4 py-3 flex items-center gap-2 text-[12.5px] text-[#F87171]">
+        <div className="rounded-[6px] border border-[#5C2128] bg-[#1F1215] px-4 py-3 flex items-center gap-2 text-[13.5px] text-[#F87171]">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -349,9 +349,9 @@ export function MvtVerifierPanel() {
 
       {/* Resultados del Análisis Forense */}
       {result && (
-        <div ref={resultsRef} className="space-y-3.5 pt-1">
+        <div ref={resultsRef} className="space-y-4 pt-1">
           <div className="flex items-center justify-between">
-            <h2 className="text-[12px] font-medium uppercase tracking-wider text-[#8E8E96]">
+            <h2 className="text-[12.5px] font-semibold uppercase tracking-wider text-[#9CA3B0]">
               Resultados del análisis forense
             </h2>
           </div>
@@ -360,11 +360,11 @@ export function MvtVerifierPanel() {
           <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-0.5 min-w-0">
-                <p className="text-[13.5px] font-medium text-[#F2F2F4]">
+                <p className="text-[15px] font-semibold text-[#F5F7FA]">
                   {result.detected_format}
                 </p>
                 {analyzedLabel && (
-                  <p className="font-tech text-[11.5px] text-[#8E8E96] truncate">
+                  <p className="font-tech text-[12.5px] text-[#9CA3B0] truncate">
                     {analyzedLabel}
                   </p>
                 )}
@@ -372,10 +372,10 @@ export function MvtVerifierPanel() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className={`font-tech rounded-[4px] border px-2.5 py-1 text-[11px] font-medium ${
+                  className={`font-tech rounded-[4px] border px-2.5 py-1 text-[12px] font-medium ${
                     result.total_matches > 0
                       ? 'border-[#5C2128] bg-[#1F1215] text-[#F87171]'
-                      : 'border-[#2F6FED]/40 bg-[#15223D] text-[#7AA7FF]'
+                      : 'border-[#2F6FED]/40 bg-[#15223D] text-[#8AB4FF]'
                   }`}
                 >
                   {result.total_matches === 0
@@ -390,15 +390,15 @@ export function MvtVerifierPanel() {
                 <button
                   type="button"
                   onClick={handleExportReport}
-                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2.5 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED] transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-3 py-1.5 text-[12.5px] text-[#F2F4F8] hover:border-[#2F6FED] transition-colors cursor-pointer"
                 >
-                  <Download className="h-3.5 w-3.5 text-[#8E8E96]" />
+                  <Download className="h-3.5 w-3.5 text-[#9CA3B0]" />
                   <span>Exportar informe (.md)</span>
                 </button>
               </div>
             </div>
 
-            <div className="border-t border-[#232329] pt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-tech text-[11px] text-[#8E8E96]">
+            <div className="border-t border-[#232329] pt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-tech text-[12px] text-[#9CA3B0]">
               <span>Evaluados: {result.analyzed_indicators}</span>
               <span>·</span>
               <span>Dominios: {result.breakdown?.domains ?? 0}</span>
@@ -413,53 +413,53 @@ export function MvtVerifierPanel() {
 
           {/* Estado limpio vs Hallazgos Correlacionados */}
           {result.total_matches === 0 ? (
-            <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-4 flex items-center gap-2.5 text-[13px] text-[#F2F2F4]">
+            <div className="rounded-[6px] border border-[#232329] bg-[#141418] p-4 flex items-center gap-2.5 text-[14px] text-[#F2F4F8]">
               <ShieldCheck className="h-4 w-4 text-[#2F6FED] shrink-0" />
               <span>
                 No se detectaron coincidencias con los indicadores públicos de spyware comercial indexados.
               </span>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {result.matches.map((m, idx) => (
                 <div
                   key={`${m.ioc_type}-${m.ioc_value}-${idx}`}
-                  className="rounded-[6px] border border-[#5C2128] border-l-2 border-l-[#F87171] bg-[#141418] p-4 space-y-2.5"
+                  className="rounded-[6px] border border-[#5C2128] border-l-2 border-l-[#F87171] bg-[#141418] p-4 space-y-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-tech text-[13px] text-[#F2F2F4] break-all">
+                    <div className="font-tech text-[14px] font-medium text-[#F5F7FA] break-all">
                       <span className="text-[#F87171]">[{m.ioc_type.toUpperCase()}]</span>{' '}
                       {m.ioc_value}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 font-tech text-[10.5px]">
-                      <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
+                    <div className="flex flex-wrap items-center gap-1.5 font-tech text-[11.5px]">
+                      <span className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#B6BDC9]">
                         {m.match_precision}
                       </span>
-                      <span className="rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-0.5 text-[#7AA7FF]">
+                      <span className="rounded-[4px] border border-[#2F6FED]/40 bg-[#15223D] px-2 py-0.5 text-[#8AB4FF]">
                         {m.spyware_family}
                       </span>
                     </div>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2 text-[12px]">
+                  <div className="grid gap-2.5 sm:grid-cols-2 text-[13px]">
                     <div className="space-y-0.5">
-                      <span className="text-[#8E8E96]">Origen en dump: </span>
-                      <span className="font-tech text-[#F2F2F4]">{m.artifact_origin}</span>
+                      <span className="text-[#9CA3B0]">Origen en dump: </span>
+                      <span className="font-tech text-[#F2F4F8]">{m.artifact_origin}</span>
                     </div>
                     <div className="space-y-0.5">
-                      <span className="text-[#8E8E96]">Campaña asociada: </span>
-                      <span className="font-medium text-[#F2F2F4]">{m.campaign}</span>
+                      <span className="text-[#9CA3B0]">Campaña asociada: </span>
+                      <span className="font-medium text-[#F5F7FA]">{m.campaign}</span>
                     </div>
                   </div>
 
                   {m.context && (
-                    <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-2.5 text-[12px] text-[#8E8E96]">
+                    <div className="rounded-[4px] border border-[#232329] bg-[#0A0A0C] p-3 text-[13px] leading-[1.58] text-[#CED4DE]">
                       {m.context}
                     </div>
                   )}
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#8E8E96]">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#9CA3B0]">
                     <span>
                       Fuente: {m.organization} — {m.source_report}
                     </span>
@@ -468,10 +468,10 @@ export function MvtVerifierPanel() {
                         href={m.source_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[#7AA7FF] hover:underline underline-offset-2"
+                        className="inline-flex items-center gap-1 text-[#8AB4FF] hover:underline underline-offset-2"
                       >
                         <span>Ver reporte original</span>
-                        <ExternalLink className="h-3 w-3" />
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}
                   </div>
