@@ -32,7 +32,7 @@ export function CitationDrawer({ citation, onClose }) {
               {citation.organization}
             </span>
             <span className="font-tech rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-2 py-0.5 text-[#8E8E96]">
-              Pág. {citation.page}
+              p.{citation.page}
             </span>
             <span className="font-tech rounded-[4px] border border-[#2F6FED]/30 bg-[#15223D] px-2 py-0.5 text-[#7AA7FF]">
               Similitud {(citation.similarity * 100).toFixed(1)}%

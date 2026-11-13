@@ -40,7 +40,7 @@ function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
       return (
         <span
           key={idx}
-          className="font-tech rounded-[4px] border border-[#232329] bg-[#0A0A0C] px-1.5 py-0.5 text-[12px] text-[#F2F2F4]"
+          className="font-tech rounded-[4px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[12px] text-[#F2F2F4]"
         >
           {part}
         </span>
@@ -106,7 +106,7 @@ export function MarkdownMessage({ content, citations = [], onSelectCitation }) {
             <strong className="font-semibold text-[#F2F2F4]">{enhance(children)}</strong>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="my-2 border-l-2 border-[#2F6FED] bg-[#0A0A0C] py-2 pl-3.5 pr-3 text-[13px] text-[#8E8E96]">
+            <blockquote className="my-2 border-l-2 border-[#232329] bg-[#141418] py-2 pl-3.5 pr-3 text-[13px] text-[#8E8E96]">
               {enhance(children)}
             </blockquote>
           ),
