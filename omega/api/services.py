@@ -34,12 +34,256 @@ REGLAS DE ESTILO Y LEGIBILIDAD (RNF2):
 1. Escribe en español técnico, directo y bien estructurado en Markdown limpio.
 2. NUNCA uses etiquetas HTML como <br>, <b> o <table>.
 3. Evita tablas anchas en el chat. Organiza la información usando:
-   - Un párrafo breve de síntesis inicial (2-3 líneas).
-   - Listas con viñetas donde cada punto inicie con un concepto en **negrita** seguido de la explicación concisa y su cita [1].
+   - Un párrafo breve de conclusión ejecutiva inicial (2-3 líneas directas) con sus citas [1].
+   - Listas con viñetas donde cada hallazgo inicie con categoría/concepto en **negrita** (ej. **Vector de explotación:**, **Infraestructura C2:**, **Artefactos forenses:**, **Impacto y objetivos:**, **Mitigación:**) seguido de la explicación concisa y su cita [1].
    - Citas textuales en inglés únicamente cuando aporten evidencia forense clave, usando bloque de cita (`> "..."`) corto."""
 
 CONDENSE_PROMPT = """Reescribe la última pregunta del analista como una consulta técnica autocontenida (en español o conservando los términos técnicos/CVEs exactos) resolviendo pronombres como "esa campaña", "ese exploit" o "el segundo" a partir del historial.
 Si la pregunta ya es autocontenida, devuélvela sin cambios. Responde ÚNICAMENTE con la consulta reescrita, sin explicaciones."""
+
+CVE_CODE_RE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
+SHA256_HEX_RE = re.compile(r"\b[a-f0-9]{64}\b", re.IGNORECASE)
+IPV4_TOKEN_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+DOMAIN_TOKEN_RE = re.compile(
+    r"\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)\b",
+    re.IGNORECASE,
+)
+
+CATEGORY_RULES = [
+    ("Vector y explotación", ("cve-", "zero-click", "0-day", "1-click", "exploit", "imessage", "blastdoor", "sandbox", "vulnerabil", "passkit", "webp", "coregraphics", "ejecución")),
+    ("Infraestructura y C2", ("dominio", "c2", "servidor", "dns", "redirec", "url", "infraestructura", "entrega", "inyección", "shortener")),
+    ("Artefactos forenses", ("mvt", "shutdown.log", "safari", "crash", "imtranscoderagent", "artefacto", "sqlite", "proceso", "hash", "sha-256", "respaldo", "persistencia")),
+    ("Actores y objetivos", ("sector", "región", "periodist", "gobierno", "derechos humanos", "diplomát", "objetivo", "víctima", "nso", "intellexa", "candiru", "pegasus", "predator", "actor", "campaña")),
+    ("Mitigación y defensa", ("mitig", "parche", "actualiz", "lockdown", "bloqueo", "verific", "recomend", "defens")),
+]
+
+ACTOR_PATTERNS = [
+    ("Pegasus (NSO Group)", re.compile(r"\b(?:pegasus|nso\s*group)\b", re.IGNORECASE)),
+    ("Predator (Intellexa / Cytrox)", re.compile(r"\b(?:predator|intellexa|cytrox)\b", re.IGNORECASE)),
+    ("Candiru", re.compile(r"\bcandiru\b", re.IGNORECASE)),
+    ("QuaDream (KingsPawn)", re.compile(r"\b(?:quadream|kingspawn)\b", re.IGNORECASE)),
+    ("FinFisher (FinSpy)", re.compile(r"\b(?:finfisher|finspy)\b", re.IGNORECASE)),
+]
+
+
+def _confidence_for_citations(cit_list: list[dict]) -> str:
+    if not cit_list:
+        return "Referencial"
+    best_sim = max(float(c.get("similarity") or 0.0) for c in cit_list)
+    has_hybrid_or_exact = any(c.get("retrieval_method") in ("Híbrido (Vector + Exacto)", "Coincidencia Exacta") for c in cit_list)
+    if (has_hybrid_or_exact and best_sim >= 0.65) or best_sim >= 0.82:
+        return "Alta"
+    if best_sim >= 0.58 or has_hybrid_or_exact:
+        return "Media"
+    return "Referencial"
+
+
+def _classify_finding(title: str, summary: str) -> str:
+    haystack = f"{title} {summary}".lower()
+    for category, keywords in CATEGORY_RULES:
+        if any(kw in haystack for kw in keywords):
+            return category
+    return "Hallazgo analítico"
+
+
+def _fetch_linked_cti_context(cur, report_ids: list[str]) -> dict:
+    if not report_ids:
+        return {"campaigns": [], "cves": [], "iocs": []}
+
+    cur.execute(
+        """
+        SELECT DISTINCT c.id::text, c.name, c.spyware_family, COALESCE(c.suspected_actor, ''), COALESCE(c.target_sector, '')
+        FROM reports r
+        JOIN campaigns c ON c.id = r.campaign_id
+        WHERE r.id = ANY(%s::uuid[])
+        UNION
+        SELECT DISTINCT c.id::text, c.name, c.spyware_family, COALESCE(c.suspected_actor, ''), COALESCE(c.target_sector, '')
+        FROM campaign_cves cc
+        JOIN campaigns c ON c.id = cc.campaign_id
+        WHERE cc.report_id = ANY(%s::uuid[])
+        LIMIT 6;
+        """,
+        (report_ids, report_ids),
+    )
+    campaigns = [
+        {
+            "id": row[0],
+            "name": row[1],
+            "spyware_family": row[2],
+            "suspected_actor": row[3] or None,
+            "target_sector": row[4] or None,
+        }
+        for row in cur.fetchall()
+    ]
+
+    cur.execute(
+        """
+        SELECT DISTINCT cv.cve_code
+        FROM campaign_cves cc
+        JOIN cves cv ON cv.id = cc.cve_id
+        WHERE cc.report_id = ANY(%s::uuid[])
+        ORDER BY cv.cve_code
+        LIMIT 12;
+        """,
+        (report_ids,),
+    )
+    cves = [row[0] for row in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT DISTINCT i.ioc_type, i.ioc_value, COALESCE(i.context, ''), COALESCE(c.spyware_family, '')
+        FROM iocs i
+        LEFT JOIN campaigns c ON c.id = i.campaign_id
+        WHERE i.report_id = ANY(%s::uuid[])
+        LIMIT 24;
+        """,
+        (report_ids,),
+    )
+    iocs = [
+        {
+            "type": row[0],
+            "value": row[1],
+            "context": row[2] or None,
+            "family": row[3] or None,
+        }
+        for row in cur.fetchall()
+    ]
+
+    return {"campaigns": campaigns, "cves": cves, "iocs": iocs}
+
+
+def _build_structured_analysis(answer: str, citations: list[dict], linked_ctx: dict) -> dict:
+    clean_answer = (answer or "").strip()
+    insufficient = not citations or "no hay evidencia suficiente en los reportes indexados" in clean_answer.lower()
+
+    if insufficient:
+        return {
+            "insufficient_evidence": True,
+            "executive_summary": clean_answer,
+            "findings": [],
+            "related_indicators": {"cves": [], "iocs": [], "actors_families": [], "campaigns": []},
+            "traceability": {
+                "overall_confidence": "Referencial",
+                "sources_count": len(citations),
+                "organizations": [],
+                "hybrid_count": 0,
+                "max_similarity": 0.0,
+                "sources": [],
+            },
+        }
+
+    lines = clean_answer.splitlines()
+    exec_lines = []
+    findings = []
+    cit_by_index = {c["index"]: c for c in citations}
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if exec_lines and not findings:
+                # Primer párrafo antes de listas o citas
+                continue
+            continue
+        bullet_match = re.match(r"^(?:[-*]|\d+\.)\s+(?:\*\*([^*]+?)\*\*\s*:?\s*)?(.*)$", stripped)
+        if bullet_match:
+            raw_title = (bullet_match.group(1) or "").strip().rstrip(":")
+            raw_body = (bullet_match.group(2) or "").strip()
+            if not raw_title and ":" in raw_body[:60]:
+                head, tail = raw_body.split(":", 1)
+                raw_title, raw_body = head.strip(), tail.strip()
+            elif not raw_title:
+                raw_title = "Evidencia documentada"
+            cited_nums = [int(n) for n in re.findall(r"\[(\d+)\]", raw_body) if int(n) in cit_by_index]
+            cited_objs = [cit_by_index[n] for n in cited_nums]
+            findings.append(
+                {
+                    "category": _classify_finding(raw_title, raw_body),
+                    "title": raw_title,
+                    "summary": raw_body,
+                    "citations": sorted(set(cited_nums)),
+                    "confidence": _confidence_for_citations(cited_objs or citations),
+                }
+            )
+        elif not findings and not stripped.startswith(">") and not stripped.startswith("#"):
+            exec_lines.append(stripped)
+
+    executive_summary = " ".join(exec_lines).strip()
+    if not executive_summary:
+        executive_summary = clean_answer.split("\n")[0].strip()
+
+    corpus_text = "\n".join([clean_answer, *(c.get("snippet", "") for c in citations)])
+    cves = sorted({m.upper() for m in CVE_CODE_RE.findall(corpus_text)})
+    for db_cve in linked_ctx.get("cves", []):
+        if db_cve.upper() not in cves and len(cves) < 12:
+            cves.append(db_cve.upper())
+
+    seen_iocs = set()
+    iocs_out = []
+    for h in SHA256_HEX_RE.findall(corpus_text):
+        val = h.lower()
+        if val not in seen_iocs:
+            seen_iocs.add(val)
+            iocs_out.append({"type": "sha256", "value": val, "source": "Hallazgo citado"})
+    for d in DOMAIN_TOKEN_RE.findall(corpus_text):
+        val = d.lower()
+        if val not in seen_iocs and "citizenlab.ca" not in val and "amnesty.org" not in val and "blog.google" not in val:
+            seen_iocs.add(val)
+            iocs_out.append({"type": "domain", "value": val, "source": "Hallazgo citado"})
+    for ip in IPV4_TOKEN_RE.findall(corpus_text):
+        if ip not in seen_iocs:
+            seen_iocs.add(ip)
+            iocs_out.append({"type": "ip", "value": ip, "source": "Hallazgo citado"})
+    for db_ioc in linked_ctx.get("iocs", []):
+        val = db_ioc["value"]
+        if val.lower() not in seen_iocs and len(iocs_out) < 10:
+            seen_iocs.add(val.lower())
+            iocs_out.append(
+                {
+                    "type": db_ioc["type"],
+                    "value": val,
+                    "source": db_ioc.get("family") or "Corpus CTI citado",
+                }
+            )
+
+    actors_families = [label for label, pat in ACTOR_PATTERNS if pat.search(corpus_text)]
+    for camp in linked_ctx.get("campaigns", []):
+        fam = camp.get("spyware_family")
+        if fam and not any(fam.lower() in a.lower() for a in actors_families):
+            actors_families.append(fam)
+
+    trace_sources = [
+        {
+            "index": c["index"],
+            "report_id": c["report_id"],
+            "title": c["title"],
+            "organization": c["organization"],
+            "page": c["page"],
+            "retrieval_method": c["retrieval_method"],
+            "similarity": c["similarity"],
+            "confidence": _confidence_for_citations([c]),
+        }
+        for c in citations
+    ]
+
+    return {
+        "insufficient_evidence": False,
+        "executive_summary": executive_summary,
+        "findings": findings,
+        "related_indicators": {
+            "cves": cves[:12],
+            "iocs": iocs_out[:10],
+            "actors_families": actors_families,
+            "campaigns": linked_ctx.get("campaigns", []),
+        },
+        "traceability": {
+            "overall_confidence": _confidence_for_citations(citations),
+            "sources_count": len(citations),
+            "organizations": sorted({c["organization"] for c in citations}),
+            "hybrid_count": sum(1 for c in citations if c.get("retrieval_method") != "Semántico"),
+            "max_similarity": max((float(c["similarity"]) for c in citations), default=0.0),
+            "sources": trace_sources,
+        },
+    }
 
 
 def _groq_extra_params(model_name: str) -> dict:
@@ -143,13 +387,16 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                 (q_vec, q_vec, q_vec, standalone_query, standalone_query, top_k),
             )
             rows = cur.fetchall()
+            linked_ctx = _fetch_linked_cti_context(cur, list({row[0] for row in rows})) if rows else {"campaigns": [], "cves": [], "iocs": []}
 
     if not rows:
+        empty_answer = "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
         return {
-            "answer": "No hay evidencia suficiente en los reportes indexados para responder esta consulta.",
+            "answer": empty_answer,
             "standalone_query": standalone_query,
             "citations": [],
             "model": GROQ_MODEL,
+            "analysis": _build_structured_analysis(empty_answer, [], {"campaigns": [], "cves": [], "iocs": []}),
         }
 
     citations = []
@@ -202,11 +449,13 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
             else:
                 raise
 
+    answer_text = completion.choices[0].message.content
     return {
-        "answer": completion.choices[0].message.content,
+        "answer": answer_text,
         "standalone_query": standalone_query,
         "citations": citations,
         "model": GROQ_MODEL,
+        "analysis": _build_structured_analysis(answer_text, citations, linked_ctx),
     }
 
 

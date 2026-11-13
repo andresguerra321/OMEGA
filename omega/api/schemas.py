@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -30,6 +30,7 @@ class ChatResponse(BaseModel):
     standalone_query: str
     citations: list[CitationItem]
     model: str
+    analysis: dict[str, Any] | None = None
 
 
 class IocMatchItem(BaseModel):
