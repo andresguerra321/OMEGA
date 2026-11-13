@@ -9,6 +9,8 @@ import psycopg
 from dotenv import load_dotenv
 from groq import Groq
 
+from behavioral_forensics import run_behavioral_forensics, unpack_forensic_archives_in_ram
+
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 DB_DSN = (
@@ -344,14 +346,14 @@ def _diagnose_verdict(agent_reports: list[dict], crash_anomalies: list[str]) -> 
             ],
         }
 
-    # Caso 3: Coincidencia única aislada -> probable falso positivo o exposición pasiva
+    # Caso 3: Coincidencia única aislada o anomalías sin IOCs conocidos
     only_derived = len(all_matches) > 0 and len(exact_matches) == 0
-    if len(all_matches) == 1 or only_derived:
+    if not active_agents_with_hits or len(all_matches) == 1 or only_derived:
         sample = all_matches[0] if all_matches else None
         reason_detail = (
             f"Coincidencia única en '{sample['ioc_value']}' ({sample['match_precision']}) detectada únicamente por {active_agents_with_hits[0]['agent_name']}, sin corroboración en procesos activos ni tráfico de red adicional."
-            if sample
-            else "Solo se observaron anomalías genéricas en CrashLogs sin coincidencias contra IOCs conocidos."
+            if sample and active_agents_with_hits
+            else "Solo se observaron anomalías heurísticas en logs o CrashLogs sin coincidencias contra IOCs públicos conocidos."
         )
         return {
             "verdict_code": "LIKELY_FALSE_POSITIVE",
@@ -386,11 +388,14 @@ def _diagnose_verdict(agent_reports: list[dict], crash_anomalies: list[str]) -> 
 
 
 async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
-    """Orquestador asíncrono que despacha los 3 subagentes en paralelo y correlaciona hallazgos."""
-    res_a, res_b, res_c = await asyncio.gather(
-        asyncio.to_thread(_worker_a_messaging_sqlite, artifacts),
-        asyncio.to_thread(_worker_b_network_dns, artifacts),
-        asyncio.to_thread(_worker_c_process_crashlogs, artifacts),
+    """Orquestador asíncrono: desempaqueta en RAM y ejecuta CTI + análisis conductual."""
+    expanded_artifacts = await asyncio.to_thread(unpack_forensic_archives_in_ram, artifacts)
+
+    res_a, res_b, res_c, behavioral_anomalies = await asyncio.gather(
+        asyncio.to_thread(_worker_a_messaging_sqlite, expanded_artifacts),
+        asyncio.to_thread(_worker_b_network_dns, expanded_artifacts),
+        asyncio.to_thread(_worker_c_process_crashlogs, expanded_artifacts),
+        asyncio.to_thread(run_behavioral_forensics, expanded_artifacts),
     )
 
     raw_agents = [res_a, res_b, res_c]
@@ -413,17 +418,49 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
             }
         )
 
-    crash_anomalies = res_c.get("crash_anomalies", [])
+    crash_anomalies = list(res_c.get("crash_anomalies", []))
+    for anom in behavioral_anomalies:
+        summary_line = f"[{anom['severity']}] {anom['category']} ({anom['artifact']}): {anom['indicator']} — {anom['detail']}"
+        if summary_line not in crash_anomalies:
+            crash_anomalies.append(summary_line)
+
     diagnosis = _diagnose_verdict(agent_summaries, crash_anomalies)
+    critical_behavioral = [a for a in behavioral_anomalies if a.get("severity") == "CRITICAL"]
+    total_cti_matches = sum(a["matches_count"] for a in agent_summaries)
+
+    if total_cti_matches == 0 and critical_behavioral and diagnosis.get("verdict_code") in (
+        "CLEAN",
+        "LIKELY_FALSE_POSITIVE",
+    ):
+        categories_preview = ", ".join(
+            dict.fromkeys(a["category"] for a in critical_behavioral[:3])
+        )
+        diagnosis = {
+            "verdict_code": "BEHAVIORAL_ZERO_DAY_SUSPICION",
+            "verdict_label": "Anomalía Conductual Crítica — Posible Spyware Zero-Day (Sin IOCs Públicos)",
+            "confidence": "Alta",
+            "is_likely_false_positive": False,
+            "rationale": (
+                f"No hubo coincidencias contra IOCs públicos documentados, pero el análisis conductual en RAM "
+                f"detectó {len(critical_behavioral)} anomalía(s) crítica(s) ({categories_preview}). "
+                "Este patrón sugiere persistencia o abuso zero-day aún no catalogado en feeds CTI."
+            ),
+            "recommended_actions": [
+                "Preservar el respaldo completo (sysdiagnose y dump MVT) sin reiniciar ni restaurar el dispositivo.",
+                "Activar Modo de Aislamiento (Lockdown Mode) y rotar credenciales desde un dispositivo limpio.",
+                "Escalar la evidencia conductual a un equipo forense especializado (CERT / Citizen Lab / Amnesty Tech).",
+            ],
+        }
 
     return {
-        "pipeline_mode": "Parallel Multi-Agent Triage (3 Workers)",
-        "total_files": len(artifacts),
+        "pipeline_mode": "Parallel Multi-Agent Triage (3 CTI Workers + Behavioral Forensics RAM)",
+        "total_files": len(expanded_artifacts),
         "total_indicators_analyzed": total_unique_tokens,
-        "total_matches": sum(a["matches_count"] for a in agent_summaries),
+        "total_matches": total_cti_matches,
         "crash_anomalies": crash_anomalies,
+        "behavioral_anomalies": behavioral_anomalies,
         "diagnosis": diagnosis,
         "subagents": agent_summaries,
-        "ephemeral_notice": "Triage paralelo ejecutado 100% en memoria volátil (RAM). Ningún respaldo ni log fue persistido (RNF4).",
+        "ephemeral_notice": "Triage paralelo y análisis conductual ejecutados 100% en memoria volátil (RAM). Archivos y SQLite analizados sin guardado en disco (RNF4).",
     }
 
