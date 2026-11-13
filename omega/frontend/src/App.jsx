@@ -661,15 +661,16 @@ export default function App() {
           <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
             <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
 
-            {/* Barra Instrumental Unificada de Estudio */}
+            {/* Barra Principal Unificada — Navegación siempre centrada */}
             <header
-              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 pl-5 sm:pl-7 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
+              aria-label="Barra principal OMEGA"
+              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 px-5 sm:px-7 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
                 isDesktop
-                  ? 'pr-40 sm:pr-44 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
-                  : 'pr-5 sm:pr-7'
+                  ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
+                  : ''
               }`}
             >
-              <div className="min-w-0 flex items-center gap-2 shrink-0">
+              <div className="relative z-10 min-w-0 flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => handleNavigate('inicio')}
@@ -677,21 +678,20 @@ export default function App() {
                   title="Volver a Inicio"
                 >
                   <OmegaLogo size={22} isThinking={loadingChat} />
-                  <span className="hidden sm:inline text-[14px] font-semibold tracking-[0.06em] text-[#F8FAFC]">
+                  <span className="font-display hidden sm:inline text-[14px] font-semibold tracking-[0.06em] text-[#F8FAFC]">
                     OMEGA
                   </span>
                 </button>
 
                 <span className="hidden sm:inline text-white/25 text-[12px]">/</span>
-                <span className="text-[13px] font-medium text-[#E2E8F0] truncate max-w-[125px] xl:max-w-none">
+                <span className="text-[13px] font-medium text-[#E2E8F0] truncate max-w-[115px] lg:max-w-[165px]">
                   {activeNavItem.label}
                 </span>
               </div>
 
-              {/* Barra de navegación segmentada central */}
-              <div className="titlebar-no-drag hidden md:flex items-center justify-center shrink-0">
+              {/* Barra de navegación segmentada matemáticamente centrada */}
+              <div className="titlebar-no-drag hidden md:flex items-center justify-center md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-20">
                 <SpatialNavPill
-                  compact
                   activeNav={activeNav}
                   onSelectNav={(id) => handleNavigate(id)}
                   pcVerdict={pcVerdict}
@@ -701,176 +701,179 @@ export default function App() {
                 />
               </div>
 
-                {/* Controles contextuales del instrumento */}
-                <div className="titlebar-no-drag flex items-center gap-1.5 shrink-0">
-                  {activeNav === 'preguntar' && (
-                    <div className="relative">
+              {/* Controles globales derechos uniformes en todas las vistas */}
+              <div className={`titlebar-no-drag relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
+                <div
+                  role="group"
+                  aria-label="Nivel de detalle"
+                  className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTechnicalMode(false)}
+                    className={`px-2 py-1 rounded-[6px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
+                      !technicalMode
+                        ? 'apple-segmented-active'
+                        : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                    }`}
+                  >
+                    Simple
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTechnicalMode(true)}
+                    className={`px-2 py-1 rounded-[6px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
+                      technicalMode
+                        ? 'apple-segmented-active'
+                        : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                    }`}
+                  >
+                    Técnico
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCopilotOpen((v) => !v)}
+                  aria-label="Abrir o cerrar copiloto lateral"
+                  title="Copiloto deslizable (Ctrl+J)"
+                  className={`h-8 px-2 xl:px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                    isCopilotOpen
+                      ? 'border-[#5E9BFF]/55 bg-[#2F6FED]/20 text-[#9EC1FF]'
+                      : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
+                  <span className="hidden xl:inline">Copiloto</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCommandOpen(true);
+                    setCommandQuery('');
+                  }}
+                  aria-label="Abrir búsqueda rápida (⌘K)"
+                  title="Saltar a módulo o acción (⌘K)"
+                  className="h-8 px-2 xl:px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-[11.5px] text-[#B4BAC6] hover:text-[#F4F6FA] transition-colors cursor-pointer"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  <span className="font-tech hidden xl:inline">⌘K</span>
+                </button>
+              </div>
+            </header>
+
+            {/* Sub-barra contextual de conversación exclusivamente en Asistente */}
+            {activeNav === 'preguntar' && (
+              <header
+                aria-label="Controles de sesión de chat"
+                className="relative z-15 h-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.05] bg-[#060910]/85 flex items-center justify-between gap-2 select-none"
+              >
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSessionsMenuOpen((v) => !v)}
+                    className="h-7 max-w-[220px] sm:max-w-[300px] px-2.5 rounded-[7px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[11.5px] text-[#E4E8F0] transition-colors cursor-pointer"
+                  >
+                    <MessageSquare className="h-3 w-3 text-[#8AB4FF] shrink-0" />
+                    <span className="truncate">
+                      {activeSession?.title || 'Nueva consulta'}
+                    </span>
+                    <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+                  </button>
+
+                  {sessionsMenuOpen && (
+                    <div className="apple-popover absolute left-0 mt-1.5 w-[300px] rounded-[13px] p-1.5 z-50 space-y-1">
                       <button
                         type="button"
-                        onClick={() => setSessionsMenuOpen((v) => !v)}
-                        className="h-8 max-w-[125px] xl:max-w-[180px] px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[12px] text-[#E4E8F0] transition-colors cursor-pointer"
+                        onClick={() => {
+                          setSessionsMenuOpen(false);
+                          startNewInvestigation();
+                        }}
+                        className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
                       >
-                        <MessageSquare className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
-                        <span className="truncate">
-                          {activeSession?.title || 'Nueva consulta'}
-                        </span>
-                        <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Nueva consulta limpia</span>
                       </button>
 
-                      {sessionsMenuOpen && (
-                        <div className="apple-popover absolute right-0 mt-2 w-[300px] rounded-[13px] p-1.5 z-50 space-y-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSessionsMenuOpen(false);
-                              startNewInvestigation();
-                            }}
-                            className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            <span>Nueva consulta limpia</span>
-                          </button>
+                      <div className="h-px bg-white/[0.07] my-1" />
 
-                          <div className="h-px bg-white/[0.07] my-1" />
+                      <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                        {sessions.map((sess) => {
+                          const selected = sess.id === currentSessionId;
+                          return (
+                            <div
+                              key={sess.id}
+                              className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
+                                selected
+                                  ? 'bg-white/[0.08] text-[#F4F6FA]'
+                                  : 'text-[#C4CAD4] hover:bg-white/[0.05]'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCurrentSessionId(sess.id);
+                                  setSelectedCitation(null);
+                                  setSessionsMenuOpen(false);
+                                }}
+                                className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                              >
+                                <span className="block truncate font-medium">{sess.title}</span>
+                                <span className="font-tech text-[10.5px] text-[#9097A5]">
+                                  {formatRelativeTime(sess.updatedAt)}
+                                </span>
+                              </button>
 
-                          <div className="max-h-[240px] overflow-y-auto space-y-0.5">
-                            {sessions.map((sess) => {
-                              const selected = sess.id === currentSessionId;
-                              return (
-                                <div
-                                  key={sess.id}
-                                  className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
-                                    selected
-                                      ? 'bg-white/[0.08] text-[#F4F6FA]'
-                                      : 'text-[#C4CAD4] hover:bg-white/[0.05]'
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setCurrentSessionId(sess.id);
-                                      setSelectedCitation(null);
-                                      setSessionsMenuOpen(false);
-                                    }}
-                                    className="flex-1 min-w-0 text-left truncate cursor-pointer"
-                                  >
-                                    <span className="block truncate font-medium">{sess.title}</span>
-                                    <span className="font-tech text-[10.5px] text-[#9097A5]">
-                                      {formatRelativeTime(sess.updatedAt)}
-                                    </span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => deleteSession(e, sess.id)}
-                                    title="Eliminar conversación"
-                                    aria-label="Eliminar conversación"
-                                    className="p-1 rounded-[6px] text-[#9097A5] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                              <button
+                                type="button"
+                                onClick={(e) => deleteSession(e, sess.id)}
+                                title="Eliminar conversación"
+                                aria-label="Eliminar conversación"
+                                className="p-1 rounded-[6px] text-[#9097A5] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
+                </div>
 
-                  {activeNav === 'preguntar' && messages.length > 0 && activeConversationCitations.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {messages.length > 0 && activeConversationCitations.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setIsSourcesPanelOpen((v) => !v)}
                       title={`Fuentes (${activeConversationCitations.length})`}
-                      className={`h-8 px-2 rounded-[8px] border flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                      className={`h-7 px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
                         isSourcesPanelOpen
                           ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
                           : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
                       }`}
                     >
-                      <BookOpen className="h-3.5 w-3.5" />
-                      <span className="hidden xl:inline">Fuentes ({activeConversationCitations.length})</span>
+                      <BookOpen className="h-3 w-3" />
+                      <span>Fuentes ({activeConversationCitations.length})</span>
                     </button>
                   )}
 
-                  {activeNav === 'preguntar' && messages.length > 0 && (
+                  {messages.length > 0 && (
                     <button
                       type="button"
                       onClick={handleExportSession}
                       title="Exportar investigación"
                       aria-label="Exportar investigación"
-                      className="h-8 px-2 rounded-[8px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[12px] font-medium text-[#F4F6FA] transition-colors cursor-pointer"
+                      className="h-7 px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F4F6FA] transition-colors cursor-pointer"
                     >
-                      <Download className="h-3.5 w-3.5 text-[#9BA2B0]" />
-                      <span className="hidden xl:inline">Exportar</span>
+                      <Download className="h-3 w-3 text-[#9BA2B0]" />
+                      <span>Exportar</span>
                     </button>
                   )}
-
-                  {/* Selector global Simple / Técnico */}
-                  <div
-                    role="group"
-                    aria-label="Nivel de detalle"
-                    className={`apple-segmented ${
-                      activeNav === 'preguntar' ? 'hidden xl:inline-flex' : 'hidden lg:inline-flex'
-                    } items-center rounded-[9px] p-0.5 h-8`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setTechnicalMode(false)}
-                      className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
-                        !technicalMode
-                          ? 'apple-segmented-active'
-                          : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
-                      }`}
-                    >
-                      Simple
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTechnicalMode(true)}
-                      className={`px-2 py-1 rounded-[6px] text-[11.5px] font-medium transition-all cursor-pointer ${
-                        technicalMode
-                          ? 'apple-segmented-active'
-                          : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
-                      }`}
-                    >
-                      Técnico
-                    </button>
-                  </div>
-
-                  {/* Disparador del Copiloto deslizante */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCopilotOpen((v) => !v)}
-                    aria-label="Abrir o cerrar copiloto lateral"
-                    title="Copiloto deslizable (Ctrl+J)"
-                    className={`h-8 px-2 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
-                      isCopilotOpen
-                        ? 'border-[#5E9BFF]/55 bg-[#2F6FED]/20 text-[#9EC1FF]'
-                        : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
-                    }`}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
-                    <span className="hidden xl:inline">Copiloto</span>
-                  </button>
-
-                  {/* Paleta rápida */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCommandOpen(true);
-                      setCommandQuery('');
-                    }}
-                    aria-label="Abrir búsqueda rápida (⌘K)"
-                    title="Saltar a módulo o acción (⌘K)"
-                    className="h-8 px-2 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-[11.5px] text-[#B4BAC6] hover:text-[#F4F6FA] transition-colors cursor-pointer"
-                  >
-                    <Search className="h-3.5 w-3.5" />
-                    <span className="font-tech hidden sm:inline">⌘K</span>
-                  </button>
                 </div>
               </header>
+            )}
 
               {/* Navegación móvil en anchos estrechos */}
               <div className="md:hidden shrink-0 border-b border-white/[0.06] py-1.5 flex justify-center">

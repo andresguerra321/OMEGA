@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'IBM Plex Mono', SFMono-Regular, monospace;
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Sora', 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
-  --color-obsidian: #090A0D;
-  --color-surface: #12141A;
-  --color-cobalt: #2F6FED;
-  --color-ink-primary: #F4F5F7;
-  --color-ink-secondary: #989DA8;
+  --color-obsidian: #05070B;
+  --color-surface: #0A0E16;
+  --color-cobalt: #2563EB;
+  --color-ink-primary: #F8FAFC;
+  --color-ink-secondary: #94A3B8;
 }
 
 @layer base {
@@ -59,6 +60,14 @@
     outline: 2px solid rgba(94, 155, 255, 0.85);
     outline-offset: 2px;
   }
+}
+
+/* Tipografía Display arquitectónica para titulares y marca */
+.font-display,
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Tipografía Monospace estricta para telemetría, IPs, hashes y marcas de tiempo */
@@ -416,48 +425,43 @@
 }
 
 /* =========================================================
-   UNIFIED DARK STUDIO COCKPIT (NEGRO · BLANCO · AZUL REY)
+   ARCHITECTURAL DARK STUDIO COCKPIT (NEGRO · BLANCO · AZUL REY)
    ========================================================= */
 .omega-studio-bg {
-  background-color: #04070e;
-  background-image:
-    radial-gradient(88% 58% at 50% 44%, rgba(30, 58, 138, 0.28) 0%, rgba(15, 23, 42, 0.34) 48%, transparent 78%),
-    radial-gradient(62% 38% at 50% 62%, rgba(29, 78, 216, 0.14), transparent 72%),
-    linear-gradient(180deg, #060b16 0%, #091224 44%, #060b16 74%, #03050b 100%);
+  background-color: #05070b;
+  background-image: radial-gradient(54% 40% at 50% 42%, rgba(29, 78, 216, 0.085) 0%, transparent 72%);
 }
 
 .omega-glass-card {
-  background: linear-gradient(180deg, rgba(16, 25, 44, 0.68) 0%, rgba(8, 13, 24, 0.78) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  background-color: rgba(9, 13, 21, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.085);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 22px 46px rgba(2, 6, 18, 0.56);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
-  backdrop-filter: blur(22px) saturate(1.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.075),
+    0 14px 32px rgba(0, 0, 0, 0.48);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
 }
 
 .omega-glass-chip {
-  background: rgba(11, 18, 34, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 10px 26px rgba(0, 0, 0, 0.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  backdrop-filter: blur(18px) saturate(1.35);
+  background-color: rgba(10, 14, 22, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 .roam-pill-nav {
-  background: linear-gradient(180deg, rgba(12, 20, 38, 0.84) 0%, rgba(6, 10, 20, 0.9) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(10, 14, 22, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 14px 36px rgba(0, 0, 0, 0.45);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 26px rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 .roam-obsidian-sheet {
-  background: linear-gradient(180deg, #060a14 0%, #04060c 100%);
+  background-color: #05070b;
   color: #f8fafc;
 }
 

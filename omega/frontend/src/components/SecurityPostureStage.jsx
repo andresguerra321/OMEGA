@@ -232,39 +232,74 @@ export function SecurityPostureStage({
       aria-label="Cabina de postura OMEGA"
       className="omega-studio-bg relative h-full w-full overflow-hidden flex flex-col justify-between select-none text-[#F8FAFC]"
     >
-      {/* Haz sutil de estudio en ángulo superior derecho (Negro · Azul Rey) */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-24 right-[8%] h-[78%] w-[48%] rotate-[-22deg] bg-gradient-to-b from-[#2563EB]/[0.18] via-[#1D4ED8]/[0.06] to-transparent blur-3xl"
-      />
-      {/* Horizonte suave iluminado bajo la maqueta central */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 h-[220px] w-[72%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(37,99,235,0.22)_0%,rgba(29,78,216,0.06)_48%,transparent_75%)] blur-2xl"
-      />
+      {/* Escenario WebGL de estudio a pantalla completa (cuadrícula en perspectiva + objeto 3D) */}
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <SecurityCenterpiece3D
+          surfaceId={activeSurface.id}
+          healthy={
+            activeSurface.id === 'windows'
+              ? pcHealthy
+              : activeSurface.id === 'usb'
+                ? usbConnected
+                : activeSurface.id === 'link'
+                  ? Boolean(lastLinkResult) && linkRisk !== 'HIGH'
+                  : apiOnline
+          }
+          alert={
+            activeSurface.id === 'windows'
+              ? pcWarn
+              : activeSurface.id === 'link'
+                ? linkRisk === 'HIGH'
+                : false
+          }
+          spinNonce={spinNonce}
+        />
+      </div>
 
-      {/* Cabecera Superior Unificada */}
+      {/* Marco arquitectónico con rieles finos y marcadores de calibración lateral */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[56px] bottom-0 z-0 mx-auto max-w-[1320px] border-x border-white/[0.045]"
+      >
+        <span className="absolute -left-px top-6 h-3 w-px bg-[#3B82F6]/45" />
+        <span className="absolute -right-px top-6 h-3 w-px bg-[#3B82F6]/45" />
+        <span className="absolute -left-px bottom-6 h-3 w-px bg-[#3B82F6]/45" />
+        <span className="absolute -right-px bottom-6 h-3 w-px bg-[#3B82F6]/45" />
+        <div className="hidden lg:flex items-center justify-between px-7 pt-6">
+          <div className="font-tech text-[10px] tracking-[0.14em] text-[#64748B]/85 uppercase space-y-1">
+            <div>{pcScannedAt ? `HOST · ${pcScannedAt}` : 'HOST WINDOWS'}</div>
+            <div className="text-[#475569]">MODO · {technicalMode ? 'TÉCNICO' : 'SIMPLE'}</div>
+          </div>
+          <div className="font-tech text-right text-[10px] tracking-[0.14em] text-[#64748B]/85 uppercase space-y-1">
+            <div>MEMORIA VOLÁTIL</div>
+            <div className="text-[#475569]">0 BYTES EN DISCO</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Cabecera Superior Unificada — Navegación centrada en todo ancho */}
       <header
-        className={`relative z-30 shrink-0 pl-5 sm:pl-7 pt-3.5 flex items-center justify-between gap-2.5 ${
+        aria-label="Barra principal OMEGA"
+        className={`relative z-30 shrink-0 h-[56px] px-5 sm:px-7 flex items-center justify-between gap-2 ${
           isDesktop
-            ? 'pr-40 sm:pr-44 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
-            : 'pr-5 sm:pr-7'
+            ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
+            : ''
         }`}
       >
         {/* Marca OMEGA izquierda */}
         <button
           type="button"
           onClick={() => onSelectNav?.('inicio')}
-          className="inline-flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
+          className="relative z-10 inline-flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
         >
-          <OmegaLogo size={24} isThinking={isLoadingChat} />
-          <span className="text-[15.5px] font-semibold tracking-[0.06em] text-white group-hover:text-[#DBEAFE] transition-colors">
+          <OmegaLogo size={23} isThinking={isLoadingChat} />
+          <span className="font-display text-[15px] font-semibold tracking-[0.06em] text-white group-hover:text-[#DBEAFE] transition-colors">
             OMEGA
           </span>
         </button>
 
-        {/* Navegación segmentada central estilo consola de estudio */}
-        <div className="hidden md:flex justify-center">
+        {/* Barra de navegación segmentada matemáticamente centrada al viewport */}
+        <div className="hidden md:flex justify-center md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-20">
           <SpatialNavPill
             activeNav={activeNav}
             onSelectNav={onSelectNav}
@@ -275,19 +310,19 @@ export function SecurityPostureStage({
           />
         </div>
 
-        {/* Pila flotante derecha: Copiloto + Búsqueda ⌘K + Simple/Técnico */}
-        <div className="relative flex flex-col items-end gap-1.5 shrink-0">
-          <div className="flex items-center gap-2">
+        {/* Utilidades derechas con reserva limpia para botones - □ ✕ */}
+        <div className={`relative z-10 flex flex-col items-end gap-1 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => onOpenCopilot?.({})}
               aria-label="Abrir copiloto lateral"
               title="Abrir copiloto lateral (Ctrl+J)"
-              className="omega-glass-chip relative h-9 px-3.5 rounded-[12px] inline-flex items-center gap-2 text-[12px] font-medium text-[#E2E8F0] hover:text-white cursor-pointer transition-all"
+              className="omega-glass-chip relative h-8 xl:h-9 px-2 xl:px-3.5 rounded-[11px] inline-flex items-center gap-1.5 xl:gap-2 text-[12px] font-medium text-[#E2E8F0] hover:text-white cursor-pointer transition-all"
             >
               <Bell className="h-3.5 w-3.5 text-[#93C5FD]" />
               <span className="hidden xl:inline">Copiloto</span>
-              <span className="font-tech h-4 min-w-[18px] px-1 rounded-full bg-[#1D4ED8] text-white text-[10px] font-bold inline-flex items-center justify-center">
+              <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#1D4ED8] text-white text-[10px] font-bold inline-flex items-center justify-center">
                 {pcWarn ? pcInfo.findingsCount : reportsCount}
               </span>
             </button>
@@ -297,21 +332,21 @@ export function SecurityPostureStage({
               onClick={onOpenCommandPalette}
               aria-label="Abrir búsqueda rápida (⌘K)"
               title="Buscar módulo o CVE (⌘K)"
-              className="omega-glass-chip h-9 px-2.5 rounded-[12px] inline-flex items-center gap-1.5 text-[11.5px] text-[#CBD5E1] hover:text-white cursor-pointer transition-all"
+              className="omega-glass-chip h-8 xl:h-9 px-2 xl:px-2.5 rounded-[11px] inline-flex items-center gap-1.5 text-[11.5px] text-[#CBD5E1] hover:text-white cursor-pointer transition-all"
             >
               <Search className="h-3.5 w-3.5" />
-              <span className="font-tech hidden sm:inline">⌘K</span>
+              <span className="font-tech hidden xl:inline">⌘K</span>
             </button>
 
             <div
               role="group"
               aria-label="Nivel de detalle"
-              className="omega-glass-chip hidden sm:inline-flex items-center rounded-[12px] p-0.5 h-9"
+              className="omega-glass-chip hidden sm:inline-flex items-center rounded-[11px] p-0.5 h-8 xl:h-9"
             >
               <button
                 type="button"
                 onClick={() => onToggleTechnicalMode?.(false)}
-                className={`px-2.5 py-1 rounded-[9px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                className={`px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
                   !technicalMode ? 'bg-white text-[#070B14] shadow-xs' : 'text-[#94A3B8] hover:text-white'
                 }`}
               >
@@ -320,7 +355,7 @@ export function SecurityPostureStage({
               <button
                 type="button"
                 onClick={() => onToggleTechnicalMode?.(true)}
-                className={`px-2.5 py-1 rounded-[9px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                className={`px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
                   technicalMode ? 'bg-white text-[#070B14] shadow-xs' : 'text-[#94A3B8] hover:text-white'
                 }`}
               >
@@ -328,30 +363,11 @@ export function SecurityPostureStage({
               </button>
             </div>
           </div>
-
-          {/* Mini chip discreto de actividad debajo de la cabecera en escritorios amplios */}
-          <button
-            type="button"
-            onClick={() => onNavigate?.(pcAudit ? 'equipo' : 'amenazas')}
-            className="hidden xl:inline-flex items-center gap-2 rounded-[10px] border border-white/[0.08] bg-[#0B1324]/70 hover:bg-[#111C33]/80 backdrop-blur-md px-2.5 py-1 text-[11px] text-[#94A3B8] hover:text-[#E2E8F0] transition-colors cursor-pointer"
-          >
-            <span
-              aria-hidden="true"
-              className={`h-1.5 w-1.5 rounded-full ${
-                pcWarn ? 'bg-[#EF4444]' : pcHealthy ? 'bg-[#22C55E]' : 'bg-[#3B82F6]'
-              }`}
-            />
-            <span className="font-tech">
-              {pcScannedAt
-                ? `PC verificado · ${pcScannedAt} · 0 B disco`
-                : `STIX 2.1 · ${iocsCount.toLocaleString('en-US')} firmas en RAM`}
-            </span>
-          </button>
         </div>
       </header>
 
       {/* Nav compacto en anchos estrechos */}
-      <div className="relative z-20 md:hidden flex justify-center px-3 pt-2">
+      <div className="relative z-20 md:hidden flex justify-center px-3 pt-1">
         <SpatialNavPill
           compact
           activeNav={activeNav}
@@ -364,14 +380,10 @@ export function SecurityPostureStage({
       </div>
 
       {/* Escenario Central del Sujeto 3D */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center px-4 sm:px-8 pt-1">
-        {/* Encabezado tipográfico centrado sobre el objeto 3D */}
-        <div ref={menuRef} className="relative z-20 flex flex-col items-center text-center">
-          <div className="font-tech text-[10.5px] uppercase tracking-[0.16em] text-[#93C5FD]/90">
-            {activeSurface.kicker}
-          </div>
-
-          <div className="mt-1 flex items-center justify-center gap-2.5 flex-wrap">
+      <div className="pointer-events-none relative z-10 flex-1 min-h-0 flex flex-col items-center justify-between px-4 sm:px-8 pt-4 pb-2">
+        {/* Selector de superficie centrado sin eyebrow decorativo */}
+        <div ref={menuRef} className="pointer-events-auto relative z-20 flex flex-col items-center text-center">
+          <div className="flex items-center justify-center gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={() => setSurfaceMenuOpen((v) => !v)}
@@ -379,7 +391,7 @@ export function SecurityPostureStage({
               aria-haspopup="listbox"
               className="group inline-flex items-baseline gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#3B82F6] rounded-lg px-2 py-0.5"
             >
-              <h1 className="text-[clamp(1.65rem,2.7vw,2.35rem)] font-semibold tracking-[-0.03em] text-white leading-tight">
+              <h1 className="font-display text-[clamp(1.65rem,2.6vw,2.3rem)] font-semibold tracking-[-0.03em] text-white leading-tight">
                 {activeSurface.lead}{' '}
                 <span className="font-light text-[#94A3B8] group-hover:text-[#CBD5E1] transition-colors">
                   {activeSurface.accent}
@@ -404,7 +416,7 @@ export function SecurityPostureStage({
             <div
               role="listbox"
               aria-label="Cambiar superficie mostrada"
-              className="mt-2 w-[260px] rounded-[14px] border border-white/[0.12] bg-[#09101E]/95 backdrop-blur-xl p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.65)] text-left"
+              className="mt-2 w-[260px] rounded-[14px] border border-white/[0.12] bg-[#070B14]/95 backdrop-blur-xl p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.65)] text-left"
             >
               {SURFACE_ORDER.map((id) => {
                 const s = surfaces[id];
@@ -440,32 +452,8 @@ export function SecurityPostureStage({
           )}
         </div>
 
-        {/* Escultura WebGL interactiva en estudio oscuro */}
-        <div className="relative w-full max-w-[680px] flex-1 min-h-[150px] max-h-[300px] flex items-center justify-center">
-          <SecurityCenterpiece3D
-            surfaceId={activeSurface.id}
-            healthy={
-              activeSurface.id === 'windows'
-                ? pcHealthy
-                : activeSurface.id === 'usb'
-                  ? usbConnected
-                  : activeSurface.id === 'link'
-                    ? Boolean(lastLinkResult) && linkRisk !== 'HIGH'
-                    : apiOnline
-            }
-            alert={
-              activeSurface.id === 'windows'
-                ? pcWarn
-                : activeSurface.id === 'link'
-                  ? linkRisk === 'HIGH'
-                  : false
-            }
-            spinNonce={spinNonce}
-          />
-        </div>
-
-        {/* Arco orbital de estudio y controles < 360° > */}
-        <div className="relative z-20 -mt-2 flex flex-col items-center w-full max-w-[640px]">
+        {/* Ventana abierta de inspección 3D + arco orbital < 360° > */}
+        <div className="relative z-20 mt-auto flex flex-col items-center w-full max-w-[640px]">
           <svg
             viewBox="0 0 600 32"
             aria-hidden="true"
@@ -489,7 +477,7 @@ export function SecurityPostureStage({
             />
           </svg>
 
-          <div className="-mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#070D19]/85 border border-white/[0.1] backdrop-blur-md px-2.5 py-1 shadow-lg">
+          <div className="pointer-events-auto -mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#070B14]/90 border border-white/[0.1] backdrop-blur-md px-2.5 py-1 shadow-lg">
             <button
               type="button"
               onClick={() => stepSurface(-1)}
@@ -525,7 +513,7 @@ export function SecurityPostureStage({
         {/* Barra lateral flotante derecha minimal (acciones rápidas de estudio) */}
         <div
           aria-label="Controles rápidos de cabina"
-          className="hidden lg:flex flex-col gap-1.5 absolute right-6 top-1/2 -translate-y-1/2 z-20"
+          className="pointer-events-auto hidden lg:flex flex-col gap-1.5 absolute right-6 top-1/2 -translate-y-1/2 z-20"
         >
           <button
             type="button"
@@ -576,7 +564,7 @@ export function SecurityPostureStage({
                   Equipo Local
                 </h2>
                 <p className="text-[11.5px] text-[#94A3B8]">
-                  Procesos RAM · Persistencia WMI
+                  {technicalMode ? 'WMI / Sockets RAM · Tiempo real' : 'Procesos RAM · Persistencia WMI'}
                 </p>
               </div>
               <button

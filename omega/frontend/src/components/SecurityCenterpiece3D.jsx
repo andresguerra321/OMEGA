@@ -287,6 +287,102 @@ function buildSurfaceMeshGroup(surfaceId, palette, disposables) {
   return { group, rotatingParts: [innerBeacon, orbitalShield] };
 }
 
+function buildPerspectiveFloorGrid(disposables) {
+  const halfExtent = 16.8;
+  const step = 1.4;
+  const subStep = 1.2;
+  const positions = [];
+  const colors = [];
+
+  const pushFadeColor = (x, z, isAccentAxis) => {
+    const radial = Math.hypot(x, z * 0.72);
+    // Suave atenúa alrededor del pedestal central (< 2.2) y hacia el horizonte (> 5.5..15)
+    const centerHole = THREE.MathUtils.smoothstep(radial, 1.8, 3.2);
+    const farFade = 1 - THREE.MathUtils.smoothstep(radial, 5.2, 14.5);
+    const intensity = centerHole * farFade;
+    const baseR = isAccentAxis ? 0.14 : 0.09;
+    const baseG = isAccentAxis ? 0.31 : 0.14;
+    const baseB = isAccentAxis ? 0.68 : 0.24;
+    colors.push(baseR * intensity, baseG * intensity, baseB * intensity);
+  };
+
+  for (let gx = -halfExtent; gx <= halfExtent + 0.001; gx += step) {
+    const isCenterAxis = Math.abs(gx) < 0.05;
+    for (let z = -18; z < 8; z += subStep) {
+      const z2 = Math.min(8, z + subStep);
+      positions.push(gx, -1.26, z, gx, -1.26, z2);
+      pushFadeColor(gx, z, isCenterAxis);
+      pushFadeColor(gx, z2, isCenterAxis);
+    }
+  }
+
+  for (let gz = -18; gz <= 8 + 0.001; gz += step) {
+    const isHorizonAxis = Math.abs(gz + 2.8) < 0.15;
+    for (let x = -halfExtent; x < halfExtent; x += subStep) {
+      const x2 = Math.min(halfExtent, x + subStep);
+      positions.push(x, -1.26, gz, x2, -1.26, gz);
+      pushFadeColor(x, gz, isHorizonAxis);
+      pushFadeColor(x2, gz, isHorizonAxis);
+    }
+  }
+
+  const gridGeo = new THREE.BufferGeometry();
+  gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  gridGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const gridMat = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  disposables.push(gridGeo, gridMat);
+  return new THREE.LineSegments(gridGeo, gridMat);
+}
+
+function buildAtmosphericMotes(disposables) {
+  const count = 88;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i += 1) {
+    // Distribución determinista para evitar destellos bruscos al cambiar superficie
+    const s1 = Math.sin(i * 12.9898) * 43758.5453;
+    const s2 = Math.sin(i * 78.233) * 19341.123;
+    const s3 = Math.sin(i * 39.425) * 65123.771;
+    const r1 = s1 - Math.floor(s1);
+    const r2 = s2 - Math.floor(s2);
+    const r3 = s3 - Math.floor(s3);
+
+    let x = (r1 - 0.5) * 17;
+    if (Math.abs(x) < 2.2) x += x >= 0 ? 2.4 : -2.4;
+    const y = -0.8 + r2 * 4.2;
+    const z = -11.5 + r3 * 12.5;
+
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+
+    const royal = i % 3 === 0;
+    colors[i * 3] = royal ? 0.24 : 0.78;
+    colors[i * 3 + 1] = royal ? 0.51 : 0.85;
+    colors[i * 3 + 2] = royal ? 0.96 : 0.94;
+  }
+
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  moteGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const moteMat = new THREE.PointsMaterial({
+    size: 0.04,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+  });
+  disposables.push(moteGeo, moteMat);
+  return new THREE.Points(moteGeo, moteMat);
+}
+
 export function SecurityCenterpiece3D({
   surfaceId = 'windows',
   healthy = false,
@@ -332,8 +428,8 @@ export function SecurityCenterpiece3D({
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 40);
-    camera.position.set(0, 0.65, 6.2);
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
+    camera.position.set(0, 1.25, 9.6);
 
     const palette = alert
       ? SURFACE_COLORS.alert
@@ -348,15 +444,22 @@ export function SecurityCenterpiece3D({
       palette,
       disposables,
     );
+    artifactGroup.position.set(0, 0.22, 0);
     artifactGroup.rotation.y = -0.34;
     stageGroup.add(artifactGroup);
 
+    const perspectiveGrid = buildPerspectiveFloorGrid(disposables);
+    stageGroup.add(perspectiveGrid);
+
+    const motes = buildAtmosphericMotes(disposables);
+    stageGroup.add(motes);
+
     // Anillo sutil del pedestal sobre el piso del estudio
-    const floorRingGeo = new THREE.RingGeometry(2.15, 2.2, 96);
+    const floorRingGeo = new THREE.RingGeometry(2.05, 2.1, 96);
     const floorRingMat = new THREE.MeshBasicMaterial({
       color: palette.ring,
       transparent: true,
-      opacity: 0.24,
+      opacity: 0.22,
       side: THREE.DoubleSide,
     });
     disposables.push(floorRingGeo, floorRingMat);
@@ -366,7 +469,7 @@ export function SecurityCenterpiece3D({
     stageGroup.add(floorRing);
 
     const shadowPlaneGeo = new THREE.PlaneGeometry(8, 8);
-    const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.36 });
+    const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.42 });
     disposables.push(shadowPlaneGeo, shadowPlaneMat);
     const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
     shadowPlane.position.set(0, -1.25, 0);
@@ -419,7 +522,7 @@ export function SecurityCenterpiece3D({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(viewport.width, viewport.height, false);
       camera.aspect = viewport.width / viewport.height;
-      camera.position.z = viewport.width < 460 ? 7.2 : 6.2;
+      camera.position.z = viewport.width < 1100 ? 10.6 : 9.6;
       camera.updateProjectionMatrix();
     };
 
@@ -440,6 +543,9 @@ export function SecurityCenterpiece3D({
     };
 
     const onPointerDown = (ev) => {
+      if (ev.target instanceof Element && ev.target.closest('button, a, input, select, form, header, footer, [role="listbox"]')) {
+        return;
+      }
       dragActive = true;
       dragStartX = ev.clientX;
     };
@@ -454,10 +560,10 @@ export function SecurityCenterpiece3D({
       pointerTarget.y = 0;
     };
 
-    host.addEventListener('pointermove', onPointerMove);
-    host.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointerup', onPointerUp);
-    host.addEventListener('pointerleave', onPointerLeave);
+    document.addEventListener('mouseleave', onPointerLeave);
 
     let rafId = 0;
     let lastTs = performance.now();
@@ -471,8 +577,8 @@ export function SecurityCenterpiece3D({
 
       if (reduceMotion) {
         camera.position.x = -0.35;
-        camera.position.y = 0.78;
-        camera.lookAt(-0.14, 0.02, 0);
+        camera.position.y = 1.25;
+        camera.lookAt(-0.14, -0.42, 0);
         artifactGroup.rotation.y = -0.34 + dragRotationOffset + spinTargetRef.current;
         renderer.render(scene, camera);
         return;
@@ -484,14 +590,18 @@ export function SecurityCenterpiece3D({
       spinCurrent += (spinTargetRef.current - spinCurrent) * 0.09;
 
       // Paralaje suave de cámara y objeto separado
-      camera.position.x = -smoothPointer.x * 0.42;
-      camera.position.y = 0.65 + smoothPointer.y * 0.24;
-      camera.lookAt(camera.position.x * 0.42, (camera.position.y - 0.65) * 0.42, 0);
+      camera.position.x = -smoothPointer.x * 0.55;
+      camera.position.y = 1.25 + smoothPointer.y * 0.24;
+      camera.lookAt(camera.position.x * 0.35, -0.42 + (camera.position.y - 1.25) * 0.35, 0);
 
       artifactGroup.rotation.y =
         -0.34 + Math.sin(elapsed * 0.35) * 0.07 + smoothPointer.x * 0.14 + dragRotationOffset + spinCurrent;
-      artifactGroup.rotation.x = smoothPointer.y * 0.045;
-      artifactGroup.position.y = Math.sin(elapsed * 1.1) * 0.045;
+      artifactGroup.rotation.x = smoothPointer.y * 0.04;
+      artifactGroup.position.y = 0.22 + Math.sin(elapsed * 1.1) * 0.045;
+
+      // Deriva sutil del piso reticulado y partículas de profundidad
+      perspectiveGrid.position.z = (elapsed * 0.22) % 1.4;
+      motes.rotation.y = elapsed * 0.014;
 
       rotatingParts.forEach((part, idx) => {
         part.rotation.z = elapsed * (idx % 2 === 0 ? 0.35 : -0.22);
@@ -520,10 +630,10 @@ export function SecurityCenterpiece3D({
     return () => {
       cancelAnimationFrame(rafId);
       ro.disconnect();
-      host.removeEventListener('pointermove', onPointerMove);
-      host.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerup', onPointerUp);
-      host.removeEventListener('pointerleave', onPointerLeave);
+      document.removeEventListener('mouseleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibility);
       disposables.forEach((item) => item?.dispose?.());
       renderer.dispose();

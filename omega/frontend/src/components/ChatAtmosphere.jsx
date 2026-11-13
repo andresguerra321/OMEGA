@@ -1,41 +1,32 @@
 /**
- * ChatAtmosphere — Luz atmosférica silenciosa de fondo (estilo Apple Obsidian).
- * Iluminación radial profunda en cobalto tenue con transición suave al modo de lectura.
+ * ChatAtmosphere — Retícula arquitectónica discreta en plano de estudio (#05070B).
  */
 export function ChatAtmosphere({ dimmed = false }) {
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute inset-0 overflow-hidden select-none transition-opacity duration-700 ease-apple ${
-        dimmed ? 'opacity-25' : 'opacity-100'
+      className={`pointer-events-none absolute inset-0 overflow-hidden select-none transition-opacity duration-500 ease-apple ${
+        dimmed ? 'opacity-20' : 'opacity-65'
       }`}
     >
-      {/* Halo óptico superior central muy suave */}
+      {/* Líneas guía verticales de estudio alineadas al contenedor */}
+      <div className="mx-auto h-full max-w-[1320px] border-x border-white/[0.04]" />
+
+      {/* Micro-punteado arquitectónico en tono tenue */}
       <div
-        className="absolute -top-44 left-1/2 -translate-x-1/2 h-[420px] w-[760px]"
+        className="absolute inset-0 opacity-45"
         style={{
-          background:
-            'radial-gradient(ellipse at center, rgba(47, 111, 237, 0.14) 0%, rgba(47, 111, 237, 0.045) 45%, rgba(8, 8, 10, 0) 76%)',
+          backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
         }}
       />
 
-      {/* Haz diagonal volumétrico sutil */}
-      <div className="omega-ray-drift absolute -top-28 right-[-8%] h-[112%] w-[86%] origin-top-right">
-        <div
-          className="h-full w-full"
-          style={{
-            background:
-              'radial-gradient(ellipse 68% 58% at 78% 12%, rgba(74, 134, 247, 0.105) 0%, rgba(47, 111, 237, 0.04) 44%, rgba(8, 8, 10, 0) 76%)',
-          }}
-        />
-      </div>
-
-      {/* Difusión inferior hacia el lienzo obsidiana #08080A */}
+      {/* Viñeta sutil hacia negro mate #05070B */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(180deg, rgba(8, 8, 10, 0) 0%, rgba(8, 8, 10, 0.25) 62%, #08080A 100%)',
+            'radial-gradient(ellipse 68% 54% at 50% 42%, transparent 0%, rgba(5, 7, 11, 0.72) 78%, #05070B 100%)',
         }}
       />
     </div>

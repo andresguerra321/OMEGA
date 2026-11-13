@@ -83,12 +83,12 @@ export function SpatialNavPill({
                     ? 'h-8 w-12'
                     : 'h-8 w-8'
                   : isActive
-                    ? 'h-9 w-16'
-                    : 'h-9 w-10'
+                    ? 'h-8 w-12 xl:h-9 xl:w-16'
+                    : 'h-8 w-8 xl:h-9 xl:w-10'
               } ${
                 isActive
-                  ? 'bg-white/[0.15] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.28)]'
-                  : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.09] hover:text-white'
+                  ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]'
+                  : 'bg-transparent text-[#94A3B8] hover:bg-white/[0.08] hover:text-white'
               }`}
             >
               <Icon className="h-[15px] w-[15px]" strokeWidth={isActive ? 2.1 : 1.75} />
