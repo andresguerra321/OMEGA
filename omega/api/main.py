@@ -1,7 +1,8 @@
+import asyncio
 import sys
 import json
 from pathlib import Path
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Request
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -27,6 +28,8 @@ from forensic_engine import analyze_forensic_payload
 from triage_orchestrator import run_parallel_forensic_triage
 from stix_ingestor import sync_stix2_directory
 from deep_forensics import build_adb_artifacts_in_ram, extract_ios_manifest_targets
+from ios_backup_crypto import decrypt_binary_artifacts_in_ram, unlock_encrypted_ios_backup_in_ram
+from host_forensics import run_host_live_audit
 from detection_engineering import generate_mvt_triage_script, generate_yara_for_campaign
 from link_verifier import inspect_suspicious_link
 from web_intel_loader import load_cti_url_in_ram
@@ -214,6 +217,12 @@ class LiveDeviceSnapshot(BaseModel):
     processes_text: str = ""
     proc_net_raw: str = ""
     dns_resolver_raw: str = ""
+    apk_hashes_raw: str = ""
+    ca_certs_raw: str = ""
+    proxy_raw: str = ""
+    ios_profiles_raw: str = ""
+    ios_unlock_token: str = ""
+    ios_backup_auth: dict | None = None
     crashlogs: list[dict] = Field(default_factory=list)
     binary_artifacts: list[dict] = Field(default_factory=list)
 
@@ -237,7 +246,38 @@ async def live_device_triage(payload: LiveDeviceSnapshot):
     device_summary = dict(payload.device or {})
     device_summary.setdefault("platform", payload.platform)
     dump["device"] = device_summary
+
+    extra_manifest_anomalies: list[dict] = []
+    decrypted_count = 0
+    if dump.get("ios_unlock_token") or dump.get("ios_backup_auth"):
+        auth = dump.get("ios_backup_auth") or {}
+        try:
+            dec_artifacts, extra_manifest_anomalies, decrypted_count = await asyncio.to_thread(
+                decrypt_binary_artifacts_in_ram,
+                dump.get("binary_artifacts") or [],
+                dump.get("ios_unlock_token") or None,
+                auth.get("manifest_plist_b64"),
+                auth.get("manifest_db_b64"),
+                auth.get("password"),
+            )
+            dump["binary_artifacts"] = dec_artifacts
+        except ValueError as exc:
+            if "INVALID_BACKUP_PASSWORD" in str(exc):
+                raise HTTPException(
+                    status_code=401,
+                    detail="Contraseña incorrecta para la copia encriptada de iPhone.",
+                )
+            raise HTTPException(status_code=400, detail=str(exc))
+
     artifacts = build_adb_artifacts_in_ram(dump)
+    if dump.get("apk_hashes_raw"):
+        artifacts.append({"filename": "android_apk_sha256.txt", "bytes": str(dump["apk_hashes_raw"]).encode("utf-8")})
+    if dump.get("ca_certs_raw"):
+        artifacts.append({"filename": "android_user_cacerts_added.txt", "bytes": str(dump["ca_certs_raw"]).encode("utf-8")})
+    if dump.get("proxy_raw"):
+        artifacts.append({"filename": "android_net_proxy.txt", "bytes": str(dump["proxy_raw"]).encode("utf-8")})
+    if dump.get("ios_profiles_raw"):
+        artifacts.append({"filename": "ios_installed_profiles.mobileconfig", "bytes": str(dump["ios_profiles_raw"]).encode("utf-8")})
 
     try:
         triage_report = await run_parallel_forensic_triage(artifacts)
@@ -245,6 +285,14 @@ async def live_device_triage(payload: LiveDeviceSnapshot):
         for art in artifacts:
             art["bytes"] = b""
         artifacts.clear()
+
+    if extra_manifest_anomalies:
+        existing_anom = triage_report.setdefault("behavioral_anomalies", [])
+        seen = {(a.get("category"), str(a.get("indicator", "")).lower()) for a in existing_anom}
+        for ma in extra_manifest_anomalies:
+            if (ma.get("category"), str(ma.get("indicator", "")).lower()) not in seen:
+                existing_anom.insert(0, ma)
+                seen.add((ma.get("category"), str(ma.get("indicator", "")).lower()))
 
     return {
         "device_summary": device_summary,
@@ -257,6 +305,10 @@ async def live_device_triage(payload: LiveDeviceSnapshot):
         "yara_hits": triage_report.get("yara_hits", []),
         "behavioral_anomalies": triage_report.get("behavioral_anomalies", []),
         "manifest_findings": triage_report.get("manifest_findings", []),
+        "timeline": triage_report.get("timeline", []),
+        "timeline_summary": triage_report.get("timeline_summary", {}),
+        "yara_engine": triage_report.get("yara_engine", {}),
+        "decrypted_artifacts_count": decrypted_count,
         "triage": triage_report,
     }
 
@@ -430,3 +482,55 @@ def scan_web_intel_source(payload: WebIntelScanRequest):
         "known_cti_matches": known_cti_matches,
         "ram_only": True,
     }
+
+
+@app.post("/api/triage/ios-manifest-decrypt")
+async def ios_manifest_decrypt_targets(
+    manifest_plist: UploadFile = File(...),
+    manifest_db: UploadFile = File(...),
+    password: str = Form(...),
+):
+    """Desbloquea Manifest.db de una copia iOS encriptada exclusivamente en RAM (sin disco)."""
+    plist_bytes = await manifest_plist.read()
+    db_bytes = await manifest_db.read()
+    try:
+        res = await asyncio.to_thread(
+            unlock_encrypted_ios_backup_in_ram,
+            plist_bytes,
+            db_bytes,
+            password,
+        )
+        return res
+    except ValueError as exc:
+        msg = str(exc)
+        if "INVALID_BACKUP_PASSWORD" in msg:
+            raise HTTPException(
+                status_code=401,
+                detail="Contraseña incorrecta. Verifica la clave de cifrado de tu respaldo en iTunes / Finder.",
+            )
+        raise HTTPException(status_code=400, detail=msg)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo desbloquear el respaldo en memoria: {exc}",
+        )
+    finally:
+        del plist_bytes
+        del db_bytes
+
+
+class PcLiveSnapshot(BaseModel):
+    platform: str = "win32"
+    host: dict = Field(default_factory=dict)
+    tcp_connections: list[dict] = Field(default_factory=list)
+    processes: list[dict] = Field(default_factory=list)
+    wmi_subscriptions: list[dict] = Field(default_factory=list)
+    scheduled_tasks: list[dict] = Field(default_factory=list)
+    startup_items: list[dict] = Field(default_factory=list)
+    file_hashes: list[dict] = Field(default_factory=list)
+
+
+@app.post("/api/triage/pc-live")
+async def pc_live_host_triage(payload: PcLiveSnapshot):
+    """Pilar 3: Auditoría forense local en RAM para Windows/macOS/Linux (Candiru / Predator Desktop)."""
+    return await asyncio.to_thread(run_host_live_audit, payload.model_dump())

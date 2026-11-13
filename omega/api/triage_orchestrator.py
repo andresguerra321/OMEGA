@@ -16,6 +16,8 @@ from deep_forensics import (
     run_kernel_and_posture_forensics,
     run_live_yara_hunt,
 )
+from temporal_correlator import correlate_temporal_chains, inspect_mobile_profiles_and_certs
+from yara_engine import get_yara_engine_status
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -452,7 +454,7 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
     try:
         expanded_artifacts = await asyncio.to_thread(_inject_decoded_kernel_telemetries, expanded_artifacts)
 
-        res_a, res_b, res_c, behavioral_raw, manifest_findings, kernel_posture, yara_hits = await asyncio.gather(
+        res_a, res_b, res_c, behavioral_raw, manifest_findings, kernel_posture, yara_hits, temporal_res, profile_alerts = await asyncio.gather(
             asyncio.to_thread(_worker_a_messaging_sqlite, expanded_artifacts),
             asyncio.to_thread(_worker_b_network_dns, expanded_artifacts),
             asyncio.to_thread(_worker_c_process_crashlogs, expanded_artifacts),
@@ -460,15 +462,21 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
             asyncio.to_thread(_run_ios_manifests_in_ram, expanded_artifacts),
             asyncio.to_thread(run_kernel_and_posture_forensics, expanded_artifacts),
             asyncio.to_thread(run_live_yara_hunt, expanded_artifacts),
+            asyncio.to_thread(correlate_temporal_chains, expanded_artifacts),
+            asyncio.to_thread(inspect_mobile_profiles_and_certs, expanded_artifacts),
         )
 
-        # Fusionar hallazgos de Manifest.db sin duplicados dentro de anomalías conductuales
+        # Fusionar hallazgos de Manifest.db, cadenas temporales y perfiles sin duplicados
         behavioral_anomalies = list(behavioral_raw)
         seen_anom = {
             (a.get("category"), str(a.get("indicator", "")).lower(), str(a.get("artifact", "")).lower())
             for a in behavioral_anomalies
         }
-        for mf in manifest_findings:
+        for mf in (
+            manifest_findings
+            + temporal_res.get("temporal_anomalies", [])
+            + [p for p in profile_alerts if not str(p.get("category", "")).startswith("ANDROID_")]
+        ):
             key = (mf.get("category"), str(mf.get("indicator", "")).lower(), str(mf.get("artifact", "")).lower())
             if key not in seen_anom:
                 seen_anom.add(key)
@@ -501,7 +509,9 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
                 crash_anomalies.append(summary_line)
 
         hardening_checks = kernel_posture.get("hardening_checks", [])
-        abuse_alerts = kernel_posture.get("abuse_alerts", [])
+        abuse_alerts = list(kernel_posture.get("abuse_alerts", [])) + [
+            p for p in profile_alerts if p.get("category", "").startswith("ANDROID_")
+        ]
         live_sockets = kernel_posture.get("live_sockets", [])
         cached_dns_domains = kernel_posture.get("cached_dns_domains", [])
 
@@ -575,6 +585,9 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
         "live_sockets_total": len(live_sockets),
         "cached_dns_count": len(cached_dns_domains),
         "cached_dns_sample": cached_dns_domains[:25],
+        "timeline": temporal_res.get("timeline", []),
+        "timeline_summary": temporal_res.get("timeline_summary", {}),
+        "yara_engine": get_yara_engine_status(),
         "diagnosis": diagnosis,
         "subagents": agent_summaries,
         "ephemeral_notice": "Triage paralelo, análisis conductual/kernel, Manifest.db y caza YARA ejecutados 100% en memoria volátil (RAM) sin persistencia en disco (RNF4).",

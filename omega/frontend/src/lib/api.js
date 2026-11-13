@@ -211,3 +211,29 @@ export async function scanWebIntelUrl(url, activeNet4Ips = []) {
   });
   return parseJsonOrThrow(res, 'Error extrayendo indicadores CTI desde la URL');
 }
+
+// ============================================================================
+// 8. PILAR 1 & PILAR 3 (Copia iOS Encriptada en RAM + Auditoría Local PC)
+// ============================================================================
+export async function resolveEncryptedIosManifestTargets(manifestPlistB64, manifestDbB64, password) {
+  const plistBytes = Uint8Array.from(atob(manifestPlistB64), (c) => c.charCodeAt(0));
+  const dbBytes = Uint8Array.from(atob(manifestDbB64), (c) => c.charCodeAt(0));
+  const form = new FormData();
+  form.append('manifest_plist', new Blob([plistBytes], { type: 'application/octet-stream' }), 'Manifest.plist');
+  form.append('manifest_db', new Blob([dbBytes], { type: 'application/octet-stream' }), 'Manifest.db');
+  form.append('password', password);
+  const res = await fetch(`${API_BASE}/triage/ios-manifest-decrypt`, {
+    method: 'POST',
+    body: form,
+  });
+  return parseJsonOrThrow(res, 'No se pudo desbloquear la copia de seguridad en memoria');
+}
+
+export async function analyzePcLiveSnapshot(snapshot) {
+  const res = await fetch(`${API_BASE}/triage/pc-live`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  });
+  return parseJsonOrThrow(res, 'Error ejecutando auditoría local del equipo en RAM');
+}

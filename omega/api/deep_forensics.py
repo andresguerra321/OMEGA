@@ -408,6 +408,10 @@ def extract_ios_manifest_targets(raw_bytes: bytes, limit: int = 35) -> dict[str,
                 OR LOWER(relativePath) LIKE '%ckdiscretionaryd%'
                 OR LOWER(relativePath) LIKE '%bridgepd%'
                 OR LOWER(relativePath) LIKE '%.pkpass'
+                OR LOWER(relativePath) LIKE '%configurationprofiles%'
+                OR LOWER(relativePath) LIKE '%.mobileconfig'
+                OR LOWER(relativePath) LIKE '%currentpowerlog.plsql%'
+                OR LOWER(relativePath) LIKE '%powerlog%.sql%'
               )
             LIMIT ?;
             """,
@@ -476,81 +480,10 @@ def _load_db_yara_iocs() -> list[tuple[bytes, str, str, str]]:
 
 
 def run_live_yara_hunt(artifacts: list[dict]) -> list[dict]:
-    """Ejecuta caza de firmas YARA defensivas (reglas conductuales + IOCs de PostgreSQL) en RAM."""
-    if not artifacts:
-        return []
+    """Ejecuta caza de firmas YARA reales (yara-python + IOCs de PostgreSQL) en RAM."""
+    from yara_engine import scan_artifacts_with_yara
 
-    hits: list[dict] = []
-    seen_hits: set[tuple[str, str, str]] = set()
-    db_iocs = _load_db_yara_iocs()
-
-    for art in artifacts:
-        fname = str(art.get("filename") or "artifact.bin")
-        blob: bytes = art.get("bytes") or b""
-        if not blob:
-            continue
-        blob_low = blob.lower()
-
-        # 1. Reglas estructurales de explotación (JBIG2, PassKit/WebP, rutas volátiles, Predator/Alien)
-        for sig in BUILTIN_DETECTION_SIGNATURES:
-            matched_tokens = [
-                p.decode("utf-8", errors="ignore")
-                for p in sig["byte_patterns"]
-                if p.lower() in blob_low
-            ]
-            if len(matched_tokens) >= sig["min_matches"]:
-                dedup_key = (sig["rule"], fname, ",".join(matched_tokens))
-                if dedup_key not in seen_hits:
-                    seen_hits.add(dedup_key)
-                    hits.append(
-                        {
-                            "rule_name": sig["rule"],
-                            "spyware_family": sig["family"],
-                            "cve": sig["cve"],
-                            "artifact": fname,
-                            "matched_strings": matched_tokens,
-                            "description": sig["description"],
-                        }
-                    )
-
-        # 2. Caza binaria directa contra IOCs reales del corpus STIX2/CTI en PostgreSQL
-        art_db_hits = 0
-        for pattern_bytes, ioc_type, fam, rep_title in db_iocs:
-            idx = blob_low.find(pattern_bytes)
-            if idx == -1:
-                continue
-
-            # Para direcciones IPv4 o procesos cortos, exigir límites de palabra para evitar falsos positivos
-            if ioc_type in ("ip", "process"):
-                before_ok = idx == 0 or not (48 <= blob_low[idx - 1] <= 57 or 97 <= blob_low[idx - 1] <= 122)
-                after_pos = idx + len(pattern_bytes)
-                after_ok = after_pos >= len(blob_low) or not (
-                    48 <= blob_low[after_pos] <= 57 or 97 <= blob_low[after_pos] <= 122
-                )
-                if not (before_ok and after_ok):
-                    continue
-
-            ioc_str = pattern_bytes.decode("utf-8", errors="ignore")
-            dedup_key = ("Omega_Dynamic_CTI_IOC_Hunt", fname, ioc_str)
-            if dedup_key in seen_hits:
-                continue
-            seen_hits.add(dedup_key)
-
-            hits.append(
-                {
-                    "rule_name": "Omega_Dynamic_CTI_IOC_Hunt",
-                    "spyware_family": fam,
-                    "cve": f"IOC ({ioc_type})",
-                    "artifact": fname,
-                    "matched_strings": [ioc_str],
-                    "description": f"Firma coincidente con indicador '{ioc_str}' documentado en '{rep_title}'.",
-                }
-            )
-            art_db_hits += 1
-            if art_db_hits >= 15:
-                break
-
-    return hits
+    return scan_artifacts_with_yara(artifacts)
 
 
 def build_adb_artifacts_in_ram(snapshot: dict[str, Any]) -> list[dict]:

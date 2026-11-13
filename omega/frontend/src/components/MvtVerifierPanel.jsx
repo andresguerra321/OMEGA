@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Check,
+  Clock,
   Copy,
   Download,
   ExternalLink,
   FolderOpen,
   HelpCircle,
+  KeyRound,
+  Laptop,
   Loader2,
   Lock,
   RefreshCw,
@@ -16,12 +19,14 @@ import {
 } from 'lucide-react';
 import {
   analyzeLiveDeviceSnapshot,
+  analyzePcLiveSnapshot,
+  resolveEncryptedIosManifestTargets,
   resolveIosManifestTargets,
   runParallelTriage,
   syncStixFeeds,
   verifyMvtText,
 } from '../lib/api';
-import { AndroidStepVisual, IosStepVisual } from './DeviceSetupVisuals';
+import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
@@ -90,6 +95,8 @@ function normalizeParallelResult(res, files = [], customSourceLabel = '') {
     matchesCount: findings.length,
     behavioralAnomalies: res.behavioral_anomalies || [],
     yaraHits: res.yara_hits || [],
+    timeline: res.timeline || [],
+    timelineSummary: res.timeline_summary || null,
     verdictCode: res.diagnosis?.verdict_code || (findings.length > 0 ? 'DETECTED' : 'CLEAN'),
     rationale: res.diagnosis?.rationale || '',
     recommendedActions: res.diagnosis?.recommended_actions || [],
@@ -218,6 +225,12 @@ export function MvtVerifierPanel({ onAskInChat }) {
   const [refreshingUsb, setRefreshingUsb] = useState(false);
   const [scanningUsb, setScanningUsb] = useState(false);
   const [scanningIos, setScanningIos] = useState(false);
+  const [installingAdb, setInstallingAdb] = useState(false);
+  const [scanningPc, setScanningPc] = useState(false);
+  const [encryptedBackupPrompt, setEncryptedBackupPrompt] = useState(null);
+  const [backupPassword, setBackupPassword] = useState('');
+  const [unlockingBackup, setUnlockingBackup] = useState(false);
+  const [backupUnlockError, setBackupUnlockError] = useState('');
   const [showAndroidGuide, setShowAndroidGuide] = useState(true);
   const [showAdvancedCmds, setShowAdvancedCmds] = useState(false);
   const [copiedHintKey, setCopiedHintKey] = useState('');
@@ -275,7 +288,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
   );
 
   useEffect(() => {
-    if (!window.omegaDesktop?.checkAdbStatus) return undefined;
+    if (!window.omegaDesktop?.checkAdbStatus || deviceTab === 'pc') return undefined;
     let cancelled = false;
 
     const tick = () => {
@@ -301,12 +314,17 @@ export function MvtVerifierPanel({ onAskInChat }) {
           behavioral_anomalies: liveRes.behavioral_anomalies?.length
             ? liveRes.behavioral_anomalies
             : liveRes.triage.behavioral_anomalies,
+          timeline: liveRes.timeline?.length ? liveRes.timeline : liveRes.triage.timeline,
+          timeline_summary: liveRes.timeline_summary || liveRes.triage.timeline_summary,
         }
       : {};
-    const computedLabel =
-      dev.platform === 'ios'
-        ? `${[dev.name, dev.ios_version ? `iOS ${dev.ios_version}` : ''].filter(Boolean).join(' · ') || fallbackLabel}`
-        : `${[dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || fallbackLabel} (ADB USB)`;
+    let computedLabel = `${[dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || fallbackLabel} (ADB USB)`;
+    if (dev.platform === 'ios') {
+      computedLabel = `${[dev.name, dev.ios_version ? `iOS ${dev.ios_version}` : ''].filter(Boolean).join(' · ') || fallbackLabel}`;
+    } else if (dev.platform === 'pc') {
+      const osTag = dev.host_os === 'win32' ? 'Windows' : dev.host_os === 'darwin' ? 'macOS' : 'PC';
+      computedLabel = `${osTag} · ${dev.hostname || 'Esta computadora'}`;
+    }
     setHardeningReport(liveRes);
     setResult(normalizeParallelResult(unifiedSource, [], computedLabel));
   }
@@ -382,21 +400,85 @@ export function MvtVerifierPanel({ onAskInChat }) {
     }
   }
 
-  async function analyzeIosBackupDirectory(backupPath) {
+  async function handleInstallPortableAdb() {
+    if (!window.omegaDesktop?.installPortableAdb || installingAdb) return;
+    setInstallingAdb(true);
+    setErrorMsg('');
+    try {
+      const res = await window.omegaDesktop.installPortableAdb();
+      if (!res?.ok || !res.adbPath) {
+        setErrorMsg(res?.error || 'No se pudo instalar el conector USB de Google.');
+        return;
+      }
+      setCustomAdbPath(res.adbPath);
+      try {
+        window.localStorage?.setItem('omega_custom_adb_path', res.adbPath);
+      } catch {
+        // Ignore storage restrictions
+      }
+      await fetchUsbStatuses(res.adbPath, false, true);
+    } catch (err) {
+      setErrorMsg(err?.message || 'Error instalando conector ADB automático.');
+    } finally {
+      setInstallingAdb(false);
+    }
+  }
+
+  async function handlePcLiveAudit() {
+    if (!window.omegaDesktop?.collectPcAuditSnapshot || scanningPc || isAnalyzing) return;
+    setScanningPc(true);
+    setErrorMsg('');
+    try {
+      const col = await window.omegaDesktop.collectPcAuditSnapshot();
+      if (!col?.ok || !col.snapshot) {
+        setErrorMsg(col?.error || 'No se pudo leer el estado de seguridad de esta computadora.');
+        return;
+      }
+      const pcRes = await analyzePcLiveSnapshot(col.snapshot);
+      applyLiveDeviceResult(pcRes, 'Auditoría Local PC (en RAM)');
+    } catch (err) {
+      setErrorMsg(err?.message || 'No se pudo completar la auditoría de esta computadora.');
+    } finally {
+      setScanningPc(false);
+    }
+  }
+
+  async function analyzeIosBackupDirectory(backupPath, fallbackMeta = null) {
     if (!window.omegaDesktop?.readIosBackupManifest || scanningIos || isAnalyzing) return;
     setScanningIos(true);
     setErrorMsg('');
+    setBackupUnlockError('');
     try {
       const manifestData = await window.omegaDesktop.readIosBackupManifest(backupPath);
       if (manifestData.encrypted || !manifestData.manifest_b64) {
-        setErrorMsg(
-          `El respaldo "${manifestData.backup?.deviceName || 'iOS'}" está cifrado por Apple. Desencríptalo primero con "mvt-ios decrypt-backup" o arrastra un sysdiagnose (.tar.gz) abajo.`,
-        );
+        if (!manifestData.manifest_plist_b64) {
+          setErrorMsg(
+            `El respaldo "${manifestData.backup?.deviceName || 'iOS'}" está cifrado pero falta Manifest.plist para desbloquearlo en memoria.`,
+          );
+          return;
+        }
+        setBackupPassword('');
+        setEncryptedBackupPrompt({
+          backupPath,
+          meta: manifestData.backup || fallbackMeta,
+          manifestB64: manifestData.manifest_b64 || '',
+          manifestPlistB64: manifestData.manifest_plist_b64,
+        });
         return;
       }
       const targetPlan = await resolveIosManifestTargets(manifestData.manifest_b64);
       if (targetPlan.encrypted) {
-        setErrorMsg(targetPlan.detail || 'Manifest.db cifrado; requiere desencriptación previa.');
+        if (!manifestData.manifest_plist_b64) {
+          setErrorMsg(targetPlan.detail || 'Manifest.db cifrado; requiere contraseña de respaldo.');
+          return;
+        }
+        setBackupPassword('');
+        setEncryptedBackupPrompt({
+          backupPath,
+          meta: manifestData.backup || fallbackMeta,
+          manifestB64: manifestData.manifest_b64 || '',
+          manifestPlistB64: manifestData.manifest_plist_b64,
+        });
         return;
       }
       const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
@@ -409,6 +491,40 @@ export function MvtVerifierPanel({ onAskInChat }) {
       setErrorMsg(err?.message || 'No se pudo analizar la carpeta de respaldo iOS en RAM.');
     } finally {
       setScanningIos(false);
+    }
+  }
+
+  async function handleUnlockEncryptedBackup(e) {
+    e?.preventDefault?.();
+    if (!encryptedBackupPrompt || !backupPassword || unlockingBackup) return;
+    setUnlockingBackup(true);
+    setBackupUnlockError('');
+    const pwd = backupPassword;
+    try {
+      const targetPlan = await resolveEncryptedIosManifestTargets(
+        encryptedBackupPrompt.manifestPlistB64,
+        encryptedBackupPrompt.manifestB64,
+        pwd,
+      );
+      setBackupPassword('');
+      const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
+        backupPath: encryptedBackupPrompt.backupPath,
+        targets: targetPlan.targets || [],
+        encrypted: true,
+      });
+      const liveRes = await analyzeLiveDeviceSnapshot({
+        ...backupPayload,
+        ios_unlock_token: targetPlan.unlock_token || '',
+      });
+      setEncryptedBackupPrompt(null);
+      applyLiveDeviceResult(liveRes, 'Respaldo iOS Encriptado (en RAM)');
+    } catch (err) {
+      setBackupUnlockError(
+        err?.message || 'No se pudo abrir la copia encriptada. Revisa tu contraseña de respaldo.',
+      );
+    } finally {
+      setBackupPassword('');
+      setUnlockingBackup(false);
     }
   }
 
@@ -614,14 +730,24 @@ export function MvtVerifierPanel({ onAskInChat }) {
       verdictHeadingTone = 'text-[#FFD60A]';
     }
 
+    const isPcPlatform = hardeningReport?.device_summary?.platform === 'pc';
+
     let verdictTitle = 'Sin indicadores de spyware detectados';
     const signalParts = [];
     if (hasMatches) signalParts.push(`${result.matchesCount} coincidencia${result.matchesCount === 1 ? '' : 's'} CTI`);
     if (hasYara) signalParts.push(`${yaraHits.length} firma${yaraHits.length === 1 ? '' : 's'} YARA`);
     if (hasBehavioral) signalParts.push(`${behavioralAnomalies.length} anomalía${behavioralAnomalies.length === 1 ? '' : 's'} en RAM`);
-    if (abuseAlerts.length > 0) signalParts.push(`${abuseAlerts.length} alerta${abuseAlerts.length === 1 ? '' : 's'} de dispositivo`);
+    if (abuseAlerts.length > 0) {
+      signalParts.push(`${abuseAlerts.length} alerta${abuseAlerts.length === 1 ? '' : 's'} de ${isPcPlatform ? 'equipo' : 'dispositivo'}`);
+    }
     if (signalParts.length > 0) {
-      verdictTitle = `Detectado: ${signalParts.join(' · ')}`;
+      if (isPcPlatform && !hasMatches && !hasYara && !hasBehavioral) {
+        verdictTitle = `Sin spyware conocido · ${signalParts.join(' · ')}`;
+      } else {
+        verdictTitle = `Detectado: ${signalParts.join(' · ')}`;
+      }
+    } else if (isPcPlatform && hasCriticalAlert) {
+      verdictTitle = 'Sin spyware conocido · Protecciones apagadas';
     }
 
     const hasAnyThreatSignal = hasMatches || hasBehavioral || hasYara || abuseAlerts.length > 0 || hasCriticalAlert;
@@ -629,7 +755,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
     let verdictBody =
       'Ninguno de los artefactos analizados coincide con dominios, procesos, firmas YARA ni hashes públicos asociados a spyware comercial conocidos por OMEGA.';
-    if ((hasBehavioral || hasYara) && result.rationale) {
+    if ((isPcPlatform || hasBehavioral || hasYara) && result.rationale) {
       verdictBody = result.rationale;
     } else if (hasMatches) {
       verdictBody =
@@ -750,7 +876,9 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 <span className="font-tech text-[11px] text-[#8E8E93]">
                   {hardeningReport.device_summary.platform === 'ios'
                     ? `iOS ${hardeningReport.device_summary.ios_version || 'N/D'} · ${hardeningReport.device_summary.model || 'iPhone/iPad'}`
-                    : `Android ${hardeningReport.device_summary.android_version || 'N/D'} · Parche ${hardeningReport.device_summary.security_patch || 'N/D'}`}
+                    : hardeningReport.device_summary.platform === 'pc'
+                      ? `${hardeningReport.device_summary.host_os === 'win32' ? 'Windows' : hardeningReport.device_summary.host_os || 'PC'} · ${hardeningReport.device_summary.hostname || 'Equipo local'}`
+                      : `Android ${hardeningReport.device_summary.android_version || 'N/D'} · Parche ${hardeningReport.device_summary.security_patch || 'N/D'}`}
                 </span>
               )}
           </div>
@@ -918,10 +1046,12 @@ export function MvtVerifierPanel({ onAskInChat }) {
               <div>
                 <div className="px-4 py-2.5 bg-white/[0.02] flex items-center justify-between gap-3">
                   <span className="text-[12px] font-medium text-[#D1D1D6]">
-                    Sockets kernel activos /proc/net/tcp ({hardeningReport?.live_sockets_total || liveSockets.length})
+                    {isPcPlatform ? 'Conexiones TCP activas' : 'Sockets kernel activos /proc/net/tcp'} ({hardeningReport?.live_sockets_total || liveSockets.length})
                   </span>
                   <span className="font-tech text-[11px] text-[#8E8E93]">
-                    {hardeningReport?.cached_dns_count || 0} DNS en caché
+                    {isPcPlatform
+                      ? `${liveSockets.filter((s) => s.process_name).length} con proceso`
+                      : `${hardeningReport?.cached_dns_count || 0} DNS en caché`}
                   </span>
                 </div>
                 <div className="divide-y divide-white/[0.05] max-h-[220px] overflow-y-auto">
@@ -938,6 +1068,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                         />
                         <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate">
                           {sock.remote_ip}:{sock.remote_port}
+                          {sock.process_name ? ` · ${sock.process_name}` : ''}
                         </span>
                         {sock.cti_match && (
                           <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
@@ -946,7 +1077,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                         )}
                       </div>
                       <span className="font-tech shrink-0 text-[11px] text-[#8E8E93]">
-                        {sock.state} · local:{sock.local_port}
+                        {sock.state}{sock.local_port ? ` · local:${sock.local_port}` : ''}
                       </span>
                     </div>
                   ))}
@@ -969,9 +1100,46 @@ export function MvtVerifierPanel({ onAskInChat }) {
               compact
               activeNet4Ips={liveSockets.map((s) => s.remote_ip).filter(Boolean)}
               onAskInChat={onAskInChat}
-              title="Cruzar sockets IPv4 activos contra artículo CTI reciente"
-              subtitle="Carga en RAM un reporte de Citizen Lab, Amnesty Tech o Google TAG y compara sus IPv4 (net4) contra las conexiones abiertas en /proc/net/tcp."
+              title="Cruzar IPv4 activas contra artículo CTI reciente"
+              subtitle={
+                isPcPlatform
+                  ? 'Carga en RAM un reporte de Citizen Lab, Amnesty Tech o Google TAG y compara sus IPv4 (net4) contra las conexiones salientes de esta computadora.'
+                  : 'Carga en RAM un reporte de Citizen Lab, Amnesty Tech o Google TAG y compara sus IPv4 (net4) contra las conexiones abiertas en /proc/net/tcp.'
+              }
             />
+          )}
+
+          {result.timeline?.length > 0 && (
+            <div className="apple-group rounded-[13px] overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F5F5F7]">
+                  <Clock className="h-3.5 w-3.5 text-[#8AB4FF]" />
+                  <span>
+                    Línea temporal correlacionada en RAM ({result.timelineSummary?.events_total || result.timeline.length} eventos)
+                  </span>
+                </span>
+                {result.timelineSummary?.chains_detected > 0 && (
+                  <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
+                    {result.timelineSummary.chains_detected} cadena(s) 0-day sospechosa(s)
+                  </span>
+                )}
+              </div>
+              <div className="divide-y divide-white/[0.04] max-h-48 overflow-y-auto">
+                {result.timeline.slice(-8).reverse().map((ev, idx) => (
+                  <div key={`${ev.timestamp}-${ev.kind}-${idx}`} className="px-4 py-2 flex items-start justify-between gap-3 text-[11.5px]">
+                    <div className="min-w-0">
+                      <span className={`font-medium ${ev.suspicious ? 'text-[#FF6961]' : 'text-[#E5E5EA]'}`}>
+                        {ev.actor}
+                      </span>{' '}
+                      <span className="text-[#8E8E93]">{ev.detail}</span>
+                    </div>
+                    <span className="font-tech text-[10.5px] text-[#8E8E93] shrink-0">
+                      {ev.timestamp}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </section>
 
@@ -1092,7 +1260,12 @@ export function MvtVerifierPanel({ onAskInChat }) {
 
           let statusPillLabel = 'Solo app Desktop';
           let statusPillTone = 'border-white/[0.08] bg-white/[0.04] text-[#8E8E93]';
-          if (hasDesktopBridge) {
+          if (deviceTab === 'pc') {
+            statusPillLabel = hasDesktopBridge ? 'Auditoría de solo lectura' : 'Solo en OMEGA Desktop';
+            statusPillTone = hasDesktopBridge
+              ? 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]'
+              : 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
+          } else if (hasDesktopBridge) {
             if (deviceTab === 'android') {
               if (usbDevice?.connected) {
                 statusPillLabel = `Conectado · ${usbDevice.model || 'Android'}`;
@@ -1126,20 +1299,24 @@ export function MvtVerifierPanel({ onAskInChat }) {
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
-                    <Smartphone
-                      className={`h-4 w-4 ${
-                        hasDesktopBridge &&
-                        ((deviceTab === 'android' && usbDevice?.connected) ||
-                          (deviceTab === 'ios' && iosStatus?.connected))
-                          ? 'text-[#30D158]'
-                          : 'text-[#8E8E93]'
-                      }`}
-                    />
+                    {deviceTab === 'pc' ? (
+                      <Laptop className={`h-4 w-4 ${hasDesktopBridge ? 'text-[#30D158]' : 'text-[#8E8E93]'}`} />
+                    ) : (
+                      <Smartphone
+                        className={`h-4 w-4 ${
+                          hasDesktopBridge &&
+                          ((deviceTab === 'android' && usbDevice?.connected) ||
+                            (deviceTab === 'ios' && iosStatus?.connected))
+                            ? 'text-[#30D158]'
+                            : 'text-[#8E8E93]'
+                        }`}
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                        Analizar dispositivo USB
+                        {deviceTab === 'pc' ? 'Revisar esta computadora' : 'Analizar dispositivo USB'}
                       </span>
                       <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${statusPillTone}`}>
                         {statusPillLabel}
@@ -1172,9 +1349,20 @@ export function MvtVerifierPanel({ onAskInChat }) {
                     >
                       iPhone / iPad
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeviceTab('pc')}
+                      className={`rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                        deviceTab === 'pc'
+                          ? 'apple-segmented-active'
+                          : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      }`}
+                    >
+                      Esta PC
+                    </button>
                   </div>
 
-                  {hasDesktopBridge && (
+                  {hasDesktopBridge && deviceTab !== 'pc' && (
                     <button
                       type="button"
                       disabled={refreshingUsb}
@@ -1304,6 +1492,24 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           {hasDesktopBridge && (
                             <div className="pt-0.5 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
+                                {window.omegaDesktop?.installPortableAdb && !usbDevice?.adb_path && (
+                                  <button
+                                    type="button"
+                                    disabled={installingAdb}
+                                    onClick={handleInstallPortableAdb}
+                                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[11.5px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 transition-colors cursor-pointer"
+                                  >
+                                    {installingAdb ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Download className="h-3.5 w-3.5" />
+                                    )}
+                                    <span>
+                                      {installingAdb ? 'Descargando conector Google...' : 'Instalar conector automático (Google)'}
+                                    </span>
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={handlePickAdbBinary}
@@ -1368,7 +1574,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : deviceTab === 'ios' ? (
                 <div className="space-y-2.5">
                   {hasDesktopBridge && iosStatus?.connected ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
@@ -1519,22 +1725,18 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           {bk.encrypted ? (
                             <button
                               type="button"
-                              onClick={() =>
-                                handleCopyCommand(
-                                  `dec-${bk.id}`,
-                                  `mvt-ios decrypt-backup -d ./ios_decrypted "${bk.path}"`,
-                                )
-                              }
-                              className="shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10.5px] text-[#D1D1D6] hover:bg-white/[0.08] cursor-pointer"
-                              title="Desmarca cifrado al crear la copia o copia este comando para descifrarla localmente"
+                              disabled={scanningIos || isAnalyzing || unlockingBackup}
+                              onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
+                              className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/15 px-2.5 py-1 text-[11px] font-medium text-[#FFD60A] hover:bg-[#FF9F0A]/25 disabled:opacity-50 cursor-pointer"
                             >
-                              {copiedHintKey === `dec-${bk.id}` ? 'Comando copiado' : 'Copiar comando de descifrado'}
+                              <KeyRound className="h-3 w-3" />
+                              <span>Desbloquear en RAM</span>
                             </button>
                           ) : (
                             <button
                               type="button"
                               disabled={scanningIos || isAnalyzing}
-                              onClick={() => analyzeIosBackupDirectory(bk.path)}
+                              onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
                               className="shrink-0 rounded-[7px] bg-[#2F6FED] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 cursor-pointer"
                             >
                               Revisar copia ahora
@@ -1542,6 +1744,119 @@ export function MvtVerifierPanel({ onAskInChat }) {
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {encryptedBackupPrompt && (
+                    <form
+                      onSubmit={handleUnlockEncryptedBackup}
+                      className="rounded-[11px] border border-[#FF9F0A]/30 bg-[#121217] p-3.5 space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5F5F7]">
+                            <KeyRound className="h-3.5 w-3.5 text-[#FFD60A]" />
+                            <span>
+                              Contraseña de la copia «{encryptedBackupPrompt.meta?.deviceName || 'iPhone'}»
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#8E8E93]">
+                            Solo se usa en memoria temporal (RAM) para revisar SMS, Safari, DataUsage y perfiles. Nunca se guarda ni sale de tu computadora.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="password"
+                          autoFocus
+                          value={backupPassword}
+                          onChange={(e) => setBackupPassword(e.target.value)}
+                          placeholder="Contraseña de respaldo iTunes / Finder"
+                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#6E6E73] focus:border-[#2F6FED] focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!backupPassword || unlockingBackup}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 cursor-pointer"
+                        >
+                          {unlockingBackup && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          <span>Desbloquear y revisar en RAM</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={unlockingBackup}
+                          onClick={() => {
+                            setEncryptedBackupPrompt(null);
+                            setBackupPassword('');
+                            setBackupUnlockError('');
+                          }}
+                          className="rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] text-[#8E8E93] hover:text-[#F5F5F7] cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+
+                      {backupUnlockError && (
+                        <p className="text-[11.5px] text-[#FF6961]">{backupUnlockError}</p>
+                      )}
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[12px] text-[#8E8E93] leading-relaxed">
+                    Revisa si esta computadora Windows o macOS tiene programas ocultos sin firma digital, persistencia silenciosa en WMI (técnica asociada a <span className="text-[#D1D1D6]">Candiru / Predator</span>) o conexiones externas sospechosas — sin leer tus archivos personales.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
+                      <PcStepVisual step={1} />
+                      <div className="text-[11.5px] font-medium text-[#F5F5F7]">
+                        1. Conexiones externas
+                      </div>
+                      <p className="text-[11px] text-[#8E8E93] leading-snug">
+                        Cruza direcciones IP abiertas por tus aplicaciones contra campañas conocidas y reglas YARA.
+                      </p>
+                    </div>
+                    <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
+                      <PcStepVisual step={2} />
+                      <div className="text-[11.5px] font-medium text-[#F5F5F7]">
+                        2. Persistencia oculta
+                      </div>
+                      <p className="text-[11px] text-[#8E8E93] leading-snug">
+                        Inspecciona eventos WMI, tareas programadas y ejecutables sin firma en carpetas temporales.
+                      </p>
+                    </div>
+                    <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
+                      <PcStepVisual step={3} />
+                      <div className="text-[11.5px] font-medium text-[#F5F5F7]">
+                        3. Escudos del sistema
+                      </div>
+                      <p className="text-[11px] text-[#8E8E93] leading-snug">
+                        Verifica que Defender, Firewall, UAC y SmartScreen (o Gatekeeper/SIP) sigan activos.
+                      </p>
+                    </div>
+                  </div>
+
+                  {hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                      <span className="text-[11.5px] text-[#8E8E93]">
+                        Análisis instantáneo en RAM · Tarda ~2 segundos · 0 modificaciones en tu equipo.
+                      </span>
+                      <button
+                        type="button"
+                        disabled={scanningPc || isAnalyzing}
+                        onClick={handlePcLiveAudit}
+                        className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_12px_rgba(47,111,237,0.32)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                      >
+                        {scanningPc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Laptop className="h-3.5 w-3.5" />}
+                        <span>{scanningPc ? 'Revisando equipo...' : 'Analizar esta computadora'}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-[11.5px] text-[#8E8E93]">
+                      La revisión directa de procesos y WMI locales está disponible en la aplicación de escritorio <span className="text-[#D1D1D6]">OMEGA Desktop</span>.
                     </div>
                   )}
                 </div>

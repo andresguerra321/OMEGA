@@ -70,6 +70,7 @@ async function resolveAdbBinary(customPath = '') {
     candidates.push(path.join(os.homedir(), 'Android', 'Sdk', 'platform-tools', exe));
     candidates.push('/opt/homebrew/bin/adb', '/usr/local/bin/adb', '/usr/bin/adb');
   }
+  candidates.push(path.join(app.getPath('userData'), 'tools', 'platform-tools', exe));
   candidates.push(path.join(__dirname, '..', '..', 'tools', 'platform-tools', exe));
 
   for (const cand of candidates) {
@@ -235,6 +236,9 @@ ipcMain.handle('omega:adb-collect', async (_event, opts = {}) => {
     procNetTcp,
     procNetTcp6,
     dnsResolverDump,
+    apkPathsRaw,
+    caCertsRaw,
+    httpProxyRaw,
   ] = await Promise.all([
     execScoped(['shell', 'getprop', 'ro.product.model']).catch(() => 'Desconocido'),
     execScoped(['shell', 'getprop', 'ro.product.manufacturer']).catch(() => ''),
@@ -252,6 +256,9 @@ ipcMain.handle('omega:adb-collect', async (_event, opts = {}) => {
     execScoped(['shell', 'cat', '/proc/net/tcp']).catch(() => ''),
     execScoped(['shell', 'cat', '/proc/net/tcp6']).catch(() => ''),
     execScoped(['shell', 'dumpsys', 'dnsresolver']).catch(() => ''),
+    execScoped(['shell', 'pm', 'list', 'packages', '-3', '-f']).catch(() => ''),
+    execScoped(['shell', 'ls', '/data/misc/user/0/cacerts-added']).catch(() => ''),
+    execScoped(['shell', 'settings', 'get', 'global', 'http_proxy']).catch(() => ''),
   ]);
 
   const cleanPackages = packagesRaw
@@ -259,6 +266,22 @@ ipcMain.handle('omega:adb-collect', async (_event, opts = {}) => {
     .map((line) => line.replace(/^package:/, '').trim())
     .filter(Boolean)
     .join('\n');
+
+  const apkFilePaths = apkPathsRaw
+    .split(/\r?\n/)
+    .map((line) => {
+      const m = line.match(/^package:(\/data\/app\/[^\s=]+\.apk)=/);
+      return m ? m[1] : '';
+    })
+    .filter((p) => p && /^\/data\/app\/[A-Za-z0-9._/~=+@-]+\.apk$/.test(p))
+    .slice(0, 18);
+
+  let apkHashesRaw = '';
+  if (apkFilePaths.length > 0) {
+    apkHashesRaw = await execScoped(['shell', 'sha256sum', ...apkFilePaths]).catch(() => '');
+  }
+
+  const proxyClean = httpProxyRaw.trim();
 
   return {
     platform: 'android',
@@ -281,6 +304,9 @@ ipcMain.handle('omega:adb-collect', async (_event, opts = {}) => {
     processes_text: processesRaw,
     proc_net_raw: `${procNetTcp}\n${procNetTcp6}`,
     dns_resolver_raw: dnsResolverDump,
+    apk_hashes_raw: apkHashesRaw,
+    ca_certs_raw: caCertsRaw && !/no such file/i.test(caCertsRaw) ? caCertsRaw : '',
+    proxy_raw: proxyClean && proxyClean.toLowerCase() !== 'null' ? `http_proxy=${proxyClean}` : '',
   };
 });
 
@@ -685,6 +711,7 @@ ipcMain.handle('omega:ios-pick-backup-dir', async () => {
 ipcMain.handle('omega:ios-read-backup-manifest', async (_event, backupPath) => {
   const resolvedDir = path.resolve(String(backupPath || ''));
   const manifestPath = path.join(resolvedDir, 'Manifest.db');
+  const manifestPlistPath = path.join(resolvedDir, 'Manifest.plist');
   if (!fs.existsSync(manifestPath)) {
     throw new Error('No se encontró Manifest.db en la carpeta de respaldo seleccionada.');
   }
@@ -695,10 +722,14 @@ ipcMain.handle('omega:ios-read-backup-manifest', async (_event, backupPath) => {
   const raw = fs.readFileSync(manifestPath);
   const meta = readBackupMetadata(resolvedDir);
   const isEncrypted = raw.length < 16 || !raw.subarray(0, 16).equals(SQLITE_MAGIC);
+  const manifestPlistB64 = fs.existsSync(manifestPlistPath)
+    ? fs.readFileSync(manifestPlistPath).toString('base64')
+    : '';
   return {
     backup: meta,
     encrypted: isEncrypted,
-    manifest_b64: isEncrypted ? null : raw.toString('base64'),
+    manifest_b64: raw.toString('base64'),
+    manifest_plist_b64: manifestPlistB64,
   };
 });
 
@@ -712,8 +743,9 @@ ipcMain.handle('omega:ios-read-backup-artifacts', async (_event, opts = {}) => {
 
   const artifacts = [];
   let totalBytes = 0;
-  const manifestBuf = fs.readFileSync(manifestPath);
-  if (manifestBuf.length <= 25 * 1024 * 1024) {
+  const isEncryptedBackup = Boolean(opts?.encrypted);
+  const manifestBuf = isEncryptedBackup ? Buffer.alloc(0) : fs.readFileSync(manifestPath);
+  if (!isEncryptedBackup && manifestBuf.length > 0 && manifestBuf.length <= 25 * 1024 * 1024) {
     totalBytes += manifestBuf.length;
     artifacts.push({
       filename: 'Manifest.db',
@@ -735,6 +767,7 @@ ipcMain.handle('omega:ios-read-backup-artifacts', async (_event, opts = {}) => {
       totalBytes += st.size;
       const rel = String(tgt?.relative_path || fileId).replace(/^\/+/, '');
       artifacts.push({
+        file_id: fileId,
         filename: path.posix.basename(rel) || fileId,
         content_b64: fs.readFileSync(chosen).toString('base64'),
       });
@@ -751,7 +784,7 @@ ipcMain.handle('omega:ios-read-backup-artifacts', async (_event, opts = {}) => {
       name: meta?.deviceName || 'Respaldo iOS',
       model: meta?.productType || 'iPhone Backup',
       ios_version: meta?.iosVersion || '',
-      backup_encrypted: false,
+      backup_encrypted: Boolean(opts?.encrypted ?? meta?.encrypted),
     },
     binary_artifacts: artifacts,
   };
@@ -934,6 +967,301 @@ ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
     await ses.clearStorageData().catch(() => {});
     await ses.clearCache().catch(() => {});
     if (!sandboxWin.isDestroyed()) sandboxWin.destroy();
+  }
+});
+
+// =====================================================================
+// Instalador automático de ADB portátil (Google platform-tools)
+// =====================================================================
+ipcMain.handle('omega:adb-install-portable', async () => {
+  const existing = await resolveAdbBinary();
+  if (existing) {
+    return { ok: true, adbPath: existing, alreadyInstalled: true };
+  }
+
+  const toolsDir = path.join(app.getPath('userData'), 'tools');
+  const extractTarget = path.join(toolsDir, 'platform-tools');
+  const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb';
+  const urls = {
+    win32: 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip',
+    darwin: 'https://dl.google.com/android/repository/platform-tools-latest-darwin.zip',
+    linux: 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip',
+  };
+  const zipUrl = urls[process.platform];
+  if (!zipUrl) {
+    return { ok: false, error: `Sistema no soportado para instalación automática (${process.platform}).` };
+  }
+
+  const tmpZip = path.join(toolsDir, 'platform-tools-tmp.zip');
+  try {
+    fs.mkdirSync(toolsDir, { recursive: true });
+    const resp = await fetch(zipUrl, { signal: AbortSignal.timeout(45000) });
+    if (!resp.ok) {
+      throw new Error(`Google rechazó la descarga (HTTP ${resp.status})`);
+    }
+    const buf = Buffer.from(await resp.arrayBuffer());
+    if (buf.length < 100000 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+      throw new Error('El paquete descargado no es un archivo ZIP válido.');
+    }
+    fs.writeFileSync(tmpZip, buf);
+
+    if (process.platform === 'win32') {
+      await execFileAsync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          `Expand-Archive -LiteralPath '${tmpZip.replace(/'/g, "''")}' -DestinationPath '${toolsDir.replace(/'/g, "''")}' -Force`,
+        ],
+        { timeout: 45000 },
+      );
+    } else {
+      await execFileAsync('unzip', ['-oq', tmpZip, '-d', toolsDir], { timeout: 45000 });
+    }
+
+    const adbBin = path.join(extractTarget, exeName);
+    if (!fs.existsSync(adbBin)) {
+      throw new Error('No se encontró el binario adb dentro del ZIP extraído.');
+    }
+    if (process.platform !== 'win32') {
+      fs.chmodSync(adbBin, 0o755);
+    }
+    const runnable = await isRunnableBinary(adbBin, ['version']);
+    if (!runnable) {
+      throw new Error('El binario ADB descargado no pudo ejecutarse en este equipo.');
+    }
+    return { ok: true, adbPath: adbBin, alreadyInstalled: false };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `No se pudo instalar ADB automáticamente: ${err?.message || err}`,
+    };
+  } finally {
+    try {
+      if (fs.existsSync(tmpZip)) fs.unlinkSync(tmpZip);
+    } catch {
+      // ignore cleanup error
+    }
+  }
+});
+
+// =====================================================================
+// Pilar 3: Auditoría Forense Local de Escritorio (Solo Lectura)
+// =====================================================================
+const WINDOWS_PC_AUDIT_PS = `
+$ErrorActionPreference = 'SilentlyContinue'
+$ProgressPreference = 'SilentlyContinue'
+
+$defRt = $null
+try { $defRt = [bool](Get-MpComputerStatus).RealTimeProtectionEnabled } catch {}
+
+$fwOn = $null
+try {
+  $profs = @(Get-NetFirewallProfile)
+  if ($profs.Count -gt 0) { $fwOn = [bool]($profs | Where-Object { $_.Enabled -eq $true }).Count -gt 0 }
+} catch {}
+
+$uacOn = $null
+try {
+  $lua = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA).EnableLUA
+  $uacOn = ([int]$lua -ne 0)
+} catch {}
+
+$smartOn = $null
+try {
+  $ss = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer' -Name SmartScreenEnabled).SmartScreenEnabled
+  if ($ss) { $smartOn = ($ss -ne 'Off') }
+} catch {}
+
+$procList = @(Get-CimInstance Win32_Process | Select-Object ProcessId, Name, ExecutablePath, CommandLine)
+$procMap = @{}
+foreach ($p in $procList) { $procMap[[int]$p.ProcessId] = $p }
+
+$tcpRaw = @(Get-NetTCPConnection -State Established,SynSent | Where-Object {
+  $_.RemoteAddress -and $_.RemoteAddress -notmatch '^(127\\.|0\\.|::1$|::|fe80:|10\\.|192\\.168\\.|172\\.(1[6-9]|2\\d|3[0-1])\\.)'
+} | Select-Object -First 60)
+
+$tcpOut = @()
+$netPids = @{}
+foreach ($c in $tcpRaw) {
+  $pidInt = [int]$c.OwningProcess
+  $netPids[$pidInt] = $true
+  $pinfo = $procMap[$pidInt]
+  $tcpOut += [pscustomobject]@{
+    local_addr = [string]$c.LocalAddress
+    local_port = [int]$c.LocalPort
+    remote_ip = [string]$c.RemoteAddress
+    remote_port = [int]$c.RemotePort
+    state = [string]$c.State
+    pid = $pidInt
+    process_name = if ($pinfo) { [string]$pinfo.Name } else { '' }
+    exe_path = if ($pinfo) { [string]$pinfo.ExecutablePath } else { '' }
+  }
+}
+
+$interestingProcs = @()
+$sigCache = @{}
+$riskyRe = '(\\\\appdata\\\\local\\\\temp\\\\|\\\\users\\\\public\\\\|\\\\windows\\\\temp\\\\|\\\\programdata\\\\|wmiutils|agentservice|svchost|lsass|csrss|winlogon)'
+$checkedCount = 0
+
+foreach ($p in $procList) {
+  $pidInt = [int]$p.ProcessId
+  if ($pidInt -eq $PID) { continue }
+  $ep = [string]$p.ExecutablePath
+  $pname = [string]$p.Name
+  $cmd = [string]$p.CommandLine
+  $needInspect = ($ep -and $ep -imatch $riskyRe) -or ($netPids.ContainsKey($pidInt)) -or ($cmd -and $cmd -imatch '(-enc|-encodedcommand|frombase64|mshta|wscript)')
+  if (-not $needInspect) { continue }
+
+  $sigStatus = ''
+  $signer = ''
+  $sha = ''
+  if ($ep -and (Test-Path -LiteralPath $ep) -and $checkedCount -lt 35) {
+    if ($sigCache.ContainsKey($ep)) {
+      $sigStatus = $sigCache[$ep].status
+      $signer = $sigCache[$ep].signer
+      $sha = $sigCache[$ep].sha
+    } else {
+      $checkedCount++
+      try {
+        $sig = Get-AuthenticodeSignature -LiteralPath $ep
+        $sigStatus = [string]$sig.Status
+        if ($sig.SignerCertificate) { $signer = [string]$sig.SignerCertificate.Subject }
+      } catch {}
+      try {
+        if ($ep -notmatch '^C:\\\\Windows\\\\System32\\\\') {
+          $sha = [string](Get-FileHash -LiteralPath $ep -Algorithm SHA256).Hash.ToLower()
+        }
+      } catch {}
+      $sigCache[$ep] = @{ status = $sigStatus; signer = $signer; sha = $sha }
+    }
+  }
+  $interestingProcs += [pscustomobject]@{
+    pid = $pidInt
+    name = $pname
+    exe_path = $ep
+    command_line = if ($cmd.Length -gt 240) { $cmd.Substring(0, 240) } else { $cmd }
+    signature_status = $sigStatus
+    signer = $signer
+    sha256 = $sha
+  }
+}
+
+$wmiOut = @()
+try {
+  foreach ($f in @(Get-CimInstance -Namespace root\\subscription -ClassName __EventFilter)) {
+    $wmiOut += [pscustomobject]@{ kind = 'Filter'; name = [string]$f.Name; query_or_target = [string]$f.Query; detail = [string]$f.QueryLanguage }
+  }
+  foreach ($c in @(Get-CimInstance -Namespace root\\subscription -ClassName CommandLineEventConsumer)) {
+    $wmiOut += [pscustomobject]@{ kind = 'Consumer'; name = [string]$c.Name; query_or_target = [string]$c.CommandLineTemplate; detail = [string]$c.ExecutablePath }
+  }
+  foreach ($s in @(Get-CimInstance -Namespace root\\subscription -ClassName ActiveScriptEventConsumer)) {
+    $wmiOut += [pscustomobject]@{ kind = 'Consumer'; name = [string]$s.Name; query_or_target = [string]$s.ScriptText; detail = [string]$s.ScriptingEngine }
+  }
+} catch {}
+
+$tasksOut = @()
+try {
+  foreach ($t in @(Get-ScheduledTask | Where-Object { $_.TaskPath -notlike '\\Microsoft\\*' -and $_.State -ne 'Disabled' } | Select-Object -First 35)) {
+    $act = $t.Actions | Select-Object -First 1
+    $tasksOut += [pscustomobject]@{
+      name = [string]$t.TaskName
+      task_path = [string]$t.TaskPath
+      execute = if ($act) { [string]$act.Execute } else { '' }
+      arguments = if ($act) { [string]$act.Arguments } else { '' }
+    }
+  }
+} catch {}
+
+$startupOut = @()
+foreach ($rk in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run')) {
+  try {
+    $item = Get-ItemProperty $rk
+    foreach ($prop in $item.PSObject.Properties) {
+      if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+      $startupOut += [pscustomobject]@{ hive = $rk; name = [string]$prop.Name; command = [string]$prop.Value }
+    }
+  } catch {}
+}
+
+[pscustomobject]@{
+  platform = 'win32'
+  host = @{
+    hostname = $env:COMPUTERNAME
+    os_version = [System.Environment]::OSVersion.VersionString
+    defender_realtime = $defRt
+    firewall_enabled = $fwOn
+    uac_enabled = $uacOn
+    smartscreen_enabled = $smartOn
+  }
+  tcp_connections = @($tcpOut)
+  processes = @($interestingProcs)
+  wmi_subscriptions = @($wmiOut)
+  scheduled_tasks = @($tasksOut)
+  startup_items = @($startupOut)
+} | ConvertTo-Json -Depth 5 -Compress
+`;
+
+ipcMain.handle('omega:pc-audit-collect', async () => {
+  try {
+    if (process.platform === 'win32') {
+      const encoded = Buffer.from(WINDOWS_PC_AUDIT_PS, 'utf16le').toString('base64');
+      const { stdout } = await execFileAsync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
+        { timeout: 20000, maxBuffer: 8 * 1024 * 1024 },
+      );
+      const parsed = JSON.parse(String(stdout || '{}').trim() || '{}');
+      return { ok: true, snapshot: parsed };
+    }
+
+    // Respaldo macOS / Linux en solo lectura
+    const hostInfo = {
+      hostname: os.hostname(),
+      os_version: `${os.type()} ${os.release()}`,
+      sip_enabled: null,
+      gatekeeper_enabled: null,
+    };
+    if (process.platform === 'darwin') {
+      const sipOut = await execFileAsync('csrutil', ['status'], { timeout: 3000 }).then((r) => r.stdout).catch(() => '');
+      const gkOut = await execFileAsync('spctl', ['--status'], { timeout: 3000 }).then((r) => r.stdout).catch(() => '');
+      if (sipOut) hostInfo.sip_enabled = /enabled/i.test(sipOut);
+      if (gkOut) hostInfo.gatekeeper_enabled = /assessments enabled/i.test(gkOut);
+    }
+
+    const psOut = await execFileAsync('ps', ['-axo', 'pid,comm,args'], { timeout: 5000 })
+      .then((r) => r.stdout)
+      .catch(() => '');
+    const processes = psOut
+      .split(/\r?\n/)
+      .slice(1, 150)
+      .map((line) => {
+        const m = line.trim().match(/^(\d+)\s+(\S+)\s+(.*)$/);
+        if (!m) return null;
+        return { pid: Number(m[1]), name: m[2], exe_path: m[2], command_line: m[3], signature_status: '' };
+      })
+      .filter(Boolean);
+
+    return {
+      ok: true,
+      snapshot: {
+        platform: process.platform,
+        host: hostInfo,
+        tcp_connections: [],
+        processes,
+        wmi_subscriptions: [],
+        scheduled_tasks: [],
+        startup_items: [],
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `No se pudo recolectar telemetría local del equipo: ${err?.message || err}`,
+    };
   }
 });
 

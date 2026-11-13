@@ -187,3 +187,70 @@ export function IosStepVisual({ step }) {
   );
 }
 
+export function PcStepVisual({ step }) {
+  if (step === 1) {
+    return (
+      <svg viewBox="0 0 220 104" className="w-full h-[80px]" role="img" aria-label="Inspección de conexiones de red externas de esta computadora">
+        <rect x="1" y="1" width="218" height="102" rx="10" fill="#0B0B0E" stroke="rgba(255,255,255,0.08)" />
+        <rect x="24" y="20" width="64" height="44" rx="6" fill="#16161D" stroke="rgba(255,255,255,0.16)" />
+        <rect x="16" y="65" width="80" height="5" rx="2.5" fill="#25252E" />
+        <rect x="31" y="28" width="50" height="28" rx="3" fill="rgba(47,111,237,0.16)" />
+        <text x="56" y="44.5" textAnchor="middle" fill="#8AB4FF" fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
+          Red TCP
+        </text>
+        <line x1="94" y1="42" x2="136" y2="42" stroke="#2F6FED" strokeWidth="1.8" strokeDasharray="3 3" />
+        <rect x="138" y="18" width="58" height="48" rx="8" fill="#14141A" stroke="rgba(138,180,255,0.35)" />
+        <text x="167" y="38" textAnchor="middle" fill="#F5F5F7" fontSize="6.4" fontWeight="600" fontFamily="system-ui, sans-serif">
+          CTI + YARA
+        </text>
+        <text x="167" y="49" textAnchor="middle" fill="#30D158" fontSize="6" fontFamily="system-ui, sans-serif">
+          Candiru / Helios
+        </text>
+        <text x="110" y="88" textAnchor="middle" fill="#8E8E93" fontSize="6.2" fontFamily="system-ui, sans-serif">
+          Solo conexiones externas activas (sin leer archivos personales)
+        </text>
+      </svg>
+    );
+  }
+
+  if (step === 2) {
+    return (
+      <svg viewBox="0 0 220 104" className="w-full h-[80px]" role="img" aria-label="Revisión de programas al inicio, WMI y procesos no firmados">
+        <rect x="1" y="1" width="218" height="102" rx="10" fill="#0B0B0E" stroke="rgba(255,255,255,0.08)" />
+        <rect x="24" y="12" width="172" height="80" rx="9" fill="#14141A" stroke="rgba(255,255,255,0.14)" />
+        <rect x="33" y="21" width="154" height="17" rx="4" fill="rgba(48,209,88,0.1)" />
+        <text x="41" y="32" fill="#E5E5EA" fontSize="6.4" fontFamily="system-ui, sans-serif">
+          ✓ Procesos en Temp / AppData y firma digital
+        </text>
+        <rect x="33" y="43" width="154" height="17" rx="4" fill="rgba(47,111,237,0.14)" />
+        <text x="41" y="54" fill="#8AB4FF" fontSize="6.4" fontWeight="600" fontFamily="system-ui, sans-serif">
+          ✓ Eventos ocultos WMI y Tareas Programadas
+        </text>
+        <rect x="33" y="65" width="154" height="17" rx="4" fill="rgba(255,255,255,0.04)" />
+        <text x="41" y="76" fill="#D1D1D6" fontSize="6.4" fontFamily="system-ui, sans-serif">
+          ✓ Llaves de inicio automático (Run)
+        </text>
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 220 104" className="w-full h-[80px]" role="img" aria-label="Verificación de escudos Windows Defender, Firewall y UAC">
+      <rect x="1" y="1" width="218" height="102" rx="10" fill="#0B0B0E" stroke="rgba(255,255,255,0.08)" />
+      <rect x="30" y="14" width="160" height="46" rx="9" fill="#16161E" stroke="rgba(48,209,88,0.28)" />
+      <circle cx="51" cy="37" r="10" fill="rgba(48,209,88,0.16)" />
+      <path d="M47 37l2.6 2.6 5.2-5.4" fill="none" stroke="#30D158" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <text x="68" y="34" fill="#F5F5F7" fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
+        Escudos del sistema
+      </text>
+      <text x="68" y="45" fill="#8E8E93" fontSize="6" fontFamily="system-ui, sans-serif">
+        Defender · Firewall · UAC · SmartScreen
+      </text>
+      <rect x="52" y="69" width="116" height="18" rx="9" fill="rgba(48,209,88,0.12)" stroke="rgba(48,209,88,0.3)" />
+      <text x="110" y="80.5" textAnchor="middle" fill="#30D158" fontSize="6.4" fontWeight="600" fontFamily="system-ui, sans-serif">
+        Solo lectura · Sin modificar la PC
+      </text>
+    </svg>
+  );
+}
+
