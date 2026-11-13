@@ -11,8 +11,6 @@ import {
   Download,
   Trash2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   BookOpen,
   Gauge,
   Sparkles,
@@ -28,7 +26,6 @@ import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaLogo } from './components/OmegaLogo';
 import { SpatialNavPill } from './components/SpatialNavPill';
 import { SecurityPostureStage } from './components/SecurityPostureStage';
-import { OverviewWarmInspector } from './components/OverviewWarmInspector';
 import { CopilotDrawer } from './components/CopilotDrawer';
 import { ChatWorkspace } from './components/ChatWorkspace';
 import { CampaignsPanel } from './components/CampaignsPanel';
@@ -179,7 +176,6 @@ export default function App() {
   const [deviceNavKey, setDeviceNavKey] = useState(0);
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState('windows');
-  const [stageCollapsed, setStageCollapsed] = useState(false);
   const [scanningPc, setScanningPc] = useState(false);
   const [syncingStix, setSyncingStix] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
@@ -267,7 +263,7 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.omegaDesktop?.setTitleBarTheme) {
-      void window.omegaDesktop.setTitleBarTheme(activeNav === 'inicio' ? 'light' : 'dark');
+      void window.omegaDesktop.setTitleBarTheme('dark');
     }
   }, [activeNav]);
 
@@ -629,23 +625,15 @@ export default function App() {
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
   const drawerFailedPrompt = lastMsg?.isError ? lastMsg.retryQuery : '';
   const isHome = activeNav === 'inicio';
-  const showLeftStage = !stageCollapsed;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col md:flex-row bg-[#050811] text-[#F8FAFC] select-none">
-      {/* Panel Izquierdo: Postura de Seguridad Atmosférica / Rail Sereno en Módulos */}
-      {showLeftStage && (
-        <div
-          className={`relative min-w-0 min-h-0 shrink-0 transition-[width,height] duration-300 ease-out ${
-            isHome
-              ? 'w-full h-[46%] md:h-full md:w-[56%] lg:w-[58%] xl:w-[60%]'
-              : 'hidden xl:flex xl:w-[27%] xl:max-w-[360px] h-full'
-          }`}
-        >
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#04070E] text-[#F8FAFC] select-none">
+      <main className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text">
+        {isHome ? (
           <SecurityPostureStage
+            isDesktop={isDesktop}
             activeNav={activeNav}
             onSelectNav={(id) => handleNavigate(id)}
-            isCompactRail={!isHome}
             selectedNodeId={selectedNodeId}
             onSelectNode={setSelectedNodeId}
             pcAudit={pcAudit}
@@ -654,133 +642,64 @@ export default function App() {
             lastLinkResult={lastLinkResult}
             govStats={govStats}
             technicalMode={technicalMode}
+            onToggleTechnicalMode={setTechnicalMode}
             apiOnline={apiOnline}
             isLoadingChat={loadingChat}
+            scanningPc={scanningPc}
             syncingStix={syncingStix}
+            onRunPcScan={handleRunPcScan}
             onSyncStix={handleSyncStix}
+            onOpenCopilot={handleOpenCopilot}
             onOpenCommandPalette={() => {
               setCommandOpen(true);
               setCommandQuery('');
             }}
             onNavigate={handleNavigate}
+            onLinkVerified={handleLinkVerified}
           />
-        </div>
-      )}
+        ) : (
+          <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
+            <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
 
-      {/* Hoja Curva Derecha: Piedra Cálida en Inicio · Obsidiana en Instrumentos */}
-      <div className="relative flex-1 min-w-0 min-h-0 flex">
-        {/* Lengüeta interactiva de unión sobre el borde curvo */}
-        <button
-          type="button"
-          onClick={() => setStageCollapsed((v) => !v)}
-          aria-label={stageCollapsed ? 'Mostrar panel lateral de postura' : 'Ocultar panel lateral de postura'}
-          title={stageCollapsed ? 'Expandir panel lateral' : 'Contraer panel y ampliar inspector'}
-          className={`hidden ${
-            isHome ? 'md:flex' : 'xl:flex'
-          } items-center justify-center absolute z-30 top-1/2 -translate-y-1/2 ${
-            showLeftStage ? '-left-3' : 'left-2'
-          } w-6 h-12 rounded-full border shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-all cursor-pointer ${
-            isHome
-              ? 'bg-[#FFFFFF] border-[#0B1220]/15 text-[#090D16] hover:border-[#1D4ED8]/40 hover:scale-105'
-              : 'bg-[#0F172A] border-[#3B82F6]/30 text-[#E2E8F0] hover:bg-[#1E293B] hover:scale-105'
-          }`}
-        >
-          {stageCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" />
-          )}
-        </button>
-
-        <main
-          className={`relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text shadow-[-16px_0_48px_rgba(0,0,0,0.45)] ${
-            showLeftStage
-              ? isHome
-                ? 'rounded-t-[26px] md:rounded-t-none md:rounded-l-[28px]'
-                : 'xl:rounded-l-[28px]'
-              : ''
-          }`}
-        >
-          {isHome ? (
-            <>
-              {isDesktop && (
-                <div className="hidden md:block absolute top-0 left-0 right-0 h-10 z-20 titlebar-drag" />
-              )}
-              <OverviewWarmInspector
-                isDesktop={isDesktop}
-                selectedNodeId={selectedNodeId}
-                technicalMode={technicalMode}
-                onToggleTechnicalMode={setTechnicalMode}
-                apiOnline={apiOnline}
-                govStats={govStats}
-                usbStatus={usbStatus}
-                pcAudit={pcAudit}
-                pcScannedAt={pcScannedAt}
-                lastLinkResult={lastLinkResult}
-                scanningPc={scanningPc}
-                syncingStix={syncingStix}
-                onRunPcScan={handleRunPcScan}
-                onSyncStix={handleSyncStix}
-                onNavigate={handleNavigate}
-                onOpenCopilot={handleOpenCopilot}
-                onOpenCommandPalette={() => {
-                  setCommandOpen(true);
-                  setCommandQuery('');
-                }}
-                onLinkVerified={handleLinkVerified}
-              />
-            </>
-          ) : (
-            <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
-              <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
-
-              {/* Barra Instrumental Compacta sobre la Hoja Obsidiana */}
-              <header
-                className={`relative z-20 min-h-[52px] h-[52px] shrink-0 px-4 sm:px-6 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
-                  isDesktop
-                    ? 'pr-40 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
-                    : ''
-                }`}
-              >
-                <div className="min-w-0 flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleNavigate('inicio')}
-                    className={`${
-                      showLeftStage ? 'xl:hidden ' : ''
-                    }titlebar-no-drag inline-flex items-center gap-1.5 rounded-[9px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer`}
-                    title="Volver a Inicio"
-                  >
-                    <OmegaLogo size={20} isThinking={loadingChat} />
-                    <span className="hidden sm:inline text-[12.5px] font-semibold tracking-[0.12em] text-[#F4F6FA]">
-                      OMEGA
-                    </span>
-                  </button>
-
-                  <span
-                    className={`${
-                      showLeftStage ? 'xl:hidden ' : ''
-                    }hidden sm:inline text-white/25 text-[12px]`}
-                  >
-                    /
+            {/* Barra Instrumental Unificada de Estudio */}
+            <header
+              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 pl-5 sm:pl-7 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
+                isDesktop
+                  ? 'pr-40 sm:pr-44 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
+                  : 'pr-5 sm:pr-7'
+              }`}
+            >
+              <div className="min-w-0 flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleNavigate('inicio')}
+                  className="titlebar-no-drag inline-flex items-center gap-2 rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  title="Volver a Inicio"
+                >
+                  <OmegaLogo size={22} isThinking={loadingChat} />
+                  <span className="hidden sm:inline text-[14px] font-semibold tracking-[0.06em] text-[#F8FAFC]">
+                    OMEGA
                   </span>
-                  <span className="text-[13px] font-medium text-[#E4E8F0] truncate max-w-[115px] xl:max-w-none">
-                    {activeNavItem.label}
-                  </span>
-                </div>
+                </button>
 
-                {/* Cápsula circular flotante siempre accesible en vistas especializadas */}
-                <div className="titlebar-no-drag hidden md:flex items-center justify-center shrink-0">
-                  <SpatialNavPill
-                    compact
-                    activeNav={activeNav}
-                    onSelectNav={(id) => handleNavigate(id)}
-                    pcVerdict={pcVerdict}
-                    usbConnected={usbConnected}
-                    apiOnline={apiOnline}
-                    isLoadingChat={loadingChat}
-                  />
-                </div>
+                <span className="hidden sm:inline text-white/25 text-[12px]">/</span>
+                <span className="text-[13px] font-medium text-[#E2E8F0] truncate max-w-[125px] xl:max-w-none">
+                  {activeNavItem.label}
+                </span>
+              </div>
+
+              {/* Barra de navegación segmentada central */}
+              <div className="titlebar-no-drag hidden md:flex items-center justify-center shrink-0">
+                <SpatialNavPill
+                  compact
+                  activeNav={activeNav}
+                  onSelectNav={(id) => handleNavigate(id)}
+                  pcVerdict={pcVerdict}
+                  usbConnected={usbConnected}
+                  apiOnline={apiOnline}
+                  isLoadingChat={loadingChat}
+                />
+              </div>
 
                 {/* Controles contextuales del instrumento */}
                 <div className="titlebar-no-drag flex items-center gap-1.5 shrink-0">
@@ -1030,7 +949,6 @@ export default function App() {
             </div>
           )}
         </main>
-      </div>
 
       {/* Panel Deslizable No Destructivo de Copiloto */}
       <CopilotDrawer

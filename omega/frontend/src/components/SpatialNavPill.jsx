@@ -48,7 +48,7 @@ export function SpatialNavPill({
   return (
     <nav
       aria-label="Navegación espacial OMEGA"
-      className={`roam-pill-nav inline-flex items-center rounded-full p-1 select-none ${
+      className={`roam-pill-nav inline-flex items-center rounded-[14px] p-1 select-none ${
         compact ? 'gap-0.5' : 'gap-1'
       }`}
     >
@@ -67,7 +67,7 @@ export function SpatialNavPill({
             {item.dividerBefore && (
               <span
                 aria-hidden="true"
-                className="mx-1 h-4 w-px bg-white/[0.15] shrink-0"
+                className="mx-1 h-4 w-px bg-white/[0.12] shrink-0"
               />
             )}
 
@@ -77,29 +77,41 @@ export function SpatialNavPill({
               aria-label={item.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
               title={item.ariaLabel}
-              className={`group relative flex items-center justify-center rounded-full transition-all duration-150 cursor-pointer active:scale-[0.94] ${
-                compact ? 'h-8 w-8' : 'h-9 w-9'
+              className={`group relative flex flex-col items-center justify-center rounded-[10px] transition-all duration-200 cursor-pointer active:scale-[0.95] ${
+                compact
+                  ? isActive
+                    ? 'h-8 w-12'
+                    : 'h-8 w-8'
+                  : isActive
+                    ? 'h-9 w-16'
+                    : 'h-9 w-10'
               } ${
                 isActive
-                  ? 'bg-white text-[#090D16] shadow-[0_4px_12px_rgba(0,0,0,0.34)]'
-                  : 'bg-white/[0.06] text-[#DCE4F2] hover:bg-[#1D4ED8]/35 hover:text-white'
+                  ? 'bg-white/[0.15] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.28)]'
+                  : 'bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.09] hover:text-white'
               }`}
             >
-              <Icon className="h-[16px] w-[16px]" strokeWidth={isActive ? 2.1 : 1.75} />
+              <Icon className="h-[15px] w-[15px]" strokeWidth={isActive ? 2.1 : 1.75} />
+
+              {/* Subrayado discreto de estado activo estilo consola de estudio */}
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="mt-1 h-[2px] w-4 rounded-full bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,0.9)]"
+                />
+              )}
 
               {ledClass && (
                 <span
                   aria-hidden="true"
-                  className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ${
-                    isActive ? 'ring-white' : 'ring-[#090D16]'
-                  } ${ledClass}`}
+                  className={`absolute top-1 right-1 h-1.5 w-1.5 rounded-full ${ledClass}`}
                 />
               )}
 
               {/* Tooltip flotante discreto */}
               <span
                 role="tooltip"
-                className="pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full border border-white/[0.14] bg-[#14181F]/95 px-2.5 py-0.5 text-[11px] font-medium text-[#F4F6FA] shadow-lg"
+                className="pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full border border-white/[0.14] bg-[#090F1D]/95 px-2.5 py-0.5 text-[11px] font-medium text-[#F8FAFC] shadow-lg"
               >
                 {item.label}
               </span>

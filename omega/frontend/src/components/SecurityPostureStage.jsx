@@ -1,81 +1,52 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUpRight,
+  Bell,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  Database,
   Laptop,
-  Layers,
   Link2,
+  Loader2,
   RefreshCw,
-  SlidersHorizontal,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
   Smartphone,
 } from 'lucide-react';
+import { verifySuspiciousLink } from '../lib/api';
 import { OmegaLogo } from './OmegaLogo';
 import { SpatialNavPill } from './SpatialNavPill';
+import { SecurityCenterpiece3D } from './SecurityCenterpiece3D';
 
-function drawLightCurtains(ctx, width, height, elapsedSec, palette, animate) {
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#050811';
-  ctx.fillRect(0, 0, width, height);
-
-  // Cortinas verticales suaves de luz en Azul Rey sobre negro profundo
-  ctx.globalCompositeOperation = 'screen';
-  const folds = [
-    { xRatio: 0.12, widthRatio: 0.34, amp: 0.032, speed: 0.19, phase: 0.4, color: palette.secondary, alpha: 0.38 },
-    { xRatio: 0.34, widthRatio: 0.36, amp: 0.038, speed: 0.15, phase: 1.7, color: palette.primary, alpha: 0.44 },
-    { xRatio: 0.58, widthRatio: 0.32, amp: 0.028, speed: 0.18, phase: 2.9, color: palette.secondary, alpha: 0.32 },
-    { xRatio: 0.78, widthRatio: 0.38, amp: 0.035, speed: 0.14, phase: 4.1, color: palette.accent, alpha: 0.46 },
-    { xRatio: 0.94, widthRatio: 0.28, amp: 0.022, speed: 0.17, phase: 5.3, color: palette.sheen, alpha: 0.14 },
-  ];
-
-  const t = animate ? elapsedSec : 0;
-
-  for (const fold of folds) {
-    const drift = Math.sin(t * fold.speed + fold.phase) * width * fold.amp;
-    const centerX = width * fold.xRatio + drift;
-    const bandW = width * fold.widthRatio;
-    const leftX = centerX - bandW / 2;
-
-    const hGrad = ctx.createLinearGradient(leftX, 0, leftX + bandW, 0);
-    hGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    hGrad.addColorStop(0.42, `rgba(${fold.color}, ${fold.alpha * 0.48})`);
-    hGrad.addColorStop(0.55, `rgba(${fold.color}, ${fold.alpha})`);
-    hGrad.addColorStop(1, 'rgba(0,0,0,0)');
-
-    ctx.fillStyle = hGrad;
-    ctx.fillRect(leftX, 0, bandW, height);
-  }
-
-  // Bloom discreto azul rey hacia la esquina inferior derecha
-  const cornerGlow = ctx.createRadialGradient(
-    width * 0.88,
-    height * 0.86,
-    0,
-    width * 0.88,
-    height * 0.86,
-    Math.max(width, height) * 0.68,
+function extractPcVerdictInfo(pcAudit) {
+  if (!pcAudit) return { verdict: '', findingsCount: 0, yaraHits: 0, sockets: 0 };
+  const rawCode = String(
+    pcAudit?.triage?.diagnosis?.verdict_code || pcAudit?.verdict || '',
+  ).toLowerCase();
+  const yaraHits = Number(pcAudit?.yara_hits?.length ?? pcAudit?.triage?.yara_hits?.length ?? 0);
+  const anomalies = Number(
+    pcAudit?.triage?.behavioral_anomalies?.length ?? pcAudit?.behavioral_anomalies?.length ?? 0,
   );
-  cornerGlow.addColorStop(0, `rgba(${palette.corner}, 0.24)`);
-  cornerGlow.addColorStop(0.55, `rgba(${palette.secondary}, 0.1)`);
-  cornerGlow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = cornerGlow;
-  ctx.fillRect(0, 0, width, height);
-
-  // Viñeta vertical continua superior/inferior para evitar bordes duros
-  ctx.globalCompositeOperation = 'source-over';
-  const vVignette = ctx.createLinearGradient(0, 0, 0, height);
-  vVignette.addColorStop(0, 'rgba(5, 8, 17, 0.78)');
-  vVignette.addColorStop(0.28, 'rgba(5, 8, 17, 0.18)');
-  vVignette.addColorStop(0.75, 'rgba(5, 8, 17, 0.04)');
-  vVignette.addColorStop(1, 'rgba(5, 8, 17, 0.56)');
-  ctx.fillStyle = vVignette;
-  ctx.fillRect(0, 0, width, height);
+  const matches = Number(pcAudit?.triage?.total_matches ?? pcAudit?.high_findings ?? 0);
+  const sockets = Number(pcAudit?.live_sockets_total ?? pcAudit?.network_count ?? 0);
+  return {
+    verdict: rawCode,
+    findingsCount: matches + yaraHits + anomalies,
+    yaraHits,
+    sockets,
+  };
 }
 
+const SURFACE_ORDER = ['windows', 'usb', 'link', 'corpus'];
+
 export function SecurityPostureStage({
+  isDesktop = false,
   activeNav,
   onSelectNav,
-  isCompactRail = false,
-  selectedNodeId,
+  selectedNodeId = 'windows',
   onSelectNode,
   pcAudit,
   pcScannedAt,
@@ -83,474 +54,747 @@ export function SecurityPostureStage({
   lastLinkResult,
   govStats,
   technicalMode = false,
+  onToggleTechnicalMode,
   apiOnline = true,
   isLoadingChat = false,
+  scanningPc = false,
   syncingStix = false,
+  onRunPcScan,
   onSyncStix,
   onOpenCommandPalette,
+  onOpenCopilot,
   onNavigate,
+  onLinkVerified,
+  onLogActivity,
 }) {
-  const containerRef = useRef(null);
-  const canvasRef = useRef(null);
+  const [surfaceMenuOpen, setSurfaceMenuOpen] = useState(false);
+  const [spinNonce, setSpinNonce] = useState(0);
+  const [quickUrl, setQuickUrl] = useState('');
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [inlineLink, setInlineLink] = useState(null);
+  const menuRef = useRef(null);
+
+  const pcInfo = useMemo(() => extractPcVerdictInfo(pcAudit), [pcAudit]);
+  const pcHealthy =
+    Boolean(pcAudit) &&
+    (pcInfo.verdict === 'clean' || pcInfo.verdict === 'low' || pcInfo.findingsCount === 0);
+  const pcWarn = Boolean(pcAudit) && !pcHealthy;
+  const pcVerdict = pcInfo.verdict || null;
 
   const reportsCount = Number(govStats?.corpus_stats?.reports ?? 16);
   const iocsCount = Number(govStats?.corpus_stats?.iocs ?? 4896);
   const campaignsCount = Number(govStats?.corpus_stats?.campaigns ?? 19);
 
-  const pcRawCode = String(
-    pcAudit?.triage?.diagnosis?.verdict_code || pcAudit?.verdict || '',
-  ).toLowerCase();
-  const pcAlerts =
-    Number(pcAudit?.triage?.total_matches ?? 0) +
-    Number(pcAudit?.yara_hits?.length ?? 0) +
-    Number(pcAudit?.behavioral_anomalies?.length ?? 0);
-  const pcSockets = Number(pcAudit?.live_sockets_total ?? 0);
-  const pcHealthy = Boolean(pcAudit && (pcRawCode === 'clean' || pcRawCode === 'low' || pcAlerts === 0));
-  const pcWarn = Boolean(pcAudit && !pcHealthy);
-  const pcVerdict = pcRawCode || null;
-
   const androidOk = Boolean(usbStatus?.android?.connected);
   const iosOk = Boolean(usbStatus?.ios?.connected);
   const usbConnected = androidOk || iosOk;
+  const usbModel = androidOk
+    ? usbStatus?.android?.model || 'Android USB'
+    : iosOk
+      ? usbStatus?.ios?.device?.name || 'iPhone / iPad'
+      : '';
 
   const linkRisk = String(lastLinkResult?.risk_level || lastLinkResult?.verdict || '').toUpperCase();
 
-  // Paleta atmosférica unificada en Negro, Blanco y Azul Rey
-  const atmospherePalette = useMemo(() => {
-    if (pcWarn || linkRisk === 'HIGH') {
-      return {
-        primary: '29, 78, 216',
-        secondary: '23, 37, 84',
-        accent: '37, 99, 235',
-        sheen: '191, 219, 254',
-        corner: '220, 38, 38',
-      };
-    }
-    return {
-      primary: '29, 78, 216',
-      secondary: '23, 37, 84',
-      accent: '37, 99, 235',
-      sheen: '191, 219, 254',
-      corner: pcHealthy ? '37, 99, 235' : '30, 64, 175',
-    };
-  }, [pcWarn, pcHealthy, linkRisk]);
-
   useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return undefined;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return undefined;
-
-    const reducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
-    let rafId = 0;
-    let width = 0;
-    let height = 0;
-    const startTs = performance.now();
-
-    const syncSize = () => {
-      const rect = container.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = Math.max(1, Math.floor(rect.width));
-      height = Math.max(1, Math.floor(rect.height));
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawLightCurtains(ctx, width, height, 0, atmospherePalette, false);
-    };
-
-    syncSize();
-    const ro = new ResizeObserver(syncSize);
-    ro.observe(container);
-
-    const tick = (now) => {
-      if (!document.hidden && !reducedMotion) {
-        drawLightCurtains(ctx, width, height, (now - startTs) / 1000, atmospherePalette, true);
-        rafId = requestAnimationFrame(tick);
+    if (!surfaceMenuOpen) return undefined;
+    const onDown = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setSurfaceMenuOpen(false);
       }
     };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [surfaceMenuOpen]);
 
-    const onVisibility = () => {
-      cancelAnimationFrame(rafId);
-      if (!document.hidden && !reducedMotion) {
-        rafId = requestAnimationFrame(tick);
-      }
-    };
-
-    if (!reducedMotion && !document.hidden) {
-      rafId = requestAnimationFrame(tick);
-    }
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      ro.disconnect();
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [atmospherePalette]);
-
-  const sensors = useMemo(
-    () => [
-      {
+  const surfaces = useMemo(
+    () => ({
+      windows: {
         id: 'windows',
-        label: 'PC Windows',
-        ariaLabel: '#01 Esta PC · Windows',
-        icon: Laptop,
-        tone: pcWarn ? 'alert' : pcHealthy ? 'clean' : 'royal',
-        status: pcWarn
-          ? `Revisar (${pcAlerts})`
+        kicker: technicalMode ? 'HOST LOCAL · WMI / SOCKETS RAM' : 'HOST LOCAL · OPERACIÓN EN RAM',
+        lead: 'Esta PC',
+        accent: 'Windows',
+        statusLabel: pcWarn
+          ? `Revisar (${pcInfo.findingsCount})`
           : pcHealthy
-            ? pcScannedAt
-              ? `Verificado · ${pcScannedAt}`
-              : 'Verificado'
-            : technicalMode
-              ? 'Listo · WMI/RAM'
-              : 'Listo en RAM',
-        meta: technicalMode ? `${pcSockets} sockets · ${pcAlerts} hits YARA` : 'Procesos y red local',
+            ? 'Verificado · 100%'
+            : 'Listo en RAM',
+        tone: pcWarn ? 'alert' : pcHealthy ? 'clean' : 'royal',
+        icon: Laptop,
+        primaryLabel: scanningPc
+          ? 'Analizando procesos...'
+          : pcAudit
+            ? 'Reanalizar PC'
+            : 'Analizar esta PC ahora',
+        onPrimary: () => (isDesktop ? onRunPcScan?.() : onNavigate?.('equipo', { tab: 'pc' })),
+        onDetail: () => onNavigate?.('equipo', { tab: 'pc' }),
       },
-      {
+      usb: {
         id: 'usb',
-        label: 'Celulares por USB',
-        ariaLabel: '#02 Celular por USB',
+        kicker: technicalMode ? 'PUERTO USB · ADB / LOCKDOWN IOS' : 'INSPECCIÓN MÓVIL POR CABLE',
+        lead: usbModel || 'Celulares',
+        accent: usbConnected ? 'Conectado' : 'Android & iOS',
+        statusLabel: usbConnected ? 'Cable activo' : 'USB en espera',
+        tone: usbConnected ? 'clean' : 'royal',
         icon: Smartphone,
-        tone: usbConnected ? 'clean' : 'neutral',
-        status: androidOk
-          ? usbStatus?.android?.model || 'Android USB'
-          : iosOk
-            ? usbStatus?.ios?.device?.name || 'iPhone USB'
-            : 'En espera',
-        meta: technicalMode ? 'ADB / Lockdown iOS' : 'Android e iPhone por cable',
+        primaryLabel: 'Abrir guía USB',
+        onPrimary: () => onNavigate?.('equipo', { tab: iosOk ? 'ios' : 'android' }),
+        onDetail: () => onNavigate?.('equipo', { tab: iosOk ? 'ios' : 'android' }),
       },
-      {
+      link: {
         id: 'link',
-        label: 'Escudo de enlaces',
-        ariaLabel: '#03 Escudo de enlaces',
+        kicker: 'SANDBOX WEB · CERO CONEXIÓN HTTP',
+        lead: 'Escudo de',
+        accent: 'Enlaces',
+        statusLabel: linkRisk === 'HIGH' ? 'Riesgo Alto' : lastLinkResult ? 'Revisado' : 'Pasivo',
+        tone: linkRisk === 'HIGH' ? 'alert' : lastLinkResult ? 'clean' : 'royal',
         icon: Link2,
-        tone: linkRisk === 'HIGH' ? 'alert' : lastLinkResult ? 'clean' : 'neutral',
-        status: lastLinkResult ? linkRisk || 'Revisado' : 'Listo',
-        meta: technicalMode ? 'Sandbox URL pasivo' : 'Sin abrir ni conectar',
+        primaryLabel: 'Verificar en detalle',
+        onPrimary: () => onNavigate?.('enlace'),
+        onDetail: () => onNavigate?.('enlace'),
       },
-      {
+      corpus: {
         id: 'corpus',
-        label: 'Base forense local',
-        ariaLabel: '#04 Base forense STIX2',
-        icon: Layers,
+        kicker: `${campaignsCount} CAMPAÑAS CTI · ${iocsCount.toLocaleString('en-US')} INDICADORES`,
+        lead: 'Base Forense',
+        accent: 'STIX 2.1',
+        statusLabel: apiOnline ? `${reportsCount} reportes` : 'Offline',
         tone: apiOnline ? 'clean' : 'royal',
-        status: apiOnline
-          ? technicalMode
-            ? `${campaignsCount} campañas`
-            : `${reportsCount} reportes`
-          : 'Sin API',
-        meta: `${iocsCount.toLocaleString('en-US')} firmas STIX2`,
+        icon: Database,
+        primaryLabel: syncingStix ? 'Sincronizando STIX2...' : 'Sincronizar firmas',
+        onPrimary: () => onSyncStix?.(),
+        onDetail: () => onNavigate?.('amenazas'),
       },
-    ],
+    }),
     [
-      pcWarn,
-      pcHealthy,
-      pcAlerts,
-      pcScannedAt,
-      pcSockets,
       technicalMode,
+      pcWarn,
+      pcInfo.findingsCount,
+      pcHealthy,
+      scanningPc,
+      pcAudit,
+      isDesktop,
+      onRunPcScan,
+      onNavigate,
+      usbModel,
       usbConnected,
-      androidOk,
       iosOk,
-      usbStatus,
       linkRisk,
       lastLinkResult,
-      apiOnline,
       campaignsCount,
-      reportsCount,
       iocsCount,
+      apiOnline,
+      reportsCount,
+      syncingStix,
+      onSyncStix,
     ],
   );
 
-  const postureHeadline = useMemo(() => {
-    if (pcWarn) {
-      return {
-        title: 'Revisión preventiva sugerida.',
-        subtitle:
-          'Detectamos señales en memoria que conviene inspeccionar en el informe detallado.',
-      };
+  const activeSurface = surfaces[selectedNodeId] || surfaces.windows;
+
+  function stepSurface(delta) {
+    const idx = SURFACE_ORDER.indexOf(activeSurface.id);
+    const nextIdx = (idx + delta + SURFACE_ORDER.length) % SURFACE_ORDER.length;
+    onSelectNode?.(SURFACE_ORDER[nextIdx]);
+  }
+
+  async function handleQuickLinkSubmit(e) {
+    e.preventDefault();
+    const cleaned = quickUrl.trim();
+    if (!cleaned || linkLoading) return;
+    setLinkLoading(true);
+    setInlineLink(null);
+    try {
+      const res = await verifySuspiciousLink(cleaned);
+      setInlineLink({ url: cleaned, ...res });
+      onLinkVerified?.(res);
+      onLogActivity?.(`Enlace analizado: ${res?.verdict || 'revisado'}`);
+    } catch (err) {
+      setInlineLink({
+        url: cleaned,
+        verdict: 'error',
+        error: err?.message || 'Error verificando enlace',
+      });
+    } finally {
+      setLinkLoading(false);
     }
-    if (pcHealthy) {
-      return {
-        title: 'Entorno local verificado.',
-        subtitle: technicalMode
-          ? `Lectura de ${pcScannedAt || 'sesión'}: ${pcSockets} sockets activos y 0 coincidencias YARA/CTI en memoria.`
-          : `Chequeo ${pcScannedAt || 'en vivo'}: procesos, red y defensas del sistema operando sin anomalías conocidas.`,
-      };
-    }
-    return {
-      title: 'Protección pasiva lista.',
-      subtitle:
-        'Audita procesos en RAM, teléfonos conectados por USB y enlaces sospechosos sin escribir datos en disco.',
-    };
-  }, [pcWarn, pcHealthy, pcScannedAt, pcSockets, technicalMode]);
+  }
+
+  const badgeClass =
+    activeSurface.tone === 'alert'
+      ? 'bg-[#EF4444]/15 text-[#FCA5A5] border-[#EF4444]/35'
+      : activeSurface.tone === 'clean'
+        ? 'bg-[#22C55E]/15 text-[#86EFAC] border-[#22C55E]/35'
+        : 'bg-[#1D4ED8]/20 text-[#93C5FD] border-[#3B82F6]/35';
 
   return (
     <section
-      ref={containerRef}
-      aria-label="Postura de seguridad OMEGA"
-      className="relative h-full w-full overflow-hidden bg-[#050811] border-r border-white/[0.08] select-none flex flex-col justify-between"
+      aria-label="Cabina de postura OMEGA"
+      className="omega-studio-bg relative h-full w-full overflow-hidden flex flex-col justify-between select-none text-[#F8FAFC]"
     >
-      {/* Fondo atmosférico de cortinas verticales de luz */}
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full"
-      />
-
-      {/* Sutiles marcas arquitectónicas de encuadre */}
+      {/* Haz sutil de estudio en ángulo superior derecho (Negro · Azul Rey) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-3 border border-[#93C5FD]/[0.05] rounded-[18px]"
+        className="pointer-events-none absolute -top-24 right-[8%] h-[78%] w-[48%] rotate-[-22deg] bg-gradient-to-b from-[#2563EB]/[0.18] via-[#1D4ED8]/[0.06] to-transparent blur-3xl"
+      />
+      {/* Horizonte suave iluminado bajo la maqueta central */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 h-[220px] w-[72%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(37,99,235,0.22)_0%,rgba(29,78,216,0.06)_48%,transparent_75%)] blur-2xl"
       />
 
-      {/* Barra superior agrupada arriba */}
-      <div className="relative z-20 shrink-0 flex flex-col gap-2">
-        <div className="px-5 sm:px-6 pt-4 flex items-center justify-between gap-2 titlebar-drag [&_button]:[-webkit-app-region:no-drag]">
-          <button
-            type="button"
-            onClick={() => onSelectNav('inicio')}
-            className="inline-flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
-          >
-            <OmegaLogo size={22} isThinking={isLoadingChat} />
-            <span className="text-[15.5px] font-semibold tracking-[0.06em] text-[#F4F6FA] group-hover:text-white">
-              OMEGA
-            </span>
-          </button>
+      {/* Cabecera Superior Unificada */}
+      <header
+        className={`relative z-30 shrink-0 pl-5 sm:pl-7 pt-3.5 flex items-center justify-between gap-2.5 ${
+          isDesktop
+            ? 'pr-40 sm:pr-44 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
+            : 'pr-5 sm:pr-7'
+        }`}
+      >
+        {/* Marca OMEGA izquierda */}
+        <button
+          type="button"
+          onClick={() => onSelectNav?.('inicio')}
+          className="inline-flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
+        >
+          <OmegaLogo size={24} isThinking={isLoadingChat} />
+          <span className="text-[15.5px] font-semibold tracking-[0.06em] text-white group-hover:text-[#DBEAFE] transition-colors">
+            OMEGA
+          </span>
+        </button>
 
-          {!isCompactRail && (
-            <>
-              <div className="hidden xl:block">
-                <SpatialNavPill
-                  activeNav={activeNav}
-                  onSelectNav={onSelectNav}
-                  pcVerdict={pcVerdict}
-                  usbConnected={usbConnected}
-                  apiOnline={apiOnline}
-                  isLoadingChat={isLoadingChat}
-                />
-              </div>
-              <div className="hidden md:block xl:hidden">
-                <SpatialNavPill
-                  compact
-                  activeNav={activeNav}
-                  onSelectNav={onSelectNav}
-                  pcVerdict={pcVerdict}
-                  usbConnected={usbConnected}
-                  apiOnline={apiOnline}
-                  isLoadingChat={isLoadingChat}
-                />
-              </div>
-            </>
-          )}
-
-          {!isCompactRail && (
-            <div className="hidden sm:flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={onSyncStix}
-                disabled={syncingStix}
-                aria-label="Sincronizar firmas STIX2"
-                title="Actualizar firmas STIX2 y YARA"
-                className="h-9 w-9 rounded-full border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.09] text-[#DCE2EC] inline-flex items-center justify-center backdrop-blur-md transition-colors cursor-pointer disabled:opacity-55"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${syncingStix ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                type="button"
-                onClick={onOpenCommandPalette}
-                aria-label="Abrir paleta de acciones"
-                title="Buscar módulo o acción (⌘K)"
-                className="h-9 w-9 rounded-full border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.09] text-[#DCE2EC] inline-flex items-center justify-center backdrop-blur-md transition-colors cursor-pointer"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
+        {/* Navegación segmentada central estilo consola de estudio */}
+        <div className="hidden md:flex justify-center">
+          <SpatialNavPill
+            activeNav={activeNav}
+            onSelectNav={onSelectNav}
+            pcVerdict={pcVerdict}
+            usbConnected={usbConnected}
+            apiOnline={apiOnline}
+            isLoadingChat={isLoadingChat}
+          />
         </div>
 
-        {!isCompactRail && (
-          <div className="md:hidden flex justify-center px-3">
-            <SpatialNavPill
-              compact
-              activeNav={activeNav}
-              onSelectNav={onSelectNav}
-              pcVerdict={pcVerdict}
-              usbConnected={usbConnected}
-              apiOnline={apiOnline}
-              isLoadingChat={isLoadingChat}
-            />
+        {/* Pila flotante derecha: Copiloto + Búsqueda ⌘K + Simple/Técnico */}
+        <div className="relative flex flex-col items-end gap-1.5 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenCopilot?.({})}
+              aria-label="Abrir copiloto lateral"
+              title="Abrir copiloto lateral (Ctrl+J)"
+              className="omega-glass-chip relative h-9 px-3.5 rounded-[12px] inline-flex items-center gap-2 text-[12px] font-medium text-[#E2E8F0] hover:text-white cursor-pointer transition-all"
+            >
+              <Bell className="h-3.5 w-3.5 text-[#93C5FD]" />
+              <span className="hidden xl:inline">Copiloto</span>
+              <span className="font-tech h-4 min-w-[18px] px-1 rounded-full bg-[#1D4ED8] text-white text-[10px] font-bold inline-flex items-center justify-center">
+                {pcWarn ? pcInfo.findingsCount : reportsCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenCommandPalette}
+              aria-label="Abrir búsqueda rápida (⌘K)"
+              title="Buscar módulo o CVE (⌘K)"
+              className="omega-glass-chip h-9 px-2.5 rounded-[12px] inline-flex items-center gap-1.5 text-[11.5px] text-[#CBD5E1] hover:text-white cursor-pointer transition-all"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="font-tech hidden sm:inline">⌘K</span>
+            </button>
+
+            <div
+              role="group"
+              aria-label="Nivel de detalle"
+              className="omega-glass-chip hidden sm:inline-flex items-center rounded-[12px] p-0.5 h-9"
+            >
+              <button
+                type="button"
+                onClick={() => onToggleTechnicalMode?.(false)}
+                className={`px-2.5 py-1 rounded-[9px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                  !technicalMode ? 'bg-white text-[#070B14] shadow-xs' : 'text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Simple
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleTechnicalMode?.(true)}
+                className={`px-2.5 py-1 rounded-[9px] text-[11.5px] font-medium transition-all cursor-pointer ${
+                  technicalMode ? 'bg-white text-[#070B14] shadow-xs' : 'text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Técnico
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Mini chip discreto de actividad debajo de la cabecera en escritorios amplios */}
+          <button
+            type="button"
+            onClick={() => onNavigate?.(pcAudit ? 'equipo' : 'amenazas')}
+            className="hidden xl:inline-flex items-center gap-2 rounded-[10px] border border-white/[0.08] bg-[#0B1324]/70 hover:bg-[#111C33]/80 backdrop-blur-md px-2.5 py-1 text-[11px] text-[#94A3B8] hover:text-[#E2E8F0] transition-colors cursor-pointer"
+          >
+            <span
+              aria-hidden="true"
+              className={`h-1.5 w-1.5 rounded-full ${
+                pcWarn ? 'bg-[#EF4444]' : pcHealthy ? 'bg-[#22C55E]' : 'bg-[#3B82F6]'
+              }`}
+            />
+            <span className="font-tech">
+              {pcScannedAt
+                ? `PC verificado · ${pcScannedAt} · 0 B disco`
+                : `STIX 2.1 · ${iocsCount.toLocaleString('en-US')} firmas en RAM`}
+            </span>
+          </button>
+        </div>
+      </header>
+
+      {/* Nav compacto en anchos estrechos */}
+      <div className="relative z-20 md:hidden flex justify-center px-3 pt-2">
+        <SpatialNavPill
+          compact
+          activeNav={activeNav}
+          onSelectNav={onSelectNav}
+          pcVerdict={pcVerdict}
+          usbConnected={usbConnected}
+          apiOnline={apiOnline}
+          isLoadingChat={isLoadingChat}
+        />
       </div>
 
-      {/* Recepción minimalista central */}
-      {!isCompactRail ? (
-        <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-center px-6 sm:px-10 lg:px-12 py-4">
-          <div className="w-full max-w-[490px] mx-auto md:mx-0">
-            <h2 className="text-[clamp(1.6rem,2.6vw,2.25rem)] font-medium tracking-[-0.03em] leading-[1.14] text-[#F4F6FA]">
-              {postureHeadline.title}
-            </h2>
+      {/* Escenario Central del Sujeto 3D */}
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center px-4 sm:px-8 pt-1">
+        {/* Encabezado tipográfico centrado sobre el objeto 3D */}
+        <div ref={menuRef} className="relative z-20 flex flex-col items-center text-center">
+          <div className="font-tech text-[10.5px] uppercase tracking-[0.16em] text-[#93C5FD]/90">
+            {activeSurface.kicker}
+          </div>
 
-            <p className="mt-3 max-w-[44ch] text-[14px] sm:text-[14.5px] leading-[1.58] text-[#A2ACB9]">
-              {postureHeadline.subtitle}
-            </p>
+          <div className="mt-1 flex items-center justify-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setSurfaceMenuOpen((v) => !v)}
+              aria-expanded={surfaceMenuOpen}
+              aria-haspopup="listbox"
+              className="group inline-flex items-baseline gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#3B82F6] rounded-lg px-2 py-0.5"
+            >
+              <h1 className="text-[clamp(1.65rem,2.7vw,2.35rem)] font-semibold tracking-[-0.03em] text-white leading-tight">
+                {activeSurface.lead}{' '}
+                <span className="font-light text-[#94A3B8] group-hover:text-[#CBD5E1] transition-colors">
+                  {activeSurface.accent}
+                </span>
+              </h1>
+              <ChevronDown
+                className={`h-4 w-4 text-[#94A3B8] transition-transform self-center ${
+                  surfaceMenuOpen ? 'rotate-180 text-white' : ''
+                }`}
+              />
+            </button>
 
-            {/* Lista arquitectónica de sensores (sin pines de mapa) */}
+            <span
+              className={`font-tech inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${badgeClass}`}
+            >
+              {activeSurface.statusLabel}
+            </span>
+          </div>
+
+          {/* Selector desplegable discreto entre las 4 superficies de protección */}
+          {surfaceMenuOpen && (
             <div
               role="listbox"
-              aria-label="Superficies de inspección OMEGA"
-              className="mt-7 border-t border-white/[0.08]"
+              aria-label="Cambiar superficie mostrada"
+              className="mt-2 w-[260px] rounded-[14px] border border-white/[0.12] bg-[#09101E]/95 backdrop-blur-xl p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.65)] text-left"
             >
-              {sensors.map((item) => {
-                const Icon = item.icon;
-                const selected = selectedNodeId === item.id;
-                const dotColor =
-                  item.tone === 'alert'
-                    ? 'bg-[#EF4444]'
-                    : item.tone === 'clean'
-                      ? 'bg-[#22C55E]'
-                      : item.tone === 'royal'
-                        ? 'bg-[#3B82F6]'
-                        : 'bg-[#7A889E]';
-
+              {SURFACE_ORDER.map((id) => {
+                const s = surfaces[id];
+                const SIcon = s.icon;
+                const isSelected = id === activeSurface.id;
                 return (
                   <button
-                    key={item.id}
+                    key={id}
                     type="button"
                     role="option"
-                    aria-selected={selected}
-                    aria-label={item.ariaLabel}
-                    onClick={() => onSelectNode?.(item.id)}
-                    className={`group relative w-full border-b border-white/[0.08] py-3 px-3 flex items-center justify-between gap-3 text-left transition-colors cursor-pointer ${
-                      selected
-                        ? 'bg-[#1D4ED8]/[0.14]'
-                        : 'hover:bg-white/[0.035]'
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      onSelectNode?.(id);
+                      setSurfaceMenuOpen(false);
+                    }}
+                    className={`w-full rounded-[10px] px-3 py-2 flex items-center justify-between gap-2 text-[12.5px] transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#1D4ED8]/25 text-white'
+                        : 'text-[#CBD5E1] hover:bg-white/[0.06]'
                     }`}
                   >
-                    {/* Indicador vertical en Azul Rey para la superficie activa */}
-                    <span
-                      aria-hidden="true"
-                      className={`absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full transition-opacity ${
-                        selected
-                          ? 'bg-[#3B82F6] shadow-[0_0_12px_rgba(59,130,246,0.7)] opacity-100'
-                          : 'opacity-0'
-                      }`}
-                    />
-
-                    <div className="min-w-0 flex items-center gap-3">
-                      <Icon
-                        className={`h-4 w-4 shrink-0 transition-colors ${
-                          selected ? 'text-[#F4F6FA]' : 'text-[#8C95A4] group-hover:text-[#D5DCE6]'
-                        }`}
-                        strokeWidth={1.7}
-                      />
-                      <div className="min-w-0">
-                        <div
-                          className={`text-[13.5px] font-medium truncate ${
-                            selected ? 'text-[#FFFFFF]' : 'text-[#DCE2EC]'
-                          }`}
-                        >
-                          {item.label}
-                        </div>
-                        <div className="text-[11.5px] text-[#8E98A8] truncate">
-                          {item.meta}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <span className="inline-flex items-center gap-1.5 font-tech text-[11.5px] text-[#CBD3DF]">
-                        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-                        <span>{item.status}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <SIcon className="h-3.5 w-3.5 text-[#60A5FA]" />
+                      <span className="font-medium">
+                        {s.lead} {s.accent}
                       </span>
-                      <ChevronRight
-                        className={`h-3.5 w-3.5 transition-transform ${
-                          selected
-                            ? 'text-[#F4F6FA] translate-x-0.5'
-                            : 'text-[#6E7786] group-hover:text-[#AEB7C4]'
-                        }`}
-                      />
-                    </div>
+                    </span>
+                    <span className="font-tech text-[10.5px] text-[#94A3B8]">{s.statusLabel}</span>
                   </button>
                 );
               })}
             </div>
-          </div>
+          )}
         </div>
-      ) : (
-        /* Rail compacto sereno en vistas especializadas (sin mapa ni sobrecarga visual) */
-        <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-center px-5 py-6">
-          <div className="border-t border-white/[0.08]">
-            {sensors.map((item) => {
-              const Icon = item.icon;
-              const dotColor =
-                item.tone === 'alert'
-                  ? 'bg-[#EF4444]'
-                  : item.tone === 'clean'
-                    ? 'bg-[#22C55E]'
-                    : item.tone === 'royal'
-                      ? 'bg-[#3B82F6]'
-                      : 'bg-[#7A889E]';
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onSelectNode?.(item.id);
-                    if (item.id === 'link') onNavigate?.('enlace');
-                    else if (item.id === 'corpus') onNavigate?.('amenazas');
-                    else if (item.id === 'usb') onNavigate?.('equipo', { tab: iosOk ? 'ios' : 'android' });
-                    else onNavigate?.('equipo', { tab: 'pc' });
-                  }}
-                  className="w-full border-b border-white/[0.08] py-3 px-2 flex items-center justify-between gap-2 text-left hover:bg-white/[0.03] transition-colors cursor-pointer"
-                >
-                  <span className="inline-flex items-center gap-2.5 min-w-0">
-                    <Icon className="h-3.5 w-3.5 text-[#8E98A8] shrink-0" strokeWidth={1.7} />
-                    <span className="text-[12.5px] font-medium text-[#D6DCE6] truncate">
-                      {item.label}
-                    </span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 font-tech text-[11px] text-[#9BA5B4] shrink-0">
-                    <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-                    <span className="max-w-[148px] truncate whitespace-nowrap">{item.status}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Pie discreto con garantía operativa real */}
-      <div className="relative z-20 shrink-0 px-5 sm:px-6 pb-4 flex items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-[#CBD3DF] backdrop-blur-md">
-          <span
-            aria-hidden="true"
-            className={`h-1.5 w-1.5 rounded-full ${apiOnline ? 'bg-[#22C55E]' : 'bg-[#3B82F6]'}`}
+        {/* Escultura WebGL interactiva en estudio oscuro */}
+        <div className="relative w-full max-w-[680px] flex-1 min-h-[150px] max-h-[300px] flex items-center justify-center">
+          <SecurityCenterpiece3D
+            surfaceId={activeSurface.id}
+            healthy={
+              activeSurface.id === 'windows'
+                ? pcHealthy
+                : activeSurface.id === 'usb'
+                  ? usbConnected
+                  : activeSurface.id === 'link'
+                    ? Boolean(lastLinkResult) && linkRisk !== 'HIGH'
+                    : apiOnline
+            }
+            alert={
+              activeSurface.id === 'windows'
+                ? pcWarn
+                : activeSurface.id === 'link'
+                  ? linkRisk === 'HIGH'
+                  : false
+            }
+            spinNonce={spinNonce}
           />
-          <span className="font-tech">
-            {pcScannedAt ? `Chequeo ${pcScannedAt} · Solo RAM` : 'Memoria volátil · 0 bytes en disco'}
-          </span>
         </div>
 
-        {!isCompactRail && (
+        {/* Arco orbital de estudio y controles < 360° > */}
+        <div className="relative z-20 -mt-2 flex flex-col items-center w-full max-w-[640px]">
+          <svg
+            viewBox="0 0 600 32"
+            aria-hidden="true"
+            className="w-full h-6 pointer-events-none opacity-65"
+          >
+            <defs>
+              <linearGradient id="omegaArcFade" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="rgba(148,163,184,0)" />
+                <stop offset="28%" stopColor="rgba(148,163,184,0.45)" />
+                <stop offset="50%" stopColor="rgba(59,130,246,0.85)" />
+                <stop offset="72%" stopColor="rgba(148,163,184,0.45)" />
+                <stop offset="100%" stopColor="rgba(148,163,184,0)" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 30 6 Q 300 30 570 6"
+              fill="none"
+              stroke="url(#omegaArcFade)"
+              strokeWidth="2.5"
+              strokeDasharray="2 7"
+            />
+          </svg>
+
+          <div className="-mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#070D19]/85 border border-white/[0.1] backdrop-blur-md px-2.5 py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => stepSurface(-1)}
+              aria-label="Superficie anterior"
+              title="Superficie anterior"
+              className="h-7 w-7 rounded-full border border-white/[0.14] bg-white/[0.05] hover:bg-[#1D4ED8]/40 text-white inline-flex items-center justify-center cursor-pointer transition-colors"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSpinNonce((n) => n + 1)}
+              aria-label="Rotar objeto 360 grados"
+              title="Girar vista 360°"
+              className="font-tech px-2 py-0.5 text-[11.5px] font-medium text-[#CBD5E1] hover:text-white cursor-pointer transition-colors"
+            >
+              360°
+            </button>
+
+            <button
+              type="button"
+              onClick={() => stepSurface(1)}
+              aria-label="Siguiente superficie"
+              title="Siguiente superficie"
+              className="h-7 w-7 rounded-full border border-white/[0.14] bg-white/[0.05] hover:bg-[#1D4ED8]/40 text-white inline-flex items-center justify-center cursor-pointer transition-colors"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Barra lateral flotante derecha minimal (acciones rápidas de estudio) */}
+        <div
+          aria-label="Controles rápidos de cabina"
+          className="hidden lg:flex flex-col gap-1.5 absolute right-6 top-1/2 -translate-y-1/2 z-20"
+        >
           <button
             type="button"
-            onClick={() => onNavigate?.('amenazas')}
-            className="hidden sm:inline-flex items-center gap-1.5 text-[12px] font-medium text-[#9FA8B7] hover:text-[#F4F6FA] transition-colors cursor-pointer"
+            onClick={activeSurface.onPrimary}
+            disabled={scanningPc}
+            title={activeSurface.primaryLabel}
+            aria-label={activeSurface.primaryLabel}
+            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#93C5FD] hover:text-white hover:border-[#3B82F6]/50 cursor-pointer transition-all disabled:opacity-55"
           >
-            <span>Explorar amenazas</span>
-            <ArrowRight className="h-3.5 w-3.5" />
+            {scanningPc ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-4 w-4" />
+            )}
           </button>
-        )}
+
+          <button
+            type="button"
+            onClick={onSyncStix}
+            disabled={syncingStix}
+            title="Sincronizar firmas STIX 2.1"
+            aria-label="Sincronizar firmas STIX 2.1"
+            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#CBD5E1] hover:text-white cursor-pointer transition-all disabled:opacity-55"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncingStix ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={activeSurface.onDetail}
+            title="Abrir vista técnica completa"
+            aria-label="Abrir vista técnica completa"
+            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#CBD5E1] hover:text-white cursor-pointer transition-all"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Trío Inferior de Tarjetas de Vidrio Oscuro (Bento Sereno Negro · Blanco · Azul Rey) */}
+      <footer className="relative z-20 shrink-0 px-5 sm:px-7 pb-4 pt-2">
+        <div className="mx-auto max-w-[1280px] grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Tarjeta 1: Detalles del Equipo Local & Acción Primaria en Azul Rey */}
+          <div className="omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-[14px] font-semibold text-white leading-tight">
+                  Equipo Local
+                </h2>
+                <p className="text-[11.5px] text-[#94A3B8]">
+                  Procesos RAM · Persistencia WMI
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('equipo', { tab: 'pc' })}
+                aria-label="Abrir detalles del equipo"
+                className="h-7 w-7 rounded-full border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.14] text-[#CBD5E1] hover:text-white inline-flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-end justify-between gap-3">
+              <div className="space-y-2 min-w-0">
+                <div className="text-[22px] font-semibold tracking-[-0.025em] text-white leading-none">
+                  {pcWarn
+                    ? `${pcInfo.findingsCount} alertas`
+                    : pcHealthy
+                      ? 'Limpio 100%'
+                      : 'Listo RAM'}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => (isDesktop ? onRunPcScan?.() : onNavigate?.('equipo', { tab: 'pc' }))}
+                    disabled={scanningPc}
+                    className="h-8 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] text-white px-3.5 text-[12px] font-medium inline-flex items-center gap-1.5 shadow-[0_6px_18px_rgba(29,78,216,0.34)] cursor-pointer transition-colors disabled:opacity-60"
+                  >
+                    {scanningPc && <Loader2 className="h-3 w-3 animate-spin" />}
+                    <span>
+                      {scanningPc
+                        ? 'Analizando...'
+                        : pcAudit
+                          ? 'Reanalizar PC'
+                          : isDesktop
+                            ? 'Analizar esta PC ahora'
+                            : 'Abrir inspector PC'}
+                    </span>
+                  </button>
+
+                  {pcAudit && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('equipo', { tab: 'pc' })}
+                      className="h-8 rounded-full border border-white/[0.14] bg-white/[0.06] hover:bg-white/[0.12] text-white px-3 text-[11.5px] font-medium inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <span>Ver informe</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-right font-tech shrink-0 space-y-1">
+                <div>
+                  <div className="text-[12.5px] font-semibold text-white">
+                    {pcAudit ? `${pcInfo.sockets}` : 'WMI'}
+                  </div>
+                  <div className="text-[10px] text-[#94A3B8]">Sockets activos</div>
+                </div>
+                <div>
+                  <div className="text-[12.5px] font-semibold text-[#93C5FD]">
+                    {pcAudit ? `${pcInfo.yaraHits} YARA` : '0 B'}
+                  </div>
+                  <div className="text-[10px] text-[#94A3B8]">{pcAudit ? 'Hits YARA' : 'En disco'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjeta 2: Dispositivos USB (Android ADB & iPhone iOS) */}
+          <div className="omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="inline-flex items-center gap-2">
+                <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#60A5FA] inline-flex items-center justify-center">
+                  <Smartphone className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <h2 className="text-[14px] font-semibold text-white leading-tight">
+                    Celulares USB
+                  </h2>
+                  <p className="text-[11.5px] text-[#94A3B8]">
+                    {technicalMode ? 'ADB local · Lockdown iOS' : 'Android e iPhone por cable'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('equipo', { tab: iosOk ? 'ios' : 'android' })}
+                aria-label="Abrir inspección móvil por USB"
+                className="h-7 w-7 rounded-full border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.14] text-[#CBD5E1] hover:text-white inline-flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[22px] font-semibold tracking-[-0.025em] text-white leading-tight truncate">
+                  {usbConnected ? (androidOk ? 'Android' : 'iPhone') : 'En espera'}
+                </div>
+                <div className="mt-1 text-[11.5px] text-[#94A3B8] truncate">
+                  {usbModel || 'Conecta cable USB para revisar'}
+                </div>
+              </div>
+
+              {/* Anillo concéntrico minimal de estado físico */}
+              <div className="relative h-14 w-14 shrink-0 flex items-center justify-center">
+                <svg viewBox="0 0 56 56" className="h-full w-full -rotate-90" aria-hidden="true">
+                  <circle
+                    cx="28"
+                    cy="28"
+                    r="23"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.1)"
+                    strokeWidth="4.5"
+                  />
+                  <circle
+                    cx="28"
+                    cy="28"
+                    r="23"
+                    fill="none"
+                    stroke={usbConnected ? '#22C55E' : '#2563EB'}
+                    strokeWidth="4.5"
+                    strokeDasharray="144.5"
+                    strokeDashoffset={usbConnected ? '20' : '92'}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <Smartphone
+                  className={`absolute h-4 w-4 ${usbConnected ? 'text-[#4ADE80]' : 'text-[#93C5FD]'}`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjeta 3: Escudo Web Pasivo & Corpus STIX 2.1 */}
+          <div className="omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="inline-flex items-center gap-2">
+                <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#60A5FA] inline-flex items-center justify-center">
+                  <Link2 className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <h2 className="text-[14px] font-semibold text-white leading-tight">
+                    Escudo Web y STIX2
+                  </h2>
+                  <p className="text-[11.5px] text-[#94A3B8]">
+                    {iocsCount.toLocaleString('en-US')} firmas · {reportsCount} reportes
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('enlace')}
+                aria-label="Abrir verificador completo de enlaces"
+                className="h-7 w-7 rounded-full border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.14] text-[#CBD5E1] hover:text-white inline-flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickLinkSubmit} className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="url"
+                  value={quickUrl}
+                  onChange={(e) => setQuickUrl(e.target.value)}
+                  placeholder="Pega enlace sospechoso sin abrirlo..."
+                  aria-label="Enlace sospechoso para verificar"
+                  className="flex-1 min-w-0 h-8 rounded-full bg-[#050912]/75 border border-white/[0.12] px-3 text-[12px] text-white placeholder:text-[#64748B] focus:outline-none focus:border-[#3B82F6]"
+                />
+                <button
+                  type="submit"
+                  disabled={linkLoading || !quickUrl.trim()}
+                  className="h-8 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] disabled:bg-white/[0.08] disabled:text-[#64748B] px-3 text-[11.5px] font-semibold text-white cursor-pointer transition-colors shrink-0"
+                >
+                  {linkLoading ? '...' : 'Verificar'}
+                </button>
+              </div>
+
+              {inlineLink ? (
+                <div className="rounded-[10px] bg-[#050912]/90 border border-white/[0.1] px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1.5 truncate text-[#E2E8F0]">
+                    {inlineLink.risk_level === 'HIGH' && (
+                      <ShieldAlert className="h-3.5 w-3.5 text-[#EF4444] shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {inlineLink.error || `${inlineLink.verdict || 'Revisado'}`}
+                    </span>
+                  </span>
+                  {!inlineLink.error && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('enlace', { url: inlineLink.url })}
+                      className="text-[#60A5FA] hover:text-[#93C5FD] font-medium shrink-0 cursor-pointer"
+                    >
+                      Detalle →
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-[11px] text-[#94A3B8] pt-0.5">
+                  <span className="font-tech">Memoria volátil · Cero HTTP</span>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('amenazas')}
+                    className="text-[#93C5FD] hover:text-white cursor-pointer transition-colors"
+                  >
+                    Ver amenazas →
+                  </button>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      </footer>
     </section>
   );
 }
