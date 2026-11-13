@@ -90,16 +90,16 @@ export function StructuredResponse({
   const hasStructuredContent = parsedSections.findings.length > 0;
 
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-4">
       {/* Barra de metadatos y herramientas de respuesta */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#929BAA] pb-1 border-b border-[#262B33]">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#929BAA] pb-2 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 font-medium text-[#F0F2F5]">
-            <ShieldCheck className="h-3.5 w-3.5 text-[#3978F6]" />
+          <span className="flex items-center gap-2 font-medium text-[#F0F2F5]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#3978F6]" />
             <span>Respuesta Verificada CTI</span>
           </span>
-          <span className="text-[#262B33]">|</span>
-          <span className="font-tech text-[#929BAA]">
+          <span className="text-white/15">·</span>
+          <span className="font-tech text-[11px] text-[#8E98A8]">
             {citations.length} {citations.length === 1 ? 'fuente' : 'fuentes'}
           </span>
         </div>
@@ -110,10 +110,10 @@ export function StructuredResponse({
             <button
               type="button"
               onClick={onToggleSources}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] border text-[11px] font-medium transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium active:scale-[0.96] transition-all duration-150 ease-kowalski cursor-pointer ${
                 isSourcesOpen
-                  ? 'border-[#3978F6] bg-[#16243D] text-[#3978F6]'
-                  : 'border-[#262B33] bg-[#171A20] text-[#929BAA] hover:border-[#353C47] hover:text-[#F0F2F5]'
+                  ? 'border-[#3978F6]/50 bg-[#16243D]/90 text-[#8BB3FF]'
+                  : 'border-white/[0.08] bg-white/[0.03] text-[#929BAA] hover:border-white/[0.15] hover:text-[#F0F2F5]'
               }`}
             >
               <BookOpen className="h-3 w-3" />
@@ -123,14 +123,14 @@ export function StructuredResponse({
 
           {/* Toggle de vista */}
           {hasStructuredContent && (
-            <div className="inline-flex rounded-[4px] border border-[#262B33] bg-[#13161B] p-0.5">
+            <div className="inline-flex rounded-full border border-white/[0.07] bg-[#111318] p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode('structured')}
-                className={`px-2 py-0.5 rounded-[3px] text-[10.5px] font-medium transition-colors cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium active:scale-[0.96] transition-all duration-150 ease-kowalski cursor-pointer ${
                   viewMode === 'structured'
-                    ? 'bg-[#171A20] text-[#F0F2F5]'
-                    : 'text-[#929BAA] hover:text-[#F0F2F5]'
+                    ? 'bg-[#1C2029] text-[#F0F2F5] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                    : 'text-[#8E98A8] hover:text-[#F0F2F5]'
                 }`}
               >
                 Estructurada
@@ -138,10 +138,10 @@ export function StructuredResponse({
               <button
                 type="button"
                 onClick={() => setViewMode('markdown')}
-                className={`px-2 py-0.5 rounded-[3px] text-[10.5px] font-medium transition-colors cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium active:scale-[0.96] transition-all duration-150 ease-kowalski cursor-pointer ${
                   viewMode === 'markdown'
-                    ? 'bg-[#171A20] text-[#F0F2F5]'
-                    : 'text-[#929BAA] hover:text-[#F0F2F5]'
+                    ? 'bg-[#1C2029] text-[#F0F2F5] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                    : 'text-[#8E98A8] hover:text-[#F0F2F5]'
                 }`}
               >
                 Markdown
@@ -154,7 +154,8 @@ export function StructuredResponse({
             type="button"
             onClick={handleCopy}
             title="Copiar respuesta"
-            className="p-1 rounded-[4px] border border-[#262B33] bg-[#171A20] text-[#929BAA] hover:text-[#F0F2F5] transition-colors cursor-pointer"
+            aria-label="Copiar respuesta"
+            className="h-6 w-6 inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#929BAA] hover:border-white/[0.15] hover:text-[#F0F2F5] active:scale-[0.92] transition-all duration-150 ease-kowalski cursor-pointer"
           >
             {copied ? <Check className="h-3 w-3 text-[#3978F6]" /> : <Copy className="h-3 w-3" />}
           </button>
@@ -171,20 +172,20 @@ export function StructuredResponse({
       ) : (
         <div className="space-y-4">
           {/* 1. Resumen Ejecutivo */}
-          <div className="rounded-[6px] border border-[#262B33] bg-[#171A20] p-4 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#929BAA]">
+          <div className="rounded-[14px] border border-white/[0.075] bg-[#13161C]/90 p-4 space-y-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-[#8E98A8]">
               <FileText className="h-3.5 w-3.5 text-[#3978F6]" />
               <span>Resumen Ejecutivo</span>
             </div>
-            <p className="text-[14px] leading-relaxed text-[#F0F2F5]">
+            <p className="text-[14px] leading-[1.65] text-[#F0F2F5]">
               {formatTextWithTechAndCitations(parsedSections.executive, citationMap, onSelectCitation)}
             </p>
           </div>
 
           {/* 2. Hallazgos Técnicos */}
           {parsedSections.findings.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#929BAA]">
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-[#8E98A8] px-0.5">
                 <Layers className="h-3.5 w-3.5 text-[#3978F6]" />
                 <span>Hallazgos de Inteligencia</span>
               </div>
@@ -192,12 +193,12 @@ export function StructuredResponse({
                 {parsedSections.findings.map((f, i) => (
                   <div
                     key={i}
-                    className="rounded-[6px] border border-[#262B33] bg-[#14161C] p-3 space-y-1"
+                    className="rounded-[12px] border border-white/[0.065] bg-[#111318]/90 p-3.5 space-y-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:border-white/[0.11] transition-colors duration-150 ease-kowalski"
                   >
                     <div className="text-[13px] font-semibold text-[#F0F2F5]">
                       {f.title}
                     </div>
-                    <div className="text-[13px] leading-relaxed text-[#929BAA]">
+                    <div className="text-[13px] leading-[1.6] text-[#9BA3B2]">
                       {formatTextWithTechAndCitations(f.body, citationMap, onSelectCitation)}
                     </div>
                   </div>
@@ -210,8 +211,8 @@ export function StructuredResponse({
           {(technicalIndicators.cves.length > 0 ||
             technicalIndicators.domains.length > 0 ||
             technicalIndicators.hashes.length > 0) && (
-            <div className="rounded-[6px] border border-[#262B33] bg-[#171A20] p-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#929BAA]">
+            <div className="rounded-[12px] border border-white/[0.07] bg-[#13161C]/90 p-3.5 space-y-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-[#8E98A8]">
                 <Fingerprint className="h-3.5 w-3.5 text-[#3978F6]" />
                 <span>Indicadores Técnicos Vinculados</span>
               </div>
@@ -219,7 +220,7 @@ export function StructuredResponse({
                 {technicalIndicators.cves.map((cve) => (
                   <span
                     key={cve}
-                    className="font-tech text-[11.5px] px-2 py-0.5 rounded-[4px] border border-[#262B33] bg-[#13161B] text-[#F0F2F5]"
+                    className="font-tech text-[11.5px] px-2 py-0.5 rounded-[6px] border border-white/[0.08] bg-[#0D0F12] text-[#F0F2F5]"
                   >
                     {cve}
                   </span>
@@ -227,7 +228,7 @@ export function StructuredResponse({
                 {technicalIndicators.domains.slice(0, 4).map((dom) => (
                   <span
                     key={dom}
-                    className="font-tech text-[11.5px] px-2 py-0.5 rounded-[4px] border border-[#262B33] bg-[#13161B] text-[#929BAA]"
+                    className="font-tech text-[11.5px] px-2 py-0.5 rounded-[6px] border border-white/[0.08] bg-[#0D0F12] text-[#9BA3B2]"
                   >
                     {dom}
                   </span>
@@ -235,7 +236,7 @@ export function StructuredResponse({
                 {technicalIndicators.hashes.slice(0, 2).map((h) => (
                   <span
                     key={h}
-                    className="font-tech text-[11.5px] px-2 py-0.5 rounded-[4px] border border-[#262B33] bg-[#13161B] text-[#929BAA] truncate max-w-[200px]"
+                    className="font-tech text-[11.5px] px-2 py-0.5 rounded-[6px] border border-white/[0.08] bg-[#0D0F12] text-[#9BA3B2] truncate max-w-[200px]"
                   >
                     {h}
                   </span>
@@ -248,3 +249,4 @@ export function StructuredResponse({
     </div>
   );
 }
+

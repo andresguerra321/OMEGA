@@ -19,8 +19,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpen,
+  Fingerprint,
 } from 'lucide-react';
 import { sendChatQuery } from './lib/api';
+import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { StructuredResponse } from './components/StructuredResponse';
 import { SourcesPanel } from './components/SourcesPanel';
 import { CampaignsPanel } from './components/CampaignsPanel';
@@ -40,36 +42,39 @@ const NAV_ITEMS = [
 
 const SUGGESTED_PROMPTS = [
   {
-    title: 'FORCEDENTRY · Zero-Click',
-    subtitle: 'iMessage · BlastDoor evasion',
-    tag: 'CVE-2021-30860',
+    question: '¿Qué vulnerabilidades zero-click afectaron a iMessage?',
+    meta: 'Citizen Lab · FORCEDENTRY',
     icon: Shield,
     prompt:
       '¿Qué vulnerabilidades zero-click (CVEs) se documentan para Pegasus y qué versiones afectaron?',
   },
   {
-    title: 'Predator & Intellexa',
-    subtitle: 'Campañas 1-click y sectores objetivo',
-    tag: 'Amnesty Tech',
+    question: 'Sectores objetivo en campañas de Predator e Intellexa',
+    meta: 'Amnesty Tech · Campañas',
     icon: Network,
     prompt:
       '¿Qué sectores y regiones fueron objetivo en las campañas de Predator e Intellexa?',
   },
   {
-    title: 'Artefactos Forenses MVT',
-    subtitle: 'shutdown.log y Safari History',
-    tag: 'Citizen Lab',
+    question: 'Principales artefactos forenses en backups con MVT',
+    meta: 'MVT · shutdown.log',
     icon: FileSearch,
     prompt:
       'Resume los principales artefactos forenses e indicadores descritos en los reportes de MVT.',
   },
   {
-    title: 'Candiru & Red C2',
-    subtitle: 'Dominios señuelo y suplantación',
-    tag: 'Google TAG',
+    question: 'Dominios e infraestructura C2 asociada a Candiru',
+    meta: 'Google TAG · Red C2',
     icon: Globe,
     prompt:
       '¿Qué dominios e infraestructura de comando y control (C2) se asocian a las operaciones de spyware?',
+  },
+  {
+    question: 'Cadena BLASTPASS vía adjuntos PassKit e imágenes WebP',
+    meta: 'CVE-2023-41064 · iOS 16',
+    icon: Fingerprint,
+    prompt:
+      'Explica cómo funciona la explotación zero-click BLASTPASS (CVE-2023-41064) en iOS 16 y qué artefactos deja.',
   },
 ];
 
@@ -533,12 +538,22 @@ export default function App() {
       </aside>
 
       {/* Área Principal (flex-1, fondo #0D0F12) */}
-      <div className="flex-1 h-full flex flex-col min-w-0 bg-[#0D0F12]">
+      <div className="relative flex-1 h-full flex flex-col min-w-0 bg-[#0D0F12]">
+        {activeNav === 'preguntar' && <ChatAtmosphere dimmed={messages.length > 0} />}
+
         {/* Barra Superior Minimalista (48px) */}
-        <header className="h-12 shrink-0 border-b border-[#262B33] px-6 flex items-center justify-between">
+        <header
+          className={`relative z-10 h-12 shrink-0 px-6 flex items-center justify-between transition-colors duration-200 ease-kowalski ${
+            activeNav === 'preguntar'
+              ? messages.length === 0
+                ? 'border-b border-transparent'
+                : 'border-b border-white/[0.06] bg-[#0D0F12]/70 backdrop-blur-md'
+              : 'border-b border-[#262B33]'
+          }`}
+        >
           <div className="flex items-center gap-2.5 text-[12px]">
-            <span className="text-[#929BAA]">Plataforma de Investigación</span>
-            <span className="text-[#262B33]">/</span>
+            <span className="text-[#8E98A8]">Plataforma de Investigación</span>
+            <span className="text-white/15">/</span>
             <span className="font-medium text-[#F0F2F5]">
               {NAV_ITEMS.find((n) => n.id === activeNav)?.label}
             </span>
@@ -549,10 +564,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsSourcesPanelOpen((v) => !v)}
-                className={`h-[30px] px-3 rounded-[5px] border flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                className={`h-[30px] px-3 rounded-full border flex items-center gap-1.5 text-[12px] font-medium active:scale-[0.96] transition-all duration-150 ease-kowalski cursor-pointer ${
                   isSourcesPanelOpen
-                    ? 'border-[#3978F6] bg-[#16243D] text-[#3978F6]'
-                    : 'border-[#262B33] bg-[#171A20] text-[#929BAA] hover:border-[#353C47] hover:text-[#F0F2F5]'
+                    ? 'border-[#3978F6]/50 bg-[#16243D]/90 text-[#8BB3FF]'
+                    : 'border-white/[0.08] bg-white/[0.03] text-[#929BAA] hover:border-white/[0.15] hover:text-[#F0F2F5]'
                 }`}
               >
                 <BookOpen className="h-3.5 w-3.5" />
@@ -565,9 +580,9 @@ export default function App() {
                 type="button"
                 onClick={handleExportSession}
                 disabled={messages.length === 0}
-                className="h-[30px] px-3 rounded-[5px] bg-[#171A20] border border-[#262B33] flex items-center gap-1.5 text-[12px] font-medium text-[#F0F2F5] hover:border-[#3978F6] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                className="h-[30px] px-3 rounded-full bg-white/[0.03] border border-white/[0.08] flex items-center gap-1.5 text-[12px] font-medium text-[#E6E9EF] hover:border-white/[0.16] hover:bg-white/[0.06] active:scale-[0.96] disabled:opacity-35 disabled:pointer-events-none transition-all duration-150 ease-kowalski cursor-pointer"
               >
-                <Download className="h-3.5 w-3.5 text-[#929BAA]" />
+                <Download className="h-3.5 w-3.5 text-[#8E98A8]" />
                 <span>Exportar (.md)</span>
               </button>
             )}
@@ -576,138 +591,157 @@ export default function App() {
 
         {/* Contenido Dinámico */}
         {activeNav === 'preguntar' ? (
-          <div className="flex-1 flex min-h-0 relative">
+          <div className="relative z-10 flex-1 flex min-h-0">
             {messages.length === 0 ? (
-              /* 1. HOME EXPERIENCE (Inspirado en LiLi 3.0: minimal, espacioso, enfocado en el composer) */
-              <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 overflow-y-auto">
-                <div className="w-full max-w-[760px] flex flex-col items-center space-y-7">
-                  {/* Kicker & Encabezado Compacto */}
-                  <div className="text-center space-y-2">
-                    <span className="font-tech text-[10.5px] uppercase tracking-[0.14em] text-[#3978F6] bg-[#16243D] border border-[#3978F6]/30 px-2.5 py-1 rounded-[4px]">
-                      OMEGA 1.0 · CTI RESEARCH ENGINE
-                    </span>
-                    <h1 className="text-[28px] font-semibold tracking-[-0.02em] leading-tight text-[#F0F2F5] pt-1">
-                      Inteligencia Defensiva Contra Spyware
-                    </h1>
-                    <p className="text-[14px] text-[#929BAA] max-w-[560px] mx-auto leading-relaxed">
-                      Investiga vulnerabilidades zero-click, campañas patrocinadas por estados y artefactos forenses a partir de fuentes documentadas.
+              /* 1. HOME EXPERIENCE (Atmósfera LiLi 3.0 + detalle Emil Kowalski) */
+              <main className="flex-1 flex flex-col items-center justify-between px-6 pt-6 pb-5 overflow-y-auto">
+                <div className="flex-1 min-h-[16px] max-h-[84px]" />
+
+                <div className="w-full max-w-[780px] flex flex-col items-center">
+                  {/* Firma sutil de versión */}
+                  <span className="omega-fade-up text-[11px] font-medium tracking-[0.14em] text-[#6E7787] mb-5">
+                    OMEGA 1.0
+                  </span>
+
+                  {/* Encabezado Editorial Bifásico */}
+                  <div
+                    className="omega-fade-up text-center"
+                    style={{ animationDelay: '45ms' }}
+                  >
+                    <p className="text-[23px] sm:text-[26px] font-normal tracking-[-0.02em] leading-[1.25] text-[#8E98A8]">
+                      Investigación Defensiva CTI.
                     </p>
+                    <h1 className="text-[24px] sm:text-[28px] font-medium tracking-[-0.025em] leading-[1.25] text-[#F2F4F8] mt-0.5">
+                      ¿Qué amenaza deseas analizar?
+                    </h1>
                   </div>
 
-                  {/* Compositor Conversacional Visualmente Dominante */}
+                  {/* Compositor Cápsula Unificado */}
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
                       handleSend();
                     }}
-                    className="w-full rounded-[8px] bg-[#171A20] border border-[#262B33] focus-within:border-[#3978F6] transition-colors duration-150"
+                    className="omega-fade-up omega-capsule mt-8 w-full max-w-[720px] rounded-[18px] p-3.5"
+                    style={{ animationDelay: '90ms' }}
                   >
                     <textarea
                       ref={textareaRef}
-                      rows={3}
+                      rows={2}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Pregunta sobre campañas, CVEs, dominios o vectores de infección..."
-                      className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14.5px] leading-relaxed text-[#F0F2F5] placeholder-[#929BAA]/70 focus:outline-none"
+                      className="w-full resize-none bg-transparent px-1.5 pt-1 pb-2.5 text-[14.5px] leading-relaxed text-[#F2F4F8] placeholder-[#6E7787] focus:outline-none"
                     />
 
-                    {/* Barra de Controles Integrada */}
-                    <div className="flex flex-wrap items-center justify-between gap-2.5 px-3.5 py-2.5 border-t border-[#262B33]/80 bg-[#14161C] rounded-b-[7px]">
-                      <div className="flex items-center gap-2 text-[12px] text-[#929BAA]">
-                        {/* Citas obligatorias */}
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] bg-[#171A20] border border-[#262B33] text-[#F0F2F5]">
+                    {/* Controles Integrados sin Divisor Duro */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-2 text-[11.5px]">
+                        <span className="h-7 px-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] inline-flex items-center gap-1.5 text-[#D8DCE3]">
                           <ShieldCheck className="h-3.5 w-3.5 text-[#3978F6]" />
                           <span>Citas obligatorias</span>
                         </span>
 
-                        {/* Híbrido RRF */}
-                        <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] bg-[#171A20] border border-[#262B33] text-[#929BAA]">
+                        <span className="hidden sm:inline-flex h-7 px-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] items-center gap-1.5 text-[#8E98A8]">
+                          <Layers className="h-3 w-3 text-[#6E7787]" />
                           <span>Híbrido RRF</span>
                         </span>
 
-                        {/* Selector de fuentes */}
-                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] bg-[#171A20] border border-[#262B33]">
-                          <Database className="h-3 w-3 text-[#929BAA]" />
+                        <div className="h-7 px-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:border-white/[0.15] hover:bg-white/[0.05] transition-colors inline-flex items-center gap-1.5">
+                          <Database className="h-3 w-3 text-[#8E98A8]" />
                           <select
                             value={topK}
                             onChange={(e) => setTopK(Number(e.target.value))}
                             aria-label="Cantidad de fuentes"
-                            className="bg-transparent text-[11.5px] text-[#F0F2F5] focus:outline-none cursor-pointer"
+                            className="bg-transparent text-[11.5px] text-[#E6E9EF] focus:outline-none cursor-pointer"
                           >
-                            <option value={4} className="bg-[#171A20] text-[#F0F2F5]">4 fuentes</option>
-                            <option value={6} className="bg-[#171A20] text-[#F0F2F5]">6 fuentes</option>
-                            <option value={10} className="bg-[#171A20] text-[#F0F2F5]">10 fuentes</option>
+                            <option value={4} className="bg-[#15181F] text-[#F0F2F5]">4 fuentes</option>
+                            <option value={6} className="bg-[#15181F] text-[#F0F2F5]">6 fuentes</option>
+                            <option value={10} className="bg-[#15181F] text-[#F0F2F5]">10 fuentes</option>
                           </select>
                         </div>
                       </div>
 
-                      {/* Botón de envío */}
                       <button
                         type="submit"
                         disabled={loadingChat || !input.trim()}
-                        className="h-8 px-3.5 rounded-[6px] bg-[#3978F6] hover:bg-[#2968E6] text-[#F0F2F5] text-[12px] font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                        aria-label="Investigar"
+                        className={`h-8 w-8 rounded-full flex items-center justify-center active:scale-[0.92] transition-all duration-150 ease-kowalski ${
+                          loadingChat || !input.trim()
+                            ? 'bg-[#1C1F27] border border-white/[0.08] text-[#6E7787] opacity-60 cursor-not-allowed'
+                            : 'bg-[#3978F6] hover:bg-[#2968E6] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] cursor-pointer'
+                        }`}
                       >
-                        <span>Investigar</span>
                         <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </form>
 
-                  {/* Fila de Tarjetas de Investigaciones Sugeridas (Estilo LiLi) */}
-                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    {SUGGESTED_PROMPTS.map((item) => {
+                  {/* Fila Compacta de Investigaciones Sugeridas */}
+                  <div className="mt-4 w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                    {SUGGESTED_PROMPTS.map((item, idx) => {
                       const Icon = item.icon;
                       return (
                         <button
-                          key={item.title}
+                          key={item.meta}
                           type="button"
                           onClick={() => handleSend(item.prompt)}
-                          className="group p-3 rounded-[6px] bg-[#171A20] border border-[#262B33] hover:border-[#3978F6]/60 hover:bg-[#1A1E26] text-left transition-colors flex flex-col justify-between space-y-2 cursor-pointer"
+                          style={{ animationDelay: `${130 + idx * 40}ms` }}
+                          className="omega-prompt-tile omega-fade-up group rounded-[14px] p-3.5 min-h-[108px] text-left flex flex-col justify-between gap-3 cursor-pointer"
                         >
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <Icon className="h-3.5 w-3.5 text-[#3978F6]" />
-                              <span className="font-tech text-[10px] text-[#929BAA] px-1 rounded bg-[#13161B]">
-                                {item.tag}
-                              </span>
-                            </div>
-                            <h3 className="text-[12.5px] font-semibold text-[#F0F2F5] group-hover:text-[#3978F6] transition-colors leading-snug">
-                              {item.title}
-                            </h3>
-                            <p className="text-[11.5px] text-[#929BAA] line-clamp-2 leading-relaxed">
-                              {item.subtitle}
-                            </p>
+                          <p className="text-[12.5px] font-normal leading-[1.42] text-[#D8DCE3] group-hover:text-[#F4F6F9] transition-colors duration-150 line-clamp-3">
+                            {item.question}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[11px] text-[#6E7787] group-hover:text-[#929BAA] transition-colors duration-150 min-w-0">
+                            <Icon className="h-3 w-3 shrink-0 opacity-75" />
+                            <span className="truncate">{item.meta}</span>
                           </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
+
+                <div className="flex-1 min-h-[20px] max-h-[84px]" />
+
+                {/* Pie de Confianza Discreto */}
+                <footer
+                  className="omega-fade-up flex flex-wrap items-center justify-center gap-5 text-[11px] text-[#5C6473] pt-3"
+                  style={{ animationDelay: '320ms' }}
+                >
+                  <span>Trazabilidad RNF1</span>
+                  <span>Fuentes públicas indexadas</span>
+                  {sessions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => selectSession(sessions[0].id)}
+                      className="underline underline-offset-4 decoration-white/15 hover:text-[#929BAA] transition-colors cursor-pointer"
+                    >
+                      Retomar última sesión
+                    </button>
+                  )}
+                </footer>
               </main>
             ) : (
-              /* 2. CONVERSATIONAL EXPERIENCE (Espacio dedicado para el diálogo analítico) */
+              /* 2. CONVERSATIONAL EXPERIENCE (Diálogo analítico refinado) */
               <main className="flex-1 flex flex-col min-h-0">
-                <div className="flex-1 overflow-y-auto px-6 py-6">
-                  <div className="mx-auto max-w-[800px] space-y-6">
+                <div className="flex-1 overflow-y-auto px-6 py-7">
+                  <div className="mx-auto max-w-[780px] space-y-7">
                     {messages.map((msg, idx) =>
                       msg.role === 'user' ? (
-                        <div
-                          key={idx}
-                          className="rounded-[6px] border border-[#262B33] bg-[#171A20] px-4 py-3 space-y-1"
-                        >
-                          <div className="text-[11px] font-medium uppercase tracking-wider text-[#929BAA]">
-                            Consulta del Analista
-                          </div>
-                          <div className="text-[14px] text-[#F0F2F5] whitespace-pre-wrap leading-relaxed">
-                            {msg.content}
+                        <div key={idx} className="omega-fade-up flex justify-end">
+                          <div className="max-w-[82%] rounded-[16px] border border-white/[0.08] bg-[#161920]/95 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_2px_10px_rgba(0,0,0,0.3)] space-y-1">
+                            <div className="text-[10.5px] font-medium uppercase tracking-wider text-[#7E8796]">
+                              Consulta
+                            </div>
+                            <div className="text-[14px] text-[#F2F4F8] whitespace-pre-wrap leading-relaxed">
+                              {msg.content}
+                            </div>
                           </div>
                         </div>
                       ) : (
-                        <div
-                          key={idx}
-                          className="border-l-2 border-[#3978F6] pl-5 py-1"
-                        >
+                        <div key={idx} className="omega-fade-up py-1">
                           <StructuredResponse
                             message={msg}
                             onSelectCitation={handleSelectCitation}
@@ -719,13 +753,13 @@ export default function App() {
                     )}
 
                     {loadingChat && (
-                      <div className="border-l-2 border-[#262B33] pl-5 py-3 text-[13px] text-[#929BAA] space-y-1">
-                        <div className="flex items-center gap-2 text-[#F0F2F5]">
+                      <div className="omega-fade-up py-2 space-y-1.5 text-[13px] text-[#929BAA]">
+                        <div className="flex items-center gap-2.5 text-[#F0F2F5] font-medium">
                           <span className="h-2 w-2 rounded-full bg-[#3978F6] animate-pulse" />
                           <span>Consultando base documental CTI y calculando RRF...</span>
                         </div>
-                        <p className="text-[12px] text-[#929BAA]">
-                          Recuperando fragmentos de Citizen Lab, Amnesty Tech y Google TAG.
+                        <p className="text-[12px] text-[#8E98A8] pl-[18px]">
+                          Recuperando fragmentos verificados de Citizen Lab, Amnesty Tech y Google TAG.
                         </p>
                       </div>
                     )}
@@ -733,14 +767,14 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Composer Fijo al Pie de la Conversación */}
-                <div className="shrink-0 border-t border-[#262B33] bg-[#0D0F12] px-6 py-3.5">
+                {/* Composer Cápsula Flotante al Pie */}
+                <div className="shrink-0 px-6 pb-5 pt-2">
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
                       handleSend();
                     }}
-                    className="mx-auto max-w-[800px] rounded-[8px] bg-[#171A20] border border-[#262B33] focus-within:border-[#3978F6] transition-colors"
+                    className="mx-auto max-w-[780px] omega-capsule rounded-[18px] p-3"
                   >
                     <textarea
                       rows={2}
@@ -748,32 +782,40 @@ export default function App() {
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Realiza una pregunta de seguimiento sobre esta evidencia..."
-                      className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14px] leading-relaxed text-[#F0F2F5] placeholder-[#929BAA]/70 focus:outline-none"
+                      className="w-full resize-none bg-transparent px-1.5 pt-0.5 pb-2 text-[14px] leading-relaxed text-[#F2F4F8] placeholder-[#6E7787] focus:outline-none"
                     />
 
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-[#262B33]/60 bg-[#14161C] rounded-b-[7px]">
-                      <div className="flex items-center gap-2 text-[11px] text-[#929BAA]">
-                        <span>Shift+Enter para salto de línea</span>
-                        <span>·</span>
-                        <select
-                          value={topK}
-                          onChange={(e) => setTopK(Number(e.target.value))}
-                          aria-label="Cantidad de fuentes"
-                          className="bg-transparent text-[#929BAA] focus:outline-none cursor-pointer"
-                        >
-                          <option value={4} className="bg-[#171A20] text-[#F0F2F5]">4 fuentes</option>
-                          <option value={6} className="bg-[#171A20] text-[#F0F2F5]">6 fuentes</option>
-                          <option value={10} className="bg-[#171A20] text-[#F0F2F5]">10 fuentes</option>
-                        </select>
+                    <div className="flex items-center justify-between gap-2 px-1 pt-0.5">
+                      <div className="flex items-center gap-2.5 text-[11px] text-[#8E98A8]">
+                        <span className="hidden sm:inline text-[#6E7787]">
+                          Enter para enviar · Shift+Enter nueva línea
+                        </span>
+                        <div className="h-6 px-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:border-white/[0.15] transition-colors inline-flex items-center gap-1.5">
+                          <Database className="h-3 w-3 text-[#8E98A8]" />
+                          <select
+                            value={topK}
+                            onChange={(e) => setTopK(Number(e.target.value))}
+                            aria-label="Cantidad de fuentes"
+                            className="bg-transparent text-[11px] text-[#E6E9EF] focus:outline-none cursor-pointer"
+                          >
+                            <option value={4} className="bg-[#15181F] text-[#F0F2F5]">4 fuentes</option>
+                            <option value={6} className="bg-[#15181F] text-[#F0F2F5]">6 fuentes</option>
+                            <option value={10} className="bg-[#15181F] text-[#F0F2F5]">10 fuentes</option>
+                          </select>
+                        </div>
                       </div>
 
                       <button
                         type="submit"
                         disabled={loadingChat || !input.trim()}
-                        className="h-7 px-3 rounded-[5px] bg-[#3978F6] hover:bg-[#2968E6] text-[#F0F2F5] text-[11.5px] font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                        aria-label="Preguntar"
+                        className={`h-8 w-8 rounded-full flex items-center justify-center active:scale-[0.92] transition-all duration-150 ease-kowalski ${
+                          loadingChat || !input.trim()
+                            ? 'bg-[#1C1F27] border border-white/[0.08] text-[#6E7787] opacity-60 cursor-not-allowed'
+                            : 'bg-[#3978F6] hover:bg-[#2968E6] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] cursor-pointer'
+                        }`}
                       >
-                        <span>Preguntar</span>
-                        <ArrowRight className="h-3 w-3" />
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </form>

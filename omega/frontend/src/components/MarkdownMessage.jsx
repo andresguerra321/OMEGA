@@ -23,7 +23,7 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
           type="button"
           onClick={() => target && onSelectCitation?.(target)}
           title={target ? `${target.title} — Pág. ${target.page}` : `Fuente [${num}]`}
-          className="font-tech mx-0.5 inline-flex items-center rounded-[4px] border border-[#3978F6]/40 bg-[#16243D] px-1.5 py-0 text-[11px] font-medium text-[#7AA7FF] hover:border-[#3978F6] hover:text-[#F0F2F5] transition-colors duration-150 cursor-pointer"
+          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#3978F6]/35 bg-[#16243D]/85 px-1.5 py-0 text-[11px] font-medium text-[#8BB3FF] hover:border-[#3978F6]/70 hover:bg-[#1B2D4E] hover:text-[#F0F2F5] active:scale-[0.94] transition-all duration-150 ease-kowalski cursor-pointer"
         >
           [{num}]
         </button>
@@ -41,7 +41,7 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
       return (
         <span
           key={idx}
-          className="font-tech rounded-[4px] border border-[#262B33] bg-[#13161B] px-1.5 py-0.5 text-[12px] text-[#F0F2F5]"
+          className="font-tech rounded-[5px] border border-white/[0.08] bg-[#13161C] px-1.5 py-0.5 text-[12px] text-[#E6E9EF]"
         >
           {part}
         </span>
