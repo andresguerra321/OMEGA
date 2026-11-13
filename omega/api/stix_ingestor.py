@@ -9,17 +9,15 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
-import os
 import re
 from pathlib import Path
 import psycopg
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
-DB_DSN = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
+from cti_ingestor_core import (
+    DB_DSN,
+    bulk_upsert_iocs,
+    upsert_campaign,
+    upsert_report,
 )
 
 STIX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -148,63 +146,38 @@ def sync_stix2_directory() -> dict:
                 first_seen = date_match.group(1) if date_match else None
                 file_hash = hashlib.sha256(raw_bytes).hexdigest()
 
-                cur.execute(
-                    """
-                    INSERT INTO campaigns (name, spyware_family, suspected_actor, target_sector, first_seen_date, summary)
-                    VALUES (%s, %s, %s, %s, %s::date, %s)
-                    ON CONFLICT (name) DO UPDATE SET
-                        spyware_family = EXCLUDED.spyware_family,
-                        suspected_actor = COALESCE(campaigns.suspected_actor, EXCLUDED.suspected_actor),
-                        first_seen_date = COALESCE(campaigns.first_seen_date, EXCLUDED.first_seen_date)
-                    RETURNING id;
-                    """,
-                    (
-                        f"Indicadores STIX2 — {stix_path.stem}",
-                        family,
-                        actor,
-                        "Periodistas, sociedad civil, activistas y gobierno",
-                        first_seen,
-                        f"Indicadores estructurados STIX 2.1 importados automáticamente desde {stix_path.name}.",
-                    ),
+                campaign_id = upsert_campaign(
+                    cur,
+                    name=f"Indicadores STIX2 — {stix_path.stem}",
+                    spyware_family=family,
+                    suspected_actor=actor,
+                    target_sector="Periodistas, sociedad civil, activistas y gobierno",
+                    first_seen_date=first_seen,
+                    summary=f"Indicadores estructurados STIX 2.1 importados automáticamente desde {stix_path.name}.",
                 )
-                campaign_id = cur.fetchone()[0]
 
-                cur.execute(
-                    """
-                    INSERT INTO reports (title, organization, publication_date, source_url, local_filename, file_hash, campaign_id)
-                    VALUES (%s, %s, %s::date, %s, %s, %s, %s)
-                    ON CONFLICT (file_hash) DO UPDATE SET
-                        campaign_id = EXCLUDED.campaign_id,
-                        title = EXCLUDED.title
-                    RETURNING id;
-                    """,
-                    (
-                        f"Feed STIX2 Oficial: {stix_path.stem}",
-                        "Amnesty Tech / Citizen Lab STIX2",
-                        first_seen,
-                        "https://github.com/AmnestyTech/investigations",
-                        stix_path.name,
-                        file_hash,
-                        campaign_id,
-                    ),
+                report_id = upsert_report(
+                    cur,
+                    campaign_id=campaign_id,
+                    title=f"Feed STIX2 Oficial: {stix_path.stem}",
+                    organization="Amnesty Tech / Citizen Lab STIX2",
+                    publication_date=first_seen,
+                    source_url="https://github.com/AmnestyTech/investigations",
+                    local_filename=stix_path.name,
+                    file_hash=file_hash,
                 )
-                report_id = cur.fetchone()[0]
 
                 indicators = _extract_bundle_indicators(objects, stix_path.name)
                 total_parsed += len(indicators)
                 for ioc_type, _, _ in indicators:
                     by_type[ioc_type] = by_type.get(ioc_type, 0) + 1
 
-                if indicators:
-                    rows = [(campaign_id, report_id, t, v, c) for t, v, c in indicators]
-                    cur.executemany(
-                        """
-                        INSERT INTO iocs (campaign_id, report_id, ioc_type, ioc_value, context)
-                        VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (ioc_type, ioc_value, report_id) DO NOTHING;
-                        """,
-                        rows,
-                    )
+                bulk_upsert_iocs(
+                    cur,
+                    campaign_id=campaign_id,
+                    report_id=report_id,
+                    indicators=indicators,
+                )
 
             cur.execute("SELECT COUNT(*) FROM iocs;")
             after_count = int(cur.fetchone()[0])
@@ -217,3 +190,4 @@ def sync_stix2_directory() -> dict:
         "total_db_iocs": after_count,
         "by_type": by_type,
     }
+

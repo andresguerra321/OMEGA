@@ -43,6 +43,7 @@ function buildInitialDemoSessions() {
       id: 'demo-forcedentry',
       title: 'FORCEDENTRY · Explotación zero-click Pegasus',
       updatedAt: new Date(now - 2 * hourMs).toISOString(),
+      context: { family: 'Pegasus (NSO Group)', os: 'iOS', cve: 'CVE-2021-30860' },
       messages: [
         {
           role: 'user',
@@ -85,6 +86,7 @@ function buildInitialDemoSessions() {
       id: 'demo-predator',
       title: 'Predator · Infraestructura y vectores 1-click',
       updatedAt: new Date(now - 24 * hourMs).toISOString(),
+      context: { family: 'Predator (Intellexa)', os: null, cve: null },
       messages: [
         {
           role: 'user',
@@ -157,6 +159,7 @@ export default function App() {
   const [sourceScope, setSourceScope] = useState('Todas las fuentes');
   const [selectedCitation, setSelectedCitation] = useState(null);
   const [isSourcesPanelOpen, setIsSourcesPanelOpen] = useState(false);
+  const [draftContext, setDraftContext] = useState(null);
 
   const textareaRef = useRef(null);
 
@@ -201,12 +204,38 @@ export default function App() {
     return list;
   }, [messages]);
 
+  const activeChatContext = activeSession ? (activeSession.context ?? null) : draftContext;
+
   function startNewInvestigation() {
     setCurrentSessionId(null);
+    setDraftContext(null);
     setSelectedCitation(null);
     setIsSourcesPanelOpen(false);
     setActiveNav('preguntar');
     setTimeout(() => textareaRef.current?.focus(), 50);
+  }
+
+  function handleUpdateChatContext(nextCtx) {
+    if (currentSessionId) {
+      setSessions((prev) =>
+        prev.map((s) => (s.id === currentSessionId ? { ...s, context: nextCtx } : s)),
+      );
+    } else {
+      setDraftContext(nextCtx);
+    }
+  }
+
+  function handleClearChatContext() {
+    const cleared = { family: null, os: null, cve: null };
+    if (currentSessionId) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === currentSessionId ? { ...s, context: cleared, lastRewrittenQuery: null } : s,
+        ),
+      );
+    } else {
+      setDraftContext(cleared);
+    }
   }
 
   function deleteSession(e, id) {
@@ -225,6 +254,15 @@ export default function App() {
 
     const { forceNewSession = false } = options;
     const effectiveScope = requestedScope || 'Todas las fuentes';
+    const targetSession =
+      !forceNewSession && currentSessionId
+        ? sessions.find((s) => s.id === currentSessionId)
+        : null;
+    const pinnedContextPayload = forceNewSession
+      ? null
+      : (targetSession ? (targetSession.context ?? null) : draftContext);
+    if (forceNewSession) setDraftContext(null);
+
     let targetSessionId = forceNewSession ? null : currentSessionId;
     const nowIso = new Date().toISOString();
     const userTurn = {
@@ -239,6 +277,8 @@ export default function App() {
         id: targetSessionId,
         title: query.length > 46 ? `${query.slice(0, 46)}...` : query,
         updatedAt: nowIso,
+        context: pinnedContextPayload,
+        lastRewrittenQuery: null,
         messages: [userTurn],
       };
       setSessions((prev) => [newSession, ...prev]);
@@ -262,7 +302,13 @@ export default function App() {
     const t0 = performance.now();
 
     try {
-      const res = await sendChatQuery(query, historyPayload, topK, effectiveScope);
+      const res = await sendChatQuery(
+        query,
+        historyPayload,
+        topK,
+        effectiveScope,
+        pinnedContextPayload,
+      );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
         role: 'assistant',
@@ -270,14 +316,20 @@ export default function App() {
         citations: res.citations || [],
         model: res.model,
         analysis: res.analysis,
-        standaloneQuery: res.standalone_query,
+        standaloneQuery: res.rewritten_query || res.standalone_query,
         sourceScope: effectiveScope,
         latency,
       };
       setSessions((prev) =>
         prev.map((s) =>
           s.id === targetSessionId
-            ? { ...s, updatedAt: new Date().toISOString(), messages: [...s.messages, assistantTurn] }
+            ? {
+                ...s,
+                updatedAt: new Date().toISOString(),
+                context: res.resolved_context || s.context || null,
+                lastRewrittenQuery: res.rewritten_query || res.standalone_query || null,
+                messages: [...s.messages, assistantTurn],
+              }
             : s
         )
       );
@@ -635,7 +687,9 @@ export default function App() {
         {/* Barra Superior Translúcida (48px) */}
         <header
           className={`relative z-10 h-12 shrink-0 px-6 flex items-center justify-between transition-colors duration-300 ease-apple ${
-            isDesktop ? 'pr-40 [-webkit-app-region:drag] [&_button]:[-webkit-app-region:no-drag]' : ''
+            isDesktop
+              ? 'pr-40 titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
+              : ''
           } ${
             activeNav === 'preguntar' && messages.length === 0
               ? 'border-b border-transparent'
@@ -654,12 +708,12 @@ export default function App() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="titlebar-no-drag flex items-center gap-2">
             {activeNav === 'preguntar' && messages.length > 0 && activeConversationCitations.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsSourcesPanelOpen((v) => !v)}
-                className={`h-8 px-3 rounded-[8px] border flex items-center gap-1.5 text-[12.5px] font-medium active:scale-[0.97] transition-[transform,background-color,border-color,color] duration-150 cursor-pointer ${
+                className={`titlebar-no-drag h-8 px-3 rounded-[8px] border flex items-center gap-1.5 text-[12.5px] font-medium active:scale-[0.97] transition-[transform,background-color,border-color,color] duration-150 cursor-pointer ${
                   isSourcesPanelOpen
                     ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
                     : 'border-white/[0.08] bg-white/[0.045] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
@@ -674,7 +728,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleExportSession}
-                className="h-8 px-3 rounded-[8px] bg-white/[0.045] hover:bg-white/[0.08] border border-white/[0.08] flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5F5F7] active:scale-[0.97] transition-[transform,background-color,border-color] duration-150 cursor-pointer"
+                className="titlebar-no-drag h-8 px-3 rounded-[8px] bg-white/[0.045] hover:bg-white/[0.08] border border-white/[0.08] flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5F5F7] active:scale-[0.97] transition-[transform,background-color,border-color] duration-150 cursor-pointer"
               >
                 <Download className="h-3.5 w-3.5 text-[#8E8E93]" />
                 <span>Exportar</span>
@@ -692,6 +746,10 @@ export default function App() {
             onChangeSourceScope={setSourceScope}
             onSendMessage={handleSend}
             onRetryFailedTurn={handleRetryFailedTurn}
+            chatContext={activeChatContext}
+            lastRewrittenQuery={activeSession?.lastRewrittenQuery || null}
+            onUpdateChatContext={handleUpdateChatContext}
+            onClearChatContext={handleClearChatContext}
             activeCitation={selectedCitation}
             onSelectCitation={handleSelectCitation}
             isSourcesOpen={isSourcesPanelOpen}
@@ -708,9 +766,9 @@ export default function App() {
             textareaRef={textareaRef}
           />
         ) : activeNav === 'amenazas' ? (
-          <div className="relative z-10 flex-1 min-h-0 flex flex-col">
+          <main className="relative z-10 flex-1 min-h-0 flex flex-col">
             <CampaignsPanel onAskInChat={askInChat} />
-          </div>
+          </main>
         ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
           <main className="relative z-10 flex-1 overflow-y-auto px-6 py-8 flex flex-col">
             {activeNav === 'equipo' && <MvtVerifierPanel onAskInChat={askInChat} />}

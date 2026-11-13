@@ -33,10 +33,19 @@ async function parseJsonOrThrow(res, fallbackMsg) {
 // ============================================================================
 // 1. PREGUNTAR (RAG Híbrido RRF + Citas Verificables)
 // ============================================================================
-export async function sendChatQuery(query, history = [], topK = 6, sourceFilter = null) {
+export async function sendChatQuery(
+  query,
+  history = [],
+  topK = 6,
+  sourceFilter = null,
+  pinnedContext = null,
+) {
   const payload = { query, history, top_k: topK };
   if (sourceFilter && !sourceFilter.toLowerCase().includes('todas')) {
     payload.source_filter = sourceFilter;
+  }
+  if (pinnedContext !== null && pinnedContext !== undefined) {
+    payload.pinned_context = pinnedContext;
   }
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
@@ -174,4 +183,16 @@ export async function fetchSystemGovernance() {
     headers: workspaceHeaders(),
   });
   return parseJsonOrThrow(res, 'Error cargando estado de gobernanza');
+}
+
+// ============================================================================
+// 7. EXTRACTOR WEB CTI VOLÁTIL EN RAM (WebBaseLoader RNF4)
+// ============================================================================
+export async function scanWebIntelUrl(url, activeNet4Ips = []) {
+  const res = await fetch(`${API_BASE}/intel/webloader-scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, active_net4_ips: activeNet4Ips }),
+  });
+  return parseJsonOrThrow(res, 'Error extrayendo indicadores CTI desde la URL');
 }

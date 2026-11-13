@@ -5,12 +5,14 @@ Opera íntegramente en memoria volátil (RNF4) sin persistencia en disco ni root
 
 from __future__ import annotations
 
+from datetime import datetime
 import ipaddress
+import json
 import re
 import sqlite3
 from typing import Any
 import psycopg
-from stix_ingestor import DB_DSN
+from cti_ingestor_core import DB_DSN
 
 # Firmas YARA / Patrones binarios defensivos de cadenas de explotación conocidas
 BUILTIN_DETECTION_SIGNATURES: list[dict[str, Any]] = [
@@ -460,3 +462,245 @@ def run_live_yara_hunt(artifacts: list[dict]) -> list[dict]:
                 break
 
     return hits
+
+
+def build_adb_artifacts_in_ram(snapshot: dict[str, Any]) -> list[dict]:
+    """Estandariza la telemetría viva USB/ADB en la entrada única RAM [{"filename", "bytes"}] (Capa 2)."""
+    artifacts: list[dict] = []
+    device = snapshot.get("device") or {}
+    if device:
+        artifacts.append(
+            {
+                "filename": "adb_device_posture.json",
+                "bytes": json.dumps(device, ensure_ascii=False).encode("utf-8"),
+            }
+        )
+
+    mapping = [
+        ("device_admins_raw", "adb_device_policy.txt"),
+        ("packages_text", "adb_installed_packages.txt"),
+        ("processes_text", "adb_running_processes.txt"),
+        ("proc_net_raw", "adb_proc_net_tcp.txt"),
+        ("dns_resolver_raw", "adb_dnsresolver.txt"),
+    ]
+    for field_name, fname in mapping:
+        raw_text = str(snapshot.get(field_name) or "").strip()
+        if raw_text:
+            artifacts.append({"filename": fname, "bytes": raw_text.encode("utf-8")})
+
+    return artifacts
+
+
+def evaluate_device_posture(dev: dict[str, Any], device_admins_raw: str) -> tuple[list[dict], list[dict]]:
+    """Evalúa postura defensiva Android (Parche, SELinux, Accesibilidad, Device Admins, DoT, Sideloading)."""
+    hardening_checks: list[dict] = []
+    abuse_alerts: list[dict] = []
+
+    # 1. Integridad SELinux y Verified Boot
+    selinux = str(dev.get("selinux_status") or "Unknown").strip()
+    boot_state = str(dev.get("verified_boot_state") or "unknown").strip().lower()
+    selinux_ok = selinux.lower() == "enforcing"
+    boot_ok = boot_state in ("green", "unknown", "")
+    hardening_checks.append(
+        {
+            "control": "Integridad SELinux y Verified Boot",
+            "status": "OK" if (selinux_ok and boot_ok) else "CRITICAL",
+            "value": f"SELinux: {selinux} · Boot: {boot_state or 'N/D'}",
+            "detail": (
+                "Aislamiento obligatorio del kernel y arranque verificado intactos."
+                if (selinux_ok and boot_ok)
+                else "SELinux en modo Permissive o bootloader alterado; riesgo de manipulación de kernel/rootkit."
+            ),
+        }
+    )
+
+    # 2. Auditoría de nivel de parche de seguridad Android
+    patch_str = str(dev.get("security_patch") or "").strip()
+    try:
+        patch_date = datetime.strptime(patch_str, "%Y-%m-%d")
+        age_days = (datetime.now() - patch_date).days
+        patch_outdated = age_days > 120
+        hardening_checks.append(
+            {
+                "control": "Nivel de parche de seguridad",
+                "status": "WARN" if patch_outdated else "OK",
+                "value": patch_str,
+                "detail": (
+                    f"Parche con {age_days} días de antigüedad; expuesto a vectores 0-click/1-click conocidos."
+                    if patch_outdated
+                    else f"Parche actualizado ({patch_str})."
+                ),
+            }
+        )
+    except ValueError:
+        hardening_checks.append(
+            {
+                "control": "Nivel de parche de seguridad",
+                "status": "UNKNOWN",
+                "value": patch_str or "N/D",
+                "detail": "No se pudo determinar la fecha exacta del parche.",
+            }
+        )
+
+    # 3. Servicios de Accesibilidad Activos (vector crítico de robo de mensajería y permisos en Android)
+    acc_raw = str(dev.get("accessibility_services") or "null").strip()
+    if acc_raw and acc_raw.lower() not in ("null", "none", ""):
+        services = [s.strip() for s in acc_raw.split(":") if s.strip()]
+        suspicious_acc = [
+            s for s in services if not any(s.lower().startswith(safe) for safe in KNOWN_SAFE_ACCESSIBILITY_PREFIXES)
+        ]
+        for svc in suspicious_acc:
+            abuse_alerts.append(
+                {
+                    "severity": "HIGH",
+                    "category": "Abuso Potencial de Accesibilidad",
+                    "indicator": svc,
+                    "detail": "Permite leer contenido en pantalla (WhatsApp/Signal) y automatizar toques sin interacción.",
+                }
+            )
+        hardening_checks.append(
+            {
+                "control": "Servicios de Accesibilidad Activos",
+                "status": "WARN" if suspicious_acc else "OK",
+                "value": f"{len(services)} activos ({len(suspicious_acc)} terceros)",
+                "detail": (
+                    f"Servicios de terceros activos: {', '.join(suspicious_acc)}"
+                    if suspicious_acc
+                    else "Solo servicios oficiales del sistema habilitados."
+                ),
+            }
+        )
+    else:
+        hardening_checks.append(
+            {
+                "control": "Servicios de Accesibilidad Activos",
+                "status": "OK",
+                "value": "Ninguno",
+                "detail": "Sin servicios de lectura de pantalla de terceros habilitados.",
+            }
+        )
+
+    # 4. Administradores de Dispositivo (dumpsys device_policy)
+    admins, suspicious_admins = audit_device_admins(device_admins_raw)
+    if device_admins_raw.strip():
+        for adm in suspicious_admins:
+            abuse_alerts.append(
+                {
+                    "severity": "HIGH",
+                    "category": "Administrador de Dispositivo (Device Admin)",
+                    "indicator": adm,
+                    "detail": "Privilegio elevado capaz de bloquear desinstalación, imponer políticas o borrar datos.",
+                }
+            )
+        hardening_checks.append(
+            {
+                "control": "Administradores de Dispositivo",
+                "status": "WARN" if suspicious_admins else "OK",
+                "value": f"{len(admins)} activos ({len(suspicious_admins)} terceros)" if admins else "Solo sistema",
+                "detail": (
+                    f"Administradores externos detectados: {', '.join(suspicious_admins)}"
+                    if suspicious_admins
+                    else "Sin administradores de terceros anómalos en device_policy."
+                ),
+            }
+        )
+
+    # 5. DNS Privado Cifrado (DoT — mitigación en 1 clic)
+    dns_mode = str(dev.get("private_dns_mode") or "off").strip().lower()
+    dns_host = str(dev.get("private_dns_specifier") or "").strip()
+    dns_ok = dns_mode == "hostname" and bool(dns_host) and dns_host.lower() != "null"
+    hardening_checks.append(
+        {
+            "control": "DNS Privado Cifrado (DNS-over-TLS)",
+            "status": "OK" if dns_ok else "WARN",
+            "value": dns_host if dns_ok else dns_mode,
+            "detail": (
+                f"Resoluciones DNS cifradas mediante {dns_host}."
+                if dns_ok
+                else "DNS sin cifrar; expuesto a secuestro DNS o inyección de red en tránsito (mitigable en 1 clic)."
+            ),
+        }
+    )
+
+    # 6. Orígenes desconocidos (sideloading APK legacy)
+    unknown_src = str(dev.get("install_non_market_apps") or "").strip().lower()
+    if unknown_src:
+        hardening_checks.append(
+            {
+                "control": "Instalación desde orígenes desconocidos",
+                "status": "WARN" if unknown_src == "1" else "OK",
+                "value": (
+                    "Habilitado"
+                    if unknown_src == "1"
+                    else ("Desactivado" if unknown_src == "0" else "Control por app (Android 8+)")
+                ),
+                "detail": (
+                    "Permite instalar APKs fuera de Google Play; vector común en implantes 1-click Android."
+                    if unknown_src == "1"
+                    else "Sin habilitación global de sideloading legacy."
+                ),
+            }
+        )
+
+    return hardening_checks, abuse_alerts
+
+
+def run_kernel_and_posture_forensics(expanded_artifacts: list[dict]) -> dict[str, Any]:
+    """Extrae postura de dispositivo, sockets /proc/net/tcp* y caché DNS desde artefactos en RAM."""
+    device_summary: dict[str, Any] = {}
+    device_admins_raw = ""
+    proc_net_chunks: list[str] = []
+    dns_chunks: list[str] = []
+
+    for art in expanded_artifacts:
+        fname = str(art.get("filename") or "").lower()
+        raw_bytes: bytes = art.get("bytes") or b""
+        if not raw_bytes or raw_bytes.startswith(b"SQLite format 3\x00"):
+            continue
+        text = raw_bytes.decode("utf-8", errors="ignore")
+
+        if fname.endswith("adb_device_posture.json") or fname.endswith("device_posture.json"):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    device_summary = parsed
+            except json.JSONDecodeError:
+                pass
+        elif "device_policy" in fname or "device_admins" in fname:
+            device_admins_raw = f"{device_admins_raw}\n{text}".strip()
+        elif "proc_net" in fname or "net_tcp" in fname or "tcp_sockets" in fname:
+            proc_net_chunks.append(text)
+        elif "dnsresolver" in fname or "dns_cache" in fname:
+            dns_chunks.append(text)
+
+    hardening_checks: list[dict] = []
+    abuse_alerts: list[dict] = []
+    if device_summary or device_admins_raw:
+        hardening_checks, abuse_alerts = evaluate_device_posture(device_summary, device_admins_raw)
+
+    live_sockets = (
+        annotate_sockets_with_cti(parse_kernel_network_sockets("\n".join(proc_net_chunks)))
+        if proc_net_chunks
+        else []
+    )
+    cached_dns_domains = parse_dns_resolver_cache("\n".join(dns_chunks)) if dns_chunks else []
+
+    for sock in live_sockets:
+        if sock.get("cti_match"):
+            abuse_alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "category": "Socket Vivo a Infraestructura C2",
+                    "indicator": f"{sock['remote_ip']}:{sock['remote_port']} ({sock['state']})",
+                    "detail": f"Conexión kernel activa contra IP asociada a {sock.get('spyware_family') or 'spyware'}.",
+                }
+            )
+
+    return {
+        "device_summary": device_summary,
+        "hardening_checks": hardening_checks,
+        "abuse_alerts": abuse_alerts,
+        "live_sockets": live_sockets,
+        "cached_dns_domains": cached_dns_domains,
+    }
+

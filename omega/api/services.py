@@ -11,6 +11,12 @@ from pgvector.psycopg import register_vector
 from sentence_transformers import SentenceTransformer
 from groq import Groq
 from dotenv import load_dotenv
+from context_memory import (
+    build_context_guardrail,
+    get_family_filter_terms,
+    resolve_conversational_context,
+    rewrite_query_for_rrf,
+)
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -37,7 +43,7 @@ SYSTEM_PROMPT = """Eres el motor analítico de Omega, una plataforma defensiva d
 REGLAS DE TRAZABILIDAD (RNF1):
 1. Responde ÚNICAMENTE con los hechos explícitos contenidos en los FRAGMENTOS DE CONTEXTO numerados [1], [2], etc.
 2. Cita la fuente inmediatamente después de cada dato técnico, CVE, actor o fecha usando EXCLUSIVAMENTE el índice numérico del fragmento: ejemplo [1] o [1][3]. NUNCA escribas texto ni títulos ni palabras dentro de los corchetes (prohibido [Metadatos], [Reporte], etc.).
-3. Si los fragmentos recuperados no responden la pregunta específica o son de un tema ajeno (por ejemplo malware diferente, claves privadas no públicas o años/productos no cubiertos), responde EXACTAMENTE: "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
+3. Si los fragmentos recuperados no documentan el subtema o plataforma solicitados para la familia activa (por ejemplo, Predator en Windows cuando los reportes solo cubren iOS/Android), decláralo de frente y sintetiza con citas [1][2] qué plataformas, vectores o arquitectura SÍ están documentados para esa familia activa, sin atribuir técnicas de otros actores y SIN añadir al final "No hay evidencia suficiente...". Únicamente si ningún fragmento contiene información pertinente sobre la familia ni el tema consultado, responde exclusivamente "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
 
 REGLAS DE ESTILO Y ESTRUCTURA (RNF2):
 1. Responde directamente en español técnico claro, en Markdown limpio, adaptado exactamente a lo que pregunta el analista.
@@ -520,19 +526,31 @@ def _select_diverse_topk(
     entity_tokens: list[str],
     exact_cves: list[str],
     top_k: int,
+    active_family: str | None = None,
 ) -> list[tuple]:
-    """Reordena candidatos RRF priorizando CVE exacto, prosa técnica y diversidad entre reportes."""
+    """Reordena candidatos RRF priorizando CVE exacto, familia activa, prosa técnica y diversidad."""
     if len(rows) <= top_k:
         return rows
+
+    active_terms, competing_terms = get_family_filter_terms(active_family)
 
     def _score(row: tuple) -> float:
         title_lc = _normalize_ascii(row[1] or "")
         body = _clean_pdf_text(row[5] or "")
         body_lc = _normalize_ascii(body)
+        combined = f"{title_lc} {body_lc}"
         base = float(row[7] or 0.0)
         cve_hits = sum(1 for cve in exact_cves if cve in body_lc)
         entity_hits = sum(1 for tok in entity_tokens if tok in title_lc or tok in body_lc)
         title_hits = sum(1 for tok in entity_tokens if tok in title_lc)
+
+        family_boost = 0.0
+        if active_terms:
+            has_active = any(re.search(rf"\b{re.escape(t)}\b", combined) for t in active_terms)
+            if has_active:
+                family_boost += 0.025
+            elif competing_terms and any(re.search(rf"\b{re.escape(t)}\b", combined) for t in competing_terms):
+                family_boost -= 0.022
 
         # Penalizar tablas CSV/apéndices enumerativos e índices de contenido (TOC) cuando hay prosa técnica
         raw_lines = [ln.strip() for ln in (row[5] or "").splitlines() if ln.strip()]
@@ -559,6 +577,7 @@ def _select_diverse_topk(
             + 0.032 * min(cve_hits, 2)
             + 0.006 * min(entity_hits, 5)
             + 0.005 * min(title_hits, 2)
+            + family_boost
             - table_penalty
         )
 
@@ -567,15 +586,54 @@ def _select_diverse_topk(
     used_indices = set()
     per_report_counts: dict[str, int] = {}
 
-    # Primera pasada: hasta 2 fragmentos por reporte para evitar saturar una única fuente
-    for i, row in enumerate(ranked):
-        if len(selected) >= top_k:
-            break
-        rep_id = row[0]
-        if per_report_counts.get(rep_id, 0) < 2:
-            selected.append(row)
-            used_indices.add(i)
-            per_report_counts[rep_id] = per_report_counts.get(rep_id, 0) + 1
+    if active_terms:
+        row_meta: list[tuple[bool, bool]] = []
+        for row in ranked:
+            combined = f"{_normalize_ascii(row[1] or '')} {_normalize_ascii(_clean_pdf_text(row[5] or ''))}"
+            has_act = any(re.search(rf"\b{re.escape(t)}\b", combined) for t in active_terms)
+            comp_only = (not has_act) and bool(competing_terms) and any(
+                re.search(rf"\b{re.escape(t)}\b", combined) for t in competing_terms
+            )
+            row_meta.append((has_act, comp_only))
+
+        # Pasada 1A: priorizar fragmentos pertenecientes a la familia activa (hasta 3 por reporte)
+        for i, row in enumerate(ranked):
+            if len(selected) >= top_k:
+                break
+            has_act, _ = row_meta[i]
+            if not has_act:
+                continue
+            rep_id = row[0]
+            if per_report_counts.get(rep_id, 0) < 3:
+                selected.append(row)
+                used_indices.add(i)
+                per_report_counts[rep_id] = per_report_counts.get(rep_id, 0) + 1
+
+        # Pasada 1B: rellenar con más fragmentos activos del mismo reporte o fragmentos neutrales
+        for i, row in enumerate(ranked):
+            if len(selected) >= top_k:
+                break
+            if i in used_indices:
+                continue
+            has_act, comp_only = row_meta[i]
+            if comp_only:
+                continue
+            rep_id = row[0]
+            limit = 4 if has_act else 2
+            if per_report_counts.get(rep_id, 0) < limit:
+                selected.append(row)
+                used_indices.add(i)
+                per_report_counts[rep_id] = per_report_counts.get(rep_id, 0) + 1
+    else:
+        # Primera pasada: hasta 2 fragmentos por reporte para evitar saturar una única fuente
+        for i, row in enumerate(ranked):
+            if len(selected) >= top_k:
+                break
+            rep_id = row[0]
+            if per_report_counts.get(rep_id, 0) < 2:
+                selected.append(row)
+                used_indices.add(i)
+                per_report_counts[rep_id] = per_report_counts.get(rep_id, 0) + 1
 
     # Segunda pasada: completar top_k si aún faltan cupos
     for i, row in enumerate(ranked):
@@ -716,14 +774,39 @@ def _build_extractive_fallback_answer(
     standalone_query: str,
     citations: list[dict],
     linked_ctx: dict,
+    resolved_context: dict | None = None,
 ) -> str:
     """Genera una síntesis extractiva 100% anclada a citas reales si falla el LLM externo."""
     if not citations:
         return "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
 
+    active_family = (resolved_context or {}).get("family")
+    active_os = (resolved_context or {}).get("os")
+    active_terms, _ = get_family_filter_terms(active_family)
+    if active_terms:
+        family_citations = [
+            c
+            for c in citations
+            if any(
+                re.search(rf"\b{re.escape(t)}\b", f"{c.get('title', '')} {c.get('snippet', '')}".lower())
+                for t in active_terms
+            )
+        ]
+        if family_citations:
+            citations = family_citations
+
+    os_gap_notice = None
+    if active_os and active_terms:
+        os_pat = re.escape(active_os.lower())
+        has_os_in_family = any(re.search(rf"\b{os_pat}\b", f"{c.get('title', '')} {c.get('snippet', '')}".lower()) for c in citations)
+        if not has_os_in_family:
+            os_gap_notice = (
+                f"Los reportes indexados sobre **{active_family}** no documentan implantes ni ejecución nativa en **{active_os}**."
+            )
+
     best_sim = max(float(c.get("similarity") or 0.0) for c in citations)
     has_lexical = any(c.get("retrieval_method") != "Semántico" for c in citations)
-    if not has_lexical and best_sim < 0.34:
+    if not has_lexical and best_sim < 0.34 and not os_gap_notice:
         return "No hay evidencia suficiente en los reportes indexados para responder esta consulta."
 
     # Guard RNF1 anti-alucinación también en modo extractivo: si la pregunta exige términos específicos ajenos al corpus
@@ -737,7 +820,7 @@ def _build_extractive_fallback_answer(
         " ".join(_clean_pdf_text((c.get("snippet") or "") + " " + (c.get("title") or "")) for c in citations)
     )
     is_overview_q = any(trig in norm_q for trig in _OVERVIEW_TRIGGERS) or (len(q_tokens) <= 1 and not exact_cves)
-    if not is_overview_q and q_tokens:
+    if not os_gap_notice and not is_overview_q and q_tokens:
         matched_discriminating = 0
         for tok in q_tokens:
             candidates = (tok, *_FALLBACK_ALT_TERMS.get(tok, ()))
@@ -772,6 +855,8 @@ def _build_extractive_fallback_answer(
 
     fam_phrase = f" sobre {', '.join(families[:3])}" if families else ""
     intro_parts = []
+    if os_gap_notice:
+        intro_parts.append(os_gap_notice)
     if lead_item:
         _, best_c, best_excerpt = lead_item
         lead_sentence = best_excerpt.rstrip(".")
@@ -835,6 +920,22 @@ def _condense_followup_query(query: str, history: list[dict]) -> str:
     return query
 
 
+_INSUFFICIENT_EVIDENCE_RE = re.compile(
+    r"(?:\n+|\s+)No hay evidencia suficiente en los reportes indexados para responder esta consulta\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_redundant_refusal_tail(answer_text: str, citations: list[dict]) -> str:
+    """Elimina coletillas contradictorias de rechazo cuando la respuesta ya incluye hechos citados."""
+    if not answer_text or not citations:
+        return answer_text
+    cleaned = _INSUFFICIENT_EVIDENCE_RE.sub("", answer_text).strip()
+    if cleaned and cleaned != answer_text.strip() and re.search(r"\[\d+\]", cleaned):
+        return cleaned
+    return answer_text
+
+
 def _resolve_source_filter_patterns(source_filter: str | None) -> list[str] | None:
     if not source_filter:
         return None
@@ -855,9 +956,15 @@ def run_rag_query(
     top_k: int = 6,
     history: list[dict] | None = None,
     source_filter: str | None = None,
+    pinned_context: dict | None = None,
 ) -> dict:
     history = history or []
-    standalone_query = _condense_followup_query(question, history)
+    resolved_ctx = resolve_conversational_context(question, history, pinned_context)
+    if any(resolved_ctx.values()):
+        standalone_query = rewrite_query_for_rrf(question, resolved_ctx)
+    else:
+        standalone_query = _condense_followup_query(question, history)
+
     semantic_query, ts_expr, entity_tokens, exact_cves, exact_cve_ts = _prepare_retrieval_queries(standalone_query)
     q_vec = embedder.encode([semantic_query], normalize_embeddings=True)[0].tolist()
     candidate_limit = min(max(top_k * 5, 30), 48)
@@ -940,7 +1047,13 @@ def run_rag_query(
                 ),
             )
             raw_rows = cur.fetchall()
-            rows = _select_diverse_topk(raw_rows, entity_tokens, exact_cves, top_k)
+            rows = _select_diverse_topk(
+                raw_rows,
+                entity_tokens,
+                exact_cves,
+                top_k,
+                active_family=resolved_ctx.get("family"),
+            )
             linked_ctx = (
                 _fetch_linked_cti_context(cur, list({row[0] for row in rows}))
                 if rows
@@ -952,6 +1065,8 @@ def run_rag_query(
         return {
             "answer": empty_answer,
             "standalone_query": standalone_query,
+            "rewritten_query": standalone_query,
+            "resolved_context": resolved_ctx,
             "citations": [],
             "model": GROQ_MODEL,
             "analysis": _build_structured_analysis(empty_answer, [], {"campaigns": [], "cves": [], "iocs": []}),
@@ -983,6 +1098,8 @@ def run_rag_query(
             f"Contenido: {clean_snip[:900]}\n"
         )
 
+    context_guardrail = build_context_guardrail(resolved_ctx)
+    full_system_prompt = f"{SYSTEM_PROMPT}\n\n{context_guardrail}".strip()
     user_prompt = (
         f"FRAGMENTOS DE CONTEXTO:\n{''.join(context_blocks)}\n"
         f"CONSULTA DEL ANALISTA:\n{standalone_query}"
@@ -990,7 +1107,7 @@ def run_rag_query(
 
     answer_text, used_model = _chat_completion_with_failover(
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": full_system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.0,
@@ -998,12 +1115,21 @@ def run_rag_query(
     )
 
     if not answer_text:
-        answer_text = _build_extractive_fallback_answer(standalone_query, citations, linked_ctx)
+        answer_text = _build_extractive_fallback_answer(
+            standalone_query,
+            citations,
+            linked_ctx,
+            resolved_context=resolved_ctx,
+        )
         used_model = "omega-extractive-fallback"
+    else:
+        answer_text = _strip_redundant_refusal_tail(answer_text, citations)
 
     return {
         "answer": answer_text,
         "standalone_query": standalone_query,
+        "rewritten_query": standalone_query,
+        "resolved_context": resolved_ctx,
         "citations": citations,
         "model": used_model,
         "analysis": _build_structured_analysis(answer_text, citations, linked_ctx),

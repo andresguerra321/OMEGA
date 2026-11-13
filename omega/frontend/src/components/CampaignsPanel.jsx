@@ -8,8 +8,10 @@ import {
   MessageSquare,
   FileText,
   Download,
+  Globe,
 } from 'lucide-react';
 import { fetchCampaigns, fetchCampaignDetail } from '../lib/api';
+import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 export function CampaignsPanel({ onAskInChat }) {
   const [campaigns, setCampaigns] = useState([]);
@@ -26,6 +28,7 @@ export function CampaignsPanel({ onAskInChat }) {
   const [iocSearch, setIocSearch] = useState('');
   const [iocTypeFilter, setIocTypeFilter] = useState('ALL');
   const [copiedValue, setCopiedValue] = useState('');
+  const [showWebExtractor, setShowWebExtractor] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -313,6 +316,20 @@ export function CampaignsPanel({ onAskInChat }) {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => setShowWebExtractor((prev) => !prev)}
+                  title="Extraer IPv4, dominios y CVEs desde artículo web en RAM (WebBaseLoader RNF4)"
+                  className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3 py-1.5 text-[12.5px] active:scale-[0.97] transition-all cursor-pointer ${
+                    showWebExtractor
+                      ? 'border-[#2F6FED]/50 bg-[#2F6FED]/18 text-[#8AB4FF]'
+                      : 'border-white/[0.08] bg-white/[0.045] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
+                  }`}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  <span>URL (RAM)</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleExportDossier}
                   title="Exportar ficha en Markdown"
                   className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
@@ -337,6 +354,15 @@ export function CampaignsPanel({ onAskInChat }) {
                 )}
               </div>
             </div>
+
+            {showWebExtractor && (
+              <OmegaWebIntelCard
+                compact
+                onAskInChat={onAskInChat}
+                title="Extraer indicadores CTI desde artículo público (WebBaseLoader RAM)"
+                subtitle="Pega una URL de Citizen Lab, Amnesty Tech o Google TAG para obtener IPv4 públicas, dominios C2 y CVEs sin descargar HTML a disco."
+              />
+            )}
 
             {detail.summary && (
               <p className="max-w-[68ch] text-[15px] leading-[1.7] text-[#D1D1D6]">

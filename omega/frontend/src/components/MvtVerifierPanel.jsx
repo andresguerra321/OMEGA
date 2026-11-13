@@ -6,6 +6,7 @@ import {
   syncStixFeeds,
   verifyMvtText,
 } from '../lib/api';
+import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
   [
@@ -75,6 +76,7 @@ function normalizeParallelResult(res, files = [], customSourceLabel = '') {
     yaraHits: res.yara_hits || [],
     verdictCode: res.diagnosis?.verdict_code || (findings.length > 0 ? 'DETECTED' : 'CLEAN'),
     rationale: res.diagnosis?.rationale || '',
+    recommendedActions: res.diagnosis?.recommended_actions || [],
     findings,
   };
 }
@@ -89,6 +91,13 @@ function normalizeManualResult(res) {
     yaraHits: [],
     verdictCode: findings.length > 0 ? 'DETECTED' : 'CLEAN',
     rationale: '',
+    recommendedActions:
+      findings.length > 0
+        ? [
+            'Preservar el respaldo completo y evitar restaurar el equipo antes de la revisión forense.',
+            'Correlacionar el indicador detectado con los reportes técnicos desde Preguntar.',
+          ]
+        : [],
     findings,
   };
 }
@@ -229,12 +238,17 @@ export function MvtVerifierPanel({ onAskInChat }) {
       const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
       const dev = liveRes.device_summary || snapshot.device || {};
       const label = [dev.manufacturer, dev.model].filter(Boolean).join(' ').trim() || 'Dispositivo Android';
+      const unifiedSource = liveRes.triage
+        ? {
+            ...liveRes.triage,
+            yara_hits: liveRes.yara_hits?.length ? liveRes.yara_hits : liveRes.triage.yara_hits,
+            behavioral_anomalies: liveRes.behavioral_anomalies?.length
+              ? liveRes.behavioral_anomalies
+              : liveRes.triage.behavioral_anomalies,
+          }
+        : {};
       setHardeningReport(liveRes);
-      const normalized = normalizeParallelResult(liveRes.triage, [], `${label} (ADB USB)`);
-      if (liveRes.yara_hits?.length && normalized.yaraHits.length === 0) {
-        normalized.yaraHits = liveRes.yara_hits;
-      }
-      setResult(normalized);
+      setResult(normalizeParallelResult(unifiedSource, [], `${label} (ADB USB)`));
     } catch (err) {
       setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
     } finally {
@@ -305,6 +319,7 @@ export function MvtVerifierPanel({ onAskInChat }) {
     setDnsAppliedNote('');
     try {
       const apiRes = await runParallelTriage(files);
+      setHardeningReport(apiRes);
       setResult(normalizeParallelResult(apiRes, files));
     } catch (err) {
       setErrorMsg(err?.message || 'No se pudo analizar el archivo en memoria.');
@@ -475,29 +490,65 @@ export function MvtVerifierPanel({ onAskInChat }) {
           </button>
         </div>
 
-        {/* Bloque de Veredicto Apple Glass */}
-        <section className="apple-group rounded-[15px] p-5">
-          <div className="flex items-center gap-2.5">
-            {!hasAnyThreatSignal ? (
-              <ShieldCheck className="h-5 w-5 text-[#30D158] shrink-0" />
-            ) : (
-              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictDot}`} />
+        {/* 1 · Veredicto y contención */}
+        <section className="space-y-2">
+          <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
+            1 · Veredicto y contención
+          </span>
+          <div className="apple-group rounded-[15px] p-5 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {!hasAnyThreatSignal ? (
+                  <ShieldCheck className="h-5 w-5 text-[#30D158] shrink-0" />
+                ) : (
+                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictDot}`} />
+                )}
+                <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${isCriticalOverall ? 'text-[#FF6961]' : verdictHeadingTone}`}>
+                  {verdictTitle}
+                </h2>
+              </div>
+              {result.verdictCode && (
+                <span
+                  className={`font-tech shrink-0 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium ${
+                    isCriticalOverall
+                      ? 'border-[#FF453A]/35 bg-[#FF453A]/12 text-[#FF6961]'
+                      : hasAnyThreatSignal
+                        ? 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]'
+                        : 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]'
+                  }`}
+                >
+                  {result.verdictCode}
+                </span>
+              )}
+            </div>
+
+            <p className="text-[13.5px] text-[#D1D1D6] leading-relaxed">
+              {verdictBody}
+            </p>
+
+            {result.recommendedActions?.length > 0 && (
+              <div className="rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-4 py-3 space-y-2">
+                <div className="text-[11.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+                  Acciones de contención recomendadas
+                </div>
+                <ul className="space-y-1.5">
+                  {result.recommendedActions.map((act, idx) => (
+                    <li key={`${idx}-${act.slice(0, 24)}`} className="flex items-start gap-2 text-[12.5px] text-[#E5E5EA] leading-snug">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#2F6FED] shrink-0" />
+                      <span>{act}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-            <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${isCriticalOverall ? 'text-[#FF6961]' : verdictHeadingTone}`}>
-              {verdictTitle}
-            </h2>
-          </div>
 
-          <p className="mt-2.5 text-[13.5px] text-[#D1D1D6] leading-relaxed">
-            {verdictBody}
-          </p>
-
-          <div className="font-tech mt-4 pt-3 border-t border-white/[0.06] text-[11.5px] text-[#8E8E93]">
-            {result.sourceLabel}
-            {result.filesAnalyzed ? ` · ${result.filesAnalyzed} artefacto(s) en RAM` : ''}
-            {` · ${result.analyzedCount} indicadores evaluados`}
-            {hardeningReport?.cached_dns_count > 0 ? ` · ${hardeningReport.cached_dns_count} DNS en caché` : ''}
-            {' · 0 bytes guardados'}
+            <div className="font-tech pt-3 border-t border-white/[0.06] text-[11.5px] text-[#8E8E93]">
+              {result.sourceLabel}
+              {result.filesAnalyzed ? ` · ${result.filesAnalyzed} artefacto(s) en RAM` : ''}
+              {` · ${result.analyzedCount} indicadores evaluados`}
+              {hardeningReport?.cached_dns_count > 0 ? ` · ${hardeningReport.cached_dns_count} DNS en caché` : ''}
+              {' · 0 bytes guardados'}
+            </div>
           </div>
         </section>
 
@@ -513,336 +564,327 @@ export function MvtVerifierPanel({ onAskInChat }) {
           </div>
         )}
 
-        {/* Postura de Endurecimiento (ADB USB) */}
-        {hardeningReport?.hardening_checks?.length > 0 && (
-          <section className="space-y-2">
-            <div className="px-1 flex items-center justify-between gap-3">
-              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
-                Postura de endurecimiento (ADB USB)
+        {/* 2 · Anomalías conductuales y hardening */}
+        <section className="space-y-2">
+          <div className="px-1 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
+              2 · Anomalías conductuales y hardening
+            </span>
+            {hardeningReport?.device_summary && (
+              <span className="font-tech text-[11px] text-[#8E8E93]">
+                Android {hardeningReport.device_summary.android_version || 'N/D'} · Parche{' '}
+                {hardeningReport.device_summary.security_patch || 'N/D'}
               </span>
-              {hardeningReport.device_summary && (
-                <span className="font-tech text-[11.5px] text-[#8E8E93]">
-                  Android {hardeningReport.device_summary.android_version || 'N/D'} · Parche{' '}
-                  {hardeningReport.device_summary.security_patch || 'N/D'}
-                </span>
-              )}
-            </div>
-            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
-              {hardeningReport.hardening_checks.map((chk) => {
-                let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
-                if (chk.status === 'OK') {
-                  badgeCls = 'border-[#30D158]/35 bg-[#30D158]/12 text-[#30D158]';
-                } else if (chk.status === 'CRITICAL') {
-                  badgeCls = 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]';
-                } else if (chk.status === 'WARN') {
-                  badgeCls = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
-                }
+            )}
+          </div>
 
-                const showDnsAction =
-                  canHardenDnsInDesktop &&
-                  chk.control.includes('DNS Privado') &&
-                  chk.status !== 'OK';
+          <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+            {hardeningReport?.hardening_checks?.map((chk) => {
+              let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
+              if (chk.status === 'OK') {
+                badgeCls = 'border-[#30D158]/35 bg-[#30D158]/12 text-[#30D158]';
+              } else if (chk.status === 'CRITICAL') {
+                badgeCls = 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]';
+              } else if (chk.status === 'WARN') {
+                badgeCls = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
+              }
 
-                return (
-                  <div key={chk.control} className="px-4 py-3.5 space-y-2.5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
-                            {chk.status}
-                          </span>
-                          <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
-                            {chk.control}
-                          </span>
-                        </div>
-                        <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
-                          {chk.detail}
-                        </p>
+              const showDnsAction =
+                canHardenDnsInDesktop &&
+                chk.control.includes('DNS Privado') &&
+                chk.status !== 'OK';
+
+              return (
+                <div key={chk.control} className="px-4 py-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
+                          {chk.status}
+                        </span>
+                        <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                          {chk.control}
+                        </span>
                       </div>
-                      <span className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
-                        {chk.value}
-                      </span>
+                      <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
+                        {chk.detail}
+                      </p>
                     </div>
+                    <span className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
+                      {chk.value}
+                    </span>
+                  </div>
 
-                    {showDnsAction && (
-                      <div className="pt-1 flex flex-wrap items-center gap-2">
-                        {!confirmingDns ? (
+                  {showDnsAction && (
+                    <div className="pt-1 flex flex-wrap items-center gap-2">
+                      {!confirmingDns ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDns(true)}
+                          className="rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                        >
+                          Activar DNS Privado (Quad9 DoT)
+                        </button>
+                      ) : (
+                        <>
+                          <span className="text-[12px] text-[#D1D1D6]">
+                            ¿Forzar <span className="font-tech text-[#F5F5F7]">dns.quad9.net</span> por USB?
+                          </span>
                           <button
                             type="button"
-                            onClick={() => setConfirmingDns(true)}
-                            className="rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                            disabled={hardeningDns}
+                            onClick={handleConfirmHardenDns}
+                            className="rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
                           >
-                            Activar DNS Privado (Quad9 DoT)
+                            {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" />}
+                            <span>Confirmar</span>
                           </button>
-                        ) : (
-                          <>
-                            <span className="text-[12px] text-[#D1D1D6]">
-                              ¿Forzar <span className="font-tech text-[#F5F5F7]">dns.quad9.net</span> por USB?
-                            </span>
-                            <button
-                              type="button"
-                              disabled={hardeningDns}
-                              onClick={handleConfirmHardenDns}
-                              className="rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
-                            >
-                              {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" />}
-                              <span>Confirmar</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={hardeningDns}
-                              onClick={() => setConfirmingDns(false)}
-                              className="rounded-[8px] border border-white/[0.1] px-2.5 py-1 text-[12px] text-[#8E8E93] hover:text-[#F5F5F7] cursor-pointer"
-                            >
-                              Cancelar
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                          <button
+                            type="button"
+                            disabled={hardeningDns}
+                            onClick={() => setConfirmingDns(false)}
+                            className="rounded-[8px] border border-white/[0.1] px-2.5 py-1 text-[12px] text-[#8E8E93] hover:text-[#F5F5F7] cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
-        {/* Alertas de Accesibilidad, Device Admin y C2 */}
-        {abuseAlerts.length > 0 && (
-          <section className="space-y-2">
-            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
-              Alertas de accesibilidad y privilegios ({abuseAlerts.length})
-            </span>
-            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
-              {abuseAlerts.map((al, idx) => (
-                <div key={`${al.indicator}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
-                  <div className="min-w-0 space-y-1">
+            {abuseAlerts.map((al, idx) => (
+              <div key={`${al.indicator}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
+                        al.severity === 'CRITICAL'
+                          ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
+                          : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
+                      }`}
+                    >
+                      {al.severity}
+                    </span>
+                    <span className="text-[13px] font-medium text-[#F5F5F7]">
+                      {al.category}
+                    </span>
+                  </div>
+                  <div className="font-tech text-[12.5px] text-[#E5E5EA] break-all">
+                    {al.indicator}
+                  </div>
+                  <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
+                    {al.detail}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!onAskInChat}
+                  onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
+                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  Investigar en Preguntar
+                </button>
+              </div>
+            ))}
+
+            {behavioralAnomalies.map((anom, idx) => {
+              const isCrit = anom.severity === 'CRITICAL';
+              return (
+                <div
+                  key={`${anom.category}-${anom.artifact}-${anom.indicator}-${idx}`}
+                  className="px-4 py-3.5 flex items-start justify-between gap-4"
+                >
+                  <div className="min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
-                          al.severity === 'CRITICAL'
+                          isCrit
                             ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
                             : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
                         }`}
                       >
-                        {al.severity}
+                        {anom.severity}
                       </span>
-                      <span className="text-[13px] font-medium text-[#F5F5F7]">
-                        {al.category}
+                      <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
+                        {anom.indicator}
                       </span>
-                    </div>
-                    <div className="font-tech text-[12.5px] text-[#E5E5EA] break-all">
-                      {al.indicator}
-                    </div>
-                    <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
-                      {al.detail}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!onAskInChat}
-                    onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
-                    className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
-                  >
-                    Investigar en Preguntar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Firmas YARA en RAM */}
-        {hasYara && (
-          <section className="space-y-2">
-            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
-              Caza de firmas YARA en RAM ({yaraHits.length})
-            </span>
-            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
-              {yaraHits.map((hit, idx) => (
-                <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
-                  <div className="min-w-0 space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-tech text-[13px] font-medium text-[#F5F5F7]">
-                        {hit.rule_name}
+                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
+                        {anom.category}
                       </span>
-                      <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
-                        {hit.spyware_family}
-                      </span>
-                      {hit.cve && (
-                        <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
-                          {hit.cve}
-                        </span>
-                      )}
                     </div>
                     <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
-                      {hit.description}
+                      {anom.detail}
                     </p>
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      {(hit.matched_strings || []).map((tok) => (
-                        <span
-                          key={tok}
-                          className="font-tech rounded-[5px] border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[11px] text-[#8AB4FF]"
-                        >
-                          {tok}
-                        </span>
-                      ))}
-                      <span className="font-tech text-[11px] text-[#8E8E93] truncate">
-                        · {hit.artifact}
-                      </span>
+                    <div className="font-tech text-[11px] text-[#8E8E93] truncate">
+                      {anom.artifact}
                     </div>
                   </div>
 
                   <button
                     type="button"
                     disabled={!onAskInChat}
-                    onClick={() => handleInvestigateYara(hit)}
+                    onClick={() => handleInvestigateAnomaly(anom)}
                     className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
                     Investigar en Preguntar
                   </button>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+              );
+            })}
 
-        {/* Sockets Públicos de Kernel (ADB USB) */}
-        {liveSockets.length > 0 && (
-          <section className="space-y-2">
-            <div className="px-1 flex items-center justify-between gap-3">
-              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
-                Sockets salientes de kernel ({hardeningReport?.live_sockets_total || liveSockets.length})
-              </span>
-              <span className="font-tech text-[11.5px] text-[#8E8E93]">
-                {hardeningReport?.cached_dns_count || 0} dominios DNS en caché
-              </span>
-            </div>
-            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden max-h-[260px] overflow-y-auto">
-              {liveSockets.slice(0, 20).map((sock, idx) => (
-                <div
-                  key={`${sock.remote_ip}-${sock.remote_port}-${idx}`}
-                  className="px-4 py-2.5 flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0 flex items-center gap-2.5">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                        sock.cti_match ? 'bg-[#FF453A]' : 'bg-[#8E8E93]/60'
-                      }`}
-                    />
-                    <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate">
-                      {sock.remote_ip}:{sock.remote_port}
+            {liveSockets.length > 0 && (
+              <div>
+                <div className="px-4 py-2.5 bg-white/[0.02] flex items-center justify-between gap-3">
+                  <span className="text-[12px] font-medium text-[#D1D1D6]">
+                    Sockets kernel activos /proc/net/tcp ({hardeningReport?.live_sockets_total || liveSockets.length})
+                  </span>
+                  <span className="font-tech text-[11px] text-[#8E8E93]">
+                    {hardeningReport?.cached_dns_count || 0} DNS en caché
+                  </span>
+                </div>
+                <div className="divide-y divide-white/[0.05] max-h-[220px] overflow-y-auto">
+                  {liveSockets.slice(0, 20).map((sock, idx) => (
+                    <div
+                      key={`${sock.remote_ip}-${sock.remote_port}-${idx}`}
+                      className="px-4 py-2 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex items-center gap-2.5">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                            sock.cti_match ? 'bg-[#FF453A]' : 'bg-[#8E8E93]/60'
+                          }`}
+                        />
+                        <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate">
+                          {sock.remote_ip}:{sock.remote_port}
+                        </span>
+                        {sock.cti_match && (
+                          <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
+                            CTI · {sock.spyware_family}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-tech shrink-0 text-[11px] text-[#8E8E93]">
+                        {sock.state} · local:{sock.local_port}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!hardeningReport?.hardening_checks?.length &&
+              !abuseAlerts.length &&
+              !hasBehavioral &&
+              !liveSockets.length && (
+                <div className="px-4 py-3.5 text-[12.5px] text-[#8E8E93]">
+                  Sin anomalías conductuales, privilegios anómalos ni brechas de endurecimiento detectadas en este análisis.
+                </div>
+              )}
+          </div>
+
+          {liveSockets.length > 0 && (
+            <OmegaWebIntelCard
+              compact
+              activeNet4Ips={liveSockets.map((s) => s.remote_ip).filter(Boolean)}
+              onAskInChat={onAskInChat}
+              title="Cruzar sockets IPv4 activos contra artículo CTI reciente"
+              subtitle="Carga en RAM un reporte de Citizen Lab, Amnesty Tech o Google TAG y compara sus IPv4 (net4) contra las conexiones abiertas en /proc/net/tcp."
+            />
+          )}
+        </section>
+
+        {/* 3 · Coincidencias CTI y firmas YARA */}
+        <section className="space-y-2">
+          <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
+            3 · Coincidencias CTI y firmas YARA ({yaraHits.length + result.findings.length})
+          </span>
+          <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+            {yaraHits.map((hit, idx) => (
+              <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-tech text-[13px] font-medium text-[#F5F5F7]">
+                      {hit.rule_name}
                     </span>
-                    {sock.cti_match && (
-                      <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
-                        CTI · {sock.spyware_family}
+                    <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
+                      YARA · {hit.spyware_family}
+                    </span>
+                    {hit.cve && (
+                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
+                        {hit.cve}
                       </span>
                     )}
                   </div>
-                  <span className="font-tech shrink-0 text-[11px] text-[#8E8E93]">
-                    {sock.state} · local:{sock.local_port}
-                  </span>
+                  <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
+                    {hit.description}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {(hit.matched_strings || []).map((tok) => (
+                      <span
+                        key={tok}
+                        className="font-tech rounded-[5px] border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[11px] text-[#8AB4FF]"
+                      >
+                        {tok}
+                      </span>
+                    ))}
+                    <span className="font-tech text-[11px] text-[#8E8E93] truncate">
+                      · {hit.artifact}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
 
-        {/* Hallazgos CTI */}
-        {hasMatches && (
-          <section className="space-y-2">
-            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
-              Coincidencias con inteligencia pública ({result.findings.length})
-            </span>
-            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
-              {result.findings.map((finding) => (
-                <div
-                  key={finding.id}
-                  className="px-4 py-3.5 flex items-center justify-between gap-4"
+                <button
+                  type="button"
+                  disabled={!onAskInChat}
+                  onClick={() => handleInvestigateYara(hit)}
+                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
-                        {finding.ioc_value}
-                      </span>
-                      <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
-                        {finding.spyware_family}
-                      </span>
-                    </div>
-                    <div className="font-tech text-[11.5px] text-[#8E8E93] truncate">
-                      {finding.artifact_origin}
-                    </div>
-                  </div>
+                  Investigar en Preguntar
+                </button>
+              </div>
+            ))}
 
-                  <button
-                    type="button"
-                    disabled={!onAskInChat}
-                    onClick={() => handleInvestigateFinding(finding)}
-                    className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
-                  >
-                    Investigar en Preguntar
-                  </button>
+            {result.findings.map((finding) => (
+              <div
+                key={finding.id}
+                className="px-4 py-3.5 flex items-center justify-between gap-4"
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
+                      {finding.ioc_value}
+                    </span>
+                    <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
+                      {finding.spyware_family}
+                    </span>
+                  </div>
+                  <div className="font-tech text-[11.5px] text-[#8E8E93] truncate">
+                    {finding.artifact_origin}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
 
-        {/* Anomalías Conductuales */}
-        {hasBehavioral && (
-          <section className="space-y-2">
-            <span className="px-1 block text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
-              Heurística conductual en RAM ({behavioralAnomalies.length})
-            </span>
-            <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
-              {behavioralAnomalies.map((anom, idx) => {
-                const isCrit = anom.severity === 'CRITICAL';
-                return (
-                  <div
-                    key={`${anom.category}-${anom.artifact}-${anom.indicator}-${idx}`}
-                    className="px-4 py-3.5 flex items-start justify-between gap-4"
-                  >
-                    <div className="min-w-0 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
-                            isCrit
-                              ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
-                              : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
-                          }`}
-                        >
-                          {anom.severity}
-                        </span>
-                        <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
-                          {anom.indicator}
-                        </span>
-                        <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
-                          {anom.category}
-                        </span>
-                      </div>
-                      <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
-                        {anom.detail}
-                      </p>
-                      <div className="font-tech text-[11px] text-[#8E8E93] truncate">
-                        {anom.artifact}
-                      </div>
-                    </div>
+                <button
+                  type="button"
+                  disabled={!onAskInChat}
+                  onClick={() => handleInvestigateFinding(finding)}
+                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  Investigar en Preguntar
+                </button>
+              </div>
+            ))}
 
-                    <button
-                      type="button"
-                      disabled={!onAskInChat}
-                      onClick={() => handleInvestigateAnomaly(anom)}
-                      className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
-                    >
-                      Investigar en Preguntar
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+            {!hasYara && !hasMatches && (
+              <div className="px-4 py-3.5 text-[12.5px] text-[#8E8E93]">
+                0 firmas YARA activadas y 0 coincidencias contra campañas conocidas (STIX 2.1 / Citizen Lab / Amnesty Tech).
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     );
   }
@@ -856,62 +898,81 @@ export function MvtVerifierPanel({ onAskInChat }) {
             Verificar integridad del dispositivo
           </h1>
           <p className="mt-2.5 text-[14px] text-[#8E8E93] leading-[1.55] max-w-[510px] mx-auto">
-            Analiza respaldos en memoria RAM o cruza indicadores sospechosos sin escribir datos en disco.
+            Audita un teléfono conectado por USB o analiza respaldos en memoria RAM sin escribir datos en disco.
           </p>
         </header>
 
-        {/* Barra USB Nativa (solo Electron Desktop) */}
-        {hasDesktopBridge && (
-          <div className="apple-group mb-3.5 rounded-[13px] px-4 py-3 flex items-center justify-between gap-3">
-            <div className="min-w-0 flex items-center gap-3">
-              <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
-                <Smartphone
-                  className={`h-4 w-4 ${
-                    usbDevice?.connected ? 'text-[#30D158]' : 'text-[#8E8E93]'
-                  }`}
-                />
-              </div>
-              <div className="min-w-0">
-                {usbDevice?.connected ? (
-                  <div className="flex flex-wrap items-center gap-2">
+        {/* Disparador 1: Analizar dispositivo USB (ADB nativo en Electron Desktop) */}
+        <div className="apple-group mb-3.5 rounded-[13px] px-4 py-3.5 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-[10px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
+              <Smartphone
+                className={`h-4 w-4 ${
+                  hasDesktopBridge && usbDevice?.connected ? 'text-[#30D158]' : 'text-[#8E8E93]'
+                }`}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                  Analizar dispositivo USB
+                </span>
+                {hasDesktopBridge && usbDevice?.connected && (
+                  <>
                     <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
-                    <span className="text-[13px] font-medium text-[#F5F5F7] truncate">
-                      {usbDevice.model}
+                    <span className="font-tech text-[11px] text-[#8E8E93] truncate">
+                      {usbDevice.model} · {usbDevice.serial}
                     </span>
-                    <span className="font-tech text-[11px] text-[#8E8E93]">
-                      {usbDevice.serial} · solo lectura
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-[12.5px] text-[#8E8E93] truncate">
-                    {usbDevice?.reason || 'Detectando dispositivo Android por USB...'}
-                  </p>
+                  </>
                 )}
               </div>
+              <p className="text-[12px] text-[#8E8E93] truncate">
+                {hasDesktopBridge
+                  ? usbDevice?.connected
+                    ? 'Sockets kernel /proc/net/tcp, DNS en caché, SELinux y accesibilidad en RAM.'
+                    : usbDevice?.reason || 'Detectando dispositivo Android por USB (solo lectura)...'
+                  : 'Disponible en OMEGA Desktop (Electron) con depuración USB de solo lectura.'}
+              </p>
             </div>
-
-            {usbDevice?.connected ? (
-              <button
-                type="button"
-                disabled={scanningUsb || isAnalyzing}
-                onClick={handleLiveUsbScan}
-                className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
-              >
-                {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                <span>{scanningUsb ? 'Extrayendo RAM...' : 'Auditar dispositivo'}</span>
-              </button>
-            ) : (
-              <span className="font-tech shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[10.5px] text-[#8E8E93]">
-                USB ADB
-              </span>
-            )}
           </div>
-        )}
 
-        {/* Contenedor Principal Apple Glass */}
+          {hasDesktopBridge && usbDevice?.connected ? (
+            <button
+              type="button"
+              disabled={scanningUsb || isAnalyzing}
+              onClick={handleLiveUsbScan}
+              className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+            >
+              {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              <span>{scanningUsb ? 'Extrayendo RAM...' : 'Analizar dispositivo USB'}</span>
+            </button>
+          ) : (
+            <span className="font-tech shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[10.5px] text-[#8E8E93]">
+              {hasDesktopBridge ? 'USB ADB · En espera' : 'Solo Desktop'}
+            </span>
+          )}
+        </div>
+
+        {/* Disparador 2: Cargar respaldo / volcado */}
         <div className="omega-capsule rounded-[16px] p-4">
-          {/* Selector Segmentado macOS + Sincronizador STIX 2.1 */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+              Cargar respaldo / volcado
+            </span>
+
+            <button
+              type="button"
+              disabled={syncingStix}
+              onClick={handleSyncStix}
+              title="Sincronizar feeds STIX 2.1 locales (Amnesty Tech / Cytrox / NoviSpy) hacia PostgreSQL"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+            >
+              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#5E9BFF]' : ''}`} />
+              <span>{stixSyncNote || (syncingStix ? 'Sincronizando STIX2...' : 'Feeds STIX 2.1')}</span>
+            </button>
+          </div>
+
+          <div className="mb-3.5">
             <div className="apple-segmented inline-flex rounded-[9px] p-0.5">
               <button
                 type="button"
@@ -942,17 +1003,6 @@ export function MvtVerifierPanel({ onAskInChat }) {
                 Pegar indicadores
               </button>
             </div>
-
-            <button
-              type="button"
-              disabled={syncingStix}
-              onClick={handleSyncStix}
-              title="Sincronizar feeds STIX 2.1 locales (Amnesty Tech / Cytrox / NoviSpy) hacia PostgreSQL"
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
-            >
-              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#5E9BFF]' : ''}`} />
-              <span>{stixSyncNote || (syncingStix ? 'Sincronizando STIX2...' : 'Feeds STIX 2.1')}</span>
-            </button>
           </div>
 
           {inputMode === 'upload' ? (

@@ -7,11 +7,18 @@ class ChatTurn(BaseModel):
     content: str
 
 
+class ChatContextState(BaseModel):
+    family: str | None = Field(default=None, max_length=120)
+    os: str | None = Field(default=None, max_length=60)
+    cve: str | None = Field(default=None, max_length=40)
+
+
 class ChatRequest(BaseModel):
     query: str = Field(..., min_length=2, max_length=2000)
     history: list[ChatTurn] = Field(default_factory=list)
     top_k: int = Field(default=6, ge=1, le=12)
     source_filter: str | None = Field(default=None, max_length=120)
+    pinned_context: ChatContextState | None = None
 
 
 class CitationItem(BaseModel):
@@ -32,6 +39,8 @@ class ChatResponse(BaseModel):
     citations: list[CitationItem]
     model: str
     analysis: dict[str, Any] | None = None
+    resolved_context: ChatContextState | None = None
+    rewritten_query: str | None = None
 
 
 class IocMatchItem(BaseModel):

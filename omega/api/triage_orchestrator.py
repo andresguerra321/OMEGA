@@ -1,22 +1,20 @@
 import asyncio
+import gc
 import json
 import os
 import re
 import sqlite3
-from pathlib import Path
 from urllib.parse import urlparse
 import psycopg
-from dotenv import load_dotenv
 from groq import Groq
 
 from behavioral_forensics import run_behavioral_forensics, unpack_forensic_archives_in_ram
-from deep_forensics import inspect_ios_manifest_db, run_live_yara_hunt
-
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
-DB_DSN = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
+from cti_ingestor_core import DB_DSN
+from deep_forensics import (
+    inspect_ios_manifest_db,
+    parse_kernel_network_sockets,
+    run_kernel_and_posture_forensics,
+    run_live_yara_hunt,
 )
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
@@ -216,8 +214,9 @@ def _worker_c_process_crashlogs(artifacts: list[dict]) -> dict:
         is_proc_or_crash = any(
             k in fname for k in ("process", "shutdown", "crash", "ips", "package", "ps", "sysdiagnose", "test_mvt")
         )
-        # Fallback: si un archivo no encajó en A ni B, Subagente C lo inspecciona para no perder evidencia
-        is_unclassified = not any(
+        # Fallback: si un archivo no encajó en A ni B (y no es postura JSON/admin), Subagente C lo inspecciona
+        is_posture_meta = "device_posture" in fname or "device_policy" in fname or "proc_net" in fname
+        is_unclassified = not is_posture_meta and not any(
             k in fname
             for k in ("sms", "message", "chat", "whatsapp", "safari", "history", "browser", "dns", "net", "pcap", "traffic", "flow", "proxy", "conn", "timeline")
         )
@@ -316,15 +315,21 @@ def _correlate_with_cti_db(tokens: dict[str, dict]) -> list[dict]:
     return matches
 
 
-def _diagnose_verdict(agent_reports: list[dict], crash_anomalies: list[str]) -> dict:
+def _diagnose_verdict(
+    agent_reports: list[dict],
+    crash_anomalies: list[str],
+    host_signals: list[str] | None = None,
+) -> dict:
     """Evalúa patrones multi-vectoriales para distinguir falsos positivos de infecciones reales."""
     active_agents_with_hits = [ag for ag in agent_reports if len(ag["matches"]) > 0]
     all_matches = [m for ag in agent_reports for m in ag["matches"]]
     exact_matches = [m for m in all_matches if m["match_precision"] == "Exacto"]
     families = sorted({m["spyware_family"] for m in all_matches if m["spyware_family"] != "Desconocida"})
+    extra_signals = list(host_signals or [])
+    all_host_anomalies = [*crash_anomalies, *extra_signals]
 
-    # Caso 1: Sin coincidencias
-    if not all_matches and not crash_anomalies:
+    # Caso 1: Sin coincidencias CTI ni anomalías críticas en host/logs
+    if not all_matches and not all_host_anomalies:
         return {
             "verdict_code": "CLEAN",
             "verdict_label": "Sin Indicadores de Compromiso Conocidos",
@@ -337,8 +342,13 @@ def _diagnose_verdict(agent_reports: list[dict], crash_anomalies: list[str]) -> 
             ],
         }
 
-    # Caso 2: Patrón corroborado en múltiples capas (ej. Red + Mensajes o Proceso + CrashLog)
-    if len(active_agents_with_hits) >= 2 or (len(exact_matches) >= 1 and len(crash_anomalies) >= 1):
+    # Caso 2: Patrón corroborado en múltiples capas (ej. Red + Mensajes o CTI Exacto + Señal Conductual/Kernel/YARA)
+    if len(active_agents_with_hits) >= 2 or (len(exact_matches) >= 1 and len(all_host_anomalies) >= 1):
+        signal_notes: list[str] = []
+        if crash_anomalies:
+            signal_notes.append(f"{len(crash_anomalies)} anomalía(s) conductuales/crash")
+        if extra_signals:
+            signal_notes.append(f"{len(extra_signals)} señal(es) de postura kernel/abuso/YARA")
         return {
             "verdict_code": "CORROBORATED_INFECTION_PATTERN",
             "verdict_label": "Patrón de Infección Correlacionado (Alta Prioridad)",
@@ -347,7 +357,7 @@ def _diagnose_verdict(agent_reports: list[dict], crash_anomalies: list[str]) -> 
             "rationale": (
                 f"Se detectó convergencia de evidencia en {len(active_agents_with_hits)} vectores independientes "
                 f"({', '.join(a['agent_name'] for a in active_agents_with_hits)})"
-                + (f" junto con {len(crash_anomalies)} anomalía(s) en CrashLogs." if crash_anomalies else ".")
+                + (f" junto con {' y '.join(signal_notes)}." if signal_notes else ".")
                 + (f" Familias vinculadas: {', '.join(families)}." if families else "")
             ),
             "recommended_actions": [
@@ -408,17 +418,47 @@ def _run_ios_manifests_in_ram(expanded_artifacts: list[dict]) -> list[dict]:
     return findings
 
 
+def _inject_decoded_kernel_telemetries(expanded_artifacts: list[dict]) -> list[dict]:
+    """Decodifica /proc/net/tcp* hex en RAM como texto visible para Subagente B y caza YARA."""
+    raw_proc_chunks: list[str] = []
+    for art in expanded_artifacts:
+        fname = str(art.get("filename") or "").lower()
+        if "proc_net" in fname or "net_tcp" in fname or "tcp_sockets" in fname:
+            raw_bytes: bytes = art.get("bytes") or b""
+            if raw_bytes:
+                raw_proc_chunks.append(raw_bytes.decode("utf-8", errors="ignore"))
+
+    if not raw_proc_chunks:
+        return expanded_artifacts
+
+    decoded_sockets = parse_kernel_network_sockets("\n".join(raw_proc_chunks))
+    if not decoded_sockets:
+        return expanded_artifacts
+
+    lines = [f"{s['remote_ip']}:{s['remote_port']} ({s['state']})" for s in decoded_sockets]
+    return [
+        *expanded_artifacts,
+        {
+            "filename": "adb_live_net4_sockets.txt",
+            "bytes": "\n".join(lines).encode("utf-8"),
+        },
+    ]
+
+
 async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
-    """Orquestador asíncrono: desempaqueta en RAM y ejecuta CTI, conductual, Manifest.db y YARA."""
+    """Capa 2 unificada: desempaqueta en RAM y ejecuta CTI, conductual, kernel/Manifest.db y YARA."""
     expanded_artifacts = await asyncio.to_thread(unpack_forensic_archives_in_ram, artifacts)
 
     try:
-        res_a, res_b, res_c, behavioral_raw, manifest_findings, yara_hits = await asyncio.gather(
+        expanded_artifacts = await asyncio.to_thread(_inject_decoded_kernel_telemetries, expanded_artifacts)
+
+        res_a, res_b, res_c, behavioral_raw, manifest_findings, kernel_posture, yara_hits = await asyncio.gather(
             asyncio.to_thread(_worker_a_messaging_sqlite, expanded_artifacts),
             asyncio.to_thread(_worker_b_network_dns, expanded_artifacts),
             asyncio.to_thread(_worker_c_process_crashlogs, expanded_artifacts),
             asyncio.to_thread(run_behavioral_forensics, expanded_artifacts),
             asyncio.to_thread(_run_ios_manifests_in_ram, expanded_artifacts),
+            asyncio.to_thread(run_kernel_and_posture_forensics, expanded_artifacts),
             asyncio.to_thread(run_live_yara_hunt, expanded_artifacts),
         )
 
@@ -460,11 +500,25 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
             if summary_line not in crash_anomalies:
                 crash_anomalies.append(summary_line)
 
-        diagnosis = _diagnose_verdict(agent_summaries, crash_anomalies)
+        hardening_checks = kernel_posture.get("hardening_checks", [])
+        abuse_alerts = kernel_posture.get("abuse_alerts", [])
+        live_sockets = kernel_posture.get("live_sockets", [])
+        cached_dns_domains = kernel_posture.get("cached_dns_domains", [])
+
+        critical_posture = [c for c in hardening_checks if c.get("status") == "CRITICAL"] + [
+            a for a in abuse_alerts if a.get("severity") == "CRITICAL"
+        ]
+        host_signals = (
+            [f"[YARA] {y['rule_name']} ({y.get('family', 'Spyware')})" for y in yara_hits]
+            + [f"[ABUSE:{a.get('severity', 'HIGH')}] {a.get('category')}: {a.get('indicator')}" for a in abuse_alerts]
+            + [f"[POSTURE CRITICAL] {c.get('control')}: {c.get('value')}" for c in hardening_checks if c.get("status") == "CRITICAL"]
+        )
+
+        diagnosis = _diagnose_verdict(agent_summaries, crash_anomalies, host_signals=host_signals)
         critical_behavioral = [a for a in behavioral_anomalies if a.get("severity") == "CRITICAL"]
         total_cti_matches = sum(a["matches_count"] for a in agent_summaries)
 
-        if total_cti_matches == 0 and (critical_behavioral or yara_hits) and diagnosis.get("verdict_code") in (
+        if total_cti_matches == 0 and (critical_behavioral or yara_hits or critical_posture) and diagnosis.get("verdict_code") in (
             "CLEAN",
             "LIKELY_FALSE_POSITIVE",
         ):
@@ -472,6 +526,10 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
             for yh in yara_hits[:2]:
                 if yh["rule_name"] not in previews:
                     previews.append(yh["rule_name"])
+            for cp in critical_posture[:2]:
+                label = cp.get("category") or cp.get("control")
+                if label and label not in previews:
+                    previews.append(label)
             categories_preview = ", ".join(previews)
             diagnosis = {
                 "verdict_code": "BEHAVIORAL_ZERO_DAY_SUSPICION",
@@ -479,7 +537,7 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
                 "confidence": "Alta",
                 "is_likely_false_positive": False,
                 "rationale": (
-                    f"El motor en RAM detectó {len(critical_behavioral)} anomalía(s) crítica(s) "
+                    f"El motor en RAM detectó {len(critical_behavioral) + len(critical_posture)} señal(es) crítica(s) "
                     f"y {len(yara_hits)} coincidencia(s) YARA ({categories_preview}). "
                     "Este patrón sugiere persistencia o vector de explotación activo."
                 ),
@@ -492,12 +550,17 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
 
         total_files = len(expanded_artifacts)
     finally:
+        # Garantía RNF4: limpiar explícitamente todos los buffers en memoria volátil
         for art in expanded_artifacts:
             art["bytes"] = b""
         expanded_artifacts.clear()
+        for src_art in artifacts:
+            src_art["bytes"] = b""
+        artifacts.clear()
+        gc.collect()
 
     return {
-        "pipeline_mode": "Parallel Multi-Agent Triage (3 CTI Workers + Behavioral + Manifest.db + YARA RAM)",
+        "pipeline_mode": "Unified In-RAM Triage (CTI + Behavioral + Kernel/Manifest.db + YARA)",
         "total_files": total_files,
         "total_indicators_analyzed": total_unique_tokens,
         "total_matches": total_cti_matches,
@@ -505,8 +568,15 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
         "behavioral_anomalies": behavioral_anomalies,
         "manifest_findings": manifest_findings,
         "yara_hits": yara_hits,
+        "device_summary": kernel_posture.get("device_summary", {}),
+        "hardening_checks": hardening_checks,
+        "abuse_alerts": abuse_alerts,
+        "live_sockets": live_sockets[:40],
+        "live_sockets_total": len(live_sockets),
+        "cached_dns_count": len(cached_dns_domains),
+        "cached_dns_sample": cached_dns_domains[:25],
         "diagnosis": diagnosis,
         "subagents": agent_summaries,
-        "ephemeral_notice": "Triage paralelo, análisis de Manifest.db y caza YARA ejecutados 100% en memoria volátil (RAM) sin persistencia en disco (RNF4).",
+        "ephemeral_notice": "Triage paralelo, análisis conductual/kernel, Manifest.db y caza YARA ejecutados 100% en memoria volátil (RAM) sin persistencia en disco (RNF4).",
     }
 

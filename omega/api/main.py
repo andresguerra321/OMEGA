@@ -1,6 +1,5 @@
 import sys
 import json
-from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,15 +26,10 @@ from services import (
 from forensic_engine import analyze_forensic_payload
 from triage_orchestrator import run_parallel_forensic_triage
 from stix_ingestor import sync_stix2_directory
-from deep_forensics import (
-    KNOWN_SAFE_ACCESSIBILITY_PREFIXES,
-    annotate_sockets_with_cti,
-    audit_device_admins,
-    parse_dns_resolver_cache,
-    parse_kernel_network_sockets,
-)
+from deep_forensics import build_adb_artifacts_in_ram
 from detection_engineering import generate_mvt_triage_script, generate_yara_for_campaign
 from link_verifier import inspect_suspicious_link
+from web_intel_loader import load_cti_url_in_ram
 from osint_engine import (
     delete_osint_asset,
     list_osint_assets,
@@ -83,11 +77,13 @@ def health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 def chat_endpoint(payload: ChatRequest):
     history_dicts = [t.model_dump() for t in payload.history]
+    pinned_dict = payload.pinned_context.model_dump() if payload.pinned_context is not None else None
     return run_rag_query(
         payload.query,
         top_k=payload.top_k,
         history=history_dicts,
         source_filter=payload.source_filter,
+        pinned_context=pinned_dict,
     )
 
 
@@ -219,190 +215,10 @@ class LiveDeviceSnapshot(BaseModel):
     dns_resolver_raw: str = ""
 
 
-def _evaluate_device_posture(dev: dict, device_admins_raw: str) -> tuple[list[dict], list[dict]]:
-    """Evalúa postura defensiva Android (Parche, SELinux, Accesibilidad, Device Admins, DoT, Sideloading)."""
-    hardening_checks: list[dict] = []
-    abuse_alerts: list[dict] = []
-
-    # 1. Integridad SELinux y Verified Boot
-    selinux = str(dev.get("selinux_status") or "Unknown").strip()
-    boot_state = str(dev.get("verified_boot_state") or "unknown").strip().lower()
-    selinux_ok = selinux.lower() == "enforcing"
-    boot_ok = boot_state in ("green", "unknown", "")
-    hardening_checks.append(
-        {
-            "control": "Integridad SELinux y Verified Boot",
-            "status": "OK" if (selinux_ok and boot_ok) else "CRITICAL",
-            "value": f"SELinux: {selinux} · Boot: {boot_state or 'N/D'}",
-            "detail": (
-                "Aislamiento obligatorio del kernel y arranque verificado intactos."
-                if (selinux_ok and boot_ok)
-                else "SELinux en modo Permissive o bootloader alterado; riesgo de manipulación de kernel/rootkit."
-            ),
-        }
-    )
-
-    # 2. Auditoría de nivel de parche de seguridad Android
-    patch_str = str(dev.get("security_patch") or "").strip()
-    try:
-        patch_date = datetime.strptime(patch_str, "%Y-%m-%d")
-        age_days = (datetime.now() - patch_date).days
-        patch_outdated = age_days > 120
-        hardening_checks.append(
-            {
-                "control": "Nivel de parche de seguridad",
-                "status": "WARN" if patch_outdated else "OK",
-                "value": patch_str,
-                "detail": (
-                    f"Parche con {age_days} días de antigüedad; expuesto a vectores 0-click/1-click conocidos."
-                    if patch_outdated
-                    else f"Parche actualizado ({patch_str})."
-                ),
-            }
-        )
-    except ValueError:
-        hardening_checks.append(
-            {
-                "control": "Nivel de parche de seguridad",
-                "status": "UNKNOWN",
-                "value": patch_str or "N/D",
-                "detail": "No se pudo determinar la fecha exacta del parche.",
-            }
-        )
-
-    # 3. Servicios de Accesibilidad Activos (vector crítico de robo de mensajería y permisos en Android)
-    acc_raw = str(dev.get("accessibility_services") or "null").strip()
-    if acc_raw and acc_raw.lower() not in ("null", "none", ""):
-        services = [s.strip() for s in acc_raw.split(":") if s.strip()]
-        suspicious_acc = [
-            s for s in services if not any(s.lower().startswith(safe) for safe in KNOWN_SAFE_ACCESSIBILITY_PREFIXES)
-        ]
-        for svc in suspicious_acc:
-            abuse_alerts.append(
-                {
-                    "severity": "HIGH",
-                    "category": "Abuso Potencial de Accesibilidad",
-                    "indicator": svc,
-                    "detail": "Permite leer contenido en pantalla (WhatsApp/Signal) y automatizar toques sin interacción.",
-                }
-            )
-        hardening_checks.append(
-            {
-                "control": "Servicios de Accesibilidad Activos",
-                "status": "WARN" if suspicious_acc else "OK",
-                "value": f"{len(services)} activos ({len(suspicious_acc)} terceros)",
-                "detail": (
-                    f"Servicios de terceros activos: {', '.join(suspicious_acc)}"
-                    if suspicious_acc
-                    else "Solo servicios oficiales del sistema habilitados."
-                ),
-            }
-        )
-    else:
-        hardening_checks.append(
-            {
-                "control": "Servicios de Accesibilidad Activos",
-                "status": "OK",
-                "value": "Ninguno",
-                "detail": "Sin servicios de lectura de pantalla de terceros habilitados.",
-            }
-        )
-
-    # 4. Administradores de Dispositivo (dumpsys device_policy)
-    admins, suspicious_admins = audit_device_admins(device_admins_raw)
-    if device_admins_raw.strip():
-        for adm in suspicious_admins:
-            abuse_alerts.append(
-                {
-                    "severity": "HIGH",
-                    "category": "Administrador de Dispositivo (Device Admin)",
-                    "indicator": adm,
-                    "detail": "Privilegio elevado capaz de bloquear desinstalación, imponer políticas o borrar datos.",
-                }
-            )
-        hardening_checks.append(
-            {
-                "control": "Administradores de Dispositivo",
-                "status": "WARN" if suspicious_admins else "OK",
-                "value": f"{len(admins)} activos ({len(suspicious_admins)} terceros)" if admins else "Solo sistema",
-                "detail": (
-                    f"Administradores externos detectados: {', '.join(suspicious_admins)}"
-                    if suspicious_admins
-                    else "Sin administradores de terceros anómalos en device_policy."
-                ),
-            }
-        )
-
-    # 5. DNS Privado Cifrado (DoT — mitigación en 1 clic)
-    dns_mode = str(dev.get("private_dns_mode") or "off").strip().lower()
-    dns_host = str(dev.get("private_dns_specifier") or "").strip()
-    dns_ok = dns_mode == "hostname" and bool(dns_host) and dns_host.lower() != "null"
-    hardening_checks.append(
-        {
-            "control": "DNS Privado Cifrado (DNS-over-TLS)",
-            "status": "OK" if dns_ok else "WARN",
-            "value": dns_host if dns_ok else dns_mode,
-            "detail": (
-                f"Resoluciones DNS cifradas mediante {dns_host}."
-                if dns_ok
-                else "DNS sin cifrar; expuesto a secuestro DNS o inyección de red en tránsito (mitigable en 1 clic)."
-            ),
-        }
-    )
-
-    # 6. Orígenes desconocidos (sideloading APK legacy)
-    unknown_src = str(dev.get("install_non_market_apps") or "").strip().lower()
-    if unknown_src:
-        hardening_checks.append(
-            {
-                "control": "Instalación desde orígenes desconocidos",
-                "status": "WARN" if unknown_src == "1" else "OK",
-                "value": (
-                    "Habilitado"
-                    if unknown_src == "1"
-                    else ("Desactivado" if unknown_src == "0" else "Control por app (Android 8+)")
-                ),
-                "detail": (
-                    "Permite instalar APKs fuera de Google Play; vector común en implantes 1-click Android."
-                    if unknown_src == "1"
-                    else "Sin habilitación global de sideloading legacy."
-                ),
-            }
-        )
-
-    return hardening_checks, abuse_alerts
-
-
 @app.post("/api/triage/device-live")
 async def live_device_triage(payload: LiveDeviceSnapshot):
-    """Auditoría forense profunda en vivo vía USB ADB (Kernel sockets, DNS, Accesibilidad, SELinux e IOCs)."""
-    hardening_checks, abuse_alerts = _evaluate_device_posture(payload.device, payload.device_admins_raw)
-
-    live_sockets = annotate_sockets_with_cti(parse_kernel_network_sockets(payload.proc_net_raw))
-    cached_dns_domains = parse_dns_resolver_cache(payload.dns_resolver_raw)
-
-    for sock in live_sockets:
-        if sock.get("cti_match"):
-            abuse_alerts.append(
-                {
-                    "severity": "CRITICAL",
-                    "category": "Socket Vivo a Infraestructura C2",
-                    "indicator": f"{sock['remote_ip']}:{sock['remote_port']} ({sock['state']})",
-                    "detail": f"Conexión kernel activa contra IP asociada a {sock.get('spyware_family') or 'spyware'}.",
-                }
-            )
-
-    network_telemetries = "\n".join(
-        [f"{s['remote_ip']}:{s['remote_port']} ({s['state']})" for s in live_sockets] + cached_dns_domains
-    )
-
-    artifacts = []
-    if payload.packages_text.strip():
-        artifacts.append({"filename": "adb_installed_packages.txt", "bytes": payload.packages_text.encode("utf-8")})
-    if payload.processes_text.strip():
-        artifacts.append({"filename": "adb_running_processes.txt", "bytes": payload.processes_text.encode("utf-8")})
-    if network_telemetries.strip():
-        artifacts.append({"filename": "adb_live_dns_sockets.txt", "bytes": network_telemetries.encode("utf-8")})
+    """Capa 2 unificada: normaliza telemetría ADB USB a RAM y ejecuta todo triage_orchestrator."""
+    artifacts = build_adb_artifacts_in_ram(payload.model_dump())
 
     try:
         triage_report = await run_parallel_forensic_triage(artifacts)
@@ -413,13 +229,15 @@ async def live_device_triage(payload: LiveDeviceSnapshot):
 
     return {
         "device_summary": payload.device,
-        "hardening_checks": hardening_checks,
-        "abuse_alerts": abuse_alerts,
-        "live_sockets": live_sockets[:40],
-        "live_sockets_total": len(live_sockets),
-        "cached_dns_count": len(cached_dns_domains),
-        "cached_dns_sample": cached_dns_domains[:25],
+        "hardening_checks": triage_report.get("hardening_checks", []),
+        "abuse_alerts": triage_report.get("abuse_alerts", []),
+        "live_sockets": triage_report.get("live_sockets", []),
+        "live_sockets_total": triage_report.get("live_sockets_total", 0),
+        "cached_dns_count": triage_report.get("cached_dns_count", 0),
+        "cached_dns_sample": triage_report.get("cached_dns_sample", []),
         "yara_hits": triage_report.get("yara_hits", []),
+        "behavioral_anomalies": triage_report.get("behavioral_anomalies", []),
+        "manifest_findings": triage_report.get("manifest_findings", []),
         "triage": triage_report,
     }
 
@@ -513,4 +331,83 @@ def system_governance_status(x_workspace_id: str = Header(default="default_analy
             "offensive_capabilities_disabled": True,
         },
         "indexed_sources": recent_reports,
+    }
+
+
+# --- Extractor CTI Volátil en RAM (LangChain WebBaseLoader RNF4) ---
+
+
+class WebIntelScanRequest(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048)
+    active_net4_ips: list[str] = Field(default_factory=list)
+    persist_to_db: bool = True
+
+
+def _lookup_known_cti_indicators(candidates: list[str]) -> list[dict]:
+    """Cruza IPs y dominios extraídos contra el catálogo histórico de PostgreSQL."""
+    cleaned = sorted({c.strip().lower() for c in candidates if c and c.strip()})[:160]
+    if not cleaned:
+        return []
+
+    from services import DB_DSN
+    import psycopg
+
+    try:
+        with psycopg.connect(DB_DSN) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON (LOWER(i.ioc_value), COALESCE(c.spyware_family, 'Spyware'))
+                        i.ioc_value,
+                        i.ioc_type,
+                        COALESCE(c.spyware_family, 'Spyware'),
+                        COALESCE(c.name, 'Catálogo OMEGA')
+                    FROM iocs i
+                    LEFT JOIN campaigns c ON i.campaign_id = c.id
+                    WHERE LOWER(i.ioc_value) = ANY(%s)
+                      AND i.ioc_type IN ('ip', 'domain', 'url')
+                    ORDER BY
+                        LOWER(i.ioc_value),
+                        COALESCE(c.spyware_family, 'Spyware'),
+                        CASE i.ioc_type WHEN 'ip' THEN 0 WHEN 'url' THEN 1 ELSE 2 END;
+                    """,
+                    (cleaned,),
+                )
+                return [
+                    {
+                        "ioc_value": r[0],
+                        "ioc_type": r[1],
+                        "spyware_family": r[2],
+                        "campaign": r[3],
+                    }
+                    for r in cur.fetchall()
+                ]
+    except psycopg.Error:
+        return []
+
+
+@app.post("/api/intel/webloader-scan")
+def scan_web_intel_source(payload: WebIntelScanRequest):
+    """Ingiere en RAM una URL CTI (Citizen Lab / Amnesty / TAG), destruye HTML, unifica a PostgreSQL y cruza IPv4."""
+    try:
+        extracted = load_cti_url_in_ram(payload.url, persist_to_db=payload.persist_to_db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"No se pudo descargar o analizar la fuente CTI en memoria: {exc}",
+        )
+
+    active_set = {ip.strip() for ip in payload.active_net4_ips if ip and ip.strip()}
+    matched_live_sockets = sorted(active_set.intersection(extracted["ipv4_iocs"]))
+    known_cti_matches = _lookup_known_cti_indicators(
+        [*extracted["ipv4_iocs"], *extracted["domains"]]
+    )
+
+    return {
+        **extracted,
+        "matched_live_net4": matched_live_sockets,
+        "known_cti_matches": known_cti_matches,
+        "ram_only": True,
     }

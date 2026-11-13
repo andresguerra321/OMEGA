@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('omegaDesktop', {
   checkAdbStatus: () => ipcRenderer.invoke('omega:adb-status'),
   collectDeviceSnapshot: () => ipcRenderer.invoke('omega:adb-collect'),
   hardenPrivateDns: () => ipcRenderer.invoke('omega:adb-harden-dns', { confirmed: true }),
+  inspectLinkEphemeral: (targetUrl) => ipcRenderer.invoke('omega:ephemeral-link-inspect', targetUrl),
 });
 

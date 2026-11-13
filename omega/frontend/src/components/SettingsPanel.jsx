@@ -17,6 +17,7 @@ import {
   getWorkspaceId,
   rotateWorkspaceId,
 } from '../lib/api';
+import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 const CONFIG_SECTIONS = [
   { id: 'cuenta', label: 'Cuenta y sesión', icon: Shield },
@@ -577,6 +578,12 @@ export function SettingsPanel({
                   </div>
                 ))}
               </div>
+
+              <OmegaWebIntelCard
+                compact
+                title="Ingesta volátil de fuente web CTI (WebBaseLoader RNF4)"
+                subtitle="Analiza un reporte técnico externo directamente en memoria para extraer IPv4 (net4), dominios y CVEs y cruzarlos con el catálogo."
+              />
             </section>
           </div>
         </div>

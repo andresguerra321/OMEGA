@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
 
 function getVerdictPresentation(result) {
@@ -29,6 +29,13 @@ export function LinkVerifierPanel({ onAskInChat }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [traceLoading, setTraceLoading] = useState(false);
+  const [traceResult, setTraceResult] = useState(null);
+  const [traceError, setTraceError] = useState('');
+  const [finalCheckResult, setFinalCheckResult] = useState(null);
+
+  const canTraceInRam =
+    typeof window !== 'undefined' && Boolean(window.omegaDesktop?.inspectLinkEphemeral);
 
   async function handleCheck(e) {
     e.preventDefault();
@@ -36,6 +43,9 @@ export function LinkVerifierPanel({ onAskInChat }) {
     if (!cleaned || loading) return;
     setLoading(true);
     setError('');
+    setTraceResult(null);
+    setTraceError('');
+    setFinalCheckResult(null);
     try {
       const data = await verifySuspiciousLink(cleaned);
       setResult(data);
@@ -43,6 +53,29 @@ export function LinkVerifierPanel({ onAskInChat }) {
       setError(err?.message || 'No se pudo inspeccionar el enlace.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleTraceEphemeral() {
+    if (!canTraceInRam || !result?.normalized_url || traceLoading) return;
+    setTraceLoading(true);
+    setTraceError('');
+    setFinalCheckResult(null);
+    try {
+      const trace = await window.omegaDesktop.inspectLinkEphemeral(result.normalized_url);
+      setTraceResult(trace);
+      if (trace?.final_url && trace.final_url !== result.normalized_url) {
+        try {
+          const destCheck = await verifySuspiciousLink(trace.final_url);
+          setFinalCheckResult(destCheck);
+        } catch {
+          // Ignore passive re-check error while keeping redirect trace visible
+        }
+      }
+    } catch (err) {
+      setTraceError(err?.message || 'No se pudo trazar el enlace en el sandbox volátil.');
+    } finally {
+      setTraceLoading(false);
     }
   }
 
@@ -61,6 +94,9 @@ export function LinkVerifierPanel({ onAskInChat }) {
             onClick={() => {
               setResult(null);
               setError('');
+              setTraceResult(null);
+              setTraceError('');
+              setFinalCheckResult(null);
             }}
             className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer shrink-0"
           >
@@ -82,24 +118,44 @@ export function LinkVerifierPanel({ onAskInChat }) {
                 {verdictMeta.headline}
               </h2>
             </div>
-            {onAskInChat && (
-              <button
-                type="button"
-                onClick={() => {
-                  const prompt = [
-                    `Evalúa este enlace inspeccionado pasivamente en OMEGA:`,
-                    `- URL / Host: ${result.normalized_url} (host: ${result.host})`,
-                    `- Nivel de riesgo: ${result.risk_level} — ${result.verdict}`,
-                    `- Coincidencias CTI: ${ctiMatches.length}`,
-                    `¿Existe campaña o infraestructura de spyware asociada a este dominio o patrón en los reportes indexados?`,
-                  ].join('\n');
-                  onAskInChat(prompt);
-                }}
-                className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
-              >
-                Investigar en Preguntar
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {canTraceInRam && (
+                <button
+                  type="button"
+                  disabled={traceLoading}
+                  onClick={handleTraceEphemeral}
+                  title="Sigue redirecciones HTTP en una sesión Electron sin JavaScript, sin imágenes y 100% en RAM"
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.05] px-3 py-1 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  {traceLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                  <span>{traceResult ? 'Retrazar en RAM' : 'Trazar redirecciones (Sin JS)'}</span>
+                </button>
+              )}
+
+              {onAskInChat && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prompt = [
+                      `Evalúa este enlace inspeccionado pasivamente en OMEGA:`,
+                      `- URL / Host: ${result.normalized_url} (host: ${result.host})`,
+                      traceResult?.final_url && traceResult.final_url !== result.normalized_url
+                        ? `- Destino tras redirecciones (Sandbox sin JS): ${traceResult.final_url}`
+                        : '',
+                      `- Nivel de riesgo: ${result.risk_level} — ${result.verdict}`,
+                      `- Coincidencias CTI: ${ctiMatches.length}`,
+                      `¿Existe campaña o infraestructura de spyware asociada a este dominio o patrón en los reportes indexados?`,
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
+                    onAskInChat(prompt);
+                  }}
+                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  Investigar en Preguntar
+                </button>
+              )}
+            </div>
           </div>
           <p className="mt-2.5 text-[14px] text-[#E5E5EA] leading-relaxed">
             {result.recommendation}
@@ -148,6 +204,95 @@ export function LinkVerifierPanel({ onAskInChat }) {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {traceError && (
+          <div className="rounded-[12px] border border-[#FF453A]/35 bg-[#FF453A]/10 px-4 py-2.5 text-[12.5px] text-[#FF6961]">
+            {traceError}
+          </div>
+        )}
+
+        {/* Trazado Sandboxed en RAM (Electron sin JS ni imágenes) */}
+        {traceResult && (
+          <section className="apple-group rounded-[13px] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+                Trazado efímero en RAM (Sandbox sin JS)
+              </span>
+              <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[10.5px] text-[#8AB4FF]">
+                0 JS · 0 Imágenes{traceResult.status_code ? ` · HTTP ${traceResult.status_code}` : ''}
+              </span>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {traceResult.blocked_attempt && (
+                <div className="rounded-[9px] border border-[#FF453A]/40 bg-[#FF453A]/12 px-3 py-2 flex items-center gap-2 text-[12px] text-[#FF6961]">
+                  <ShieldAlert className="h-4 w-4 shrink-0" />
+                  <span>Redirección peligrosa interceptada en sandbox: {traceResult.blocked_attempt}</span>
+                </div>
+              )}
+
+              {traceResult.redirects?.length > 0 ? (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-medium text-[#8E8E93]">
+                    Cadena de redirecciones ({traceResult.redirects.length})
+                  </div>
+                  <div className="space-y-1.5">
+                    {traceResult.redirects.map((hop, idx) => (
+                      <div
+                        key={`${hop.from}-${hop.to}-${idx}`}
+                        className="rounded-[8px] border border-white/[0.06] bg-black/30 px-3 py-2 flex flex-wrap items-center gap-2 font-tech text-[11.5px]"
+                      >
+                        <span className="rounded-[5px] bg-white/[0.06] px-1.5 py-0.5 text-[10.5px] text-[#FFD60A]">
+                          {hop.statusCode || 302}
+                        </span>
+                        <span className="text-[#8E8E93] break-all">{hop.from}</span>
+                        <ArrowRight className="h-3 w-3 text-[#5E9BFF] shrink-0" />
+                        <span className="text-[#F5F5F7] break-all">{hop.to}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[12.5px] text-[#8E8E93]">
+                  Sin saltos HTTP intermedios; respondió directamente en la URL consultada.
+                </p>
+              )}
+
+              <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-[11px] font-medium text-[#8E8E93]">Destino final observado</div>
+                  <div className="font-tech text-[12px] text-[#F5F5F7] break-all">
+                    {traceResult.final_url}
+                  </div>
+                  {traceResult.title && (
+                    <div className="text-[11.5px] text-[#8E8E93]">
+                      Título: {traceResult.title}
+                    </div>
+                  )}
+                </div>
+
+                {finalCheckResult && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium shrink-0 ${
+                      finalCheckResult.risk_level === 'HIGH'
+                        ? 'border-[#FF453A]/40 bg-[#FF453A]/12 text-[#FF6961]'
+                        : finalCheckResult.risk_level === 'MEDIUM'
+                          ? 'border-[#FF9F0A]/40 bg-[#FF9F0A]/12 text-[#FFD60A]'
+                          : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#30D158]'
+                    }`}
+                  >
+                    {finalCheckResult.risk_level === 'SAFE' ? (
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    ) : (
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                    )}
+                    <span>Destino: {finalCheckResult.risk_level}</span>
+                  </span>
+                )}
+              </div>
+            </div>
           </section>
         )}
 

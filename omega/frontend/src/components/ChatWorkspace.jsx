@@ -73,6 +73,112 @@ function SourceScopePills({ value, onChange, compact = false }) {
   );
 }
 
+const QUICK_FAMILIES = [
+  'Pegasus (NSO Group)',
+  'Predator (Intellexa)',
+  'Candiru (Saito Tech)',
+  'QuaDream (Reign)',
+  'NoviSpy',
+];
+
+function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQuery }) {
+  const safeCtx = context || { family: null, os: null, cve: null };
+  const hasContext = Boolean(safeCtx.family || safeCtx.os || safeCtx.cve);
+
+  return (
+    <div
+      data-testid="omega-context-box"
+      className="mx-auto max-w-[780px] mb-2 flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px]"
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[#8E8E93]">Contexto activo:</span>
+
+        {hasContext ? (
+          <>
+            {safeCtx.family && (
+              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[11px] text-[#8AB4FF]">
+                {safeCtx.family}
+                <button
+                  type="button"
+                  aria-label="Quitar familia activa"
+                  onClick={() => onUpdateContext?.({ ...safeCtx, family: null })}
+                  className="hover:text-white ml-0.5 cursor-pointer"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {safeCtx.os && (
+              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.05] px-2.5 py-0.5 text-[11px] text-[#F5F5F7]">
+                SO: {safeCtx.os}
+                <button
+                  type="button"
+                  aria-label="Quitar SO activo"
+                  onClick={() => onUpdateContext?.({ ...safeCtx, os: null })}
+                  className="hover:text-white ml-0.5 cursor-pointer"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {safeCtx.cve && (
+              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 text-[11px] text-[#30D158]">
+                {safeCtx.cve}
+                <button
+                  type="button"
+                  aria-label="Quitar CVE activo"
+                  onClick={() => onUpdateContext?.({ ...safeCtx, cve: null })}
+                  className="hover:text-white ml-0.5 cursor-pointer"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+          </>
+        ) : (
+          <select
+            aria-label="Fijar familia de spyware en contexto"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                onUpdateContext?.({ ...safeCtx, family: e.target.value });
+              }
+            }}
+            className="font-tech rounded-[7px] border border-white/[0.09] bg-[#121216] px-2.5 py-0.5 text-[11px] text-[#8E8E93] focus:border-[#2F6FED]/70 focus:text-[#F5F5F7] focus:outline-none cursor-pointer"
+          >
+            <option value="">Auto-detectar entidad...</option>
+            {QUICK_FAMILIES.map((fam) => (
+              <option key={fam} value={fam}>
+                Fijar: {fam}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2.5">
+        {lastRewrittenQuery && (
+          <span
+            title={`Consulta expandida para RRF: ${lastRewrittenQuery}`}
+            className="font-tech hidden sm:inline max-w-[260px] truncate text-[10.5px] text-[#8E8E93]"
+          >
+            RRF → {lastRewrittenQuery}
+          </span>
+        )}
+        {hasContext && (
+          <button
+            type="button"
+            onClick={() => onClearContext?.()}
+            className="text-[11px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+          >
+            Limpiar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ChatWorkspace({
   messages,
   loading,
@@ -80,6 +186,10 @@ export function ChatWorkspace({
   onChangeSourceScope,
   onSendMessage,
   onRetryFailedTurn,
+  chatContext,
+  lastRewrittenQuery,
+  onUpdateChatContext,
+  onClearChatContext,
   activeCitation,
   onSelectCitation,
   isSourcesOpen,
@@ -430,8 +540,14 @@ export function ChatWorkspace({
               </div>
             </main>
 
-            {/* Composer Inferior Flotante */}
+            {/* Composer Inferior Flotante + Context Box */}
             <div className="shrink-0 border-t border-white/[0.05] bg-[#08080A]/75 backdrop-blur-xl px-6 py-3.5">
+              <ContextBox
+                context={chatContext}
+                onUpdateContext={onUpdateChatContext}
+                onClearContext={onClearChatContext}
+                lastRewrittenQuery={lastRewrittenQuery}
+              />
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
