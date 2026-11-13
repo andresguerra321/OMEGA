@@ -16,7 +16,7 @@ export function ChatAtmosphere({ dimmed = false }) {
         className="absolute -top-32 left-1/2 h-[440px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
         style={{
           background:
-            'radial-gradient(ellipse at 60% 25%, rgba(190, 210, 245, 0.065) 0%, rgba(57, 120, 246, 0.032) 38%, transparent 72%)',
+            'radial-gradient(ellipse at 55% 24%, rgba(190, 210, 245, 0.06) 0%, rgba(47, 111, 237, 0.045) 38%, transparent 72%)',
         }}
       />
 
@@ -52,9 +52,10 @@ export function ChatAtmosphere({ dimmed = false }) {
       <div
         className="absolute inset-x-0 bottom-0 h-56"
         style={{
-          background: 'linear-gradient(to bottom, transparent, #0D0F12 92%)',
+          background: 'linear-gradient(to bottom, transparent, #0A0A0C 92%)',
         }}
       />
     </div>
   );
 }
+

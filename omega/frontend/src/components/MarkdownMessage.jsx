@@ -29,7 +29,7 @@ function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') 
           type="button"
           onClick={() => target && onSelectCitation?.(target)}
           title={target ? `${target.title} — Pág. ${target.page}` : `Fuente [${num}]`}
-          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#3978F6]/35 bg-[#16243D]/85 px-1.5 py-0 text-[11px] font-medium text-[#8BB3FF] hover:border-[#3978F6]/70 hover:bg-[#1B2D4E] hover:text-[#F0F2F5] active:scale-[0.94] transition-all duration-150 ease-kowalski cursor-pointer"
+          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#2F6FED]/40 bg-[#15223D] px-1.5 py-0 text-[11px] font-medium text-[#7AA7FF] hover:border-[#2F6FED]/75 hover:bg-[#1B2E52] hover:text-[#F2F2F4] active:scale-[0.94] transition-all duration-150 ease-kowalski cursor-pointer"
         >
           [{num}]
         </button>
@@ -48,7 +48,7 @@ function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') 
       return (
         <span
           key={key}
-          className="font-tech rounded-[5px] border border-white/[0.08] bg-[#13161C] px-1.5 py-0.5 text-[12px] text-[#E6E9EF]"
+          className="font-tech rounded-[5px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[12px] text-[#F2F2F4]"
         >
           {normalizedCve}
         </span>
@@ -70,7 +70,7 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
       return (
         <code
           key={`c-${sIdx}`}
-          className="font-tech rounded-[5px] border border-white/[0.08] bg-[#13161C] px-1.5 py-0.5 text-[12px] text-[#E6E9EF]"
+          className="font-tech rounded-[5px] border border-[#232329] bg-[#141418] px-1.5 py-0.5 text-[12px] text-[#F2F2F4]"
         >
           {seg.slice(1, -1)}
         </code>

@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     query: str = Field(..., min_length=2, max_length=2000)
     history: list[ChatTurn] = Field(default_factory=list)
     top_k: int = Field(default=6, ge=1, le=12)
+    source_filter: str | None = Field(default=None, max_length=120)
 
 
 class CitationItem(BaseModel):

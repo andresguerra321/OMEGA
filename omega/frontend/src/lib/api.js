@@ -1,10 +1,14 @@
 const API_BASE = 'http://localhost:8000/api';
 
-export async function sendChatQuery(query, history = [], topK = 6) {
+export async function sendChatQuery(query, history = [], topK = 6, sourceFilter = null) {
+  const payload = { query, history, top_k: topK };
+  if (sourceFilter && !sourceFilter.toLowerCase().includes('todas')) {
+    payload.source_filter = sourceFilter;
+  }
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, history, top_k: topK }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));

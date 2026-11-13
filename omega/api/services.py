@@ -835,12 +835,33 @@ def _condense_followup_query(query: str, history: list[dict]) -> str:
     return query
 
 
-def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = None) -> dict:
+def _resolve_source_filter_patterns(source_filter: str | None) -> list[str] | None:
+    if not source_filter:
+        return None
+    norm = _normalize_ascii(source_filter).strip()
+    if not norm or "todas" in norm or norm == "all":
+        return None
+    if "citizen" in norm:
+        return ["%citizen lab%"]
+    if "amnesty" in norm:
+        return ["%amnesty%"]
+    if "google" in norm or "tag" in norm:
+        return ["%google%", "%tag%"]
+    return [f"%{source_filter.strip()}%"]
+
+
+def run_rag_query(
+    question: str,
+    top_k: int = 6,
+    history: list[dict] | None = None,
+    source_filter: str | None = None,
+) -> dict:
     history = history or []
     standalone_query = _condense_followup_query(question, history)
     semantic_query, ts_expr, entity_tokens, exact_cves, exact_cve_ts = _prepare_retrieval_queries(standalone_query)
     q_vec = embedder.encode([semantic_query], normalize_embeddings=True)[0].tolist()
     candidate_limit = min(max(top_k * 5, 30), 48)
+    org_patterns = _resolve_source_filter_patterns(source_filter)
 
     with psycopg.connect(DB_DSN) as conn:
         register_vector(conn)
@@ -854,7 +875,9 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                         ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) AS vec_rank,
                         1 - (dc.embedding <=> %s::vector) AS cos_sim
                     FROM document_chunks dc
+                    JOIN reports r ON dc.report_id = r.id
                     WHERE length(dc.content) >= 120
+                      AND (%s::text[] IS NULL OR r.organization ILIKE ANY(%s::text[]))
                     ORDER BY dc.embedding <=> %s::vector
                     LIMIT 32
                 ),
@@ -867,7 +890,9 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                                 ts_rank_cd(dc.search_vector, to_tsquery('simple', %s)) DESC
                         ) AS fts_rank
                     FROM document_chunks dc
+                    JOIN reports r ON dc.report_id = r.id
                     WHERE length(dc.content) >= 120
+                      AND (%s::text[] IS NULL OR r.organization ILIKE ANY(%s::text[]))
                       AND dc.search_vector @@ to_tsquery('simple', %s)
                     LIMIT 32
                 ),
@@ -900,7 +925,19 @@ def run_rag_query(question: str, top_k: int = 6, history: list[dict] | None = No
                 ORDER BY f.rrf_score DESC
                 LIMIT %s;
                 """,
-                (q_vec, q_vec, q_vec, exact_cve_ts, ts_expr, ts_expr, candidate_limit),
+                (
+                    q_vec,
+                    q_vec,
+                    org_patterns,
+                    org_patterns,
+                    q_vec,
+                    exact_cve_ts,
+                    ts_expr,
+                    org_patterns,
+                    org_patterns,
+                    ts_expr,
+                    candidate_limit,
+                ),
             )
             raw_rows = cur.fetchall()
             rows = _select_diverse_topk(raw_rows, entity_tokens, exact_cves, top_k)

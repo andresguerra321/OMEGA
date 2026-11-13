@@ -65,7 +65,12 @@ def health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 def chat_endpoint(payload: ChatRequest):
     history_dicts = [t.model_dump() for t in payload.history]
-    return run_rag_query(payload.query, top_k=payload.top_k, history=history_dicts)
+    return run_rag_query(
+        payload.query,
+        top_k=payload.top_k,
+        history=history_dicts,
+        source_filter=payload.source_filter,
+    )
 
 
 @app.get("/api/chat", include_in_schema=False)
