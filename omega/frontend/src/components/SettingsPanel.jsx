@@ -19,6 +19,11 @@ import {
 } from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
+import {
+  ActionConfirmationBanner,
+  PanelErrorBanner,
+  PanelSkeleton,
+} from './PanelStatePrimitives';
 
 const CONFIG_SECTIONS = [
   { id: 'cuenta', label: 'Cuenta y sesión', icon: Shield },
@@ -114,7 +119,7 @@ function RadioDot({ selected }) {
     <span
       className={`h-4 w-4 rounded-full inline-flex items-center justify-center shrink-0 transition-all duration-150 ${
         selected
-          ? 'bg-[#2F6FED] shadow-[0_0_0_2px_rgba(47,111,237,0.22)]'
+          ? 'bg-[#1D4ED8] shadow-[0_0_0_2px_rgba(29,78,216,0.22)]'
           : 'border border-white/20 bg-black/30'
       }`}
     >
@@ -136,7 +141,7 @@ function TogglePill({ checked, disabled = false, onChange, label }) {
       }}
       className={`w-10 h-[22px] rounded-full p-0.5 transition-colors duration-200 flex items-center shrink-0 ${
         checked
-          ? 'bg-[#2F6FED] justify-end shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]'
+          ? 'bg-[#1D4ED8] justify-end shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]'
           : 'bg-white/[0.14] justify-start'
       } ${disabled ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}
     >
@@ -175,22 +180,59 @@ export function SettingsPanel({
 
   useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
+  const [loadingGov, setLoadingGov] = useState(true);
+  const [govError, setGovError] = useState('');
+  const [actionBanner, setActionBanner] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     fetchSystemGovernance()
       .then((data) => {
-        if (!cancelled && data) {
+        if (cancelled) return;
+        setGovError('');
+        if (data) {
           setGov(data);
           if (data.workspace_id) setWorkspaceId(data.workspace_id);
         }
       })
-      .catch(() => {
-        if (!cancelled) setGov(null);
+      .catch((err) => {
+        if (cancelled) return;
+        setGov(null);
+        setGovError(
+          err?.message ||
+            'No se pudo sincronizar la gobernanza desde el backend; mostrando políticas locales de respaldo.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingGov(false);
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  function handleRetryGovernance() {
+    setLoadingGov(true);
+    setGovError('');
+    fetchSystemGovernance()
+      .then((data) => {
+        setGovError('');
+        if (data) {
+          setGov(data);
+          if (data.workspace_id) setWorkspaceId(data.workspace_id);
+        }
+      })
+      .catch((err) => {
+        setGov(null);
+        setGovError(
+          err?.message ||
+            'No se pudo sincronizar la gobernanza desde el backend; mostrando políticas locales de respaldo.',
+        );
+      })
+      .finally(() => {
+        setLoadingGov(false);
+      });
+  }
 
   function scrollToSection(id) {
     setActiveSection(id);
@@ -233,6 +275,10 @@ export function SettingsPanel({
     setSavedPassiveLinks(passiveLinks);
     setSavedExplicitConsent(explicitConsent);
     setSavedFeedback(true);
+    setActionBanner({
+      tone: 'clean',
+      message: `Preferencias guardadas en sesión local (Top-${topK} · ${sourceScope}).`,
+    });
     setTimeout(() => setSavedFeedback(false), 1800);
   }
 
@@ -242,6 +288,10 @@ export function SettingsPanel({
     setPassiveLinks(savedPassiveLinks);
     setExplicitConsent(savedExplicitConsent);
     setSavedFeedback(false);
+    setActionBanner({
+      tone: 'info',
+      message: `Cambios descartados; se restauró la configuración guardada (Top-${savedTopK}).`,
+    });
   }
 
   const effectiveGov = gov || FALLBACK_GOVERNANCE;
@@ -309,6 +359,29 @@ export function SettingsPanel({
             Configuración del espacio de trabajo
           </h1>
 
+          {govError && (
+            <PanelErrorBanner
+              message={govError}
+              onRetry={handleRetryGovernance}
+              onDismiss={() => setGovError('')}
+            />
+          )}
+
+          {loadingGov && (
+            <PanelSkeleton
+              label="Cargando estado del sistema y trazabilidad..."
+              lines={3}
+            />
+          )}
+
+          {actionBanner && (
+            <ActionConfirmationBanner
+              tone={actionBanner.tone}
+              message={actionBanner.message}
+              onDismiss={() => setActionBanner(null)}
+            />
+          )}
+
             {/* Bloque 1 — Identidad de Sesión Local */}
             <section ref={cuentaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="0">
               <div>
@@ -338,7 +411,7 @@ export function SettingsPanel({
                   >
                     {copiedId ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-[#5E9BFF]" />
+                        <Check className="h-3.5 w-3.5 text-[#3B82F6]" />
                         <span>Copiado</span>
                       </>
                     ) : (
@@ -383,7 +456,7 @@ export function SettingsPanel({
                       onClick={() => onChangeTopK?.(opt.value)}
                       className={`relative rounded-[13px] border p-4 text-left hover:-translate-y-0.5 active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
-                          ? 'bg-[#2F6FED]/15 border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+                          ? 'bg-[#1D4ED8]/15 border-[#1D4ED8]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
                           : 'apple-group hover:border-white/[0.15]'
                       }`}
                     >
@@ -394,7 +467,7 @@ export function SettingsPanel({
                       <div className="pt-4 pb-1 flex flex-col items-center text-center">
                         <Icon
                           className={`h-[19px] w-[19px] mb-2 ${
-                            selected ? 'text-[#5E9BFF]' : 'text-[#8E8E93]'
+                            selected ? 'text-[#3B82F6]' : 'text-[#8E8E93]'
                           }`}
                         />
                         <div className="font-tech text-[12.5px] font-medium text-[#F5F5F7]">
@@ -432,7 +505,7 @@ export function SettingsPanel({
                       onClick={() => onChangeSourceScope?.(opt.value)}
                       className={`relative rounded-[13px] border p-3.5 text-left hover:-translate-y-0.5 active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
-                          ? 'bg-[#2F6FED]/15 border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+                          ? 'bg-[#1D4ED8]/15 border-[#1D4ED8]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
                           : 'apple-group hover:border-white/[0.15]'
                       }`}
                     >
@@ -443,7 +516,7 @@ export function SettingsPanel({
                       <div className="pt-4 flex flex-col items-center text-center">
                         <Icon
                           className={`h-[18px] w-[18px] mb-1.5 ${
-                            selected ? 'text-[#5E9BFF]' : 'text-[#8E8E93]'
+                            selected ? 'text-[#3B82F6]' : 'text-[#8E8E93]'
                           }`}
                         />
                         <div className="text-[13px] font-semibold text-[#F5F5F7]">
@@ -463,11 +536,38 @@ export function SettingsPanel({
             <section ref={permisosRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="120">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
-                  Permisos y límites operativos
+                  Permisos y transparencia de datos
                 </h2>
                 <p className="mt-1 text-[12.5px] text-[#8E8E93]">
-                  Controles de privacidad y cumplimiento ético aplicados automáticamente en todos los módulos.
+                  Qué permanece en tu equipo, qué se analiza únicamente en RAM y qué controles éticos aplica cada módulo.
                 </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="apple-group rounded-[12px] p-3.5 space-y-1">
+                  <div className="text-[12px] font-semibold text-[#F5F5F7]">
+                    Custodia local (Zero-Retention)
+                  </div>
+                  <p className="text-[11.5px] text-[#A1A1A6] leading-relaxed">
+                    Tus PDFs originales y respaldos completos nunca se retienen en el servidor; solo se conservan metadatos, hash SHA-256 y fragmentos de expediente autorizados.
+                  </p>
+                </div>
+                <div className="apple-group rounded-[12px] p-3.5 space-y-1">
+                  <div className="text-[12px] font-semibold text-[#F5F5F7]">
+                    Evidencia volátil en RAM
+                  </div>
+                  <p className="text-[11.5px] text-[#A1A1A6] leading-relaxed">
+                    Volcados MVT, backups iOS, YARA y auditorías de PC se procesan en memoria aislada sin red externa y se liberan al finalizar el análisis.
+                  </p>
+                </div>
+                <div className="apple-group rounded-[12px] p-3.5 space-y-1">
+                  <div className="text-[12px] font-semibold text-[#F5F5F7]">
+                    Aislamiento estricto de IA
+                  </div>
+                  <p className="text-[11.5px] text-[#A1A1A6] leading-relaxed">
+                    El proveedor externo de embeddings/LLM solo recibe corpus público CTI o fragmentos RAG autorizados; nunca recibe volcados forenses ni activos OSINT.
+                  </p>
+                </div>
               </div>
 
               <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
@@ -477,7 +577,7 @@ export function SettingsPanel({
                       <span className="text-[13.5px] font-medium text-[#F5F5F7]">
                         Procesamiento forense volátil (<span className="font-tech">RNF4</span>)
                       </span>
-                      <span className="rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/35 px-2.5 py-0.5 text-[10.5px] font-medium text-[#8AB4FF]">
+                      <span className="rounded-full bg-[#1D4ED8]/15 border border-[#1D4ED8]/35 px-2.5 py-0.5 text-[10.5px] font-medium text-[#93C5FD]">
                         Obligatorio
                       </span>
                     </div>
@@ -539,7 +639,7 @@ export function SettingsPanel({
                   </h2>
                 </div>
 
-                <span className="font-tech rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/35 px-3 py-1 text-[11px] text-[#8AB4FF]">
+                <span className="font-tech rounded-full bg-[#1D4ED8]/15 border border-[#1D4ED8]/35 px-3 py-1 text-[11px] text-[#93C5FD]">
                   {stats.reports} Reportes · {stats.chunks} Fragmentos ·{' '}
                   {Number(stats.iocs || 0).toLocaleString('en-US')} IOCs
                 </span>

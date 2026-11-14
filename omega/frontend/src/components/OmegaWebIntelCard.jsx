@@ -55,7 +55,7 @@ export function OmegaWebIntelCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-0.5 min-w-0">
           <div className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-[#5E9BFF] shrink-0" />
+            <Globe className="h-4 w-4 text-[#3B82F6] shrink-0" />
             <h3 className={`${compact ? 'text-[13.5px]' : 'text-[14px]'} font-semibold tracking-[-0.01em] text-[#F5F5F7]`}>
               {title}
             </h3>
@@ -68,7 +68,7 @@ export function OmegaWebIntelCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-          <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[10.5px] text-[#8AB4FF]">
+          <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[10.5px] text-[#93C5FD]">
             RAM · RNF4
           </span>
           {scanResult?.persisted_to_db && (
@@ -90,7 +90,7 @@ export function OmegaWebIntelCard({
         <button
           type="submit"
           disabled={loading || !urlInput.trim()}
-          className="h-8 w-full sm:w-auto justify-center rounded-[8px] bg-[#2F6FED] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          className="h-8 w-full sm:w-auto justify-center rounded-[8px] bg-[#1D4ED8] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
         >
           {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           <span>{activeNet4Ips.length > 0 ? 'Cruzar IPv4' : 'Extraer en RAM'}</span>
@@ -134,7 +134,7 @@ export function OmegaWebIntelCard({
                     .join('\n');
                   onAskInChat(prompt);
                 }}
-                className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                className="shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
               >
                 Investigar en Preguntar
               </button>
@@ -219,7 +219,7 @@ export function OmegaWebIntelCard({
                   <button
                     type="button"
                     onClick={() => setShowAllDomains((prev) => !prev)}
-                    className="text-[11px] text-[#8AB4FF] hover:underline cursor-pointer"
+                    className="text-[11px] text-[#93C5FD] hover:underline cursor-pointer"
                   >
                     {showAllDomains ? 'Ver menos' : 'Ver todos'}
                   </button>

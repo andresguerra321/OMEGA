@@ -175,9 +175,12 @@ export default function App() {
   const [deviceInitialTab, setDeviceInitialTab] = useState('android');
   const [deviceNavKey, setDeviceNavKey] = useState(0);
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
+  const [threatJump, setThreatJump] = useState({ query: '', key: 0 });
+  const [osintJump, setOsintJump] = useState({ value: '', type: 'domain', key: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState('windows');
   const [scanningPc, setScanningPc] = useState(false);
   const [syncingStix, setSyncingStix] = useState(false);
+  const [stageFeedback, setStageFeedback] = useState(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [pinnedCopilotContext, setPinnedCopilotContext] = useState('');
   const [sessionsMenuOpen, setSessionsMenuOpen] = useState(false);
@@ -529,7 +532,17 @@ export default function App() {
       setDeviceNavKey((k) => k + 1);
     }
     if (opts?.url) {
-      setLinkJump({ url: opts.url, key: Date.now() });
+      setLinkJump((prev) => ({ url: opts.url, key: prev.key + 1 }));
+    }
+    if (opts?.campaignQuery) {
+      setThreatJump((prev) => ({ query: opts.campaignQuery, key: prev.key + 1 }));
+    }
+    if (opts?.assetValue) {
+      setOsintJump((prev) => ({
+        value: opts.assetValue,
+        type: opts.assetType || 'domain',
+        key: prev.key + 1,
+      }));
     }
     setSessionsMenuOpen(false);
     setActiveNav(navId);
@@ -548,16 +561,37 @@ export default function App() {
       return;
     }
     setScanningPc(true);
+    setStageFeedback(null);
     try {
       const col = await bridge.collectPcAuditSnapshot();
       if (col?.ok && col.snapshot) {
         const analysis = await analyzePcLiveSnapshot(col.snapshot);
         handlePcAuditComplete(analysis);
+        const signals =
+          Number(analysis?.triage?.total_matches ?? analysis?.high_findings ?? 0) +
+          Number(analysis?.yara_hits?.length ?? 0) +
+          Number(analysis?.behavioral_anomalies?.length ?? 0);
+        setStageFeedback({
+          tone: signals > 0 ? 'alert' : 'clean',
+          message:
+            signals > 0
+              ? `Auditoría de esta PC en RAM finalizada: ${signals} señal(es) requieren revisión.`
+              : 'Auditoría de esta PC en RAM finalizada: sin señales de spyware (0 bytes en disco).',
+          actionLabel: 'Ver informe',
+          actionNav: 'equipo',
+        });
       } else {
+        setStageFeedback({
+          tone: 'alert',
+          message: col?.error || 'No se pudo capturar la instantánea de esta PC; revisa desde el inspector.',
+        });
         handleNavigate('equipo', { tab: 'pc' });
       }
-    } catch {
-      handleNavigate('equipo', { tab: 'pc' });
+    } catch (err) {
+      setStageFeedback({
+        tone: 'alert',
+        message: err?.message || 'Error ejecutando la auditoría en RAM de esta PC.',
+      });
     } finally {
       setScanningPc(false);
     }
@@ -566,11 +600,19 @@ export default function App() {
   async function handleSyncStix() {
     if (syncingStix) return;
     setSyncingStix(true);
+    setStageFeedback(null);
     try {
       await syncStixFeeds();
       await refreshSystemTelemetry();
-    } catch {
-      // Silencioso en barra espacial: el nodo STIX refleja estado offline
+      setStageFeedback({
+        tone: 'clean',
+        message: 'Firmas STIX 2.1 sincronizadas y telemetría actualizada en memoria.',
+      });
+    } catch (err) {
+      setStageFeedback({
+        tone: 'alert',
+        message: err?.message || 'No se pudieron sincronizar los feeds STIX 2.1; verifica el backend.',
+      });
     } finally {
       setSyncingStix(false);
     }
@@ -649,6 +691,8 @@ export default function App() {
             syncingStix={syncingStix}
             onRunPcScan={handleRunPcScan}
             onSyncStix={handleSyncStix}
+            stageFeedback={stageFeedback}
+            onDismissStageFeedback={() => setStageFeedback(null)}
             onOpenCopilot={handleOpenCopilot}
             onOpenCommandPalette={() => {
               setCommandOpen(true);
@@ -743,11 +787,11 @@ export default function App() {
                   title="Copiloto deslizable (Ctrl+J)"
                   className={`h-8 px-2 xl:px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
                     isCopilotOpen
-                      ? 'border-[#5E9BFF]/55 bg-[#2F6FED]/20 text-[#9EC1FF]'
+                      ? 'border-[#3B82F6]/55 bg-[#1D4ED8]/20 text-[#93C5FD]'
                       : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
+                  <Sparkles className="h-3.5 w-3.5 text-[#93C5FD]" />
                   <span className="hidden xl:inline">Copiloto</span>
                 </button>
 
@@ -779,7 +823,7 @@ export default function App() {
                     onClick={() => setSessionsMenuOpen((v) => !v)}
                     className="h-7 w-full px-2 sm:px-2.5 rounded-[7px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[11.5px] text-[#E4E8F0] transition-colors cursor-pointer"
                   >
-                    <MessageSquare className="h-3 w-3 text-[#8AB4FF] shrink-0" />
+                    <MessageSquare className="h-3 w-3 text-[#93C5FD] shrink-0" />
                     <span className="truncate flex-1 text-left">
                       {activeSession?.title || 'Nueva consulta'}
                     </span>
@@ -794,7 +838,7 @@ export default function App() {
                           setSessionsMenuOpen(false);
                           startNewInvestigation();
                         }}
-                        className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
+                        className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/15 transition-colors cursor-pointer"
                       >
                         <Plus className="h-3.5 w-3.5" />
                         <span>Nueva consulta limpia</span>
@@ -854,7 +898,7 @@ export default function App() {
                       title={`Fuentes (${activeConversationCitations.length})`}
                       className={`h-7 px-2 sm:px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                         isSourcesPanelOpen
-                          ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                          ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
                           : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
                       }`}
                     >
@@ -922,22 +966,44 @@ export default function App() {
                     textareaRef={textareaRef}
                   />
                 ) : activeNav === 'amenazas' ? (
-                  <CampaignsPanel onAskInChat={askInChat} />
+                  <CampaignsPanel
+                    onAskInChat={askInChat}
+                    onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                    onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
+                    initialSearch={threatJump.query}
+                    initialSearchKey={threatJump.key}
+                  />
                 ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
                   <div className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-8 flex flex-col">
                     {activeNav === 'equipo' && (
                       <MvtVerifierPanel
                         key={`mvt-${deviceNavKey}`}
                         onAskInChat={askInChat}
+                        onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
                         initialTab={deviceInitialTab}
                         preloadedAudit={pcAudit}
                         onAuditUpdate={handlePcAuditComplete}
                       />
                     )}
-                    {activeNav === 'exposicion' && <OsintPanel onAskInChat={askInChat} />}
+                    {activeNav === 'exposicion' && (
+                      <OsintPanel
+                        onAskInChat={askInChat}
+                        onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                        onAuditDevice={(tab = 'pc') => handleNavigate('equipo', { tab })}
+                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                        initialAsset={osintJump}
+                        initialJumpKey={osintJump.key}
+                      />
+                    )}
                     {activeNav === 'enlace' && (
                       <LinkVerifierPanel
                         onAskInChat={askInChat}
+                        onAuditDomain={(assetValue) =>
+                          handleNavigate('exposicion', { assetValue, assetType: 'domain' })
+                        }
+                        onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
+                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
                         initialUrl={linkJump.url}
                         initialCheckKey={linkJump.key}
                         onLinkVerified={handleLinkVerified}
@@ -1032,7 +1098,7 @@ export default function App() {
                     className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors duration-150 cursor-pointer"
                   >
                     <span className="inline-flex items-center gap-3">
-                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#8AB4FF]" />
+                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#93C5FD]" />
                       <span className="font-medium tracking-[-0.01em]">{item.label}</span>
                     </span>
                     <span className="text-[11.5px] text-[#9BA2B0]">{item.subtitle}</span>
@@ -1052,7 +1118,7 @@ export default function App() {
                 className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors cursor-pointer"
               >
                 <span className="inline-flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-[#8AB4FF]" />
+                  <Sparkles className="h-4 w-4 text-[#93C5FD]" />
                   <span>Abrir Copiloto lateral</span>
                 </span>
                 <span className="font-tech text-[11px] text-[#9BA2B0]">⌘J</span>
@@ -1066,7 +1132,7 @@ export default function App() {
                 className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors cursor-pointer"
               >
                 <span className="inline-flex items-center gap-3">
-                  <Gauge className="h-4 w-4 text-[#8AB4FF]" />
+                  <Gauge className="h-4 w-4 text-[#93C5FD]" />
                   <span>
                     Cambiar a modo {technicalMode ? 'Simple (lenguaje claro)' : 'Técnico'}
                   </span>

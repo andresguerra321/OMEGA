@@ -1,7 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ExternalLink, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
+import {
+  ActionConfirmationBanner,
+  PanelEmptyState,
+  PanelErrorBanner,
+} from './PanelStatePrimitives';
 
 function getVerdictPresentation(result) {
   if (result.risk_level === 'HIGH') {
@@ -20,13 +35,16 @@ function getVerdictPresentation(result) {
   }
   return {
     dotColor: 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.45)]',
-    titleColor: 'text-[#5E9BFF]',
+    titleColor: 'text-[#3B82F6]',
     headline: 'Seguro / Sin registros',
   };
 }
 
 export function LinkVerifierPanel({
   onAskInChat,
+  onAuditDomain,
+  onAuditDevice,
+  onOpenThreat,
   initialUrl = '',
   initialCheckKey = 0,
   onLinkVerified,
@@ -39,6 +57,7 @@ export function LinkVerifierPanel({
   const [traceResult, setTraceResult] = useState(null);
   const [traceError, setTraceError] = useState('');
   const [finalCheckResult, setFinalCheckResult] = useState(null);
+  const [dismissedConfirmKey, setDismissedConfirmKey] = useState('');
   const lastCheckKeyRef = useRef(0);
   const resultContainerRef = useRef(null);
 
@@ -93,6 +112,7 @@ export function LinkVerifierPanel({
     if (!cleaned || loading) return;
     setLoading(true);
     setError('');
+    setDismissedConfirmKey('');
     setTraceResult(null);
     setTraceError('');
     setFinalCheckResult(null);
@@ -163,6 +183,23 @@ export function LinkVerifierPanel({
           </span>
         </header>
 
+        {(() => {
+          const confirmKey = `${result.normalized_url}|${traceResult?.final_url || ''}`;
+          if (dismissedConfirmKey === confirmKey) return null;
+          const bannerTone =
+            result.risk_level === 'HIGH' ? 'alert' : result.risk_level === 'SAFE' ? 'clean' : 'info';
+          const bannerMsg = traceResult
+            ? `Trazado efímero en RAM completado (${traceResult.redirects?.length || 0} salto(s), 0 JS, 0 imágenes) · Destino: ${finalCheckResult?.risk_level || result.risk_level}.`
+            : `Inspección pasiva completada (0 conexiones HTTP) · Nivel ${result.risk_level} · ${ctiMatches.length} coincidencia(s) CTI y ${heuristics.length} alerta(s) estructural(es).`;
+          return (
+            <ActionConfirmationBanner
+              tone={bannerTone}
+              message={bannerMsg}
+              onDismiss={() => setDismissedConfirmKey(confirmKey)}
+            />
+          );
+        })()}
+
         {/* Bloque de Veredicto Apple Glass (sin bordes laterales de 2px) */}
         <section className="animate-fade-up apple-group rounded-[15px] p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -204,9 +241,31 @@ export function LinkVerifierPanel({
                       .join('\n');
                     onAskInChat(prompt);
                   }}
-                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                  className="shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
+                </button>
+              )}
+
+              {onAuditDomain && (result.root_domain || result.host) && (
+                <button
+                  type="button"
+                  onClick={() => onAuditDomain(result.root_domain || result.host)}
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-3 py-1 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  <Globe className="h-3 w-3 text-[#93C5FD]" />
+                  <span>Auditar en Exposición</span>
+                </button>
+              )}
+
+              {onAuditDevice && result.risk_level !== 'SAFE' && (
+                <button
+                  type="button"
+                  onClick={() => onAuditDevice('android')}
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/12 px-3 py-1 text-[11.5px] font-medium text-[#FFD0CE] hover:bg-[#FF453A]/20 active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  <Smartphone className="h-3 w-3" />
+                  <span>Revisar mi equipo</span>
                 </button>
               )}
             </div>
@@ -268,9 +327,10 @@ export function LinkVerifierPanel({
         )}
 
         {traceError && (
-          <div className="animate-fade-in rounded-[12px] border border-[#FF453A]/35 bg-[#FF453A]/10 px-4 py-2.5 text-[12.5px] text-[#FF6961]">
-            {traceError}
-          </div>
+          <PanelErrorBanner
+            message={traceError}
+            onDismiss={() => setTraceError('')}
+          />
         )}
 
         {/* Trazado Sandboxed en RAM (Electron sin JS ni imágenes) */}
@@ -283,7 +343,7 @@ export function LinkVerifierPanel({
               <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                 Trazado efímero en RAM (Sandbox sin JS)
               </span>
-              <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[10.5px] text-[#8AB4FF]">
+              <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[10.5px] text-[#93C5FD]">
                 0 JS · 0 Imágenes{traceResult.status_code ? ` · HTTP ${traceResult.status_code}` : ''}
               </span>
             </div>
@@ -311,7 +371,7 @@ export function LinkVerifierPanel({
                           {hop.statusCode || 302}
                         </span>
                         <span className="text-[#8E8E93] break-all">{hop.from}</span>
-                        <ArrowRight className="h-3 w-3 text-[#5E9BFF] shrink-0" />
+                        <ArrowRight className="h-3 w-3 text-[#3B82F6] shrink-0" />
                         <span className="text-[#F5F5F7] break-all">{hop.to}</span>
                       </div>
                     ))}
@@ -385,17 +445,30 @@ export function LinkVerifierPanel({
                     </div>
                   </div>
 
-                  {m.source_url?.startsWith('http') && (
-                    <a
-                      href={m.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#8AB4FF] hover:bg-white/[0.08] transition-colors shrink-0"
-                    >
-                      <span>Fuente</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {onOpenThreat && (m.campaign || m.spyware_family) && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenThreat(m.campaign || m.spyware_family)}
+                        className="inline-flex items-center gap-1 rounded-[8px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/22 transition-colors cursor-pointer"
+                      >
+                        <Shield className="h-3 w-3" />
+                        <span>Ver campaña</span>
+                      </button>
+                    )}
+
+                    {m.source_url?.startsWith('http') && (
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#93C5FD] hover:bg-white/[0.08] transition-colors shrink-0"
+                      >
+                        <span>Fuente</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -434,7 +507,7 @@ export function LinkVerifierPanel({
           <button
             type="submit"
             disabled={loading || !urlInput.trim()}
-            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-3.5 sm:px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            className="h-9 rounded-[10px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-3.5 sm:px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Verificar</span>
@@ -442,7 +515,26 @@ export function LinkVerifierPanel({
         </form>
 
         {error && (
-          <p className="mt-3 text-[12.5px] text-[#FF453A] text-center">{error}</p>
+          <PanelErrorBanner
+            message={error}
+            onDismiss={() => setError('')}
+            className="mt-4"
+          />
+        )}
+
+        {!loading && !error && (
+          <PanelEmptyState
+            icon={ShieldCheck}
+            title="Aún no has verificado ningún enlace"
+            description="Pega arriba cualquier URL sospechosa (SMS, correo o chat). OMEGA evalúa estructura homográfica, shorteners y el catálogo CTI sin visitar el destino."
+            actionLabel={!urlInput.trim() ? 'Cargar enlace de ejemplo' : undefined}
+            onAction={
+              !urlInput.trim()
+                ? () => setUrlInput('https://verify-icloud-session.example/auth')
+                : undefined
+            }
+            className="mt-5"
+          />
         )}
       </div>
     </div>

@@ -139,9 +139,9 @@ export function CopilotDrawer({
 
         {/* Contexto fijado desde un análisis activo */}
         {pinnedContext && (
-          <div className="mx-4 mt-3 rounded-[10px] border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
-            <div className="min-w-0 flex items-center gap-2 text-[#D6E4FF]">
-              <Pin className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
+          <div className="mx-4 mt-3 rounded-[10px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
+            <div className="min-w-0 flex items-center gap-2 text-[#E2E8F0]">
+              <Pin className="h-3.5 w-3.5 text-[#93C5FD] shrink-0" />
               <span className="truncate">Contexto adjunto: {pinnedContext}</span>
             </div>
             <button
@@ -190,7 +190,7 @@ export function CopilotDrawer({
               <div key={msg.id || idx} className="space-y-2">
                 {msg.role === 'user' ? (
                   <div className="flex justify-end">
-                    <div className="max-w-[88%] rounded-[13px] bg-[#2F6FED]/20 border border-[#5E9BFF]/30 px-3.5 py-2 text-[13px] text-[#F4F6FA] leading-relaxed">
+                    <div className="max-w-[88%] rounded-[13px] bg-[#1D4ED8]/20 border border-[#3B82F6]/30 px-3.5 py-2 text-[13px] text-[#F4F6FA] leading-relaxed">
                       {msg.content}
                     </div>
                   </div>
@@ -214,7 +214,7 @@ export function CopilotDrawer({
 
           {isLoading && (
             <div className="apple-well rounded-[11px] px-3.5 py-3 flex items-center gap-2.5 text-[12.5px] text-[#C4CAD4]">
-              <span className="h-2 w-2 rounded-full bg-[#5E9BFF] omega-core-pulse" />
+              <span className="h-2 w-2 rounded-full bg-[#3B82F6] omega-core-pulse" />
               <span>Consultando corpus local y citas verificadas...</span>
             </div>
           )}
