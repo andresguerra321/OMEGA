@@ -228,7 +228,7 @@ export function StructuredResponse({
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                isExtractiveFallback ? 'bg-[#FF9F0A]' : 'bg-[#2F6FED]'
+                isExtractiveFallback ? 'bg-[#FF9F0A]' : 'bg-[#1D4ED8]'
               } ${isTyping ? 'omega-core-pulse' : ''}`}
             />
             <span className="font-tech text-[#F5F5F7]">
@@ -241,7 +241,7 @@ export function StructuredResponse({
             {message.latency && (
               <>
                 <span className="text-white/25">·</span>
-                <span className="font-tech inline-flex items-center gap-1 text-[#8AB4FF]">
+                <span className="font-tech inline-flex items-center gap-1 text-[#93C5FD]">
                   <Clock className="h-3 w-3" />
                   {message.latency}s
                 </span>
@@ -276,11 +276,11 @@ export function StructuredResponse({
                 onClick={onToggleSources}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] border text-[12px] font-medium active:scale-[0.96] transition-all duration-150 cursor-pointer ${
                   isSourcesOpen
-                    ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                    ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
                     : 'border-white/[0.08] bg-white/[0.04] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
                 }`}
               >
-                <BookOpen className="h-3.5 w-3.5 text-[#5E9BFF]" />
+                <BookOpen className="h-3.5 w-3.5 text-[#3B82F6]" />
                 <span>{isSourcesOpen ? 'Ocultar fuentes' : `Ver fuentes (${citations.length})`}</span>
               </button>
             )}
@@ -294,7 +294,7 @@ export function StructuredResponse({
             >
               {copied ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-[#5E9BFF]" />
+                  <Check className="h-3.5 w-3.5 text-[#3B82F6]" />
                   <span className="text-[#F5F5F7]">Copiado</span>
                 </>
               ) : (
@@ -308,7 +308,7 @@ export function StructuredResponse({
         {showTelemetry && (
           <div className="border-t border-white/[0.06] bg-black/25 px-3.5 py-2.5 text-[12px] text-[#8E8E93] grid gap-1.5 sm:grid-cols-2">
             <div className="flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5 text-[#5E9BFF] shrink-0" />
+              <Activity className="h-3.5 w-3.5 text-[#3B82F6] shrink-0" />
               <span>{telemetry.modeLabel}:</span>
               <span className="font-tech text-[#F5F5F7]">
                 {telemetry.hybridCount} híbrido · {telemetry.exactCount} exacto · {telemetry.semanticCount} semántico
@@ -316,7 +316,7 @@ export function StructuredResponse({
             </div>
             <div className="flex items-center gap-1.5 sm:justify-end">
               <span>Similitud máx:</span>
-              <span className="font-tech text-[#8AB4FF]">
+              <span className="font-tech text-[#93C5FD]">
                 {(Number(telemetry.maxSimilarity || 0) * 100).toFixed(1)}%
               </span>
             </div>
@@ -359,11 +359,11 @@ export function StructuredResponse({
                 onClick={() => onSelectCitation?.(cit)}
                 className={`inline-flex items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] active:scale-[0.97] transition-all cursor-pointer ${
                   isSelected
-                    ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#F5F5F7]'
+                    ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#F5F5F7]'
                     : 'border-white/[0.08] bg-white/[0.03] text-[#A1A1A6] hover:bg-white/[0.07] hover:text-[#F5F5F7]'
                 }`}
               >
-                <span className="font-tech font-medium text-[#8AB4FF]">[{cit.index}]</span>
+                <span className="font-tech font-medium text-[#93C5FD]">[{cit.index}]</span>
                 <span className="max-w-[210px] truncate">{cit.title}</span>
                 <span className="font-tech text-[#8E8E93]">p.{cit.page}</span>
               </button>

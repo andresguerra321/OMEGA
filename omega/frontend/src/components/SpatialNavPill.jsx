@@ -87,7 +87,7 @@ export function SpatialNavPill({
                     : 'h-8 w-8 xl:h-9 xl:w-10'
               } ${
                 isActive
-                  ? 'bg-[#122142]/92 text-white border border-[#60A5FA]/28 shadow-[inset_0_1px_0_rgba(219,234,254,0.18)]'
+                  ? 'bg-[#122142]/92 text-white border border-[#3B82F6]/28 shadow-[inset_0_1px_0_rgba(219,234,254,0.18)]'
                   : 'bg-transparent text-[#94A3B8] hover:bg-[#93C5FD]/[0.08] hover:text-white'
               }`}
             >

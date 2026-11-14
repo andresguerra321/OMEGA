@@ -12,6 +12,9 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Generador grounded para respuestas RAG con formato obligatorio de citas probatorias.
+ * <p>Alcance de privacidad (RNF4/RNF7): opera exclusivamente sobre fragmentos CTI/RAG
+ * recuperados de PostgreSQL ({@code omega_rag}); nunca recibe evidencia forense volátil
+ * procesada en RAM por {@code omega/api/} ni activos de monitoreo OSINT.</p>
  * Si no existe clave API remota configurada o falla el endpoint de chat, sintetiza una respuesta
  * determinista estrictamente anclada a los fragmentos recuperados sin inventar hechos.
  */

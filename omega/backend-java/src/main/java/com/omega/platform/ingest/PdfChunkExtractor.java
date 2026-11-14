@@ -143,11 +143,18 @@ public class PdfChunkExtractor {
         return "Página " + pageNumber;
     }
 
-    private static String normalizeText(String raw) {
+    static String normalizeText(String raw) {
         if (raw == null) {
             return "";
         }
         return raw.replace('\u0000', ' ')
+                .replace("\ufb00", "ff")
+                .replace("\ufb01", "fi")
+                .replace("\ufb02", "fl")
+                .replace("\ufb03", "ffi")
+                .replace("\ufb04", "ffl")
+                .replace('\u00a0', ' ')
+                .replaceAll("[\\u2010\\u2011\\u2012\\u2013\\u2014\\u2212]", "-")
                 .replaceAll("[\\t\\x0B\\f\\r]+", " ")
                 .replaceAll(" +", " ")
                 .replaceAll("\\n{3,}", "\n\n")

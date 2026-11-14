@@ -78,11 +78,11 @@ export function ChatAtmosphere({ dimmed = false, variant = 'workspace', showWave
               <stop offset="100%" stopColor="rgba(59, 130, 246, 0)" />
             </linearGradient>
             <linearGradient id="omegaWaveHorizon" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgba(37, 99, 235, 0)" />
-              <stop offset="24%" stopColor="rgba(37, 99, 235, 0.1)" />
-              <stop offset="50%" stopColor="rgba(96, 165, 250, 0.22)" />
-              <stop offset="76%" stopColor="rgba(37, 99, 235, 0.1)" />
-              <stop offset="100%" stopColor="rgba(37, 99, 235, 0)" />
+              <stop offset="0%" stopColor="rgba(29, 78, 216, 0)" />
+              <stop offset="24%" stopColor="rgba(29, 78, 216, 0.1)" />
+              <stop offset="50%" stopColor="rgba(59, 130, 246, 0.22)" />
+              <stop offset="76%" stopColor="rgba(29, 78, 216, 0.1)" />
+              <stop offset="100%" stopColor="rgba(29, 78, 216, 0)" />
             </linearGradient>
           </defs>
 

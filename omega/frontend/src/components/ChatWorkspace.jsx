@@ -96,7 +96,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
         {hasContext ? (
           <>
             {safeCtx.family && (
-              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[11px] text-[#8AB4FF]">
+              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[11px] text-[#93C5FD]">
                 {safeCtx.family}
                 <button
                   type="button"
@@ -144,7 +144,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
                 onUpdateContext?.({ ...safeCtx, family: e.target.value });
               }
             }}
-            className="font-tech rounded-[7px] border border-white/[0.09] bg-[#121216] px-2.5 py-0.5 text-[11px] text-[#8E8E93] focus:border-[#2F6FED]/70 focus:text-[#F5F5F7] focus:outline-none cursor-pointer"
+            className="font-tech rounded-[7px] border border-white/[0.09] bg-[#121216] px-2.5 py-0.5 text-[11px] text-[#8E8E93] focus:border-[#1D4ED8]/70 focus:text-[#F5F5F7] focus:outline-none cursor-pointer"
           >
             <option value="">Auto-detectar entidad...</option>
             {QUICK_FAMILIES.map((fam) => (
@@ -303,13 +303,13 @@ export function ChatWorkspace({
               }
             }}
             placeholder="CVE-2023-41064, dominio o hash..."
-            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/70 focus:outline-none transition-colors"
+            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/70 focus:outline-none transition-colors"
           />
           <button
             type="button"
             onClick={() => insertIocValue(iocDraft)}
             disabled={!iocDraft.trim()}
-            className="rounded-[8px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:bg-white/[0.06] disabled:text-[#9097A5] active:scale-[0.96] transition-all cursor-pointer"
+            className="rounded-[8px] bg-[#1D4ED8] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B82F6] disabled:bg-white/[0.06] disabled:text-[#9097A5] active:scale-[0.96] transition-all cursor-pointer"
           >
             Usar
           </button>
@@ -319,7 +319,7 @@ export function ChatWorkspace({
             title="Pegar desde el portapapeles"
             className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1.5 text-[12px] text-[#E5E5EA] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
           >
-            <ClipboardPaste className="h-3.5 w-3.5 text-[#5E9BFF]" />
+            <ClipboardPaste className="h-3.5 w-3.5 text-[#3B82F6]" />
             <span>Pegar</span>
           </button>
           <button
@@ -338,7 +338,7 @@ export function ChatWorkspace({
               key={sample}
               type="button"
               onClick={() => insertIocValue(sample)}
-              className="font-tech rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[#8AB4FF] hover:border-[#2F6FED]/50 hover:bg-[#2F6FED]/15 transition-colors cursor-pointer"
+              className="font-tech rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[#93C5FD] hover:border-[#1D4ED8]/50 hover:bg-[#1D4ED8]/15 transition-colors cursor-pointer"
             >
               + {sample}
             </button>
@@ -395,8 +395,8 @@ export function ChatWorkspace({
                 {(detectedIoc || iocFeedback) && (
                   <div className="px-1 pb-2.5 flex flex-wrap items-center gap-2 text-[12px]">
                     {detectedIoc && (
-                      <span className="font-tech inline-flex items-center gap-1.5 rounded-full border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[#8AB4FF]">
-                        <Fingerprint className="h-3 w-3 text-[#5E9BFF]" />
+                      <span className="font-tech inline-flex items-center gap-1.5 rounded-full border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[#93C5FD]">
+                        <Fingerprint className="h-3 w-3 text-[#3B82F6]" />
                         {detectedIoc}
                       </span>
                     )}
@@ -416,11 +416,11 @@ export function ChatWorkspace({
                       title="Pegar o insertar un CVE, dominio o hash"
                       className={`inline-flex items-center gap-1 rounded-[8px] border px-2.5 py-1.5 font-tech text-[11.5px] active:scale-[0.96] transition-all duration-150 cursor-pointer ${
                         iocPopoverOpen
-                          ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                          ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
                           : 'border-white/[0.08] bg-white/[0.04] text-[#98989D] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
                       }`}
                     >
-                      <Plus className="h-3.5 w-3.5 text-[#5E9BFF]" />
+                      <Plus className="h-3.5 w-3.5 text-[#3B82F6]" />
                       <span>IOC</span>
                     </button>
 
@@ -429,7 +429,7 @@ export function ChatWorkspace({
                       disabled={loading || !input.trim()}
                       title="Analizar (Enter)"
                       aria-label="Analizar"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#1D4ED8] text-white shadow-[0_4px_14px_rgba(29,78,216,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                     >
                       <ArrowRight className="h-4 w-4" />
                     </button>
@@ -450,7 +450,7 @@ export function ChatWorkspace({
                     className="omega-prompt-tile animate-fade-up group flex flex-col justify-between rounded-[13px] px-4 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#5E9BFF]">
+                      <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#3B82F6]">
                         {item.tag}
                       </span>
                       <ArrowRight className="h-3.5 w-3.5 text-[#9097A5] group-hover:text-[#F5F5F7] group-hover:translate-x-0.5 transition-all duration-200 ease-apple" />
@@ -487,9 +487,9 @@ export function ChatWorkspace({
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
                     <div key={idx} className="animate-fade-up flex justify-end">
-                      <div className="max-w-[90%] sm:max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#2F6FED]/28 bg-[#2F6FED]/15 px-3.5 sm:px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                      <div className="max-w-[90%] sm:max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#1D4ED8]/28 bg-[#1D4ED8]/15 px-3.5 sm:px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                         {msg.sourceScope && msg.sourceScope !== 'Todas las fuentes' && (
-                          <span className="inline-block rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/18 px-2 py-0.5 text-[11px] font-medium text-[#8AB4FF]">
+                          <span className="inline-block rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/18 px-2 py-0.5 text-[11px] font-medium text-[#93C5FD]">
                             {msg.sourceScope}
                           </span>
                         )}
@@ -576,7 +576,7 @@ export function ChatWorkspace({
                     type="submit"
                     disabled={loading || !input.trim()}
                     aria-label="Enviar"
-                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
+                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#1D4ED8] text-white shadow-[0_4px_14px_rgba(29,78,216,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                   >
                     <ArrowRight className="h-4 w-4" />
                   </button>
@@ -587,7 +587,7 @@ export function ChatWorkspace({
 
                   <div className="flex items-center gap-2">
                     {detectedIoc && (
-                      <span className="font-tech text-[11.5px] text-[#8AB4FF]">
+                      <span className="font-tech text-[11.5px] text-[#93C5FD]">
                         {detectedIoc}
                       </span>
                     )}
@@ -597,11 +597,11 @@ export function ChatWorkspace({
                       title="Pegar o insertar un CVE, dominio o hash"
                       className={`inline-flex items-center gap-1 rounded-[7px] border px-2.5 py-1 font-tech text-[11.5px] active:scale-[0.96] transition-all cursor-pointer ${
                         iocPopoverOpen
-                          ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
+                          ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
                           : 'border-white/[0.08] bg-white/[0.04] text-[#98989D] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
                       }`}
                     >
-                      <Plus className="h-3 w-3 text-[#5E9BFF]" />
+                      <Plus className="h-3 w-3 text-[#3B82F6]" />
                       <span>IOC</span>
                     </button>
                   </div>
@@ -621,6 +621,12 @@ export function ChatWorkspace({
           selectedCitation={activeCitation}
           onSelectCitation={onSelectCitation}
           onClose={onCloseSources}
+          isLoading={loading}
+          onSuggestPrompt={() =>
+            submitQuery(
+              '¿Qué infraestructura C2 y vectores 1-click documentan Citizen Lab y Google TAG para Predator y Pegasus?',
+            )
+          }
         />
       )}
     </div>

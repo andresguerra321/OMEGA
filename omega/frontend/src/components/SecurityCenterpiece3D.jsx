@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { SecurityCenterpieceFallback } from './SecurityCenterpieceFallback';
+import { formatCenterpieceStatus } from '../lib/centerpieceStatus';
 
 const SURFACE_COLORS = {
   clean: {
@@ -20,10 +22,10 @@ const SURFACE_COLORS = {
   },
   standby: {
     rim: 0x3b82f6,
-    bevel: 0x2563eb,
+    bevel: 0x1d4ed8,
     bevelEmissive: 0x1d4ed8,
-    core: 0x60a5fa,
-    ring: 0x2563eb,
+    core: 0x3b82f6,
+    ring: 0x1d4ed8,
     wire: 0x93c5fd,
   },
 };
@@ -489,15 +491,27 @@ export function SecurityCenterpiece3D({
     const canvas = canvasRef.current;
     if (!host || !canvas) return undefined;
 
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+      queueMicrotask(() => setWebglUnavailable(true));
+      return undefined;
+    }
+
+    const handleContextLost = (event) => {
+      event.preventDefault();
+      setWebglUnavailable(true);
+    };
+    canvas.addEventListener('webglcontextlost', handleContextLost, false);
+
     let renderer;
     try {
       renderer = new THREE.WebGLRenderer({
         canvas,
         antialias: true,
         alpha: true,
-        powerPreference: 'high-performance',
+        powerPreference: 'default',
       });
     } catch {
+      canvas.removeEventListener('webglcontextlost', handleContextLost, false);
       queueMicrotask(() => setWebglUnavailable(true));
       return undefined;
     }
@@ -654,7 +668,7 @@ export function SecurityCenterpiece3D({
         left: rect.left,
         top: rect.top,
       };
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       renderer.setSize(viewport.width, viewport.height, false);
       camera.aspect = viewport.width / viewport.height;
       camera.position.z = viewport.width < 640 ? 14.2 : viewport.width < 1100 ? 11.2 : 10.2;
@@ -847,62 +861,39 @@ export function SecurityCenterpiece3D({
       window.removeEventListener('pointerup', onPointerUp);
       document.removeEventListener('mouseleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibility);
+      canvas.removeEventListener('webglcontextlost', handleContextLost, false);
       disposables.forEach((item) => item?.dispose?.());
       renderer.dispose();
     };
   }, []);
 
+  const { statusText } = formatCenterpieceStatus(surfaceId, healthy, alert);
+
   if (webglUnavailable) {
     return (
-      <div className="relative w-full h-full flex items-center justify-center">
-        <svg
-          width="220"
-          height="220"
-          viewBox="0 0 220 220"
-          aria-hidden="true"
-          className="drop-shadow-[0_24px_40px_rgba(29,78,216,0.28)]"
-        >
-          <circle
-            cx="110"
-            cy="110"
-            r="88"
-            fill="none"
-            stroke="rgba(148,163,184,0.28)"
-            strokeWidth="1"
-            strokeDasharray="3 6"
-          />
-          <circle
-            cx="110"
-            cy="110"
-            r="72"
-            fill="none"
-            stroke={alert ? '#EF4444' : healthy ? '#22C55E' : '#2563EB'}
-            strokeWidth="1.25"
-          />
-          <g transform="translate(70, 70)">
-            <path
-              d="M40 5.8C45.8 9.6 54.2 12.1 65.5 13.6V37.2C65.5 53.8 54.6 66.5 40 73.6C25.4 66.5 14.5 53.8 14.5 37.2V13.6C25.8 12.1 34.2 9.6 40 5.8Z"
-              fill="#0B1220"
-              stroke="rgba(226,232,240,0.45)"
-              strokeWidth="1.25"
-            />
-            <path
-              d="M34.2 54.2H23.6V47.2H29.4C26.1 43.9 24.2 39.4 24.2 34.3C24.2 25.1 31.1 18.2 40 18.2C48.9 18.2 55.8 25.1 55.8 34.3C55.8 39.4 53.9 43.9 50.6 47.2H56.4V54.2H45.8V46.8C48.7 44.1 50.3 39.9 50.3 34.7C50.3 28 45.8 23.2 40 23.2C34.2 23.2 29.7 28 29.7 34.7C29.7 39.9 31.3 44.1 34.2 46.8V54.2Z"
-              fill="#F8FAFC"
-            />
-          </g>
-        </svg>
-      </div>
+      <SecurityCenterpieceFallback
+        surfaceId={surfaceId}
+        healthy={healthy}
+        alert={alert}
+      />
     );
   }
 
   return (
     <div
       ref={hostRef}
-      aria-hidden="true"
+      role="region"
+      aria-label={statusText}
       className="relative w-full h-full touch-pan-y cursor-grab active:cursor-grabbing select-none"
     >
-      <canvas ref={canvasRef} className="block w-full h-full touch-pan-y" />
+      <span className="sr-only" role="status" aria-live="polite">
+        {statusText}
+      </span>
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className="block w-full h-full touch-pan-y"
+      />
     </div>
   );
 }

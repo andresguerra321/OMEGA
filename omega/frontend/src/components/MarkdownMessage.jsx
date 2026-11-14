@@ -29,7 +29,7 @@ function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') 
           type="button"
           onClick={() => target && onSelectCitation?.(target)}
           title={target ? `${target.title} — Pág. ${target.page}` : `Fuente [${num}]`}
-          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#2F6FED]/40 bg-[#2F6FED]/16 px-1.5 py-0 text-[12px] font-medium text-[#8AB4FF] hover:border-[#2F6FED]/70 hover:bg-[#2F6FED]/28 hover:text-white active:scale-[0.94] transition-all duration-150 ease-apple cursor-pointer"
+          className="font-tech mx-0.5 inline-flex items-center rounded-[5px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/16 px-1.5 py-0 text-[12px] font-medium text-[#93C5FD] hover:border-[#1D4ED8]/70 hover:bg-[#1D4ED8]/28 hover:text-white active:scale-[0.94] transition-all duration-150 ease-apple cursor-pointer"
         >
           [{num}]
         </button>
@@ -85,7 +85,7 @@ export function formatTextWithTechAndCitations(text, citationMap, onSelectCitati
           href={linkMatch[2]}
           target="_blank"
           rel="noreferrer"
-          className="text-[#7AA7FF] underline underline-offset-2 hover:text-[#9FC0FF]"
+          className="text-[#3B82F6] underline underline-offset-2 hover:text-[#93C5FD]"
         >
           {linkMatch[1]}
         </a>
@@ -164,10 +164,10 @@ export function MarkdownMessage({
             <p className="text-[#E5E5EA]">{enhance(children)}</p>
           ),
           ul: ({ children }) => (
-            <ul className="space-y-2.5 pl-5 list-disc marker:text-[#5E9BFF]">{children}</ul>
+            <ul className="space-y-2.5 pl-5 list-disc marker:text-[#3B82F6]">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="space-y-2.5 pl-5 list-decimal marker:text-[#5E9BFF]">{children}</ol>
+            <ol className="space-y-2.5 pl-5 list-decimal marker:text-[#3B82F6]">{children}</ol>
           ),
           li: ({ children }) => (
             <li className="pl-1.5 text-[#E5E5EA]">{enhance(children)}</li>

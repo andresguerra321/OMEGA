@@ -10,9 +10,11 @@ import {
   HelpCircle,
   KeyRound,
   Laptop,
+  Link2,
   Loader2,
   Lock,
   RefreshCw,
+  Shield,
   ShieldCheck,
   Smartphone,
   Upload,
@@ -29,6 +31,12 @@ import {
 import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import { useScrollReveal } from '../lib/useScrollReveal';
+import {
+  ActionConfirmationBanner,
+  PanelEmptyState,
+  PanelErrorBanner,
+  PanelSkeleton,
+} from './PanelStatePrimitives';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
   [
@@ -201,10 +209,23 @@ function buildForensicMarkdownReport(result, hardeningReport) {
   return lines.join('\n');
 }
 
+function isInspectableNetworkIndicator(val) {
+  const s = String(val || '').trim();
+  if (!s || s.includes(' ') || s.includes('@')) return false;
+  return (
+    s.startsWith('http://') ||
+    s.startsWith('https://') ||
+    /^([a-z0-9-]+\.)+[a-z]{2,}(?:[/:?#].*)?$/i.test(s) ||
+    /^(\d{1,3}\.){3}\d{1,3}(?:[:/].*)?$/.test(s)
+  );
+}
+
 const ADB_PATH_STORAGE_KEY = 'omega_custom_adb_path';
 
 export function MvtVerifierPanel({
   onAskInChat,
+  onVerifyLink,
+  onOpenThreat,
   initialTab = 'android',
   preloadedAudit = null,
   onAuditUpdate,
@@ -248,6 +269,8 @@ export function MvtVerifierPanel({
   const [dnsAppliedNote, setDnsAppliedNote] = useState('');
   const [syncingStix, setSyncingStix] = useState(false);
   const [stixSyncNote, setStixSyncNote] = useState('');
+  const [exportNote, setExportNote] = useState('');
+  const [dismissedResultKey, setDismissedResultKey] = useState('');
 
   const hasDesktopBridge =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
@@ -338,6 +361,8 @@ export function MvtVerifierPanel({
       }
       setHardeningReport(liveRes);
       setResult(normalizeParallelResult(unifiedSource, [], computedLabel));
+      setExportNote('');
+      setDismissedResultKey('');
       if (notifyParent) {
         onAuditUpdate?.(liveRes);
       }
@@ -665,6 +690,8 @@ export function MvtVerifierPanel({
     try {
       const apiRes = await verifyMvtText(trimmed);
       setResult(normalizeManualResult(apiRes));
+      setExportNote('');
+      setDismissedResultKey('');
     } catch (err) {
       setErrorMsg(err?.message || 'No se pudieron evaluar los indicadores en memoria.');
     } finally {
@@ -677,6 +704,8 @@ export function MvtVerifierPanel({
     setHardeningReport(null);
     setConfirmingDns(false);
     setDnsAppliedNote('');
+    setExportNote('');
+    setDismissedResultKey('');
     setErrorMsg('');
   }
 
@@ -690,6 +719,7 @@ export function MvtVerifierPanel({
     a.download = `omega_verificacion_${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
+    setExportNote('Reporte forense descargado (.md).');
   }
 
   function handleInvestigateFinding(finding) {
@@ -821,6 +851,27 @@ export function MvtVerifierPanel({
           </button>
         </div>
 
+        {(() => {
+          const resultKey = `${result.sourceLabel}|${result.analyzedCount}|${result.verdictCode}`;
+          if (dismissedResultKey === resultKey) return null;
+          const bannerTone = isCriticalOverall ? 'alert' : hasAnyThreatSignal ? 'info' : 'clean';
+          return (
+            <ActionConfirmationBanner
+              tone={bannerTone}
+              message={`Revisión en RAM completada (${result.analyzedCount} indicadores · ${result.matchesCount} coincidencia(s) CTI · ${yaraHits.length} YARA · ${behavioralAnomalies.length} anomalía(s) · 0 bytes en disco).`}
+              onDismiss={() => setDismissedResultKey(resultKey)}
+            />
+          );
+        })()}
+
+        {exportNote && (
+          <ActionConfirmationBanner
+            tone="clean"
+            message={exportNote}
+            onDismiss={() => setExportNote('')}
+          />
+        )}
+
         {/* 1 · Veredicto y contención */}
         <section className="animate-fade-up space-y-2">
           <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
@@ -865,7 +916,7 @@ export function MvtVerifierPanel({
                 <ul className="space-y-1.5">
                   {result.recommendedActions.map((act, idx) => (
                     <li key={`${idx}-${act.slice(0, 24)}`} className="flex items-start gap-2 text-[12.5px] text-[#E5E5EA] leading-snug">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#2F6FED] shrink-0" />
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#1D4ED8] shrink-0" />
                       <span>{act}</span>
                     </li>
                   ))}
@@ -883,16 +934,19 @@ export function MvtVerifierPanel({
           </div>
         </section>
 
-        {(errorMsg || dnsAppliedNote) && (
-          <div
-            className={`rounded-[12px] border px-4 py-2.5 text-[12.5px] ${
-              errorMsg
-                ? 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FF6961]'
-                : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#30D158]'
-            }`}
-          >
-            {errorMsg || dnsAppliedNote}
-          </div>
+        {errorMsg && (
+          <PanelErrorBanner
+            message={errorMsg}
+            onDismiss={() => setErrorMsg('')}
+          />
+        )}
+
+        {dnsAppliedNote && (
+          <ActionConfirmationBanner
+            tone="clean"
+            message={dnsAppliedNote}
+            onDismiss={() => setDnsAppliedNote('')}
+          />
         )}
 
         {/* 2 · Anomalías conductuales y hardening */}
@@ -957,7 +1011,7 @@ export function MvtVerifierPanel({
                         <button
                           type="button"
                           onClick={() => setConfirmingDns(true)}
-                          className="rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                          className="rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
                         >
                           Activar DNS Privado (Quad9 DoT)
                         </button>
@@ -970,7 +1024,7 @@ export function MvtVerifierPanel({
                             type="button"
                             disabled={hardeningDns}
                             onClick={handleConfirmHardenDns}
-                            className="rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
+                            className="rounded-[8px] bg-[#1D4ED8] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
                           >
                             {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" />}
                             <span>Confirmar</span>
@@ -1020,7 +1074,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1064,7 +1118,7 @@ export function MvtVerifierPanel({
                     type="button"
                     disabled={!onAskInChat}
                     onClick={() => handleInvestigateAnomaly(anom)}
-                    className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                    className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
                     Investigar en Preguntar
                   </button>
@@ -1143,7 +1197,7 @@ export function MvtVerifierPanel({
             <div className="apple-group rounded-[13px] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F5F5F7]">
-                  <Clock className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
+                  <Clock className="h-3.5 w-3.5 text-[#93C5FD] shrink-0" />
                   <span>
                     Línea temporal correlacionada en RAM ({result.timelineSummary?.events_total || result.timeline.length} eventos)
                   </span>
@@ -1202,7 +1256,7 @@ export function MvtVerifierPanel({
                     {(hit.matched_strings || []).map((tok) => (
                       <span
                         key={tok}
-                        className="font-tech rounded-[5px] border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[11px] text-[#8AB4FF]"
+                        className="font-tech rounded-[5px] border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[11px] text-[#93C5FD]"
                       >
                         {tok}
                       </span>
@@ -1217,7 +1271,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateYara(hit)}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1243,14 +1297,38 @@ export function MvtVerifierPanel({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={!onAskInChat}
-                  onClick={() => handleInvestigateFinding(finding)}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
-                >
-                  Investigar en Preguntar
-                </button>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+                  {onVerifyLink && isInspectableNetworkIndicator(finding.ioc_value) && (
+                    <button
+                      type="button"
+                      onClick={() => onVerifyLink(finding.ioc_value)}
+                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                    >
+                      <Link2 className="h-3 w-3 text-[#93C5FD]" />
+                      <span>Ver enlace</span>
+                    </button>
+                  )}
+
+                  {onOpenThreat && finding.spyware_family && finding.spyware_family !== 'Sin clasificar' && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenThreat(finding.spyware_family)}
+                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                    >
+                      <Shield className="h-3 w-3 text-[#93C5FD]" />
+                      <span>Campaña</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={!onAskInChat}
+                    onClick={() => handleInvestigateFinding(finding)}
+                    className="rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  >
+                    Investigar en Preguntar
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -1401,7 +1479,7 @@ export function MvtVerifierPanel({
                       aria-label="Volver a buscar teléfono conectado"
                       className="h-7 w-7 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#8E8E93] hover:text-[#F5F5F7] disabled:opacity-50 transition-colors cursor-pointer"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#8AB4FF]' : ''}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#93C5FD]' : ''}`} />
                     </button>
                   )}
                 </div>
@@ -1444,7 +1522,7 @@ export function MvtVerifierPanel({
                         type="button"
                         disabled={scanningUsb || isAnalyzing}
                         onClick={handleLiveUsbScan}
-                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                        className="shrink-0 rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         <span>{scanningUsb ? 'Revisando teléfono...' : 'Iniciar revisión segura'}</span>
@@ -1462,7 +1540,7 @@ export function MvtVerifierPanel({
                         <button
                           type="button"
                           onClick={() => setShowAndroidGuide((v) => !v)}
-                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#8AB4FF] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#93C5FD] hover:bg-white/[0.08] transition-colors cursor-pointer"
                         >
                           <HelpCircle className="h-3.5 w-3.5" />
                           <span>
@@ -1527,7 +1605,7 @@ export function MvtVerifierPanel({
                                     type="button"
                                     disabled={installingAdb}
                                     onClick={handleInstallPortableAdb}
-                                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[11.5px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 transition-colors cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#1D4ED8] px-3 py-1 text-[11.5px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 transition-colors cursor-pointer"
                                   >
                                     {installingAdb ? (
                                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1543,7 +1621,7 @@ export function MvtVerifierPanel({
                                 <button
                                   type="button"
                                   onClick={handlePickAdbBinary}
-                                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 transition-colors cursor-pointer"
                                 >
                                   <FolderOpen className="h-3.5 w-3.5" />
                                   <span>
@@ -1626,7 +1704,7 @@ export function MvtVerifierPanel({
                         type="button"
                         disabled={scanningIos || isAnalyzing}
                         onClick={handleLiveIosScan}
-                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                        className="shrink-0 rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningIos && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         <span>{scanningIos ? 'Revisando iPhone...' : 'Iniciar revisión de iPhone'}</span>
@@ -1685,7 +1763,7 @@ export function MvtVerifierPanel({
                               type="button"
                               disabled={scanningIos || isAnalyzing}
                               onClick={handlePickIosBackupDir}
-                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 transition-colors cursor-pointer"
                             >
                               {scanningIos ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1767,7 +1845,7 @@ export function MvtVerifierPanel({
                               type="button"
                               disabled={scanningIos || isAnalyzing}
                               onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
-                              className="shrink-0 rounded-[7px] bg-[#2F6FED] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 cursor-pointer"
+                              className="shrink-0 rounded-[7px] bg-[#1D4ED8] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 cursor-pointer"
                             >
                               Revisar copia ahora
                             </button>
@@ -1803,12 +1881,12 @@ export function MvtVerifierPanel({
                           value={backupPassword}
                           onChange={(e) => setBackupPassword(e.target.value)}
                           placeholder="Contraseña de respaldo iTunes / Finder"
-                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED] focus:outline-none"
+                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8] focus:outline-none"
                         />
                         <button
                           type="submit"
                           disabled={!backupPassword || unlockingBackup}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B7BF2] disabled:opacity-50 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#1D4ED8] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 cursor-pointer"
                         >
                           {unlockingBackup && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                           <span>Desbloquear y revisar en RAM</span>
@@ -1878,7 +1956,7 @@ export function MvtVerifierPanel({
                         type="button"
                         disabled={scanningPc || isAnalyzing}
                         onClick={handlePcLiveAudit}
-                        className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_12px_rgba(47,111,237,0.32)] hover:bg-[#3B7BF2] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                        className="rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_12px_rgba(29,78,216,0.32)] hover:bg-[#3B82F6] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningPc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Laptop className="h-3.5 w-3.5" />}
                         <span>{scanningPc ? 'Revisando equipo...' : 'Analizar esta computadora'}</span>
@@ -1909,7 +1987,7 @@ export function MvtVerifierPanel({
               title="Actualizar base de amenazas conocidas en memoria"
               className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
             >
-              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#5E9BFF]' : ''}`} />
+              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#3B82F6]' : ''}`} />
               <span>{stixSyncNote || (syncingStix ? 'Actualizando...' : 'Feeds STIX 2.1')}</span>
             </button>
           </div>
@@ -1966,8 +2044,8 @@ export function MvtVerifierPanel({
               }}
               className={`rounded-[12px] border border-dashed py-5 px-4 sm:px-6 flex flex-col items-center justify-center text-center transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
                 isDragging
-                  ? 'border-[#2F6FED] bg-[#2F6FED]/12'
-                  : 'border-white/[0.12] bg-black/25 hover:border-[#2F6FED]/55 hover:bg-black/35'
+                  ? 'border-[#1D4ED8] bg-[#1D4ED8]/12'
+                  : 'border-white/[0.12] bg-black/25 hover:border-[#1D4ED8]/55 hover:bg-black/35'
               }`}
             >
               <input
@@ -1981,7 +2059,7 @@ export function MvtVerifierPanel({
 
               <div className="mb-2.5 h-10 w-10 rounded-[11px] bg-white/[0.045] border border-white/[0.08] flex items-center justify-center">
                 {isAnalyzing ? (
-                  <Loader2 className="h-5 w-5 text-[#5E9BFF] animate-spin" />
+                  <Loader2 className="h-5 w-5 text-[#3B82F6] animate-spin" />
                 ) : (
                   <Upload className="h-4.5 w-4.5 text-[#8E8E93]" />
                 )}
@@ -2003,7 +2081,7 @@ export function MvtVerifierPanel({
                 type="button"
                 disabled={isAnalyzing}
                 onClick={handleRunSample}
-                className="mt-3 rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-1 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/20 active:scale-[0.97] disabled:opacity-50 transition-all cursor-pointer"
+                className="mt-3 rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-3 py-1 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/20 active:scale-[0.97] disabled:opacity-50 transition-all cursor-pointer"
               >
                 Probar con muestra de ejemplo
               </button>
@@ -2027,7 +2105,7 @@ export function MvtVerifierPanel({
                 <button
                   type="submit"
                   disabled={isAnalyzing || !manualText.trim()}
-                  className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
+                  className="rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Revisar</span>
@@ -2037,9 +2115,48 @@ export function MvtVerifierPanel({
           )}
 
           {errorMsg && (
-            <p className="mt-3 text-[12.5px] text-[#FF453A]">
-              {errorMsg}
-            </p>
+            <PanelErrorBanner
+              message={errorMsg}
+              onDismiss={() => setErrorMsg('')}
+              className="mt-3"
+            />
+          )}
+
+          {(isAnalyzing || scanningPc || scanningUsb || scanningIos) && (
+            <PanelSkeleton
+              label={
+                scanningPc
+                  ? 'Auditando procesos, WMI y sockets en RAM...'
+                  : scanningUsb || scanningIos
+                    ? 'Leyendo telemetría USB en RAM...'
+                    : 'Analizando artefactos forenses en RAM...'
+              }
+              lines={3}
+              className="mt-3"
+            />
+          )}
+
+          {!isAnalyzing && !scanningPc && !scanningUsb && !scanningIos && !errorMsg && (
+            <PanelEmptyState
+              icon={ShieldCheck}
+              title="Aún no has verificado ningún equipo"
+              description={
+                deviceTab === 'pc'
+                  ? 'Ejecuta la inspección en RAM sobre esta computadora (procesos, WMI y conexiones abiertas) o carga un archivo forense.'
+                  : 'Conecta tu celular arriba para inspección directa o carga una copia / lista de indicadores abajo. Todo corre en RAM sin guardar archivos.'
+              }
+              actionLabel={
+                deviceTab === 'pc' && hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot
+                  ? 'Analizar esta computadora'
+                  : 'Probar con muestra de ejemplo'
+              }
+              onAction={
+                deviceTab === 'pc' && hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot
+                  ? handlePcLiveAudit
+                  : handleRunSample
+              }
+              className="mt-4"
+            />
           )}
         </div>
       </div>

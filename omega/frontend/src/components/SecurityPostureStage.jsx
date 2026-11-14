@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -20,7 +20,14 @@ import { verifySuspiciousLink } from '../lib/api';
 import { OmegaLogo } from './OmegaLogo';
 import { ChatAtmosphere } from './ChatAtmosphere';
 import { SpatialNavPill } from './SpatialNavPill';
-import { SecurityCenterpiece3D } from './SecurityCenterpiece3D';
+import { SecurityCenterpieceFallback } from './SecurityCenterpieceFallback';
+import { ActionConfirmationBanner, PanelErrorBanner } from './PanelStatePrimitives';
+
+const SecurityCenterpiece3D = lazy(() =>
+  import('./SecurityCenterpiece3D').then((mod) => ({
+    default: mod.SecurityCenterpiece3D,
+  })),
+);
 
 function extractPcVerdictInfo(pcAudit) {
   if (!pcAudit) return { verdict: '', findingsCount: 0, yaraHits: 0, sockets: 0 };
@@ -62,6 +69,8 @@ export function SecurityPostureStage({
   syncingStix = false,
   onRunPcScan,
   onSyncStix,
+  stageFeedback = null,
+  onDismissStageFeedback,
   onOpenCommandPalette,
   onOpenCopilot,
   onNavigate,
@@ -73,7 +82,23 @@ export function SecurityPostureStage({
   const [quickUrl, setQuickUrl] = useState('');
   const [linkLoading, setLinkLoading] = useState(false);
   const [inlineLink, setInlineLink] = useState(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('omega_onboarding_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const menuRef = useRef(null);
+
+  function handleDismissOnboarding() {
+    setOnboardingDismissed(true);
+    try {
+      localStorage.setItem('omega_onboarding_dismissed', '1');
+    } catch {
+      // Storage restricted
+    }
+  }
 
   const pcInfo = useMemo(() => extractPcVerdictInfo(pcAudit), [pcAudit]);
   const pcHealthy =
@@ -192,6 +217,23 @@ export function SecurityPostureStage({
   );
 
   const activeSurface = surfaces[selectedNodeId] || surfaces.windows;
+  const [mount3d, setMount3d] = useState(false);
+
+  useEffect(() => {
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    if (prefersReduced) return undefined;
+
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(() => setMount3d(true), {
+        timeout: 600,
+      });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timer = window.setTimeout(() => setMount3d(true), 120);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function stepSurface(delta) {
     const idx = SURFACE_ORDER.indexOf(activeSurface.id);
@@ -228,6 +270,21 @@ export function SecurityPostureStage({
         ? 'bg-[#22C55E]/15 text-[#86EFAC] border-[#22C55E]/35'
         : 'bg-[#1D4ED8]/20 text-[#93C5FD] border-[#3B82F6]/35';
 
+  const stageHealthy =
+    activeSurface.id === 'windows'
+      ? pcHealthy
+      : activeSurface.id === 'usb'
+        ? usbConnected
+        : activeSurface.id === 'link'
+          ? Boolean(lastLinkResult) && linkRisk !== 'HIGH'
+          : apiOnline;
+  const stageAlert =
+    activeSurface.id === 'windows'
+      ? pcWarn
+      : activeSurface.id === 'link'
+        ? linkRisk === 'HIGH'
+        : false;
+
   return (
     <section
       aria-label="Cabina de postura OMEGA"
@@ -236,28 +293,32 @@ export function SecurityPostureStage({
       {/* Fondo atmosférico unificado en azul noche con pliegues diagonales y trazas curvas */}
       <ChatAtmosphere variant="stage" />
 
-      {/* Escenario WebGL de estudio a pantalla completa (cuadrícula en perspectiva + logo OMEGA futurista) */}
+      {/* Escenario de postura OMEGA: fallback SVG inmediato y WebGL diferido tras TTI */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[100dvh] md:inset-0 md:h-full z-0">
-        <SecurityCenterpiece3D
-          surfaceId={activeSurface.id}
-          healthy={
-            activeSurface.id === 'windows'
-              ? pcHealthy
-              : activeSurface.id === 'usb'
-                ? usbConnected
-                : activeSurface.id === 'link'
-                  ? Boolean(lastLinkResult) && linkRisk !== 'HIGH'
-                  : apiOnline
-          }
-          alert={
-            activeSurface.id === 'windows'
-              ? pcWarn
-              : activeSurface.id === 'link'
-                ? linkRisk === 'HIGH'
-                : false
-          }
-          spinNonce={spinNonce}
-        />
+        {mount3d ? (
+          <Suspense
+            fallback={
+              <SecurityCenterpieceFallback
+                surfaceId={activeSurface.id}
+                healthy={stageHealthy}
+                alert={stageAlert}
+              />
+            }
+          >
+            <SecurityCenterpiece3D
+              surfaceId={activeSurface.id}
+              healthy={stageHealthy}
+              alert={stageAlert}
+              spinNonce={spinNonce}
+            />
+          </Suspense>
+        ) : (
+          <SecurityCenterpieceFallback
+            surfaceId={activeSurface.id}
+            healthy={stageHealthy}
+            alert={stageAlert}
+          />
+        )}
       </div>
 
       {/* Telemetría discreta alineada a los rieles del escenario */}
@@ -280,11 +341,10 @@ export function SecurityPostureStage({
       {/* Cabecera Superior Unificada — Navegación centrada en todo ancho */}
       <header
         aria-label="Barra principal OMEGA"
-        className={`relative z-30 shrink-0 h-[56px] px-5 sm:px-7 flex items-center justify-between gap-2 ${
-          isDesktop
-            ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
-            : ''
-        }`}
+        className={`relative z-30 shrink-0 h-[56px] px-5 sm:px-7 flex items-center justify-between gap-2 ${isDesktop
+          ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
+          : ''
+          }`}
       >
         {/* Marca OMEGA izquierda */}
         <button
@@ -293,7 +353,7 @@ export function SecurityPostureStage({
           className="relative z-10 inline-flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
         >
           <OmegaLogo size={23} isThinking={isLoadingChat} />
-          <span className="font-display text-[15px] font-semibold tracking-[0.06em] text-white group-hover:text-[#DBEAFE] transition-colors">
+          <span className="font-display text-[15px] font-semibold tracking-[0.06em] text-white group-hover:text-[#93C5FD] transition-colors">
             OMEGA
           </span>
         </button>
@@ -346,18 +406,16 @@ export function SecurityPostureStage({
               <button
                 type="button"
                 onClick={() => onToggleTechnicalMode?.(false)}
-                className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${
-                  !technicalMode ? 'apple-segmented-active' : 'text-[#94A3B8] hover:text-white'
-                }`}
+                className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${!technicalMode ? 'apple-segmented-active' : 'text-[#94A3B8] hover:text-white'
+                  }`}
               >
                 Simple
               </button>
               <button
                 type="button"
                 onClick={() => onToggleTechnicalMode?.(true)}
-                className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${
-                  technicalMode ? 'apple-segmented-active' : 'text-[#94A3B8] hover:text-white'
-                }`}
+                className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${technicalMode ? 'apple-segmented-active' : 'text-[#94A3B8] hover:text-white'
+                  }`}
               >
                 Técnico
               </button>
@@ -403,9 +461,8 @@ export function SecurityPostureStage({
                 </span>
               </h1>
               <ChevronDown
-                className={`h-4 w-4 text-[#94A3B8] transition-transform duration-180 ease-kowalski self-center ${
-                  surfaceMenuOpen ? 'rotate-180 text-white' : ''
-                }`}
+                className={`h-4 w-4 text-[#94A3B8] transition-transform duration-180 ease-kowalski self-center ${surfaceMenuOpen ? 'rotate-180 text-white' : ''
+                  }`}
               />
             </button>
 
@@ -437,14 +494,13 @@ export function SecurityPostureStage({
                       onSelectNode?.(id);
                       setSurfaceMenuOpen(false);
                     }}
-                    className={`w-full rounded-[10px] px-3 py-2 flex items-center justify-between gap-2 text-[12.5px] transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#1D4ED8]/25 text-white'
-                        : 'text-[#CBD5E1] hover:bg-white/[0.06]'
-                    }`}
+                    className={`w-full rounded-[10px] px-3 py-2 flex items-center justify-between gap-2 text-[12.5px] transition-colors cursor-pointer ${isSelected
+                      ? 'bg-[#1D4ED8]/25 text-white'
+                      : 'text-[#CBD5E1] hover:bg-white/[0.06]'
+                      }`}
                   >
                     <span className="inline-flex items-center gap-2">
-                      <SIcon className="h-3.5 w-3.5 text-[#60A5FA]" />
+                      <SIcon className="h-3.5 w-3.5 text-[#3B82F6]" />
                       <span className="font-medium">
                         {s.lead} {s.accent}
                       </span>
@@ -558,8 +614,102 @@ export function SecurityPostureStage({
         </div>
       </div>
 
-      {/* Trío Inferior de Tarjetas de Vidrio Obsidiana (Bento Azul Noche · Blanco) */}
-      <footer className="relative z-20 shrink-0 px-3.5 sm:px-7 pb-4 pt-2">
+      {/* Alertas de estado / Guía rápida (10 s) / Trío Inferior de Tarjetas */}
+      <footer className="relative z-20 shrink-0 px-3.5 sm:px-7 pb-4 pt-2 space-y-2.5">
+        {(!apiOnline || stageFeedback) && (
+          <div className="mx-auto max-w-[1280px] space-y-2">
+            {!apiOnline && (
+              <PanelErrorBanner
+                message="Sin conexión con el backend OMEGA. Verifica Docker o el servidor Java antes de consultar el corpus o enlaces."
+              />
+            )}
+            {stageFeedback && (
+              stageFeedback.tone === 'alert' ? (
+                <PanelErrorBanner
+                  message={stageFeedback.message}
+                  onDismiss={onDismissStageFeedback}
+                />
+              ) : (
+                <ActionConfirmationBanner
+                  tone={stageFeedback.tone || 'clean'}
+                  message={stageFeedback.message}
+                  actionLabel={stageFeedback.actionLabel}
+                  onAction={
+                    stageFeedback.actionNav
+                      ? () => {
+                          onDismissStageFeedback?.();
+                          onNavigate?.(stageFeedback.actionNav);
+                        }
+                      : undefined
+                  }
+                  onDismiss={onDismissStageFeedback}
+                />
+              )
+            )}
+          </div>
+        )}
+
+        {!onboardingDismissed && (
+          <div
+            role="region"
+            aria-label="Guía rápida inicial"
+            className="mx-auto max-w-[1280px] omega-glass-card rounded-[16px] px-4 py-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-tech rounded-full border border-[#3B82F6]/35 bg-[#1D4ED8]/20 px-2 py-0.5 text-[10px] tracking-[0.06em] uppercase text-[#93C5FD]">
+                  Guía 10 s
+                </span>
+                <span className="text-[12.5px] font-medium text-white">
+                  Empieza por aquí según lo que quieras verificar hoy:
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDismissOnboarding}
+                className="lg:hidden rounded-[8px] border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#CBD5E1] hover:text-white cursor-pointer"
+              >
+                Entendido
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigate?.('equipo')}
+                className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#93C5FD]/15 bg-white/[0.04] hover:bg-[#1D4ED8]/20 hover:border-[#3B82F6]/45 px-2.5 py-1 text-[11.5px] text-[#E2E8F0] transition-colors cursor-pointer"
+              >
+                <span className="font-tech text-[#3B82F6]">1.</span>
+                <span>Equipos (PC o USB móvil)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('enlace')}
+                className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#93C5FD]/15 bg-white/[0.04] hover:bg-[#1D4ED8]/20 hover:border-[#3B82F6]/45 px-2.5 py-1 text-[11.5px] text-[#E2E8F0] transition-colors cursor-pointer"
+              >
+                <span className="font-tech text-[#3B82F6]">2.</span>
+                <span>Enlaces sin abrir URLs</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('preguntar')}
+                className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#93C5FD]/15 bg-white/[0.04] hover:bg-[#1D4ED8]/20 hover:border-[#3B82F6]/45 px-2.5 py-1 text-[11.5px] text-[#E2E8F0] transition-colors cursor-pointer"
+              >
+                <span className="font-tech text-[#3B82F6]">3.</span>
+                <span>Asistente con citas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDismissOnboarding}
+                className="hidden lg:inline-flex items-center rounded-[8px] border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.1] px-2.5 py-1 text-[11px] font-medium text-[#CBD5E1] hover:text-white transition-colors cursor-pointer ml-1"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mx-auto max-w-[1280px] grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Tarjeta 1: Detalles del Equipo Local & Acción Primaria en Azul Rey */}
           <div
@@ -596,12 +746,12 @@ export function SecurityPostureStage({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => (isDesktop ? onRunPcScan?.() : onNavigate?.('equipo', { tab: 'pc' }))}
-                      disabled={scanningPc}
-                      className="kowalski-press h-8 rounded-full bg-[#1D4ED8] hover:bg-[#2563EB] text-white px-3.5 text-[12px] font-medium inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(0,0,0,0.4),0_8px_20px_-4px_rgba(29,78,216,0.45)] cursor-pointer disabled:opacity-60"
-                    >
+                  <button
+                    type="button"
+                    onClick={() => (isDesktop ? onRunPcScan?.() : onNavigate?.('equipo', { tab: 'pc' }))}
+                    disabled={scanningPc}
+                    className="kowalski-press h-8 rounded-full bg-[#1D4ED8] hover:bg-[#3B82F6] text-white px-3.5 text-[12px] font-medium inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(0,0,0,0.4),0_8px_20px_-4px_rgba(29,78,216,0.45)] cursor-pointer disabled:opacity-60"
+                  >
                     {scanningPc && <Loader2 className="h-3 w-3 animate-spin" />}
                     <span>
                       {scanningPc
@@ -651,7 +801,7 @@ export function SecurityPostureStage({
           >
             <div className="flex items-start justify-between gap-2">
               <div className="inline-flex items-center gap-2">
-                <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#60A5FA] inline-flex items-center justify-center">
+                <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#3B82F6] inline-flex items-center justify-center">
                   <Smartphone className="h-3.5 w-3.5" />
                 </span>
                 <div>
@@ -699,7 +849,7 @@ export function SecurityPostureStage({
                     cy="28"
                     r="23"
                     fill="none"
-                    stroke={usbConnected ? '#22C55E' : '#2563EB'}
+                    stroke={usbConnected ? '#22C55E' : '#3B82F6'}
                     strokeWidth="4.5"
                     strokeDasharray="144.5"
                     strokeDashoffset={usbConnected ? '20' : '92'}
@@ -720,7 +870,7 @@ export function SecurityPostureStage({
           >
             <div className="flex items-start justify-between gap-2">
               <div className="inline-flex items-center gap-2">
-                <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#60A5FA] inline-flex items-center justify-center">
+                <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#3B82F6] inline-flex items-center justify-center">
                   <Link2 className="h-3.5 w-3.5" />
                 </span>
                 <div>
@@ -755,27 +905,35 @@ export function SecurityPostureStage({
                 <button
                   type="submit"
                   disabled={linkLoading || !quickUrl.trim()}
-                  className="kowalski-press h-8 rounded-full bg-[#1D4ED8] hover:bg-[#2563EB] disabled:bg-white/[0.08] disabled:text-[#64748B] px-3 text-[11.5px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] cursor-pointer shrink-0"
+                  className="kowalski-press h-8 rounded-full bg-[#1D4ED8] hover:bg-[#3B82F6] disabled:bg-white/[0.08] disabled:text-[#64748B] px-3 text-[11.5px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] cursor-pointer shrink-0"
                 >
                   {linkLoading ? '...' : 'Verificar'}
                 </button>
               </div>
 
               {inlineLink ? (
-                <div className="rounded-[10px] bg-[#040812]/90 border border-[#93C5FD]/[0.12] px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]">
-                  <span className="inline-flex items-center gap-1.5 truncate text-[#E2E8F0]">
-                    {inlineLink.risk_level === 'HIGH' && (
+                <div
+                  className={`rounded-[10px] border px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px] ${
+                    inlineLink.error
+                      ? 'bg-[#EF4444]/10 border-[#EF4444]/35 text-[#FCA5A5]'
+                      : inlineLink.risk_level === 'HIGH'
+                        ? 'bg-[#EF4444]/10 border-[#EF4444]/35 text-[#FCA5A5]'
+                        : 'bg-[#040812]/90 border-[#93C5FD]/[0.12] text-[#E2E8F0]'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5 truncate">
+                    {(inlineLink.error || inlineLink.risk_level === 'HIGH') && (
                       <ShieldAlert className="h-3.5 w-3.5 text-[#EF4444] shrink-0" />
                     )}
                     <span className="truncate">
-                      {inlineLink.error || `${inlineLink.verdict || 'Revisado'}`}
+                      {inlineLink.error || `Listo · ${inlineLink.verdict || inlineLink.risk_level || 'Revisado'}`}
                     </span>
                   </span>
                   {!inlineLink.error && (
                     <button
                       type="button"
                       onClick={() => onNavigate?.('enlace', { url: inlineLink.url })}
-                      className="text-[#60A5FA] hover:text-[#93C5FD] font-medium shrink-0 cursor-pointer"
+                      className="text-[#3B82F6] hover:text-[#93C5FD] font-medium shrink-0 cursor-pointer"
                     >
                       Detalle →
                     </button>

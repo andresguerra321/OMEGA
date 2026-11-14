@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class HybridRagQueryService {
+
+    private static final Logger log = LoggerFactory.getLogger(HybridRagQueryService.class);
 
     private final ExpedienteAuthorizationService authorizationService;
     private final DocumentRepository documentRepository;
@@ -126,15 +130,31 @@ public class HybridRagQueryService {
             return new RagQueryResponse(status, activeModel, answer, warnings, reindexNotices, List.of());
         }
 
-        float[] queryVector = embeddingProvider.embedQuery(request.question().trim());
-        List<RankedChunk> ranked = searchRepository.searchHybrid(
-                principal.tenantId(),
-                expedienteId,
-                request.question(),
-                queryVector,
-                activeModel,
-                topK
-        );
+        boolean lexicalDegraded = false;
+        List<RankedChunk> ranked;
+        try {
+            float[] queryVector = embeddingProvider.embedQuery(request.question().trim());
+            ranked = searchRepository.searchHybrid(
+                    principal.tenantId(),
+                    expedienteId,
+                    request.question(),
+                    queryVector,
+                    activeModel,
+                    topK
+            );
+        } catch (EmbeddingException ex) {
+            lexicalDegraded = true;
+            log.warn("Proveedor de embeddings no disponible; degradando consulta del expediente {} a búsqueda léxica tsvector: {}",
+                    expedienteId, ex.getMessage());
+            warnings.add("Proveedor de embeddings no disponible temporalmente; consulta ejecutada en modo degradado por búsqueda léxica exacta (tsvector).");
+            ranked = searchRepository.searchLexicalOnly(
+                    principal.tenantId(),
+                    expedienteId,
+                    request.question(),
+                    activeModel,
+                    topK
+            );
+        }
 
         String answer = answerGenerator.generateGroundedAnswer(request.question(), ranked);
         List<RagCitationDto> citations = ranked.stream()
@@ -145,7 +165,7 @@ public class HybridRagQueryService {
                         c.pageNumber(),
                         c.sectionTitle(),
                         c.citationLabel(),
-                        c.content().length() > 420 ? c.content().substring(0, 417) + "..." : c.content(),
+                        c.content().length() > 1500 ? c.content().substring(0, 1497) + "..." : c.content(),
                         c.vectorScore(),
                         c.lexicalScore(),
                         c.rrfScore()
@@ -162,11 +182,14 @@ public class HybridRagQueryService {
                         "activeModel", activeModel,
                         "topK", topK,
                         "citationsCount", citations.size(),
-                        "reindexWarnings", reindexNotices.size()
+                        "reindexWarnings", reindexNotices.size(),
+                        "degradedMode", lexicalDegraded ? "LEXICAL_ONLY" : "HYBRID_RRF"
                 )
         );
 
-        String status = reindexNotices.isEmpty() ? "OK" : "PARTIAL_REINDEX_REQUIRED";
+        String status = lexicalDegraded
+                ? "DEGRADED_LEXICAL"
+                : (reindexNotices.isEmpty() ? "OK" : "PARTIAL_REINDEX_REQUIRED");
         return new RagQueryResponse(status, activeModel, answer, warnings, reindexNotices, citations);
     }
 

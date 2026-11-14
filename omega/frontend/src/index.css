@@ -7,7 +7,7 @@
 
   --color-obsidian: #05070B;
   --color-surface: #0A0E16;
-  --color-cobalt: #2563EB;
+  --color-cobalt: #1D4ED8;
   --color-ink-primary: #F8FAFC;
   --color-ink-secondary: #94A3B8;
 
@@ -29,7 +29,7 @@
     --bg-well: #040812;
     --border-hairline: rgba(147, 197, 253, 0.11);
     --border-subtle: rgba(147, 197, 253, 0.065);
-    --accent-cobalt: #2563EB;
+    --accent-cobalt: #1D4ED8;
     --accent-royal: #1D4ED8;
     --accent-cobalt-tint: rgba(37, 99, 235, 0.18);
     --text-primary: #F8FAFC;
@@ -54,7 +54,7 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    caret-color: #5E9BFF;
+    caret-color: #3B82F6;
     overflow: hidden;
   }
 
@@ -185,7 +185,7 @@ h2 {
 }
 
 .tactile-key-primary {
-  background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
+  background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);
   border: 1px solid rgba(147, 197, 253, 0.4);
   color: #FFFFFF;
   box-shadow:
@@ -334,11 +334,13 @@ h2 {
 }
 
 @keyframes omegaCorePulse {
+
   0%,
   100% {
     opacity: 0.74;
     transform: scale(0.97);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.03);
@@ -350,6 +352,7 @@ h2 {
     opacity: 0.4;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -361,6 +364,7 @@ h2 {
     opacity: 0;
     transform: translateX(14px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -372,6 +376,7 @@ h2 {
     opacity: 0;
     transform: scale(0.97) translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -383,6 +388,7 @@ h2 {
     transform: translate3d(0px, 0px, 0) scale(1);
     opacity: 0.88;
   }
+
   100% {
     transform: translate3d(-14px, 10px, 0) scale(1.03);
     opacity: 1;
@@ -410,6 +416,7 @@ h2 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .animate-fade-up,
   .animate-fade-in,
   .animate-reveal,
@@ -434,11 +441,11 @@ h2 {
     transform: none !important;
   }
 
-  .omega-prose-typing > :last-child::after,
-  .omega-prose-typing > ul:last-child > li:last-child::after,
-  .omega-prose-typing > ol:last-child > li:last-child::after,
-  .omega-prose-typing > blockquote:last-child > :last-child::after,
-  .omega-prose-typing > pre:last-child > code::after {
+  .omega-prose-typing> :last-child::after,
+  .omega-prose-typing>ul:last-child>li:last-child::after,
+  .omega-prose-typing>ol:last-child>li:last-child::after,
+  .omega-prose-typing>blockquote:last-child> :last-child::after,
+  .omega-prose-typing>pre:last-child>code::after {
     display: none !important;
   }
 
@@ -453,11 +460,11 @@ h2 {
 }
 
 /* Escritura asistida */
-.omega-prose-typing > :last-child:not(ul):not(ol):not(pre):not(blockquote)::after,
-.omega-prose-typing > ul:last-child > li:last-child::after,
-.omega-prose-typing > ol:last-child > li:last-child::after,
-.omega-prose-typing > blockquote:last-child > :last-child::after,
-.omega-prose-typing > pre:last-child > code::after {
+.omega-prose-typing> :last-child:not(ul):not(ol):not(pre):not(blockquote)::after,
+.omega-prose-typing>ul:last-child>li:last-child::after,
+.omega-prose-typing>ol:last-child>li:last-child::after,
+.omega-prose-typing>blockquote:last-child> :last-child::after,
+.omega-prose-typing>pre:last-child>code::after {
   content: '';
   display: inline-block;
   width: 2px;
@@ -465,7 +472,7 @@ h2 {
   margin-left: 4px;
   vertical-align: -0.16em;
   border-radius: 9999px;
-  background-color: #8ab4ff;
+  background-color: #93C5FD;
   animation: omegaCaretPulse 880ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
@@ -485,6 +492,7 @@ h2 {
     opacity: 0.84;
     transform: translate3d(0, 0, 0) scale(1);
   }
+
   100% {
     opacity: 1;
     transform: translate3d(0, 8px, 0) scale(1.03);
@@ -496,6 +504,7 @@ h2 {
     opacity: 0;
     transform: translate3d(0, 8px, 0) scale(0.988);
   }
+
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
@@ -537,11 +546,9 @@ h2 {
 
 .omega-glass-card {
   position: relative;
-  background: linear-gradient(
-    180deg,
-    rgba(10, 17, 32, 0.84) 0%,
-    rgba(5, 9, 19, 0.92) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(10, 17, 32, 0.84) 0%,
+      rgba(5, 9, 19, 0.92) 100%);
   border: 1px solid rgba(147, 197, 253, 0.11);
   box-shadow:
     inset 0 1px 0 rgba(219, 234, 254, 0.11),
@@ -589,11 +596,9 @@ h2 {
 }
 
 .roam-pill-nav {
-  background: linear-gradient(
-    180deg,
-    rgba(10, 17, 32, 0.9) 0%,
-    rgba(6, 10, 20, 0.92) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(10, 17, 32, 0.9) 0%,
+      rgba(6, 10, 20, 0.92) 100%);
   border: 1px solid rgba(147, 197, 253, 0.12);
   box-shadow:
     inset 0 1px 0 rgba(219, 234, 254, 0.1),
@@ -625,6 +630,7 @@ h2 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .omega-fold-left,
   .omega-fold-right {
     animation: none !important;
@@ -636,10 +642,12 @@ h2 {
 }
 
 @keyframes omegaCaretPulse {
+
   0%,
   100% {
     opacity: 0.92;
   }
+
   50% {
     opacity: 0.2;
   }
@@ -649,6 +657,7 @@ h2 {
   from {
     opacity: 0.65;
   }
+
   to {
     opacity: 1;
   }
@@ -659,6 +668,7 @@ h2 {
     opacity: 0;
     transform: translate3d(0, 12px, 0);
   }
+
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
@@ -669,6 +679,7 @@ h2 {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -679,6 +690,7 @@ h2 {
     opacity: 0;
     transform: translate3d(0, 14px, 0) scale(0.99);
   }
+
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
@@ -690,6 +702,7 @@ h2 {
     opacity: 0;
     transform: scale(0.96) translate3d(0, -4px, 0);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translate3d(0, 0, 0);
@@ -701,6 +714,7 @@ h2 {
     opacity: 0;
     transform: translate3d(20px, 0, 0);
   }
+
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
@@ -708,21 +722,25 @@ h2 {
 }
 
 @keyframes twFloatSlow {
+
   0%,
   100% {
     transform: translate3d(0, 0, 0);
   }
+
   50% {
     transform: translate3d(0, -4px, 0);
   }
 }
 
 @keyframes twGlowPulse {
+
   0%,
   100% {
     opacity: 0.72;
     transform: scale(0.96);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.06);

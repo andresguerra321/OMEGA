@@ -1,0 +1,20 @@
+# Override de producción fail-closed para OMEGA.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Reemplaza todos los valores por defecto de desarrollo y exige secretos explícitos.
+
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obligatorio en producción}
+
+  forensic-worker:
+    environment:
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN obligatorio en producción}
+
+  backend-java:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      OMEGA_ALLOW_TENANT_SELF_REGISTRATION: "false"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obligatorio en producción}
+      OMEGA_JWT_SECRET: ${OMEGA_JWT_SECRET:?OMEGA_JWT_SECRET obligatorio en producción}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN obligatorio en producción}

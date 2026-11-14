@@ -1,0 +1,61 @@
+name: Supply Chain & SBOM Audit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-audit:
+    name: Frontend Dependencies (npm audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: omega/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: omega/frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm audit --omit=dev --audit-level=high
+
+  python-worker-audit:
+    name: Forensic Worker Dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip pip-audit
+      - run: pip-audit -r omega/api/requirements.txt
+
+  java-sbom-and-build:
+    name: Java Core Build & CycloneDX SBOM
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: omega/backend-java
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+      - run: mvn -B -DskipTests compile test-compile
+      - run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.0:makeBom -DoutputFormat=json -DoutputName=omega-backend-sbom
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omega-java-sbom
+          path: omega/backend-java/target/omega-backend-sbom.json
+          retention-days: 30
