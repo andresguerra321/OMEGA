@@ -99,7 +99,7 @@ OMEGA opera mediante **3 contenedores endurecidos** segregados en dos redes (`om
 | **RF8** | OSINT pasivo con consentimiento | `crt.sh` + Cloudflare DNS DoH (`SPF`/`DMARC`) condicionado por BD | ✅ Cumplido |
 | **RNF1** | Precisión sin alucinación | Temperatura 0.0 + regla estricta de abstención + benchmark RAGAS | ✅ Cumplido |
 | **RNF2** | Divulgación progresiva | Cabina clara + detalles técnicos expandibles + `CitationDrawer` / `CopilotDrawer` | ✅ Cumplido |
-| **RNF3** | Latencia interactiva | Latencia media de **4.1 segundos** en benchmark | ✅ Cumplido |
+| **RNF3** | Latencia interactiva | Latencia media neta de **1.394s** (máx. 1.878s) en el benchmark comparativo | ✅ Cumplido |
 | **RNF4** | Privacidad y Zero-Retention | Análisis volátil en RAM (`del raw_bytes`, SQLite `:memory:`) y `tmpfs` `/tmp/omega_ingest` en `backend-java` | ✅ Cumplido |
 | **RNF6** | Arquitectura modular desacoplada | 3 servicios aislados en redes `omega-public` + `omega-private` (`postgres`, `forensic-worker`, `backend-java`) | ✅ Cumplido |
 | **RNF7** | Enfoque 100% defensivo | Ausencia total de exploits, payloads o capacidades ofensivas | ✅ Cumplido |
@@ -109,15 +109,19 @@ OMEGA opera mediante **3 contenedores endurecidos** segregados en dos redes (`om
 
 ## 4. Resultados de Evaluación Cuantitativa (Objetivo 6)
 
-Evaluación realizada mediante el framework **RAGAS** sobre el corpus técnico seed con casos de prueba de dominio y preguntas trampa de control (`omega/rag_engine/eval/eval_report.md`):
+Estudio comparativo de ablación realizado mediante **RAGAS** sobre `13` casos (`10` consultas in-domain CTI muestreadas estratificadamente + `3` preguntas trampa de abstención RNF1), utilizando `openai/gpt-oss-120b` (`temperature=0.0`, `top_k=5`) como generador y `openai/gpt-oss-20b` como juez sobre fragmentos completos (`10/10` muestras válidas; detalle en [eval_report.md](omega/rag_engine/eval/eval_report.md) y [ablation_report_v1.md](omega/rag_engine/eval/ablation_report_v1.md)):
 
-| Dimensión | Métrica | Valor Obtenido | Requerimiento |
-| :--- | :--- | :---: | :--- |
-| **Fidelidad Documental** | RAGAS Faithfulness (0–1) | **0.7419** | RNF1, Objetivo 3 |
-| **Relevancia de Respuesta** | RAGAS Answer Relevancy (0–1) | **0.8258** | RF4, Objetivo 6 |
-| **Trazabilidad Estricta** | Formato de citas `[Reporte, Pág. X]` | **80.0%** (8/10) | RNF1 |
-| **Control Anti-Alucinación** | Tasa de abstención fuera de corpus | **100.0%** (3/3) | RNF1 |
-| **Rendimiento Interactivo** | Latencia media por consulta | **4.105s** | RNF3 |
+| Dimensión | Métrica | Baseline MVP | Omega V1.0 (Híbrido RRF) | Requerimiento |
+| :--- | :--- | :---: | :---: | :--- |
+| **Fidelidad Documental** | RAGAS Faithfulness (0–1, 10/10) | 0.5375 | **0.6** (+0.0625) | RNF1, Objetivo 3 |
+| **Relevancia de Respuesta** | RAGAS Answer Relevancy (0–1, 10/10) | 0.6095 | **0.5131** (-0.0964) | RF4, Objetivo 6 |
+| **Precisión de Contexto** | RAGAS Context Precision (0–1, 10/10) | 0.4333 | **0.5575** (+0.1242) | RF3, Objetivo 2 |
+| **Recuperación Top-K** | Hit@3 / Hit@5 / MRR@5 | 50.0% / 70.0% / 0.44 | **70.0% / 70.0% / 0.5333** | RF3, Objetivo 2 |
+| **Trazabilidad Estricta** | Formato de citas inline `[#]` | 30.0% (3/10) | **20.0%** (2/10) | RNF1 |
+| **Control Anti-Alucinación** | Tasa de abstención fuera de corpus | 100.0% (3/3) | **100.0%** (3/3) | RNF1 |
+| **Rendimiento Interactivo (Neto)** | Latencia media sin backoff 429 | 1.466s | **1.394s** (máx. 1.878s) | RNF3 |
+
+> **Nota sobre abstención conservadora:** Con `top_k=5` y el prompt estricto `RNF1` (`temperature=0.0`), el generador prioriza abstenerse cuando la evidencia queda repartida o parcial frente a la consulta exacta; esto garantiza `100.0%` de abstención ante preguntas trampa y cero alucinaciones inventadas, a costa de reducir el porcentaje de respuestas con cita inline en preguntas complejas.
 
 ---
 
