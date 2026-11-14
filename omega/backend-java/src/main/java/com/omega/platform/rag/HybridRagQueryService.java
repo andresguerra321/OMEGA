@@ -2,6 +2,7 @@ package com.omega.platform.rag;
 
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
+import com.omega.platform.ingest.AsyncDocumentProcessor;
 import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import com.omega.platform.repository.DocumentRepository;
 import com.omega.platform.security.ExpedienteAuthorizationService;
@@ -12,6 +13,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -68,9 +71,13 @@ public class HybridRagQueryService {
         List<DocumentReindexNotice> reindexNotices = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         int activeIndexedCount = 0;
+        int lexicalIndexedCount = 0;
 
         for (DocumentEntity doc : docs) {
-            if (doc.getStatus() == DocumentStatus.INDEXED && !activeModel.equals(doc.getEmbeddingModel())) {
+            boolean isLexicalFallback = AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL.equals(doc.getEmbeddingModel());
+            if (doc.getStatus() == DocumentStatus.INDEXED
+                    && !activeModel.equals(doc.getEmbeddingModel())
+                    && !isLexicalFallback) {
                 doc.setStatus(DocumentStatus.REINDEX_REQUIRED);
                 documentRepository.saveAndFlush(doc);
             }
@@ -95,6 +102,13 @@ public class HybridRagQueryService {
                 ));
             } else if (doc.getStatus() == DocumentStatus.INDEXED && activeModel.equals(doc.getEmbeddingModel())) {
                 activeIndexedCount++;
+            } else if (doc.getStatus() == DocumentStatus.INDEXED && isLexicalFallback) {
+                lexicalIndexedCount++;
+                warnings.add(String.format(
+                        "El documento '%s' (SHA-256: %s) fue indexado sin clave de embeddings y se consulta por índice léxico exacto (tsvector).",
+                        doc.getOriginalFilename(),
+                        doc.getSha256Hash()
+                ));
             }
         }
 
@@ -112,7 +126,7 @@ public class HybridRagQueryService {
             );
         }
 
-        if (activeIndexedCount == 0) {
+        if (activeIndexedCount == 0 && lexicalIndexedCount == 0) {
             String status = reindexNotices.isEmpty() ? "NO_INDEXED_DOCUMENTS" : "REINDEX_REQUIRED";
             String answer = reindexNotices.isEmpty()
                     ? "Este expediente aún no tiene documentos PDF indexados listos para consulta."
@@ -130,30 +144,63 @@ public class HybridRagQueryService {
             return new RagQueryResponse(status, activeModel, answer, warnings, reindexNotices, List.of());
         }
 
+        List<String> lexicalModels = new ArrayList<>();
+        if (activeIndexedCount > 0) {
+            lexicalModels.add(activeModel);
+        }
+        if (lexicalIndexedCount > 0) {
+            lexicalModels.add(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL);
+        }
+
         boolean lexicalDegraded = false;
         List<RankedChunk> ranked;
-        try {
-            float[] queryVector = embeddingProvider.embedQuery(request.question().trim());
-            ranked = searchRepository.searchHybrid(
-                    principal.tenantId(),
-                    expedienteId,
-                    request.question(),
-                    queryVector,
-                    activeModel,
-                    topK
-            );
-        } catch (EmbeddingException ex) {
+        if (activeIndexedCount == 0) {
             lexicalDegraded = true;
-            log.warn("Proveedor de embeddings no disponible; degradando consulta del expediente {} a búsqueda léxica tsvector: {}",
-                    expedienteId, ex.getMessage());
-            warnings.add("Proveedor de embeddings no disponible temporalmente; consulta ejecutada en modo degradado por búsqueda léxica exacta (tsvector).");
+            warnings.add("Consulta ejecutada en modo léxico exacto (tsvector): los documentos indexados no disponen de embeddings vectoriales.");
             ranked = searchRepository.searchLexicalOnly(
                     principal.tenantId(),
                     expedienteId,
                     request.question(),
-                    activeModel,
+                    lexicalModels,
                     topK
             );
+        } else {
+            try {
+                float[] queryVector = embeddingProvider.embedQuery(request.question().trim());
+                ranked = searchRepository.searchHybrid(
+                        principal.tenantId(),
+                        expedienteId,
+                        request.question(),
+                        queryVector,
+                        activeModel,
+                        topK
+                );
+                if (lexicalIndexedCount > 0) {
+                    ranked = mergeLexicalFallbackHits(
+                            ranked,
+                            searchRepository.searchLexicalOnly(
+                                    principal.tenantId(),
+                                    expedienteId,
+                                    request.question(),
+                                    List.of(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL),
+                                    topK
+                            ),
+                            topK
+                    );
+                }
+            } catch (EmbeddingException ex) {
+                lexicalDegraded = true;
+                log.warn("Proveedor de embeddings no disponible; degradando consulta del expediente {} a búsqueda léxica tsvector: {}",
+                        expedienteId, ex.getMessage());
+                warnings.add("Proveedor de embeddings no disponible temporalmente; consulta ejecutada en modo degradado por búsqueda léxica exacta (tsvector).");
+                ranked = searchRepository.searchLexicalOnly(
+                        principal.tenantId(),
+                        expedienteId,
+                        request.question(),
+                        lexicalModels,
+                        topK
+                );
+            }
         }
 
         String answer = answerGenerator.generateGroundedAnswer(request.question(), ranked);
@@ -191,6 +238,29 @@ public class HybridRagQueryService {
                 ? "DEGRADED_LEXICAL"
                 : (reindexNotices.isEmpty() ? "OK" : "PARTIAL_REINDEX_REQUIRED");
         return new RagQueryResponse(status, activeModel, answer, warnings, reindexNotices, citations);
+    }
+
+    private static List<RankedChunk> mergeLexicalFallbackHits(
+            List<RankedChunk> primaryHits,
+            List<RankedChunk> fallbackHits,
+            int topK
+    ) {
+        if (fallbackHits == null || fallbackHits.isEmpty()) {
+            return primaryHits;
+        }
+        Map<String, RankedChunk> merged = new LinkedHashMap<>();
+        for (RankedChunk c : primaryHits) {
+            merged.put(c.documentId() + ":" + c.chunkOrder(), c);
+        }
+        for (RankedChunk c : fallbackHits) {
+            merged.putIfAbsent(c.documentId() + ":" + c.chunkOrder(), c);
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparingDouble(RankedChunk::rrfScore).reversed()
+                        .thenComparingInt(RankedChunk::pageNumber)
+                        .thenComparingInt(RankedChunk::chunkOrder))
+                .limit(topK)
+                .toList();
     }
 
     public record RagQueryRequest(

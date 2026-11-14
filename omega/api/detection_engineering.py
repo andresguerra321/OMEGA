@@ -140,9 +140,10 @@ echo "    en el Triage Paralelo de Omega para correlacionar hallazgos en memoria
 
     return {
         "campaign_id": campaign_id,
-        "campaign_name": camp[0],
+        "campaign_name": camp["name"],
         "filename": f"triage_{slug}.sh",
         "ioc_count": len(stix_objects),
+        "script": script_sh,
         "script_content": script_sh,
     }
 

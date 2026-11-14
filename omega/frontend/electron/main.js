@@ -7,6 +7,7 @@ import os from 'node:os';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DockerOrchestrator } from './dockerOrchestrator.js';
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
@@ -14,7 +15,6 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const isDev = !app.isPackaged;
 const SQLITE_MAGIC = Buffer.from('SQLite format 3\0', 'ascii');
 
 function normalizeAdbCandidate(rawPath) {
@@ -1281,7 +1281,86 @@ ipcMain.handle('omega:set-titlebar-theme', (event) => {
   }
 });
 
-function createMainWindow() {
+let mainWindow = null;
+let dockerOrchestrator = null;
+let appTransitionedToMain = false;
+let isQuitting = false;
+let shutdownInProgress = false;
+
+function getDockerOrchestrator() {
+  if (!dockerOrchestrator) {
+    dockerOrchestrator = new DockerOrchestrator({
+      userDataDir: app.getPath('userData'),
+      electronDir: __dirname,
+      onStateChange: (snapshot) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('omega:backend-status-event', snapshot);
+        }
+      },
+    });
+  }
+  return dockerOrchestrator;
+}
+
+async function loadMainRenderer(win) {
+  if (!win || win.isDestroyed() || appTransitionedToMain) return;
+  appTransitionedToMain = true;
+  const rendererUrl = process.env.OMEGA_RENDERER_URL;
+  if (rendererUrl) {
+    await win.loadURL(rendererUrl);
+    return;
+  }
+  await win.loadFile(path.join(__dirname, '../dist/index.html'));
+}
+
+async function bootDockerAndOpenApp(opts = {}) {
+  console.info('[OMEGA Desktop] Iniciando verificación/arranque de servicios Docker...');
+  const result = await getDockerOrchestrator().start(opts);
+  const state = getDockerOrchestrator().getState();
+  console.info(
+    `[OMEGA Desktop] Arranque finalizado: ok=${Boolean(result?.ok)}, startedByElectron=${getDockerOrchestrator().shouldStopOnQuit()}, phase=${state.phase}, errorCode=${state.errorCode || 'none'}`,
+  );
+  if (!result?.ok && state.detail) {
+    console.warn(`[OMEGA Desktop] Detalle de arranque: ${state.detail}`);
+  }
+  if (
+    result?.ok &&
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !isQuitting &&
+    !shutdownInProgress
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (
+      !isQuitting &&
+      !shutdownInProgress &&
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
+      await loadMainRenderer(mainWindow);
+    }
+  }
+  return result;
+}
+
+ipcMain.handle('omega:backend-status', () => getDockerOrchestrator().getState());
+
+ipcMain.handle('omega:backend-retry', async (_event, opts = {}) => {
+  appTransitionedToMain = false;
+  return bootDockerAndOpenApp({
+    prodMode: Boolean(opts?.prodMode),
+  });
+});
+
+ipcMain.handle('omega:backend-skip', async () => {
+  getDockerOrchestrator().abortStartup();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await loadMainRenderer(mainWindow);
+  }
+  return { ok: true };
+});
+
+async function createMainWindow() {
   const win = new BrowserWindow({
     width: 1380,
     height: 860,
@@ -1303,6 +1382,9 @@ function createMainWindow() {
     },
   });
 
+  mainWindow = win;
+  appTransitionedToMain = false;
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url);
@@ -1310,14 +1392,96 @@ function createMainWindow() {
     return { action: 'deny' };
   });
 
-  if (isDev) {
-    win.loadURL(process.env.OMEGA_RENDERER_URL || 'http://localhost:5173');
-  } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'));
+  win.on('close', (event) => {
+    const orchestrator = getDockerOrchestrator();
+    console.info(`[OMEGA Desktop] Evento close en ventana (shouldStop=${orchestrator.shouldStopOnQuit()}, isQuitting=${isQuitting})`);
+    if (isQuitting || !orchestrator.shouldStopOnQuit()) {
+      return;
+    }
+    event.preventDefault();
+    if (shutdownInProgress) {
+      return;
+    }
+    shutdownInProgress = true;
+    orchestrator.abortStartup();
+    const finalizeClose = () => {
+      console.info('[OMEGA Desktop] Docker Compose detenido; cerrando ventana y aplicación.');
+      isQuitting = true;
+      if (!win.isDestroyed()) {
+        win.destroy();
+      }
+      app.quit();
+    };
+    Promise.race([
+      win.loadFile(path.join(__dirname, 'splash.html'), { query: { mode: 'closing' } }).catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 250)),
+    ]).finally(() => {
+      console.info('[OMEGA Desktop] Ejecutando docker compose down...');
+      orchestrator.shutdownStack()
+        .then((res) => console.info('[OMEGA Desktop] Resultado docker compose down:', JSON.stringify(res)))
+        .finally(finalizeClose);
+    });
+  });
+
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
+  await win.loadFile(path.join(__dirname, 'splash.html'));
+  if (!win.isDestroyed()) {
+    win.webContents.send('omega:backend-status-event', getDockerOrchestrator().getState());
   }
+  void bootDockerAndOpenApp();
 }
 
-app.whenReady().then(createMainWindow);
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+app.whenReady().then(() => {
+  void createMainWindow();
 });
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0 && !isQuitting && !shutdownInProgress) {
+    void createMainWindow();
+  }
+});
+
+app.on('before-quit', (event) => {
+  const orchestrator = dockerOrchestrator;
+  if (isQuitting || !orchestrator || !orchestrator.shouldStopOnQuit()) {
+    isQuitting = true;
+    return;
+  }
+  event.preventDefault();
+  if (shutdownInProgress) {
+    return;
+  }
+  shutdownInProgress = true;
+  orchestrator.abortStartup();
+  orchestrator.shutdownStack().finally(() => {
+    isQuitting = true;
+    app.quit();
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+function handleProcessTermination() {
+  if (!dockerOrchestrator || !dockerOrchestrator.shouldStopOnQuit() || shutdownInProgress) {
+    app.quit();
+    return;
+  }
+  shutdownInProgress = true;
+  dockerOrchestrator.abortStartup();
+  dockerOrchestrator.shutdownStack().finally(() => {
+    isQuitting = true;
+    app.quit();
+  });
+}
+
+process.on('SIGINT', handleProcessTermination);
+process.on('SIGTERM', handleProcessTermination);

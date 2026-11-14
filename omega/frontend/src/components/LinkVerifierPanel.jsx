@@ -35,7 +35,7 @@ function getVerdictPresentation(result) {
   }
   return {
     dotColor: 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.45)]',
-    titleColor: 'text-[#3B82F6]',
+    titleColor: 'text-[#F2F2F4]',
     headline: 'Seguro / Sin registros',
   };
 }
@@ -172,13 +172,13 @@ export function LinkVerifierPanel({
               setTraceError('');
               setFinalCheckResult(null);
             }}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer shrink-0"
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#8E8E93]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#9A9AA2]" />
             <span>Verificar otro enlace</span>
           </button>
 
-          <span className="font-tech text-[12px] text-[#8E8E93] truncate max-w-full sm:max-w-[400px]">
+          <span className="font-tech text-[12px] text-[#9A9AA2] truncate max-w-full sm:max-w-[400px]">
             {result.normalized_url}
           </span>
         </header>
@@ -201,7 +201,7 @@ export function LinkVerifierPanel({
         })()}
 
         {/* Bloque de Veredicto Apple Glass (sin bordes laterales de 2px) */}
-        <section className="animate-fade-up apple-group rounded-[15px] p-4 sm:p-5">
+        <section className="animate-fade-up omega-glass-panel rounded-[15px] p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictMeta.dotColor}`} />
@@ -216,7 +216,7 @@ export function LinkVerifierPanel({
                   disabled={traceLoading}
                   onClick={handleTraceEphemeral}
                   title="Sigue redirecciones HTTP en una sesión Electron sin JavaScript, sin imágenes y 100% en RAM"
-                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.05] px-3 py-1 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.05] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.09] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   {traceLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                   <span>{traceResult ? 'Retrazar en RAM' : 'Trazar redirecciones (Sin JS)'}</span>
@@ -241,7 +241,7 @@ export function LinkVerifierPanel({
                       .join('\n');
                     onAskInChat(prompt);
                   }}
-                  className="shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
+                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -251,9 +251,9 @@ export function LinkVerifierPanel({
                 <button
                   type="button"
                   onClick={() => onAuditDomain(result.root_domain || result.host)}
-                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-3 py-1 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.65)] active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  <Globe className="h-3 w-3 text-[#93C5FD]" />
+                  <Globe className="h-3 w-3 text-[#2F6FED]" />
                   <span>Auditar en Exposición</span>
                 </button>
               )}
@@ -270,10 +270,10 @@ export function LinkVerifierPanel({
               )}
             </div>
           </div>
-          <p className="mt-2.5 text-[14px] text-[#E5E5EA] leading-relaxed break-words">
+          <p className="mt-2.5 text-[14px] text-[#F2F2F4]/90 leading-relaxed break-words">
             {result.recommendation}
           </p>
-          <p className="mt-3 text-[12px] text-[#8E8E93] break-words">
+          <p className="mt-3 text-[12px] text-[#9A9AA2] break-words">
             {result.privacy_notice}
           </p>
         </section>
@@ -284,22 +284,22 @@ export function LinkVerifierPanel({
           data-delay="40"
         >
           <div className="p-4 min-w-0">
-            <div className="text-[11.5px] font-medium text-[#8E8E93]">Host</div>
-            <div className="font-tech mt-1.5 text-[12.5px] text-[#F5F5F7] break-all">
+            <div className="text-[11.5px] font-medium text-[#9A9AA2]">Host</div>
+            <div className="font-tech mt-1.5 text-[12.5px] text-[#F2F2F4] break-all">
               {result.host}
             </div>
           </div>
 
           <div className="p-4 min-w-0">
-            <div className="text-[11.5px] font-medium text-[#8E8E93]">Dominio raíz</div>
-            <div className="font-tech mt-1.5 text-[12.5px] text-[#F5F5F7] break-all">
+            <div className="text-[11.5px] font-medium text-[#9A9AA2]">Dominio raíz</div>
+            <div className="font-tech mt-1.5 text-[12.5px] text-[#F2F2F4] break-all">
               {result.root_domain || result.host}
             </div>
           </div>
 
           <div className="p-4 min-w-0">
-            <div className="text-[11.5px] font-medium text-[#8E8E93]">Certificados crt.sh</div>
-            <div className="font-tech mt-1.5 text-[12.5px] text-[#F5F5F7]">
+            <div className="text-[11.5px] font-medium text-[#9A9AA2]">Certificados crt.sh</div>
+            <div className="font-tech mt-1.5 text-[12.5px] text-[#F2F2F4]">
               {result.passive_ct_certificates !== null && result.passive_ct_certificates !== undefined
                 ? `${result.passive_ct_certificates} registros`
                 : 'N/D'}
@@ -313,12 +313,12 @@ export function LinkVerifierPanel({
             className="animate-on-scroll apple-group rounded-[13px] overflow-hidden"
             data-delay="80"
           >
-            <div className="px-4 py-2.5 border-b border-white/[0.06] text-[12.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+            <div className="px-4 py-2.5 border-b border-white/[0.06] text-[12.5px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
               Alertas estructurales
             </div>
             <ul className="divide-y divide-white/[0.06]">
               {heuristics.map((item, idx) => (
-                <li key={idx} className="px-4 py-3 text-[13px] text-[#D1D1D6] break-words">
+                <li key={idx} className="px-4 py-3 text-[13px] text-[#F2F2F4]/85 break-words">
                   {item}
                 </li>
               ))}
@@ -340,10 +340,10 @@ export function LinkVerifierPanel({
             data-delay="120"
           >
             <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+              <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                 Trazado efímero en RAM (Sandbox sin JS)
               </span>
-              <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[10.5px] text-[#93C5FD]">
+              <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
                 0 JS · 0 Imágenes{traceResult.status_code ? ` · HTTP ${traceResult.status_code}` : ''}
               </span>
             </div>
@@ -358,7 +358,7 @@ export function LinkVerifierPanel({
 
               {traceResult.redirects?.length > 0 ? (
                 <div className="space-y-1.5">
-                  <div className="text-[11px] font-medium text-[#8E8E93]">
+                  <div className="text-[11px] font-medium text-[#9A9AA2]">
                     Cadena de redirecciones ({traceResult.redirects.length})
                   </div>
                   <div className="space-y-1.5">
@@ -370,27 +370,27 @@ export function LinkVerifierPanel({
                         <span className="rounded-[5px] bg-white/[0.06] px-1.5 py-0.5 text-[10.5px] text-[#FFD60A]">
                           {hop.statusCode || 302}
                         </span>
-                        <span className="text-[#8E8E93] break-all">{hop.from}</span>
-                        <ArrowRight className="h-3 w-3 text-[#3B82F6] shrink-0" />
-                        <span className="text-[#F5F5F7] break-all">{hop.to}</span>
+                        <span className="text-[#9A9AA2] break-all">{hop.from}</span>
+                        <ArrowRight className="h-3 w-3 text-[#2F6FED] shrink-0" />
+                        <span className="text-[#F2F2F4] break-all">{hop.to}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <p className="text-[12.5px] text-[#8E8E93]">
+                <p className="text-[12.5px] text-[#9A9AA2]">
                   Sin saltos HTTP intermedios; respondió directamente en la URL consultada.
                 </p>
               )}
 
               <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0 space-y-0.5">
-                  <div className="text-[11px] font-medium text-[#8E8E93]">Destino final observado</div>
-                  <div className="font-tech text-[12px] text-[#F5F5F7] break-all">
+                  <div className="text-[11px] font-medium text-[#9A9AA2]">Destino final observado</div>
+                  <div className="font-tech text-[12px] text-[#F2F2F4] break-all">
                     {traceResult.final_url}
                   </div>
                   {traceResult.title && (
-                    <div className="text-[11.5px] text-[#8E8E93]">
+                    <div className="text-[11.5px] text-[#9A9AA2]">
                       Título: {traceResult.title}
                     </div>
                   )}
@@ -433,14 +433,14 @@ export function LinkVerifierPanel({
                 >
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-tech text-[13px] text-[#F5F5F7]">
+                      <span className="font-tech text-[13px] text-[#F2F2F4]">
                         {m.ioc_value}
                       </span>
                       <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[11px] font-medium text-[#FF6961]">
                         {m.spyware_family}
                       </span>
                     </div>
-                    <div className="text-[12px] text-[#8E8E93]">
+                    <div className="text-[12px] text-[#9A9AA2]">
                       {m.campaign} · {m.source_report} ({m.organization})
                     </div>
                   </div>
@@ -450,7 +450,7 @@ export function LinkVerifierPanel({
                       <button
                         type="button"
                         onClick={() => onOpenThreat(m.campaign || m.spyware_family)}
-                        className="inline-flex items-center gap-1 rounded-[8px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/22 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] transition-all cursor-pointer"
                       >
                         <Shield className="h-3 w-3" />
                         <span>Ver campaña</span>
@@ -462,7 +462,7 @@ export function LinkVerifierPanel({
                         href={m.source_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#93C5FD] hover:bg-white/[0.08] transition-colors shrink-0"
+                        className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.65)] transition-all shrink-0"
                       >
                         <span>Fuente</span>
                         <ExternalLink className="h-3 w-3" />
@@ -483,10 +483,10 @@ export function LinkVerifierPanel({
     <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-6">
       <div className="w-full max-w-[620px]">
         <header className="text-center mb-6 sm:mb-7">
-          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
             Verifica un enlace antes de abrirlo
           </h1>
-          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#8E8E93] leading-[1.55] max-w-[500px] mx-auto">
+          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#9A9AA2] leading-[1.55] max-w-[500px] mx-auto">
             Detecta dominios vinculados a campañas 1-click o URLs ofuscadas sin realizar peticiones HTTP al servidor destino.
           </p>
         </header>
@@ -501,13 +501,13 @@ export function LinkVerifierPanel({
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="https://enlace-sospechoso.ejemplo/ruta"
-            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 sm:px-2.5 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 sm:px-2.5 text-[13.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
           />
 
           <button
             type="submit"
             disabled={loading || !urlInput.trim()}
-            className="h-9 rounded-[10px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-3.5 sm:px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none px-3.5 sm:px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Verificar</span>

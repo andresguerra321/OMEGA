@@ -98,6 +98,21 @@ services:
       retries: 6
       start_period: 30s
 
+  # 4. Frontend React + Proxy Nginx apuntando exclusivamente al gateway backend-java en omega-public
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: omega_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    networks:
+      - omega-public
+    depends_on:
+      backend-java:
+        condition: service_healthy
+
 networks:
   omega-public:
     driver: bridge

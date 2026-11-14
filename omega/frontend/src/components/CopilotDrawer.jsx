@@ -89,12 +89,12 @@ export function CopilotDrawer({
         type="button"
         aria-label="Cerrar panel de copiloto"
         onClick={onClose}
-        className="animate-fade-in flex-1 bg-black/55 backdrop-blur-[4px] cursor-default"
+        className="animate-fade-in flex-1 bg-black/55 cursor-default"
       />
 
-      {/* Cajón lateral deslizable */}
+      {/* Cajón lateral deslizable vidrio esmerilado */}
       <aside
-        className={`animate-slide-right relative h-full w-full max-w-[470px] border-l border-[#93C5FD]/[0.13] bg-gradient-to-b from-[#081020]/98 to-[#040710]/98 backdrop-blur-2xl shadow-[-18px_0_52px_rgba(2,6,18,0.78)] flex flex-col ${
+        className={`animate-slide-right relative h-full w-full max-w-[470px] border-l border-white/[0.08] bg-[rgba(20,20,24,0.72)] backdrop-blur-xl shadow-[-18px_0_52px_rgba(0,0,0,0.72)] flex flex-col ${
           typeof window !== 'undefined' && window.omegaDesktop?.isDesktop ? 'pt-9' : ''
         }`}
       >
@@ -103,10 +103,10 @@ export function CopilotDrawer({
           <div className="min-w-0 flex items-center gap-2.5">
             <OmegaShaderOrb size={24} isThinking={isLoading} />
             <div className="min-w-0">
-              <div className="text-[13.5px] font-semibold text-[#F4F6FA] truncate">
+              <div className="text-[13.5px] font-semibold text-[#F2F2F4] truncate">
                 Copiloto OMEGA
               </div>
-              <div className="font-tech text-[11px] text-[#9BA2B0] truncate">
+              <div className="font-tech text-[11px] text-[#9A9AA2] truncate">
                 {reportsCount} reportes citables · memoria local
               </div>
             </div>
@@ -139,16 +139,16 @@ export function CopilotDrawer({
 
         {/* Contexto fijado desde un análisis activo */}
         {pinnedContext && (
-          <div className="mx-4 mt-3 rounded-[10px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
-            <div className="min-w-0 flex items-center gap-2 text-[#E2E8F0]">
-              <Pin className="h-3.5 w-3.5 text-[#93C5FD] shrink-0" />
+          <div className="mx-4 mt-3 rounded-[10px] border border-[#2F6FED]/40 bg-[#2F6FED]/14 px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
+            <div className="min-w-0 flex items-center gap-2 text-[#F2F2F4]">
+              <Pin className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
               <span className="truncate">Contexto adjunto: {pinnedContext}</span>
             </div>
             <button
               type="button"
               onClick={onClearPinnedContext}
               aria-label="Quitar contexto adjunto"
-              className="text-[#9BA2B0] hover:text-white cursor-pointer"
+              className="text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -163,13 +163,13 @@ export function CopilotDrawer({
                 <div className="flex justify-center py-1">
                   <OmegaShaderOrb size={48} isThinking={isLoading} />
                 </div>
-                <p className="text-[13px] leading-relaxed text-[#D6DAE2]">
+                <p className="text-[13px] leading-relaxed text-[#F2F2F4]">
                   Puedes consultar cualquier hallazgo, dominio o síntoma técnico mientras mantienes tu escaneo o revisión abierta detrás.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <div className="text-[11.5px] font-medium text-[#9BA2B0]">
+                <div className="text-[11.5px] font-medium text-[#9A9AA2]">
                   Consultas rápidas
                 </div>
                 {DRAWER_STARTERS.map((q, idx) => (
@@ -178,7 +178,7 @@ export function CopilotDrawer({
                     type="button"
                     onClick={() => onSendPrompt?.(q)}
                     style={{ animationDelay: `${Math.min(idx * 50, 180)}ms` }}
-                    className="animate-fade-up w-full text-left rounded-[11px] border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:-translate-y-0.5 active:scale-[0.985] px-3.5 py-2.5 text-[12.5px] text-[#E4E8F0] transition-all duration-200 cursor-pointer"
+                    className="animate-fade-up w-full text-left rounded-[11px] border border-white/[0.08] bg-white/[0.03] hover:bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/45 hover:-translate-y-0.5 active:scale-[0.985] px-3.5 py-2.5 text-[12.5px] text-[#F2F2F4] transition-all duration-200 cursor-pointer"
                   >
                     {q}
                   </button>
@@ -190,12 +190,12 @@ export function CopilotDrawer({
               <div key={msg.id || idx} className="space-y-2">
                 {msg.role === 'user' ? (
                   <div className="flex justify-end">
-                    <div className="max-w-[88%] rounded-[13px] bg-[#1D4ED8]/20 border border-[#3B82F6]/30 px-3.5 py-2 text-[13px] text-[#F4F6FA] leading-relaxed">
+                    <div className="max-w-[88%] rounded-[13px] bg-[rgba(28,36,56,0.65)] border border-[#2F6FED]/40 px-3.5 py-2 text-[13px] text-[#F2F2F4] leading-relaxed">
                       {msg.content}
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-[13px] border border-white/[0.07] bg-white/[0.02] p-3">
+                  <div className="rounded-[13px] border border-white/[0.08] bg-white/[0.025] p-3">
                     <StructuredResponse
                       message={msg}
                       activeCitation={activeCitation}
@@ -213,8 +213,8 @@ export function CopilotDrawer({
           )}
 
           {isLoading && (
-            <div className="apple-well rounded-[11px] px-3.5 py-3 flex items-center gap-2.5 text-[12.5px] text-[#C4CAD4]">
-              <span className="h-2 w-2 rounded-full bg-[#3B82F6] omega-core-pulse" />
+            <div className="apple-well rounded-[11px] px-3.5 py-3 flex items-center gap-2.5 text-[12.5px] text-[#9A9AA2]">
+              <span className="h-2 w-2 rounded-full bg-[#2F6FED] omega-core-pulse" />
               <span>Consultando corpus local y citas verificadas...</span>
             </div>
           )}
@@ -239,9 +239,9 @@ export function CopilotDrawer({
         {/* Compositor fijado al pie */}
         <form
           onSubmit={handleSubmit}
-          className="shrink-0 border-t border-[#93C5FD]/[0.09] bg-[#050914] p-3.5"
+          className="shrink-0 border-t border-white/[0.08] bg-[#0A0A0C]/80 p-3.5"
         >
-          <div className="apple-well rounded-[13px] p-2 flex items-end gap-2">
+          <div className="apple-well rounded-[13px] p-2 flex items-end gap-2 focus-within:border-[#2F6FED] focus-within:shadow-[0_0_24px_rgba(47,111,237,0.25)] transition-all">
             <textarea
               ref={inputRef}
               rows={2}
@@ -250,7 +250,7 @@ export function CopilotDrawer({
               onKeyDown={handleKeyDown}
               placeholder="Escribe tu duda técnica o pega un indicador..."
               aria-label="Mensaje para el copiloto"
-              className="flex-1 resize-none bg-transparent px-2 py-1 text-[13px] text-[#F4F6FA] placeholder:text-[#9097A5] focus:outline-none"
+              className="flex-1 resize-none bg-transparent px-2 py-1 text-[13px] text-[#F2F2F4] placeholder:text-[#9A9AA2] focus:outline-none"
             />
             <button
               type="submit"
