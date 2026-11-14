@@ -16,3 +16,4 @@ const child = spawn(electronPath, ['.'], {
 child.on('exit', (code) => {
   process.exit(code ?? 0);
 });
+

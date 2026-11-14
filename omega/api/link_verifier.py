@@ -158,3 +158,4 @@ def inspect_suspicious_link(raw_url: str) -> dict:
         "cti_matches": cti_matches,
         "privacy_notice": "Verificación 100% pasiva: Omega no realizó ninguna conexión al enlace ni almacenó la URL consultada (RNF4, RNF7).",
     }
+
