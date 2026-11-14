@@ -31,3 +31,7 @@ Thumbs.db
 *.log
 *.tmp
 
+# Java / Maven build artifacts
+target/
+**/target/
+

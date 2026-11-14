@@ -1,0 +1,31 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    schemas: omega_rag
+    default-schema: omega_rag
+    create-schemas: true
+
+omega:
+  security:
+    jwt-secret: omega-integration-test-hmac-sha256-secret-key-min-32-bytes
+    jwt-expiration-seconds: 3600
+    jwt-issuer: omega-rag-core
+    allow-tenant-self-registration: true
+    bootstrap-secret: ""
+  ingest:
+    temp-dir: /tmp/omega_ingest_test
+    max-pdf-bytes: 26214400
+    tesseract-data-path: /usr/share/tesseract-ocr/5/tessdata
+  rag:
+    embedding-model: text-embedding-3-small
+    embedding-dimensions: 1536
+    min-chunk-tokens: 500
+    max-chunk-tokens: 1000
+    chunk-overlap-tokens: 120
+  forensic-worker:
+    base-url: http://localhost:18000
+    connect-timeout-ms: 1000
+    read-timeout-ms: 5000

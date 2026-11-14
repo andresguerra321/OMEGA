@@ -1,5 +1,5 @@
 services:
-  omega-db:
+  postgres:
     image: pgvector/pgvector:pg16
     container_name: omega_postgres
     restart: unless-stopped
@@ -10,30 +10,80 @@ services:
     volumes:
       - omega_pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      omega-internal:
+        aliases:
+          - omega-db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  omega-api:
+  # Worker forense interno aislado (sin exposición pública directa de puertos)
+  forensic-worker:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: omega_api
+    container_name: omega_forensic_worker
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      POSTGRES_HOST: omega-db
-    ports:
-      - "8000:8000"
+      POSTGRES_HOST: postgres
+    expose:
+      - "8000"
     volumes:
       - omega_hf_cache:/root/.cache/huggingface
       - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
+    networks:
+      omega-internal:
+        aliases:
+          - omega-api
     depends_on:
-      omega-db:
+      postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Núcleo transaccional, seguridad multi-tenant, OCR Zero-Retention y motor RAG híbrido
+  backend-java:
+    build:
+      context: ./backend-java
+      dockerfile: Dockerfile
+    container_name: omega_backend_java
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-omega_cti}?currentSchema=omega_rag,public
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      OMEGA_JWT_SECRET: ${OMEGA_JWT_SECRET:-omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}
+      OMEGA_INGEST_TMP_DIR: /tmp/omega_ingest
+      OMEGA_FORENSIC_WORKER_URL: http://forensic-worker:8000
+      OMEGA_EMBEDDING_MODEL: ${OMEGA_EMBEDDING_MODEL:-text-embedding-3-small}
+    ports:
+      - "${JAVA_BACKEND_PORT:-8080}:8080"
+    # Directorio temporal volátil estrictamente en RAM sin ejecución de binarios (Zero-Retention)
+    tmpfs:
+      - /tmp/omega_ingest:rw,noexec,nosuid,nodev,size=256m,mode=0700,uid=10001,gid=10001
+    networks:
+      - omega-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      forensic-worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   omega-frontend:
     build:
@@ -43,8 +93,17 @@ services:
     restart: unless-stopped
     ports:
       - "5173:80"
+    networks:
+      - omega-internal
     depends_on:
-      - omega-api
+      forensic-worker:
+        condition: service_started
+      backend-java:
+        condition: service_healthy
+
+networks:
+  omega-internal:
+    driver: bridge
 
 volumes:
   omega_pgdata:
