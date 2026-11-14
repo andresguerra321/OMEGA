@@ -3,6 +3,7 @@ package com.omega.platform.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -13,6 +14,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
+import com.omega.platform.ingest.AsyncDocumentProcessor;
+import com.omega.platform.rag.EmbeddingException;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentChunkRepository;
 import com.omega.platform.repository.DocumentRepository;
@@ -219,6 +222,60 @@ class DocumentZeroRetentionIngestionTest {
         assertThat(auditLogService.verifyTenantChain(tenantId).valid()).isTrue();
         assertThat(auditLogService.listRecent(tenantId, 10))
                 .anySatisfy(e -> assertThat(e.getAction()).isEqualTo("DOCUMENT_REJECTED_UNSAFE_PDF"));
+    }
+
+    @Test
+    void degradesCleanlyToLexicalIndexingAndRagQueryWhenEmbeddingKeyIsMissing() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList()))
+                .thenThrow(new EmbeddingException("OPENAI_API_KEY no configurada en este despliegue."));
+        when(embeddingProvider.embedQuery(anyString()))
+                .thenThrow(new EmbeddingException("OPENAI_API_KEY no configurada en este despliegue."));
+
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode tenant = registerTenant("zr-lex-" + suffix, "ZeroRet Lexical", "lex@" + suffix + ".org");
+        String token = tenant.get("accessToken").asText();
+        UUID tenantId = UUID.fromString(tenant.get("tenantId").asText());
+        UUID expId = createExpediente(token, "Expediente Offline Zero-Retention");
+
+        byte[] pdfBytes = buildValidPdf(
+                "1. Análisis iOS Offline",
+                "Hallazgo Pegasus CVE-2026-4410 persistente en proceso WebContent sin conectividad remota."
+        );
+        String expectedSha256 = sha256Hex(pdfBytes);
+
+        MvcResult uploadRes = mockMvc.perform(multipart("/api/v1/expedientes/" + expId + "/documents")
+                        .file(new MockMultipartFile("file", "offline-audit.pdf", MediaType.APPLICATION_PDF_VALUE, pdfBytes))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isAccepted())
+                .andReturn();
+
+        UUID documentId = UUID.fromString(objectMapper.readTree(uploadRes.getResponse().getContentAsString()).get("id").asText());
+        DocumentEntity indexed = awaitTerminalStatus(token, expId, documentId);
+
+        assertThat(indexed.getStatus()).isEqualTo(DocumentStatus.INDEXED);
+        assertThat(indexed.getEmbeddingModel()).isEqualTo(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL);
+        assertThat(indexed.getTempDeletedAt()).isNotNull();
+        assertThat(documentChunkRepository.countByTenantIdAndDocumentId(tenantId, documentId)).isGreaterThan(0);
+
+        try (Stream<Path> files = Files.list(sharedTempDir)) {
+            assertThat(files.toList()).isEmpty();
+        }
+
+        MvcResult ragRes = mockMvc.perform(post("/api/v1/expedientes/" + expId + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "question": "¿Qué indica sobre CVE-2026-4410 y WebContent?", "topK": 4 }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode ragJson = objectMapper.readTree(ragRes.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        assertThat(ragJson.get("status").asText()).isEqualTo("DEGRADED_LEXICAL");
+        assertThat(ragJson.get("citations").size()).isGreaterThanOrEqualTo(1);
+        assertThat(ragJson.get("citations").get(0).get("sha256Hash").asText()).isEqualTo(expectedSha256);
     }
 
     private void stubDeterministicEmbeddings() {

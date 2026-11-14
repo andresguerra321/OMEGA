@@ -48,3 +48,5 @@ omega:
     read-timeout-ms: 5000
   cti:
     stix-corpus-dir: ../corpus_mvp/iocs
+  osint:
+    external-lookups-enabled: false

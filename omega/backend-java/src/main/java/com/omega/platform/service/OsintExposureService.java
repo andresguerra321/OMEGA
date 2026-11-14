@@ -1,0 +1,408 @@
+package com.omega.platform.service;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.omega.platform.cti.PublicSchemaSupport;
+import com.omega.platform.cti.PublicSchemaSupport.CtiMatchRecord;
+import com.omega.platform.domain.OsintMonitoredAssetEntity;
+import com.omega.platform.ingest.InvalidDocumentException;
+import com.omega.platform.repository.OsintAssetRepository;
+import com.omega.platform.security.OmegaPrincipal;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import javax.naming.Context;
+import javax.naming.NamingEnumeration;
+import javax.naming.directory.Attribute;
+import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
+import javax.naming.directory.InitialDirContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Auditoría pasiva de exposición OSINT con aislamiento estricto por `(tenantId, userId)`
+ * y validación obligatoria de consentimiento explícito.
+ */
+@Service
+public class OsintExposureService {
+
+    private static final Logger log = LoggerFactory.getLogger(OsintExposureService.class);
+    private static final Pattern DOMAIN_PATTERN =
+            Pattern.compile("^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,24}$");
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[^@\\s]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,24}$");
+    private static final int MAX_CT_BYTES = 512 * 1024;
+
+    private final OsintAssetRepository assetRepository;
+    private final PublicSchemaSupport publicSchemaSupport;
+    private final AuditLogService auditLogService;
+    private final ObjectMapper objectMapper;
+    private final boolean externalLookupsEnabled;
+    private final HttpClient httpClient;
+
+    public OsintExposureService(
+            OsintAssetRepository assetRepository,
+            PublicSchemaSupport publicSchemaSupport,
+            AuditLogService auditLogService,
+            ObjectMapper objectMapper,
+            @Value("${omega.osint.external-lookups-enabled:true}") boolean externalLookupsEnabled
+    ) {
+        this.assetRepository = assetRepository;
+        this.publicSchemaSupport = publicSchemaSupport;
+        this.auditLogService = auditLogService;
+        this.objectMapper = objectMapper;
+        this.externalLookupsEnabled = externalLookupsEnabled;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(4))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public AssetListResponse listAssets(OmegaPrincipal principal) {
+        List<AssetDto> items = assetRepository
+                .findAllByTenantIdAndUserIdOrderByConsentedAtDesc(principal.tenantId(), principal.userId())
+                .stream()
+                .map(AssetDto::fromEntity)
+                .toList();
+        return new AssetListResponse(items);
+    }
+
+    @Transactional
+    public AssetDto registerAsset(OmegaPrincipal principal, String assetType, String rawValue, boolean explicitConsent) {
+        if (!explicitConsent) {
+            throw new InvalidDocumentException(
+                    "Se requiere consentimiento explícito del titular antes de monitorear cualquier activo."
+            );
+        }
+
+        String normalizedType = assetType != null ? assetType.trim().toLowerCase(Locale.ROOT) : "";
+        String normalizedValue = rawValue != null ? rawValue.trim().toLowerCase(Locale.ROOT) : "";
+
+        validateAssetInput(normalizedType, normalizedValue);
+
+        if (assetRepository.existsByTenantIdAndUserIdAndAssetValue(principal.tenantId(), principal.userId(), normalizedValue)) {
+            throw new ConflictException("Este activo ya se encuentra registrado para tu sesión.");
+        }
+
+        OsintMonitoredAssetEntity entity = new OsintMonitoredAssetEntity(
+                principal.tenantId(),
+                principal.userId(),
+                normalizedType,
+                normalizedValue,
+                true
+        );
+        OsintMonitoredAssetEntity saved = assetRepository.save(entity);
+
+        auditLogService.record(
+                principal.tenantId(),
+                principal.userId(),
+                "OSINT_ASSET_REGISTERED",
+                "OSINT_ASSET",
+                saved.getId().toString(),
+                Map.of("assetType", normalizedType, "explicitConsent", true)
+        );
+        return AssetDto.fromEntity(saved);
+    }
+
+    @Transactional
+    public OsintScanReport scanAsset(OmegaPrincipal principal, UUID assetId) {
+        OsintMonitoredAssetEntity asset = assetRepository
+                .findByIdAndTenantIdAndUserId(assetId, principal.tenantId(), principal.userId())
+                .orElseThrow(() -> new ResourceNotFoundException("Activo OSINT no encontrado: " + assetId));
+
+        String value = asset.getAssetValue();
+        String domain = resolveDomain(asset.getAssetType(), value);
+
+        List<String> iocCandidates = new ArrayList<>();
+        iocCandidates.add(value);
+        if (domain != null && !domain.equals(value)) {
+            iocCandidates.add(domain);
+        }
+        List<CtiMatchRecord> ctiMatches = publicSchemaSupport.matchKnownIocs(iocCandidates, 40);
+
+        DnsPostureDto dnsPosture = (domain != null && externalLookupsEnabled)
+                ? inspectPassiveDns(domain)
+                : new DnsPostureDto(domain, false, null, false, null);
+
+        List<String> exposedSubdomains = (domain != null && externalLookupsEnabled)
+                ? fetchCrtShSubdomains(domain)
+                : List.of();
+
+        EmailBreachesDto emailBreaches = "institutional_email".equals(asset.getAssetType())
+                ? new EmailBreachesDto("unavailable", List.of(), "HIBP_API_KEY no configurada en este servidor")
+                : null;
+
+        Instant checkedAt = Instant.now();
+        asset.markChecked(checkedAt);
+        assetRepository.save(asset);
+
+        auditLogService.record(
+                principal.tenantId(),
+                principal.userId(),
+                "OSINT_ASSET_SCANNED",
+                "OSINT_ASSET",
+                asset.getId().toString(),
+                Map.of(
+                        "assetType", asset.getAssetType(),
+                        "ctiMatchesCount", ctiMatches.size(),
+                        "subdomainsCount", exposedSubdomains.size()
+                )
+        );
+
+        return new OsintScanReport(
+                asset.getId(),
+                asset.getAssetType(),
+                value,
+                checkedAt.toString(),
+                ctiMatches,
+                emailBreaches,
+                dnsPosture,
+                exposedSubdomains
+        );
+    }
+
+    @Transactional
+    public Map<String, Object> revokeAsset(OmegaPrincipal principal, UUID assetId) {
+        OsintMonitoredAssetEntity asset = assetRepository
+                .findByIdAndTenantIdAndUserId(assetId, principal.tenantId(), principal.userId())
+                .orElseThrow(() -> new ResourceNotFoundException("Activo OSINT no encontrado: " + assetId));
+
+        assetRepository.delete(asset);
+
+        auditLogService.record(
+                principal.tenantId(),
+                principal.userId(),
+                "OSINT_ASSET_REVOKED",
+                "OSINT_ASSET",
+                assetId.toString(),
+                Map.of("assetType", asset.getAssetType())
+        );
+
+        return Map.of("status", "revoked", "id", assetId.toString());
+    }
+
+    private static void validateAssetInput(String type, String value) {
+        if (value.isBlank() || value.length() > 255) {
+            throw new InvalidDocumentException("Valor de activo inválido.");
+        }
+        switch (type) {
+            case "domain" -> {
+                if (!DOMAIN_PATTERN.matcher(value).matches()) {
+                    throw new InvalidDocumentException("Formato de dominio inválido.");
+                }
+            }
+            case "institutional_email" -> {
+                if (!EMAIL_PATTERN.matcher(value).matches()) {
+                    throw new InvalidDocumentException("Formato de correo electrónico inválido.");
+                }
+            }
+            case "organization" -> {
+                if (value.length() < 2) {
+                    throw new InvalidDocumentException("El nombre de organización es demasiado corto.");
+                }
+            }
+            default -> throw new InvalidDocumentException(
+                    "Tipo de activo inválido. Usa 'domain', 'institutional_email' u 'organization'."
+            );
+        }
+    }
+
+    private static String resolveDomain(String assetType, String assetValue) {
+        if ("domain".equals(assetType)) {
+            return assetValue;
+        }
+        if ("institutional_email".equals(assetType)) {
+            int at = assetValue.indexOf('@');
+            if (at > 0 && at + 1 < assetValue.length()) {
+                return assetValue.substring(at + 1);
+            }
+        }
+        return null;
+    }
+
+    private DnsPostureDto inspectPassiveDns(String domain) {
+        List<String> rootTxts = lookupTxtRecords(domain);
+        String spf = rootTxts.stream()
+                .filter(t -> t.toLowerCase(Locale.ROOT).contains("v=spf1"))
+                .findFirst()
+                .orElse(null);
+
+        List<String> dmarcTxts = lookupTxtRecords("_dmarc." + domain);
+        String dmarc = dmarcTxts.stream()
+                .filter(t -> t.toLowerCase(Locale.ROOT).contains("v=dmarc1"))
+                .findFirst()
+                .orElse(null);
+
+        return new DnsPostureDto(domain, spf != null, spf, dmarc != null, dmarc);
+    }
+
+    private List<String> lookupTxtRecords(String host) {
+        List<String> records = new ArrayList<>();
+        Hashtable<String, String> env = new Hashtable<>();
+        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");
+        env.put(Context.PROVIDER_URL, "dns:");
+        env.put("com.sun.jndi.dns.timeout.initial", "2500");
+        env.put("com.sun.jndi.dns.timeout.retries", "1");
+        DirContext ctx = null;
+        try {
+            ctx = new InitialDirContext(env);
+            Attributes attrs = ctx.getAttributes(host, new String[]{"TXT"});
+            Attribute txtAttr = attrs.get("TXT");
+            if (txtAttr != null) {
+                NamingEnumeration<?> all = txtAttr.getAll();
+                while (all.hasMore()) {
+                    Object val = all.next();
+                    if (val != null) {
+                        records.add(val.toString().replace("\"", "").trim());
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Consulta pasiva DNS TXT omitida para {}: {}", host, ex.getMessage());
+        } finally {
+            if (ctx != null) {
+                try {
+                    ctx.close();
+                } catch (Exception ignored) {
+                    // ignore cleanup failure
+                }
+            }
+        }
+        return records;
+    }
+
+    private List<String> fetchCrtShSubdomains(String domain) {
+        Set<String> subdomains = new LinkedHashSet<>();
+        try {
+            String encoded = URLEncoder.encode("%." + domain, StandardCharsets.UTF_8);
+            HttpRequest req = HttpRequest.newBuilder(URI.create("https://crt.sh/?q=" + encoded + "&output=json"))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("User-Agent", "OMEGA-OSINT-Passive/1.0")
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+            HttpResponse<InputStream> res = httpClient.send(req, HttpResponse.BodyHandlers.ofInputStream());
+            if (res.statusCode() < 200 || res.statusCode() >= 300) {
+                try (InputStream body = res.body()) {
+                    body.close();
+                }
+                return List.of();
+            }
+            String json;
+            try (InputStream is = res.body()) {
+                json = readBoundedJson(is);
+            }
+            List<Map<String, Object>> entries = objectMapper.readValue(json, new TypeReference<>() {});
+            for (Map<String, Object> entry : entries) {
+                Object nameVal = entry.get("name_value");
+                if (nameVal == null) {
+                    continue;
+                }
+                for (String line : nameVal.toString().split("\\R")) {
+                    String candidate = line.trim().toLowerCase(Locale.ROOT);
+                    if (candidate.startsWith("*.")) {
+                        candidate = candidate.substring(2);
+                    }
+                    if (!candidate.isBlank()
+                            && !candidate.equals(domain)
+                            && candidate.endsWith("." + domain)) {
+                        subdomains.add(candidate);
+                        if (subdomains.size() >= 30) {
+                            return new ArrayList<>(subdomains);
+                        }
+                    }
+                }
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        } catch (Exception ex) {
+            log.debug("Consulta pasiva crt.sh omitida para {}: {}", domain, ex.getMessage());
+        }
+        return new ArrayList<>(subdomains);
+    }
+
+    private static String readBoundedJson(InputStream is) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(8192);
+        byte[] buf = new byte[4096];
+        int remaining = MAX_CT_BYTES;
+        int n;
+        while (remaining > 0 && (n = is.read(buf, 0, Math.min(buf.length, remaining))) != -1) {
+            out.write(buf, 0, n);
+            remaining -= n;
+        }
+        return out.toString(StandardCharsets.UTF_8);
+    }
+
+    public record AssetListResponse(List<AssetDto> assets) {
+    }
+
+    public record AssetDto(
+            UUID id,
+            @JsonProperty("asset_type") String assetType,
+            @JsonProperty("asset_value") String assetValue,
+            @JsonProperty("explicit_consent") boolean explicitConsent,
+            @JsonProperty("consented_at") Instant consentedAt,
+            @JsonProperty("last_checked_at") Instant lastCheckedAt
+    ) {
+        static AssetDto fromEntity(OsintMonitoredAssetEntity e) {
+            return new AssetDto(
+                    e.getId(),
+                    e.getAssetType(),
+                    e.getAssetValue(),
+                    e.isExplicitConsent(),
+                    e.getConsentedAt(),
+                    e.getLastCheckedAt()
+            );
+        }
+    }
+
+    public record DnsPostureDto(
+            String domain,
+            @JsonProperty("spf_configured") boolean spfConfigured,
+            @JsonProperty("spf_record") String spfRecord,
+            @JsonProperty("dmarc_configured") boolean dmarcConfigured,
+            @JsonProperty("dmarc_record") String dmarcRecord
+    ) {
+    }
+
+    public record EmailBreachesDto(
+            String status,
+            List<Map<String, Object>> breaches,
+            String message
+    ) {
+    }
+
+    public record OsintScanReport(
+            @JsonProperty("asset_id") UUID assetId,
+            @JsonProperty("asset_type") String assetType,
+            @JsonProperty("asset_value") String assetValue,
+            @JsonProperty("scanned_at") String scannedAt,
+            @JsonProperty("cti_ioc_matches") List<CtiMatchRecord> ctiIocMatches,
+            @JsonProperty("email_breaches") EmailBreachesDto emailBreaches,
+            @JsonProperty("dns_posture") DnsPostureDto dnsPosture,
+            @JsonProperty("exposed_subdomains") List<String> exposedSubdomains
+    ) {
+    }
+}

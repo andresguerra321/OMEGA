@@ -5,6 +5,7 @@ import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.ingest.PdfChunkExtractor.ExtractedChunk;
 import com.omega.platform.ingest.PdfChunkExtractor.ExtractionResult;
+import com.omega.platform.rag.EmbeddingException;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentChunkRepository;
 import com.omega.platform.repository.DocumentRepository;
@@ -31,6 +32,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Service
 public class AsyncDocumentProcessor {
+
+    /**
+     * Modelo centinela cuando no existe proveedor de embeddings disponible (p. ej. despliegue sin OPENAI_API_KEY);
+     * los fragmentos se persisten con índice léxico GIN `tsvector` y vector neutro compatible con el esquema pgvector.
+     */
+    public static final String LEXICAL_FALLBACK_MODEL = "lexical-only-tsvector";
 
     private static final Logger log = LoggerFactory.getLogger(AsyncDocumentProcessor.class);
 
@@ -63,6 +70,8 @@ public class AsyncDocumentProcessor {
         int totalPages = 0;
         boolean ocrApplied = false;
         int persistedChunks = 0;
+        String effectiveModel = null;
+        boolean lexicalFallbackUsed = false;
         String failureReason = null;
 
         try {
@@ -74,13 +83,12 @@ public class AsyncDocumentProcessor {
                 throw new InvalidDocumentException("No se encontró texto extraíble ni legible por OCR en el PDF.");
             }
 
-            List<String> contents = chunks.stream().map(ExtractedChunk::content).toList();
-            List<float[]> vectors = embeddingProvider.embedBatch(contents);
-            if (vectors.size() != chunks.size()) {
-                throw new IllegalStateException("Cantidad de embeddings distinta al número de fragmentos.");
-            }
+            EmbeddingBatchResult embeddingResult = resolveEmbeddingsOrFallback(cmd, chunks);
+            List<float[]> vectors = embeddingResult.vectors();
+            effectiveModel = embeddingResult.modelName();
+            lexicalFallbackUsed = embeddingResult.lexicalFallbackUsed();
 
-            final String modelName = embeddingProvider.modelName();
+            final String modelName = effectiveModel;
             final int pagesCount = totalPages;
             final boolean usedOcr = ocrApplied;
 
@@ -111,6 +119,7 @@ public class AsyncDocumentProcessor {
                     throw new IllegalStateException("Verificación de chunks persistidos falló: " + verified);
                 }
 
+                doc.setEmbeddingModel(modelName);
                 doc.setTotalPages(pagesCount);
                 doc.setOcrApplied(usedOcr);
                 doc.setStatus(DocumentStatus.INDEXED);
@@ -124,10 +133,42 @@ public class AsyncDocumentProcessor {
             log.error("Fallo procesando documento {} (tenant={}): {}", cmd.documentId(), cmd.tenantId(), failureReason, ex);
         } finally {
             Instant deletedAt = forceDeleteTempFile(cmd.tempPdfPath());
-            persistFinalAuditAndDeletionStamp(cmd, finalStatus, totalPages, ocrApplied, persistedChunks, deletedAt, failureReason);
+            persistFinalAuditAndDeletionStamp(
+                    cmd, finalStatus, totalPages, ocrApplied, persistedChunks,
+                    effectiveModel, lexicalFallbackUsed, deletedAt, failureReason
+            );
         }
 
         return CompletableFuture.completedFuture(finalStatus);
+    }
+
+    /**
+     * Genera embeddings vectoriales o degrada de forma determinista a vector neutro + modelo léxico `tsvector`
+     * cuando no hay proveedor remoto disponible (p. ej. despliegue sin `OPENAI_API_KEY`), preservando Zero-Retention.
+     */
+    private EmbeddingBatchResult resolveEmbeddingsOrFallback(DocumentIngestCommand cmd, List<ExtractedChunk> chunks) {
+        List<String> contents = chunks.stream().map(ExtractedChunk::content).toList();
+        try {
+            List<float[]> vectors = embeddingProvider.embedBatch(contents);
+            if (vectors.size() != chunks.size()) {
+                throw new IllegalStateException("Cantidad de embeddings distinta al número de fragmentos.");
+            }
+            return new EmbeddingBatchResult(embeddingProvider.modelName(), vectors, false);
+        } catch (EmbeddingException ex) {
+            log.warn(
+                    "Proveedor de embeddings no disponible para documento {} (tenant={}); indexando en modo léxico tsvector ({})",
+                    cmd.documentId(),
+                    cmd.tenantId(),
+                    ex.getMessage()
+            );
+            int dims = Math.max(1536, embeddingProvider.dimensions());
+            float[] zeroVector = new float[dims];
+            List<float[]> neutralVectors = new ArrayList<>(chunks.size());
+            for (int i = 0; i < chunks.size(); i++) {
+                neutralVectors.add(zeroVector);
+            }
+            return new EmbeddingBatchResult(LEXICAL_FALLBACK_MODEL, neutralVectors, true);
+        }
     }
 
     private Instant forceDeleteTempFile(Path tempPath) {
@@ -146,6 +187,8 @@ public class AsyncDocumentProcessor {
             int totalPages,
             boolean ocrApplied,
             int persistedChunks,
+            String effectiveModel,
+            boolean lexicalFallbackUsed,
             Instant deletedAt,
             String failureReason
     ) {
@@ -176,6 +219,10 @@ public class AsyncDocumentProcessor {
                 meta.put("finalStatus", resolvedStatus.name());
                 meta.put("persistedChunks", persistedChunks);
                 meta.put("ocrApplied", ocrApplied);
+                if (effectiveModel != null) {
+                    meta.put("embeddingModel", effectiveModel);
+                }
+                meta.put("lexicalFallback", lexicalFallbackUsed);
                 meta.put("tempDeletedAt", deletedAt != null ? deletedAt.toString() : "DELETE_FAILED");
                 if (failureReason != null && !failureReason.isBlank()) {
                     meta.put("error", failureReason.length() > 300 ? failureReason.substring(0, 300) : failureReason);
@@ -195,6 +242,13 @@ public class AsyncDocumentProcessor {
         } catch (Exception ex) {
             log.error("Error persistiendo auditoría/temp_deleted_at para documento {}", cmd.documentId(), ex);
         }
+    }
+
+    private record EmbeddingBatchResult(
+            String modelName,
+            List<float[]> vectors,
+            boolean lexicalFallbackUsed
+    ) {
     }
 
     public record DocumentIngestCommand(

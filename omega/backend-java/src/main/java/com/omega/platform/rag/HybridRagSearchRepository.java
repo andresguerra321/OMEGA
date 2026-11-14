@@ -5,6 +5,7 @@ import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.Normalizer;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -127,8 +128,8 @@ public class HybridRagSearchRepository {
                 WHERE c.tenant_id = :tenantId
                   AND c.expediente_id = :expedienteId
                   AND d.status = 'INDEXED'
-                  AND d.embedding_model = :embeddingModel
-                  AND c.embedding_model = :embeddingModel
+                  AND d.embedding_model IN (:embeddingModels)
+                  AND c.embedding_model IN (:embeddingModels)
                   AND c.search_vector @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
                 ORDER BY lex_score DESC
                 LIMIT :topK
@@ -204,6 +205,26 @@ public class HybridRagSearchRepository {
             String embeddingModel,
             int topK
     ) {
+        if (embeddingModel == null || embeddingModel.isBlank()) {
+            return List.of();
+        }
+        return searchLexicalOnly(tenantId, expedienteId, question, List.of(embeddingModel), topK);
+    }
+
+    /**
+     * Búsqueda de respaldo léxica pura (`tsvector` GIN) sobre uno o más modelos indexados
+     * (activos o `lexical-only-tsvector`), manteniendo intacto el aislamiento por tenant y expediente.
+     */
+    public List<RankedChunk> searchLexicalOnly(
+            UUID tenantId,
+            UUID expedienteId,
+            String question,
+            Collection<String> embeddingModels,
+            int topK
+    ) {
+        if (embeddingModels == null || embeddingModels.isEmpty()) {
+            return List.of();
+        }
         String tsQuery = buildSanitizedOrTsQuery(question);
         if (tsQuery.isBlank()) {
             return List.of();
@@ -212,7 +233,7 @@ public class HybridRagSearchRepository {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("expedienteId", expedienteId)
-                .addValue("embeddingModel", embeddingModel)
+                .addValue("embeddingModels", List.copyOf(embeddingModels))
                 .addValue("lexicalTsQuery", tsQuery)
                 .addValue("topK", safeTopK)
                 .addValue("rrfK", (double) properties.rag().rrfK())
@@ -221,7 +242,7 @@ public class HybridRagSearchRepository {
         return jdbcTemplate.query(LEXICAL_ONLY_SQL, params, HybridRagSearchRepository::mapRow);
     }
 
-    static String buildSanitizedOrTsQuery(String question) {
+    public static String buildSanitizedOrTsQuery(String question) {
         if (question == null || question.isBlank()) {
             return "";
         }
