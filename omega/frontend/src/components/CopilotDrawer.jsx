@@ -94,7 +94,7 @@ export function CopilotDrawer({
 
       {/* Cajón lateral deslizable */}
       <aside
-        className={`animate-slide-right relative h-full w-full max-w-[470px] border-l border-white/[0.1] bg-gradient-to-b from-[#13161E]/98 to-[#0B0D12]/98 backdrop-blur-2xl shadow-[-18px_0_48px_rgba(0,0,0,0.68)] flex flex-col ${
+        className={`animate-slide-right relative h-full w-full max-w-[470px] border-l border-[#93C5FD]/[0.13] bg-gradient-to-b from-[#081020]/98 to-[#040710]/98 backdrop-blur-2xl shadow-[-18px_0_52px_rgba(2,6,18,0.78)] flex flex-col ${
           typeof window !== 'undefined' && window.omegaDesktop?.isDesktop ? 'pt-9' : ''
         }`}
       >
@@ -238,7 +238,7 @@ export function CopilotDrawer({
         {/* Compositor fijado al pie */}
         <form
           onSubmit={handleSubmit}
-          className="shrink-0 border-t border-white/[0.08] bg-[#0C0E13] p-3.5"
+          className="shrink-0 border-t border-[#93C5FD]/[0.09] bg-[#050914] p-3.5"
         >
           <div className="apple-well rounded-[13px] p-2 flex items-end gap-2">
             <textarea

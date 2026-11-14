@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
 import { OmegaLogo } from './OmegaLogo';
+import { ChatAtmosphere } from './ChatAtmosphere';
 import { SpatialNavPill } from './SpatialNavPill';
 import { SecurityCenterpiece3D } from './SecurityCenterpiece3D';
 
@@ -232,6 +233,9 @@ export function SecurityPostureStage({
       aria-label="Cabina de postura OMEGA"
       className="omega-studio-bg relative min-h-full md:h-full w-full overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col justify-between select-none text-[#F8FAFC]"
     >
+      {/* Fondo atmosférico unificado en azul noche con pliegues diagonales y trazas curvas */}
+      <ChatAtmosphere variant="stage" />
+
       {/* Escenario WebGL de estudio a pantalla completa (cuadrícula en perspectiva + logo OMEGA futurista) */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[100dvh] md:inset-0 md:h-full z-0">
         <SecurityCenterpiece3D
@@ -256,21 +260,17 @@ export function SecurityPostureStage({
         />
       </div>
 
-      {/* Marco arquitectónico con rieles finos y marcadores de calibración lateral */}
+      {/* Telemetría discreta alineada a los rieles del escenario */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[56px] bottom-0 z-0 mx-auto max-w-[1320px] border-x border-white/[0.045]"
+        className="pointer-events-none absolute inset-x-0 top-[56px] bottom-0 z-0 mx-auto max-w-[1320px]"
       >
-        <span className="absolute -left-px top-6 h-3 w-px bg-[#3B82F6]/45" />
-        <span className="absolute -right-px top-6 h-3 w-px bg-[#3B82F6]/45" />
-        <span className="absolute -left-px bottom-6 h-3 w-px bg-[#3B82F6]/45" />
-        <span className="absolute -right-px bottom-6 h-3 w-px bg-[#3B82F6]/45" />
-        <div className="hidden lg:flex items-center justify-between px-7 pt-6">
-          <div className="font-tech text-[10px] tracking-[0.14em] text-[#64748B]/85 uppercase space-y-1">
+        <div className="hidden lg:flex items-center justify-between px-7 pt-5">
+          <div className="font-tech text-[10px] tracking-[0.14em] text-[#64748B]/90 uppercase space-y-1">
             <div>{pcScannedAt ? `HOST · ${pcScannedAt}` : 'HOST WINDOWS'}</div>
             <div className="text-[#475569]">MODO · {technicalMode ? 'TÉCNICO' : 'SIMPLE'}</div>
           </div>
-          <div className="font-tech text-right text-[10px] tracking-[0.14em] text-[#64748B]/85 uppercase space-y-1">
+          <div className="font-tech text-right text-[10px] tracking-[0.14em] text-[#64748B]/90 uppercase space-y-1">
             <div>MEMORIA VOLÁTIL</div>
             <div className="text-[#475569]">0 BYTES EN DISCO</div>
           </div>
@@ -341,13 +341,13 @@ export function SecurityPostureStage({
             <div
               role="group"
               aria-label="Nivel de detalle"
-              className="omega-glass-chip hidden sm:inline-flex items-center rounded-[11px] p-0.5 h-8 xl:h-9"
+              className="apple-segmented hidden sm:inline-flex items-center rounded-[11px] p-0.5 h-8 xl:h-9"
             >
               <button
                 type="button"
                 onClick={() => onToggleTechnicalMode?.(false)}
-                className={`px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
-                  !technicalMode ? 'bg-white text-[#070B14] shadow-xs' : 'text-[#94A3B8] hover:text-white'
+                className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${
+                  !technicalMode ? 'apple-segmented-active' : 'text-[#94A3B8] hover:text-white'
                 }`}
               >
                 Simple
@@ -355,8 +355,8 @@ export function SecurityPostureStage({
               <button
                 type="button"
                 onClick={() => onToggleTechnicalMode?.(true)}
-                className={`px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
-                  technicalMode ? 'bg-white text-[#070B14] shadow-xs' : 'text-[#94A3B8] hover:text-white'
+                className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${
+                  technicalMode ? 'apple-segmented-active' : 'text-[#94A3B8] hover:text-white'
                 }`}
               >
                 Técnico
@@ -380,25 +380,30 @@ export function SecurityPostureStage({
       </div>
 
       {/* Escenario Central del Logo OMEGA Futurista */}
-      <div className="pointer-events-none relative z-10 flex-1 min-h-[415px] md:min-h-0 flex flex-col items-center justify-between px-4 sm:px-8 pt-4 pb-2">
-        {/* Selector de superficie centrado sin eyebrow decorativo */}
+      <div className="pointer-events-none relative z-10 flex-1 min-h-[405px] md:min-h-0 flex flex-col items-center justify-between px-4 sm:px-8 pt-2.5 pb-2">
+        {/* Selector de superficie centrado con cápsula discreta de estado */}
         <div ref={menuRef} className="pointer-events-auto relative z-20 flex flex-col items-center text-center">
+          <div className="animate-kowalski-in hidden sm:inline-flex items-center gap-2 rounded-full border border-[#93C5FD]/[0.14] bg-[#070E1E]/85 px-3 py-0.5 mb-1.5 font-tech text-[10px] tracking-[0.12em] text-[#93C5FD] uppercase shadow-[inset_0_1px_0_rgba(219,234,254,0.1)] backdrop-blur-md">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#3B82F6] omega-core-pulse" />
+            <span>Cabina Local · {reportsCount} reportes STIX2</span>
+          </div>
+
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={() => setSurfaceMenuOpen((v) => !v)}
               aria-expanded={surfaceMenuOpen}
               aria-haspopup="listbox"
-              className="group inline-flex items-baseline gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#3B82F6] rounded-lg px-2 py-0.5"
+              className="kowalski-press group inline-flex items-baseline gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#3B82F6] rounded-lg px-2 py-0.5"
             >
-              <h1 className="font-display text-[clamp(1.65rem,2.6vw,2.3rem)] font-semibold tracking-[-0.03em] text-white leading-tight">
+              <h1 className="font-display text-[clamp(1.6rem,2.45vw,2.2rem)] font-semibold tracking-[-0.03em] text-white leading-tight">
                 {activeSurface.lead}{' '}
                 <span className="font-light text-[#94A3B8] group-hover:text-[#CBD5E1] transition-colors">
                   {activeSurface.accent}
                 </span>
               </h1>
               <ChevronDown
-                className={`h-4 w-4 text-[#94A3B8] transition-transform self-center ${
+                className={`h-4 w-4 text-[#94A3B8] transition-transform duration-180 ease-kowalski self-center ${
                   surfaceMenuOpen ? 'rotate-180 text-white' : ''
                 }`}
               />
@@ -416,7 +421,7 @@ export function SecurityPostureStage({
             <div
               role="listbox"
               aria-label="Cambiar superficie mostrada"
-              className="animate-scale-in origin-top mt-2 w-[260px] rounded-[14px] border border-white/[0.12] bg-[#070B14]/95 backdrop-blur-xl p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.65)] text-left"
+              className="animate-scale-in origin-top mt-2 w-[264px] rounded-[14px] border border-[#93C5FD]/[0.14] bg-[#060C1A]/96 backdrop-blur-xl p-1.5 shadow-[inset_0_1px_0_rgba(219,234,254,0.12),0_22px_52px_rgba(2,6,18,0.82)] text-left"
             >
               {SURFACE_ORDER.map((id) => {
                 const s = surfaces[id];
@@ -477,13 +482,13 @@ export function SecurityPostureStage({
             />
           </svg>
 
-          <div className="animate-fade-up pointer-events-auto -mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#070B14]/90 border border-white/[0.1] backdrop-blur-md px-2.5 py-1 shadow-lg">
+          <div className="animate-kowalski-in pointer-events-auto -mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#060C1A]/90 border border-[#93C5FD]/[0.14] backdrop-blur-md px-2.5 py-1 shadow-[inset_0_1px_0_rgba(219,234,254,0.1),0_12px_28px_rgba(2,6,18,0.65)]">
             <button
               type="button"
               onClick={() => stepSurface(-1)}
               aria-label="Superficie anterior"
               title="Superficie anterior"
-              className="h-7 w-7 rounded-full border border-white/[0.14] bg-white/[0.05] hover:bg-[#1D4ED8]/40 text-white inline-flex items-center justify-center cursor-pointer transition-colors"
+              className="kowalski-press h-7 w-7 rounded-full border border-[#93C5FD]/[0.15] bg-white/[0.04] hover:bg-[#1D4ED8]/40 text-white inline-flex items-center justify-center cursor-pointer"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
@@ -493,7 +498,7 @@ export function SecurityPostureStage({
               onClick={() => setSpinNonce((n) => n + 1)}
               aria-label="Rotar objeto 360 grados"
               title="Girar vista 360°"
-              className="font-tech px-2 py-0.5 text-[11.5px] font-medium text-[#CBD5E1] hover:text-white cursor-pointer transition-colors"
+              className="kowalski-press font-tech px-2 py-0.5 text-[11.5px] font-medium text-[#CBD5E1] hover:text-white cursor-pointer"
             >
               360°
             </button>
@@ -503,7 +508,7 @@ export function SecurityPostureStage({
               onClick={() => stepSurface(1)}
               aria-label="Siguiente superficie"
               title="Siguiente superficie"
-              className="h-7 w-7 rounded-full border border-white/[0.14] bg-white/[0.05] hover:bg-[#1D4ED8]/40 text-white inline-flex items-center justify-center cursor-pointer transition-colors"
+              className="kowalski-press h-7 w-7 rounded-full border border-[#93C5FD]/[0.15] bg-white/[0.04] hover:bg-[#1D4ED8]/40 text-white inline-flex items-center justify-center cursor-pointer"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -521,7 +526,7 @@ export function SecurityPostureStage({
             disabled={scanningPc}
             title={activeSurface.primaryLabel}
             aria-label={activeSurface.primaryLabel}
-            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#93C5FD] hover:text-white hover:border-[#3B82F6]/50 cursor-pointer transition-all disabled:opacity-55"
+            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#93C5FD] hover:text-white hover:border-[#3B82F6]/50 cursor-pointer disabled:opacity-55"
           >
             {scanningPc ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -536,7 +541,7 @@ export function SecurityPostureStage({
             disabled={syncingStix}
             title="Sincronizar firmas STIX 2.1"
             aria-label="Sincronizar firmas STIX 2.1"
-            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#CBD5E1] hover:text-white cursor-pointer transition-all disabled:opacity-55"
+            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#CBD5E1] hover:text-white cursor-pointer disabled:opacity-55"
           >
             <RefreshCw className={`h-4 w-4 ${syncingStix ? 'animate-spin' : ''}`} />
           </button>
@@ -546,20 +551,20 @@ export function SecurityPostureStage({
             onClick={activeSurface.onDetail}
             title="Abrir vista técnica completa"
             aria-label="Abrir vista técnica completa"
-            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#CBD5E1] hover:text-white cursor-pointer transition-all"
+            className="omega-glass-chip h-9 w-9 rounded-[11px] inline-flex items-center justify-center text-[#CBD5E1] hover:text-white cursor-pointer"
           >
             <ArrowUpRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* Trío Inferior de Tarjetas de Vidrio Oscuro (Bento Sereno Negro · Blanco · Azul Rey) */}
+      {/* Trío Inferior de Tarjetas de Vidrio Obsidiana (Bento Azul Noche · Blanco) */}
       <footer className="relative z-20 shrink-0 px-3.5 sm:px-7 pb-4 pt-2">
         <div className="mx-auto max-w-[1280px] grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Tarjeta 1: Detalles del Equipo Local & Acción Primaria en Azul Rey */}
           <div
-            style={{ animationDelay: '60ms' }}
-            className="animate-fade-up omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.16]"
+            style={{ animationDelay: '45ms' }}
+            className="animate-kowalski-in omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 hover:-translate-y-0.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -591,12 +596,12 @@ export function SecurityPostureStage({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => (isDesktop ? onRunPcScan?.() : onNavigate?.('equipo', { tab: 'pc' }))}
-                    disabled={scanningPc}
-                    className="h-8 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] text-white px-3.5 text-[12px] font-medium inline-flex items-center gap-1.5 shadow-[0_6px_18px_rgba(29,78,216,0.34)] cursor-pointer transition-colors disabled:opacity-60"
-                  >
+                    <button
+                      type="button"
+                      onClick={() => (isDesktop ? onRunPcScan?.() : onNavigate?.('equipo', { tab: 'pc' }))}
+                      disabled={scanningPc}
+                      className="kowalski-press h-8 rounded-full bg-[#1D4ED8] hover:bg-[#2563EB] text-white px-3.5 text-[12px] font-medium inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(0,0,0,0.4),0_8px_20px_-4px_rgba(29,78,216,0.45)] cursor-pointer disabled:opacity-60"
+                    >
                     {scanningPc && <Loader2 className="h-3 w-3 animate-spin" />}
                     <span>
                       {scanningPc
@@ -613,7 +618,7 @@ export function SecurityPostureStage({
                     <button
                       type="button"
                       onClick={() => onNavigate?.('equipo', { tab: 'pc' })}
-                      className="h-8 rounded-full border border-white/[0.14] bg-white/[0.06] hover:bg-white/[0.12] text-white px-3 text-[11.5px] font-medium inline-flex items-center gap-1 cursor-pointer transition-colors"
+                      className="kowalski-press h-8 rounded-full border border-[#93C5FD]/[0.14] bg-white/[0.05] hover:bg-white/[0.1] text-white px-3 text-[11.5px] font-medium inline-flex items-center gap-1 cursor-pointer"
                     >
                       <span>Ver informe</span>
                       <ArrowRight className="h-3 w-3" />
@@ -641,8 +646,8 @@ export function SecurityPostureStage({
 
           {/* Tarjeta 2: Dispositivos USB (Android ADB & iPhone iOS) */}
           <div
-            style={{ animationDelay: '120ms' }}
-            className="animate-fade-up omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.16]"
+            style={{ animationDelay: '90ms' }}
+            className="animate-kowalski-in omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 hover:-translate-y-0.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="inline-flex items-center gap-2">
@@ -710,8 +715,8 @@ export function SecurityPostureStage({
 
           {/* Tarjeta 3: Escudo Web Pasivo & Corpus STIX 2.1 */}
           <div
-            style={{ animationDelay: '180ms' }}
-            className="animate-fade-up omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.16]"
+            style={{ animationDelay: '135ms' }}
+            className="animate-kowalski-in omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 hover:-translate-y-0.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="inline-flex items-center gap-2">
@@ -731,7 +736,7 @@ export function SecurityPostureStage({
                 type="button"
                 onClick={() => onNavigate?.('enlace')}
                 aria-label="Abrir verificador completo de enlaces"
-                className="h-7 w-7 rounded-full border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.14] text-[#CBD5E1] hover:text-white inline-flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                className="kowalski-press h-7 w-7 rounded-full border border-[#93C5FD]/[0.14] bg-white/[0.04] hover:bg-white/[0.12] text-[#CBD5E1] hover:text-white inline-flex items-center justify-center cursor-pointer shrink-0"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
@@ -745,19 +750,19 @@ export function SecurityPostureStage({
                   onChange={(e) => setQuickUrl(e.target.value)}
                   placeholder="Pega enlace sospechoso sin abrirlo..."
                   aria-label="Enlace sospechoso para verificar"
-                  className="flex-1 min-w-0 h-8 rounded-full bg-[#050912]/75 border border-white/[0.12] px-3 text-[12px] text-white placeholder:text-[#64748B] focus:outline-none focus:border-[#3B82F6]"
+                  className="flex-1 min-w-0 h-8 rounded-full bg-[#040812]/85 border border-[#93C5FD]/[0.13] px-3 text-[12px] text-white placeholder:text-[#64748B] focus:outline-none focus:border-[#3B82F6]/70 transition-colors"
                 />
                 <button
                   type="submit"
                   disabled={linkLoading || !quickUrl.trim()}
-                  className="h-8 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] disabled:bg-white/[0.08] disabled:text-[#64748B] px-3 text-[11.5px] font-semibold text-white cursor-pointer transition-colors shrink-0"
+                  className="kowalski-press h-8 rounded-full bg-[#1D4ED8] hover:bg-[#2563EB] disabled:bg-white/[0.08] disabled:text-[#64748B] px-3 text-[11.5px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] cursor-pointer shrink-0"
                 >
                   {linkLoading ? '...' : 'Verificar'}
                 </button>
               </div>
 
               {inlineLink ? (
-                <div className="rounded-[10px] bg-[#050912]/90 border border-white/[0.1] px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]">
+                <div className="rounded-[10px] bg-[#040812]/90 border border-[#93C5FD]/[0.12] px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]">
                   <span className="inline-flex items-center gap-1.5 truncate text-[#E2E8F0]">
                     {inlineLink.risk_level === 'HIGH' && (
                       <ShieldAlert className="h-3.5 w-3.5 text-[#EF4444] shrink-0" />

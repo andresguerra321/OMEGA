@@ -77,7 +77,7 @@ export function SpatialNavPill({
               aria-label={item.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
               title={item.ariaLabel}
-              className={`group relative flex flex-col items-center justify-center rounded-[10px] transition-all duration-200 cursor-pointer active:scale-[0.95] ${
+              className={`group relative flex flex-col items-center justify-center rounded-[10px] transition-[transform,background-color,color,width] duration-150 ease-kowalski cursor-pointer active:scale-[0.95] ${
                 compact
                   ? isActive
                     ? 'h-8 w-12'
@@ -87,8 +87,8 @@ export function SpatialNavPill({
                     : 'h-8 w-8 xl:h-9 xl:w-10'
               } ${
                 isActive
-                  ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]'
-                  : 'bg-transparent text-[#94A3B8] hover:bg-white/[0.08] hover:text-white'
+                  ? 'bg-[#122142]/92 text-white border border-[#60A5FA]/28 shadow-[inset_0_1px_0_rgba(219,234,254,0.18)]'
+                  : 'bg-transparent text-[#94A3B8] hover:bg-[#93C5FD]/[0.08] hover:text-white'
               }`}
             >
               <Icon className="h-[15px] w-[15px]" strokeWidth={isActive ? 2.1 : 1.75} />
@@ -97,7 +97,7 @@ export function SpatialNavPill({
               {isActive && (
                 <span
                   aria-hidden="true"
-                  className="mt-1 h-[2px] w-4 rounded-full bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,0.9)]"
+                  className="mt-1 h-[2px] w-4 rounded-full bg-[#3B82F6] shadow-[0_0_6px_rgba(59,130,246,0.75)]"
                 />
               )}
 
@@ -111,7 +111,7 @@ export function SpatialNavPill({
               {/* Tooltip flotante discreto */}
               <span
                 role="tooltip"
-                className="pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full border border-white/[0.14] bg-[#090F1D]/95 px-2.5 py-0.5 text-[11px] font-medium text-[#F8FAFC] shadow-lg"
+                className="pointer-events-none opacity-0 scale-95 translate-y-1 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 transition-[opacity,transform] duration-150 ease-kowalski origin-top absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-full border border-[#93C5FD]/[0.16] bg-[#060C1A]/95 px-2.5 py-0.5 text-[11px] font-medium text-[#F8FAFC] shadow-[inset_0_1px_0_rgba(219,234,254,0.1),0_10px_24px_rgba(2,6,18,0.7)]"
               >
                 {item.label}
               </span>

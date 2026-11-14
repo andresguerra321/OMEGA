@@ -551,7 +551,7 @@ export function ChatWorkspace({
             </main>
 
             {/* Composer Inferior Flotante + Context Box */}
-            <div className="shrink-0 border-t border-white/[0.05] bg-[#08080A]/75 backdrop-blur-xl px-3.5 sm:px-6 py-3 sm:py-3.5">
+            <div className="shrink-0 border-t border-[#93C5FD]/[0.075] bg-[#040812]/78 backdrop-blur-xl px-3.5 sm:px-6 py-3 sm:py-3.5">
               <ContextBox
                 context={chatContext}
                 onUpdateContext={onUpdateChatContext}

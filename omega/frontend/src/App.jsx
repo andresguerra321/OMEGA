@@ -627,7 +627,7 @@ export default function App() {
   const isHome = activeNav === 'inicio';
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#04070E] text-[#F8FAFC] select-none">
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#03050B] text-[#F8FAFC] select-none">
       <main className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text">
         {isHome ? (
           <SecurityPostureStage
@@ -659,12 +659,15 @@ export default function App() {
           />
         ) : (
           <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
-            <ChatAtmosphere dimmed={activeNav !== 'preguntar' || messages.length > 0} />
+            <ChatAtmosphere
+              variant="workspace"
+              dimmed={activeNav !== 'preguntar' || messages.length > 0}
+            />
 
             {/* Barra Principal Unificada — Navegación siempre centrada */}
             <header
               aria-label="Barra principal OMEGA"
-              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
+              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 px-3.5 sm:px-7 border-b border-[#93C5FD]/[0.08] bg-[#040812]/72 backdrop-blur-xl flex items-center justify-between gap-2 select-none ${
                 isDesktop
                   ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
                   : ''
@@ -767,7 +770,7 @@ export default function App() {
             {activeNav === 'preguntar' && (
               <header
                 aria-label="Controles de sesión de chat"
-                className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-white/[0.05] bg-[#060910]/85 flex items-center justify-between gap-2 select-none"
+                className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-[#93C5FD]/[0.07] bg-[#040812]/80 backdrop-blur-md flex items-center justify-between gap-2 select-none"
               >
                 <div className="relative min-w-0 flex-1 max-w-[210px] sm:max-w-[300px]">
                   <button
@@ -989,7 +992,7 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="apple-modal-in w-full max-w-[540px] rounded-[16px] border border-white/[0.12] bg-[#14171F]/94 backdrop-blur-2xl shadow-[0_32px_84px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.09)] overflow-hidden"
+            className="apple-modal-in w-full max-w-[540px] rounded-[16px] border border-[#93C5FD]/[0.15] bg-[#070D1B]/95 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(219,234,254,0.12),0_32px_84px_rgba(2,6,18,0.82)] overflow-hidden"
           >
             <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3.5">
               <Search strokeWidth={1.7} className="h-[18px] w-[18px] text-[#9BA2B0] shrink-0" />

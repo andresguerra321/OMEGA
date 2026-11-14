@@ -251,7 +251,7 @@ export function SettingsPanel({
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Barra superior segmentada (reemplaza cualquier menú lateral secundario) */}
-      <div className="shrink-0 border-b border-white/[0.07] bg-[#0C0E13]/85 backdrop-blur-xl px-3.5 sm:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+      <div className="shrink-0 border-b border-[#93C5FD]/[0.08] bg-[#050914]/82 backdrop-blur-xl px-3.5 sm:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <nav
           aria-label="Secciones de configuración"
           className="apple-segmented flex items-center gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto max-w-full rounded-[11px] p-1"
