@@ -3,7 +3,7 @@ import { useId } from 'react';
 /**
  * Emblema óptico reactivo de OMEGA en SVG multicapa.
  * Reproduce el escudo glassmórfico con cresta superior, faceta interna
- * y glifo Ω metálico pulido sobre núcleo refractado en #2F6FED.
+ * y glifo Ω metálico pulido sobre núcleo refractado en #1D4ED8.
  */
 export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
   const uid = useId().replace(/:/g, '');
@@ -21,9 +21,9 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
       className={`relative inline-flex items-center justify-center select-none shrink-0 ${className}`}
       aria-hidden="true"
     >
-      {/* Resplandor ambiental azul cobalto contenido (#2F6FED) */}
+      {/* Resplandor ambiental azul cobalto contenido (#1D4ED8) */}
       <div
-        className={`absolute inset-1 rounded-[14px] bg-[#2F6FED] blur-lg transition-all duration-500 ease-kowalski ${
+        className={`absolute inset-1 rounded-[14px] bg-[#1D4ED8] blur-lg transition-all duration-500 ease-kowalski ${
           isThinking
             ? 'omega-core-pulse opacity-55 scale-110'
             : 'opacity-25 scale-95'
@@ -61,8 +61,8 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
             gradientUnits="userSpaceOnUse"
           >
             <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.18" />
-            <stop offset="65%" stopColor="#8CA8E8" stopOpacity="0.06" />
-            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
+            <stop offset="65%" stopColor="#93C5FD" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="#1D4ED8" stopOpacity="0" />
           </linearGradient>
 
           {/* Bisel especular exterior de 1.25px */}
@@ -75,9 +75,9 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
             gradientUnits="userSpaceOnUse"
           >
             <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.72" />
-            <stop offset="32%" stopColor="#99BAFF" stopOpacity="0.45" />
-            <stop offset="72%" stopColor="#2F6FED" stopOpacity="0.58" />
-            <stop offset="100%" stopColor="#7AA7FF" stopOpacity="0.42" />
+            <stop offset="32%" stopColor="#93C5FD" stopOpacity="0.45" />
+            <stop offset="72%" stopColor="#1D4ED8" stopOpacity="0.58" />
+            <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.42" />
           </linearGradient>
 
           {/* Bisel interior de refracción */}
@@ -90,8 +90,8 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
             gradientUnits="userSpaceOnUse"
           >
             <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.28" />
-            <stop offset="50%" stopColor="#7AA7FF" stopOpacity="0.14" />
-            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0.32" />
+            <stop offset="50%" stopColor="#3B82F6" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="#1D4ED8" stopOpacity="0.32" />
           </linearGradient>
 
           {/* Núcleo interno azul cobalto reactivo */}
@@ -103,15 +103,15 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
           >
             <stop
               offset="0%"
-              stopColor="#2F6FED"
+              stopColor="#1D4ED8"
               stopOpacity={isThinking ? '0.82' : '0.48'}
             />
             <stop
               offset="55%"
-              stopColor="#2F6FED"
+              stopColor="#1D4ED8"
               stopOpacity={isThinking ? '0.32' : '0.16'}
             />
-            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
+            <stop offset="100%" stopColor="#1D4ED8" stopOpacity="0" />
           </radialGradient>
 
           {/* Acabado titanio/hielo metálico para la letra Omega */}
@@ -125,8 +125,8 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
           >
             <stop offset="0%" stopColor="#FFFFFF" />
             <stop offset="42%" stopColor="#DCE3F0" />
-            <stop offset="78%" stopColor="#9EB6E8" />
-            <stop offset="100%" stopColor="#6D93E3" />
+            <stop offset="78%" stopColor="#93C5FD" />
+            <stop offset="100%" stopColor="#3B82F6" />
           </linearGradient>
 
           {/* Contorno especular sutil del glifo */}
@@ -158,7 +158,7 @@ export function OmegaLogo({ size = 64, isThinking = false, className = '' }) {
           fill={`url(#${glassFacetId})`}
         />
 
-        {/* Cavidad interior con núcleo azul #2F6FED */}
+        {/* Cavidad interior con núcleo azul #1D4ED8 */}
         <path
           d="M40 10.2C45.2 13.3 52.4 15.4 61.5 16.8V37C61.5 51.3 52.2 62.3 40 68.4C27.8 62.3 18.5 51.3 18.5 37V16.8C27.6 15.4 34.8 13.3 40 10.2Z"
           fill={`url(#${coreGlowId})`}

@@ -1,7 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, ExternalLink, ShieldCheck, Search } from 'lucide-react';
 
-export function SourcesPanel({ citations = [], selectedCitation, onSelectCitation, onClose }) {
+import {
+  PanelSkeleton,
+  PanelErrorBanner,
+  PanelEmptyState,
+} from './PanelStatePrimitives';
+
+export function SourcesPanel({
+  citations = [],
+  selectedCitation,
+  onSelectCitation,
+  onClose,
+  isLoading = false,
+  error = '',
+  onRetry,
+  onSuggestPrompt,
+}) {
   const [filter, setFilter] = useState('');
   const cardRefs = useRef(new Map());
 
@@ -28,11 +43,11 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
         {/* Header Inspector */}
         <div className="h-12 px-4 border-b border-white/[0.06] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldCheck strokeWidth={1.7} className="h-4 w-4 text-[#5E9BFF]" />
+            <ShieldCheck strokeWidth={1.7} className="h-4 w-4 text-[#3B82F6]" />
             <span className="text-[13.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
               Evidencia documental
             </span>
-            <span className="font-tech text-[11.5px] rounded-full bg-[#2F6FED]/18 border border-[#2F6FED]/35 px-2 py-0.5 text-[#8AB4FF]">
+            <span className="font-tech text-[11.5px] rounded-full bg-[#1D4ED8]/18 border border-[#1D4ED8]/35 px-2 py-0.5 text-[#93C5FD]">
               {citations.length}
             </span>
           </div>
@@ -57,7 +72,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filtrar por término u organización..."
-                className="apple-well w-full rounded-[9px] py-1.5 pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none transition-colors duration-150"
+                className="apple-well w-full rounded-[9px] py-1.5 pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none transition-colors duration-150"
               />
             </div>
           </div>
@@ -65,10 +80,31 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
 
         {/* Lista de fragmentos */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-          {filtered.length === 0 ? (
-            <p className="p-4 text-center text-[13px] text-[#8E8E93]">
-              No hay fuentes coincidentes con el filtro.
-            </p>
+          {error && <PanelErrorBanner message={error} onRetry={onRetry} />}
+
+          {isLoading && (
+            <PanelSkeleton
+              label={citations.length > 0 ? 'Buscando evidencia adicional...' : 'Recuperando fuentes del corpus...'}
+              lines={citations.length > 0 ? 2 : 3}
+            />
+          )}
+
+          {!isLoading && !error && filtered.length === 0 ? (
+            citations.length === 0 ? (
+              <PanelEmptyState
+                icon={ExternalLink}
+                title="Aún no hay fuentes citadas"
+                description="Haz una pregunta en el Asistente para inspeccionar aquí los fragmentos verificables de Citizen Lab, Amnesty Tech y Google TAG."
+                actionLabel={onSuggestPrompt ? 'Probar consulta de ejemplo' : undefined}
+                onAction={onSuggestPrompt}
+              />
+            ) : (
+              <PanelEmptyState
+                icon={ExternalLink}
+                title="Sin fuentes coincidentes"
+                description="Ningún fragmento recuperado coincide con la búsqueda o filtro actual."
+              />
+            )
           ) : (
             filtered.map((cit, idx) => {
               const isSelected =
@@ -86,13 +122,13 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                   style={{ animationDelay: `${Math.min(idx * 30, 180)}ms` }}
                   className={`animate-fade-up rounded-[12px] border p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 ease-apple hover:-translate-y-0.5 active:scale-[0.99] ${
                     isSelected
-                      ? 'border-[#2F6FED]/60 bg-[#2F6FED]/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                      ? 'border-[#1D4ED8]/60 bg-[#1D4ED8]/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
                       : 'border-white/[0.075] bg-white/[0.025] hover:border-white/[0.14] hover:bg-white/[0.045]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2 text-[12px]">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-tech font-medium text-[#8AB4FF] bg-[#2F6FED]/18 border border-[#2F6FED]/35 px-1.5 py-0.5 rounded-[5px]">
+                      <span className="font-tech font-medium text-[#93C5FD] bg-[#1D4ED8]/18 border border-[#1D4ED8]/35 px-1.5 py-0.5 rounded-[5px]">
                         [{cit.index}]
                       </span>
                       <span className="font-medium tracking-[-0.01em] text-[#F5F5F7] truncate">
@@ -113,7 +149,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                   </div>
 
                   <div className="flex items-center justify-between pt-0.5 text-[11.5px] text-[#8E8E93]">
-                    <span className="font-tech text-[#8AB4FF]">
+                    <span className="font-tech text-[#93C5FD]">
                       {(Number(cit.similarity || 0) * 100).toFixed(1)}% ·{' '}
                       <span className="text-[#8E8E93]">{cit.retrieval_method || 'RRF'}</span>
                     </span>
@@ -123,7 +159,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-[#8AB4FF] hover:text-[#A9C7FF] hover:underline underline-offset-2 transition-colors"
+                        className="inline-flex items-center gap-1 text-[#93C5FD] hover:text-[#93C5FD] hover:underline underline-offset-2 transition-colors"
                       >
                         <span>Abrir reporte</span>
                         <ExternalLink className="h-3 w-3" />

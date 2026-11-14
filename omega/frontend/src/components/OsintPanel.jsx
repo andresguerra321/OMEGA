@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, Copy, Loader2, RefreshCw, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Globe,
+  Link2,
+  Loader2,
+  RefreshCw,
+  Shield,
+  Smartphone,
+  X,
+} from 'lucide-react';
 import {
   createOsintAsset,
   deleteOsintAsset,
@@ -7,6 +18,12 @@ import {
   scanOsintAsset,
 } from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
+import {
+  ActionConfirmationBanner,
+  PanelEmptyState,
+  PanelErrorBanner,
+  PanelSkeleton,
+} from './PanelStatePrimitives';
 
 function formatExposedData(val) {
   if (Array.isArray(val)) return val.join(', ');
@@ -14,8 +31,17 @@ function formatExposedData(val) {
   return 'Metadatos / Credenciales';
 }
 
-export function OsintPanel({ onAskInChat }) {
+export function OsintPanel({
+  onAskInChat,
+  onVerifyLink,
+  onAuditDevice,
+  onOpenThreat,
+  initialAsset = null,
+  initialJumpKey = 0,
+}) {
   const [assets, setAssets] = useState([]);
+  const [loadingAssets, setLoadingAssets] = useState(true);
+  const [loadAssetsError, setLoadAssetsError] = useState('');
   const [assetType, setAssetType] = useState('institutional_email');
   const [assetValue, setAssetValue] = useState('');
   const [consentChecked, setConsentChecked] = useState(false);
@@ -24,24 +50,61 @@ export function OsintPanel({ onAskInChat }) {
   const [activeAsset, setActiveAsset] = useState(null);
   const [report, setReport] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [confirmationNote, setConfirmationNote] = useState(null);
   const [copiedSubdomain, setCopiedSubdomain] = useState(null);
+  const lastJumpKeyRef = useRef(0);
   const reportContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (!initialJumpKey || !initialAsset?.value || initialJumpKey === lastJumpKeyRef.current) {
+      return undefined;
+    }
+    lastJumpKeyRef.current = initialJumpKey;
+    const timer = setTimeout(() => {
+      setReport(null);
+      setActiveAsset(null);
+      setErrorMsg('');
+      setAssetType(initialAsset.type === 'institutional_email' ? 'institutional_email' : 'domain');
+      setAssetValue(String(initialAsset.value).trim());
+      setConsentChecked(false);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [initialJumpKey, initialAsset]);
 
   useScrollReveal(reportContainerRef, [report?.asset_value, isScanning]);
 
+  async function loadSessionAssets() {
+    setLoadingAssets(true);
+    setLoadAssetsError('');
+    try {
+      const res = await fetchOsintAssets();
+      setAssets(res.assets || []);
+    } catch (err) {
+      setLoadAssetsError(
+        err?.message || 'No se pudieron cargar los activos autorizados de la sesión.',
+      );
+    } finally {
+      setLoadingAssets(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
-    async function loadSessionAssets() {
-      try {
-        const res = await fetchOsintAssets();
-        if (!cancelled) {
-          setAssets(res.assets || []);
-        }
-      } catch {
-        // Backend offline handled on explicit action
-      }
-    }
-    loadSessionAssets();
+    fetchOsintAssets()
+      .then((res) => {
+        if (cancelled) return;
+        setLoadAssetsError('');
+        setAssets(res.assets || []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadAssetsError(
+          err?.message || 'No se pudieron cargar los activos autorizados de la sesión.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAssets(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -50,10 +113,21 @@ export function OsintPanel({ onAskInChat }) {
   async function executeScan(asset) {
     setIsScanning(true);
     setErrorMsg('');
+    setConfirmationNote(null);
     try {
       const scanRes = await scanOsintAsset(asset.id);
       setActiveAsset(asset);
       setReport(scanRes);
+      const hits = (scanRes.cti_ioc_matches || []).length;
+      const spfOk = scanRes.dns_posture?.spf_configured;
+      const dmarcOk = scanRes.dns_posture?.dmarc_configured;
+      setConfirmationNote({
+        tone: hits > 0 ? 'alert' : 'clean',
+        message:
+          hits > 0
+            ? `Listo: auditoría completada para ${scanRes.asset_value} — encontramos ${hits} coincidencia(s) con infraestructura spyware.`
+            : `Listo: auditoría pasiva completada para ${scanRes.asset_value} — sin coincidencias spyware (SPF: ${spfOk ? 'OK' : 'ausente'}, DMARC: ${dmarcOk ? 'OK' : 'ausente'}).`,
+      });
     } catch (err) {
       setErrorMsg(err?.message || `No se pudo auditar ${asset.asset_value}.`);
     } finally {
@@ -68,6 +142,7 @@ export function OsintPanel({ onAskInChat }) {
 
     setIsScanning(true);
     setErrorMsg('');
+    setConfirmationNote(null);
     try {
       const created = await createOsintAsset({
         asset_type: assetType,
@@ -75,6 +150,7 @@ export function OsintPanel({ onAskInChat }) {
         explicit_consent: true,
       });
       setAssets((prev) => [created, ...prev.filter((a) => a.id !== created.id)]);
+      setLoadAssetsError('');
       setAssetValue('');
       setConsentChecked(false);
       await executeScan(created);
@@ -90,6 +166,14 @@ export function OsintPanel({ onAskInChat }) {
     try {
       await deleteOsintAsset(asset.id);
       setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+      if (activeAsset?.id === asset.id) {
+        setActiveAsset(null);
+        setReport(null);
+      }
+      setConfirmationNote({
+        tone: 'info',
+        message: `Listo: se eliminó ${asset.asset_value} de esta sesión.`,
+      });
     } catch (err) {
       setErrorMsg(err?.message || 'No se pudo eliminar el activo.');
     }
@@ -154,7 +238,7 @@ export function OsintPanel({ onAskInChat }) {
                   ].join('\n');
                   onAskInChat(prompt);
                 }}
-                className="inline-flex items-center rounded-[9px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 active:scale-[0.97] transition-all cursor-pointer"
+                className="inline-flex items-center rounded-[9px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
               >
                 Investigar en Preguntar
               </button>
@@ -174,7 +258,19 @@ export function OsintPanel({ onAskInChat }) {
         </header>
 
         {errorMsg && (
-          <p className="text-[12.5px] text-[#FF453A]">{errorMsg}</p>
+          <PanelErrorBanner
+            message={errorMsg}
+            onRetry={activeAsset ? () => executeScan(activeAsset) : undefined}
+            onDismiss={() => setErrorMsg('')}
+          />
+        )}
+
+        {confirmationNote && (
+          <ActionConfirmationBanner
+            message={confirmationNote.message}
+            tone={confirmationNote.tone}
+            onDismiss={() => setConfirmationNote(null)}
+          />
         )}
 
         {/* Secciones Agrupadas Apple Obsidian */}
@@ -193,20 +289,57 @@ export function OsintPanel({ onAskInChat }) {
                 </div>
               ) : (
                 <div className="divide-y divide-white/[0.06]">
-                  <div className="px-4 py-3 text-[13px] font-medium text-[#FF6961] bg-[#FF453A]/10">
-                    Se detectaron {ctiMatches.length} coincidencia{ctiMatches.length === 1 ? '' : 's'} con infraestructura CTI pública
+                  <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[13px] font-medium text-[#FF6961] bg-[#FF453A]/10">
+                    <span>
+                      Se detectaron {ctiMatches.length} coincidencia{ctiMatches.length === 1 ? '' : 's'} con infraestructura CTI pública
+                    </span>
+                    {onAuditDevice && (
+                      <button
+                        type="button"
+                        onClick={() => onAuditDevice('pc')}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#FF453A]/40 bg-[#FF453A]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#FFD0CE] hover:bg-[#FF453A]/25 active:scale-[0.97] transition-all cursor-pointer"
+                      >
+                        <Smartphone className="h-3.5 w-3.5" />
+                        <span>Revisar dispositivo</span>
+                      </button>
+                    )}
                   </div>
                   {ctiMatches.map((m, idx) => (
                     <div
                       key={`${m.ioc_value}-${idx}`}
-                      className="px-4 py-3 flex flex-wrap items-center justify-between gap-2"
+                      className="px-4 py-3 flex flex-wrap items-center justify-between gap-2.5"
                     >
-                      <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
-                        {m.ioc_value}
-                      </span>
-                      <span className="text-[12px] text-[#8E8E93] break-words">
-                        {m.spyware_family} · {m.source_report}
-                      </span>
+                      <div className="min-w-0 space-y-0.5">
+                        <span className="font-tech text-[13px] text-[#F5F5F7] break-all block">
+                          {m.ioc_value}
+                        </span>
+                        <span className="text-[12px] text-[#8E8E93] break-words block">
+                          {m.spyware_family} · {m.source_report}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        {onVerifyLink && (
+                          <button
+                            type="button"
+                            onClick={() => onVerifyLink(m.ioc_value)}
+                            className="inline-flex items-center gap-1 rounded-[7px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.96] transition-all cursor-pointer"
+                          >
+                            <Link2 className="h-3 w-3" />
+                            <span>Inspeccionar enlace</span>
+                          </button>
+                        )}
+                        {onOpenThreat && m.spyware_family && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenThreat(m.spyware_family)}
+                            className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#D1D1D6] hover:text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
+                          >
+                            <Shield className="h-3 w-3" />
+                            <span>Ver campaña</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -314,23 +447,36 @@ export function OsintPanel({ onAskInChat }) {
                         {sub}
                       </span>
 
-                      <button
-                        type="button"
-                        onClick={() => handleCopySubdomain(sub)}
-                        className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#8E8E93] hover:text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
-                      >
-                        {copiedSubdomain === sub ? (
-                          <>
-                            <Check className="h-3 w-3 text-[#5E9BFF]" />
-                            <span className="text-[#8AB4FF]">Copiado</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3" />
-                            <span>Copiar</span>
-                          </>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {onVerifyLink && (
+                          <button
+                            type="button"
+                            onClick={() => onVerifyLink(sub)}
+                            title="Verificar subdominio en el módulo de enlaces sin contacto HTTP"
+                            className="inline-flex items-center gap-1 rounded-[7px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-2.5 py-1 text-[11px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/22 active:scale-[0.96] transition-all cursor-pointer"
+                          >
+                            <Link2 className="h-3 w-3" />
+                            <span>Verificar</span>
+                          </button>
                         )}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopySubdomain(sub)}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#8E8E93] hover:text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
+                        >
+                          {copiedSubdomain === sub ? (
+                            <>
+                              <Check className="h-3 w-3 text-[#3B82F6]" />
+                              <span className="text-[#93C5FD]">Copiado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              <span>Copiar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -403,7 +549,7 @@ export function OsintPanel({ onAskInChat }) {
               <button
                 type="submit"
                 disabled={!assetValue.trim() || !consentChecked || isScanning}
-                className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+                className="h-9 rounded-[10px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
               >
                 {isScanning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>Auditar</span>
@@ -417,7 +563,7 @@ export function OsintPanel({ onAskInChat }) {
                 type="checkbox"
                 checked={consentChecked}
                 onChange={(e) => setConsentChecked(e.target.checked)}
-                className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#2F6FED] cursor-pointer shrink-0"
+                className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#1D4ED8] cursor-pointer shrink-0"
               />
               <span>Confirmo que soy titular de este activo o tengo autorización explícita.</span>
             </label>
@@ -425,17 +571,49 @@ export function OsintPanel({ onAskInChat }) {
         </form>
 
         {errorMsg && (
-          <p className="mt-3 text-[12.5px] text-[#FF453A] text-center">{errorMsg}</p>
+          <PanelErrorBanner
+            message={errorMsg}
+            onDismiss={() => setErrorMsg('')}
+            className="mt-3"
+          />
         )}
 
-        {assets.length > 0 && (
+        {confirmationNote && (
+          <ActionConfirmationBanner
+            message={confirmationNote.message}
+            tone={confirmationNote.tone}
+            onDismiss={() => setConfirmationNote(null)}
+            className="mt-3"
+          />
+        )}
+
+        {loadingAssets ? (
+          <PanelSkeleton
+            label="Cargando activos autorizados en sesión..."
+            lines={2}
+            className="mt-5"
+          />
+        ) : loadAssetsError ? (
+          <PanelErrorBanner
+            message={loadAssetsError}
+            onRetry={loadSessionAssets}
+            className="mt-5"
+          />
+        ) : assets.length === 0 ? (
+          <PanelEmptyState
+            icon={Globe}
+            title="Aún no has auditado ningún dominio ni correo"
+            description="Escribe tu activo institucional arriba, confirma tu autorización y pulsa Auditar para iniciar."
+            className="mt-5"
+          />
+        ) : (
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             {assets.map((asset, idx) => (
               <div
                 key={asset.id}
                 onClick={() => executeScan(asset)}
                 style={{ animationDelay: `${100 + idx * 35}ms` }}
-                className="animate-fade-up font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#E5E5EA] hover:border-[#2F6FED]/50 hover:bg-white/[0.07] hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer transition-all max-w-full"
+                className="animate-fade-up font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#E5E5EA] hover:border-[#1D4ED8]/50 hover:bg-white/[0.07] hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer transition-all max-w-full"
               >
                 <span className="truncate">{asset.asset_value}</span>
                 <button

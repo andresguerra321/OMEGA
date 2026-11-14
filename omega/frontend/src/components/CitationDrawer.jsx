@@ -8,9 +8,9 @@ export function CitationDrawer({ citation, onClose }) {
       <div className="p-5 space-y-4 overflow-y-auto">
         <div className="flex items-center justify-between border-b border-white/[0.06] pb-3.5">
           <div className="flex items-center gap-2 text-[13.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
-            <ShieldCheck className="h-4 w-4 text-[#5E9BFF]" />
+            <ShieldCheck className="h-4 w-4 text-[#3B82F6]" />
             <span>Fuente verificada</span>
-            <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2 py-0.5 text-[11px] text-[#8AB4FF]">
+            <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2 py-0.5 text-[11px] text-[#93C5FD]">
               [{citation.index}]
             </span>
           </div>
@@ -35,7 +35,7 @@ export function CitationDrawer({ citation, onClose }) {
             <span className="font-tech rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-[#8E8E93]">
               p.{citation.page}
             </span>
-            <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[#8AB4FF]">
+            <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[#93C5FD]">
               {(Number(citation.similarity || 0) * 100).toFixed(1)}% sim
             </span>
             {citation.retrieval_method && (
@@ -62,7 +62,7 @@ export function CitationDrawer({ citation, onClose }) {
             href={citation.source_url}
             target="_blank"
             rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] px-3 py-2 text-[13px] font-medium text-white hover:bg-[#3B7BF2] transition-colors duration-150"
+            className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] px-3 py-2 text-[13px] font-medium text-white hover:bg-[#3B82F6] transition-colors duration-150"
           >
             <FileText className="h-3.5 w-3.5" />
             <span>Abrir publicación original</span>

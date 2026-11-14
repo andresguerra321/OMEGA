@@ -16,11 +16,11 @@ export function AndroidStepVisual({ step, adbReady = false }) {
           Acerca del teléfono
         </text>
         {/* Fila resaltada: Número de compilación (tocar 7 veces) */}
-        <rect x="54" y="32" width="112" height="21" rx="5" fill="rgba(47,111,237,0.16)" stroke="rgba(138,180,255,0.45)" strokeWidth="0.9" />
+        <rect x="54" y="32" width="112" height="21" rx="5" fill="rgba(29, 78, 216,0.16)" stroke="rgba(147, 197, 253,0.45)" strokeWidth="0.9" />
         <text x="60" y="45" fill="#F5F5F7" fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
           N.º de compilación
         </text>
-        <rect x="139" y="37" width="22" height="11" rx="5.5" fill="#2F6FED" />
+        <rect x="139" y="37" width="22" height="11" rx="5.5" fill="#1D4ED8" />
         <text x="150" y="44.5" textAnchor="middle" fill="#FFFFFF" fontSize="6.5" fontWeight="700" fontFamily="system-ui, sans-serif">
           ×7
         </text>
@@ -42,12 +42,12 @@ export function AndroidStepVisual({ step, adbReady = false }) {
         {/* Laptop / PC */}
         <rect x="20" y="23" width="58" height="39" rx="5" fill="#16161D" stroke="rgba(255,255,255,0.16)" />
         <rect x="14" y="63" width="70" height="5" rx="2.5" fill="#25252E" />
-        <rect x="27" y="31" width="44" height="23" rx="3" fill={adbReady ? 'rgba(48,209,88,0.14)' : 'rgba(47,111,237,0.16)'} />
-        <text x="49" y="45" textAnchor="middle" fill={adbReady ? '#30D158' : '#8AB4FF'} fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
+        <rect x="27" y="31" width="44" height="23" rx="3" fill={adbReady ? 'rgba(48,209,88,0.14)' : 'rgba(29, 78, 216,0.16)'} />
+        <text x="49" y="45" textAnchor="middle" fill={adbReady ? '#30D158' : '#93C5FD'} fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
           {adbReady ? 'PC listo ✓' : 'Conector PC'}
         </text>
         {/* Cable USB */}
-        <line x1="82" y1="44" x2="146" y2="44" stroke={adbReady ? '#30D158' : '#2F6FED'} strokeWidth="2" strokeDasharray={adbReady ? 'none' : '4 3'} />
+        <line x1="82" y1="44" x2="146" y2="44" stroke={adbReady ? '#30D158' : '#1D4ED8'} strokeWidth="2" strokeDasharray={adbReady ? 'none' : '4 3'} />
         <rect x="101" y="36" width="26" height="15" rx="7.5" fill="#181820" stroke="rgba(255,255,255,0.15)" />
         <text x="114" y="46" textAnchor="middle" fill="#D1D1D6" fontSize="6.5" fontWeight="600" fontFamily="system-ui, sans-serif">
           USB
@@ -58,7 +58,7 @@ export function AndroidStepVisual({ step, adbReady = false }) {
         <text x="173" y="49" textAnchor="middle" fill="#E5E5EA" fontSize="6.2" fontFamily="system-ui, sans-serif">
           Transferir
         </text>
-        <text x="173" y="58" textAnchor="middle" fill="#8AB4FF" fontSize="6.2" fontFamily="system-ui, sans-serif">
+        <text x="173" y="58" textAnchor="middle" fill="#93C5FD" fontSize="6.2" fontFamily="system-ui, sans-serif">
           archivos
         </text>
         <text x="110" y="94" textAnchor="middle" fill="#8E8E93" fontSize="6.2" fontFamily="system-ui, sans-serif">
@@ -80,7 +80,7 @@ export function AndroidStepVisual({ step, adbReady = false }) {
         Autoriza la revisión de seguridad de solo lectura.
       </text>
       {/* Casilla marcada */}
-      <rect x="40" y="49" width="10" height="10" rx="2.5" fill="#2F6FED" />
+      <rect x="40" y="49" width="10" height="10" rx="2.5" fill="#1D4ED8" />
       <path d="M42.3 54l2 2 3.5-4" fill="none" stroke="#FFFFFF" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       <text x="55" y="56.5" fill="#D1D1D6" fontSize="6.5" fontFamily="system-ui, sans-serif">
         Confiar siempre en esta computadora
@@ -89,8 +89,8 @@ export function AndroidStepVisual({ step, adbReady = false }) {
       <text x="118" y="78" fill="#8E8E93" fontSize="6.8" fontFamily="system-ui, sans-serif">
         Cancelar
       </text>
-      <rect x="148" y="66" width="36" height="17" rx="6" fill="#2F6FED" />
-      <circle cx="166" cy="74.5" r="11" fill="none" stroke="rgba(138,180,255,0.55)" strokeWidth="1" />
+      <rect x="148" y="66" width="36" height="17" rx="6" fill="#1D4ED8" />
+      <circle cx="166" cy="74.5" r="11" fill="none" stroke="rgba(147, 197, 253,0.55)" strokeWidth="1" />
       <text x="166" y="77" textAnchor="middle" fill="#FFFFFF" fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
         Permitir
       </text>
@@ -107,13 +107,13 @@ export function IosStepVisual({ step }) {
         <rect x="14" y="11" width="60" height="82" rx="11" fill="#14141A" stroke="rgba(255,255,255,0.16)" />
         <rect x="35" y="16" width="18" height="4.5" rx="2.2" fill="#09090C" />
         {/* Botones laterales */}
-        <rect x="10.5" y="28" width="3.5" height="11" rx="1.5" fill="#8AB4FF" />
-        <rect x="10.5" y="43" width="3.5" height="11" rx="1.5" fill="#8AB4FF" />
-        <rect x="74" y="34" width="3.5" height="15" rx="1.5" fill="#8AB4FF" />
+        <rect x="10.5" y="28" width="3.5" height="11" rx="1.5" fill="#93C5FD" />
+        <rect x="10.5" y="43" width="3.5" height="11" rx="1.5" fill="#93C5FD" />
+        <rect x="74" y="34" width="3.5" height="15" rx="1.5" fill="#93C5FD" />
         <text x="44" y="51" textAnchor="middle" fill="#F5F5F7" fontSize="6" fontWeight="600" fontFamily="system-ui, sans-serif">
           Vol+ · Vol-
         </text>
-        <text x="44" y="61" textAnchor="middle" fill="#8AB4FF" fontSize="5.8" fontFamily="system-ui, sans-serif">
+        <text x="44" y="61" textAnchor="middle" fill="#93C5FD" fontSize="5.8" fontFamily="system-ui, sans-serif">
           + Lateral (1s)
         </text>
         {/* Ruta en Ajustes */}
@@ -129,8 +129,8 @@ export function IosStepVisual({ step }) {
         <text x="99" y="61" fill="#E5E5EA" fontSize="6.3" fontFamily="system-ui, sans-serif">
           2. Análisis y mejoras
         </text>
-        <rect x="93" y="70" width="105" height="14" rx="4" fill="rgba(47,111,237,0.18)" stroke="rgba(138,180,255,0.4)" strokeWidth="0.8" />
-        <text x="99" y="79" fill="#8AB4FF" fontSize="6.3" fontWeight="600" fontFamily="system-ui, sans-serif">
+        <rect x="93" y="70" width="105" height="14" rx="4" fill="rgba(29, 78, 216,0.18)" stroke="rgba(147, 197, 253,0.4)" strokeWidth="0.8" />
+        <text x="99" y="79" fill="#93C5FD" fontSize="6.3" fontWeight="600" fontFamily="system-ui, sans-serif">
           3. Datos de análisis
         </text>
       </svg>
@@ -157,8 +157,8 @@ export function IosStepVisual({ step }) {
         <text x="72" y="81" textAnchor="middle" fill="#8E8E93" fontSize="7" fontFamily="system-ui, sans-serif">
           No confiar
         </text>
-        <rect x="116" y="69" width="64" height="19" rx="6" fill="rgba(47,111,237,0.22)" />
-        <text x="148" y="81" textAnchor="middle" fill="#8AB4FF" fontSize="7.2" fontWeight="700" fontFamily="system-ui, sans-serif">
+        <rect x="116" y="69" width="64" height="19" rx="6" fill="rgba(29, 78, 216,0.22)" />
+        <text x="148" y="81" textAnchor="middle" fill="#93C5FD" fontSize="7.2" fontWeight="700" fontFamily="system-ui, sans-serif">
           Confiar ✓
         </text>
       </svg>
@@ -168,7 +168,7 @@ export function IosStepVisual({ step }) {
   return (
     <svg viewBox="0 0 220 104" className="w-full h-[80px]" role="img" aria-label="Análisis en memoria sin guardar archivos privados">
       <rect x="1" y="1" width="218" height="102" rx="10" fill="#0B0B0E" stroke="rgba(255,255,255,0.08)" />
-      <rect x="26" y="14" width="168" height="76" rx="10" fill="rgba(47,111,237,0.07)" stroke="rgba(47,111,237,0.4)" strokeDasharray="4 3" />
+      <rect x="26" y="14" width="168" height="76" rx="10" fill="rgba(29, 78, 216,0.07)" stroke="rgba(29, 78, 216,0.4)" strokeDasharray="4 3" />
       {/* Archivo sysdiagnose */}
       <rect x="52" y="26" width="116" height="24" rx="6" fill="#16161E" stroke="rgba(255,255,255,0.14)" />
       <circle cx="66" cy="38" r="6" fill="rgba(48,209,88,0.16)" />
@@ -194,12 +194,12 @@ export function PcStepVisual({ step }) {
         <rect x="1" y="1" width="218" height="102" rx="10" fill="#0B0B0E" stroke="rgba(255,255,255,0.08)" />
         <rect x="24" y="20" width="64" height="44" rx="6" fill="#16161D" stroke="rgba(255,255,255,0.16)" />
         <rect x="16" y="65" width="80" height="5" rx="2.5" fill="#25252E" />
-        <rect x="31" y="28" width="50" height="28" rx="3" fill="rgba(47,111,237,0.16)" />
-        <text x="56" y="44.5" textAnchor="middle" fill="#8AB4FF" fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
+        <rect x="31" y="28" width="50" height="28" rx="3" fill="rgba(29, 78, 216,0.16)" />
+        <text x="56" y="44.5" textAnchor="middle" fill="#93C5FD" fontSize="7" fontWeight="600" fontFamily="system-ui, sans-serif">
           Red TCP
         </text>
-        <line x1="94" y1="42" x2="136" y2="42" stroke="#2F6FED" strokeWidth="1.8" strokeDasharray="3 3" />
-        <rect x="138" y="18" width="58" height="48" rx="8" fill="#14141A" stroke="rgba(138,180,255,0.35)" />
+        <line x1="94" y1="42" x2="136" y2="42" stroke="#1D4ED8" strokeWidth="1.8" strokeDasharray="3 3" />
+        <rect x="138" y="18" width="58" height="48" rx="8" fill="#14141A" stroke="rgba(147, 197, 253,0.35)" />
         <text x="167" y="38" textAnchor="middle" fill="#F5F5F7" fontSize="6.4" fontWeight="600" fontFamily="system-ui, sans-serif">
           CTI + YARA
         </text>
@@ -222,8 +222,8 @@ export function PcStepVisual({ step }) {
         <text x="41" y="32" fill="#E5E5EA" fontSize="6.4" fontFamily="system-ui, sans-serif">
           ✓ Procesos en Temp / AppData y firma digital
         </text>
-        <rect x="33" y="43" width="154" height="17" rx="4" fill="rgba(47,111,237,0.14)" />
-        <text x="41" y="54" fill="#8AB4FF" fontSize="6.4" fontWeight="600" fontFamily="system-ui, sans-serif">
+        <rect x="33" y="43" width="154" height="17" rx="4" fill="rgba(29, 78, 216,0.14)" />
+        <text x="41" y="54" fill="#93C5FD" fontSize="6.4" fontWeight="600" fontFamily="system-ui, sans-serif">
           ✓ Eventos ocultos WMI y Tareas Programadas
         </text>
         <rect x="33" y="65" width="154" height="17" rx="4" fill="rgba(255,255,255,0.04)" />

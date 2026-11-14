@@ -10,20 +10,37 @@ import {
   FileText,
   Download,
   Globe,
+  Link2,
+  Smartphone,
 } from 'lucide-react';
 import { fetchCampaigns, fetchCampaignDetail } from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
+import {
+  ActionConfirmationBanner,
+  PanelEmptyState,
+  PanelErrorBanner,
+  PanelSkeleton,
+} from './PanelStatePrimitives';
 
-export function CampaignsPanel({ onAskInChat }) {
+export function CampaignsPanel({
+  onAskInChat,
+  onVerifyLink,
+  onAuditDevice,
+  initialSearch = '',
+  initialSearchKey = 0,
+}) {
   const [campaigns, setCampaigns] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [listError, setListError] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch || '');
   const [familyFilter, setFamilyFilter] = useState('ALL');
 
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [actionNote, setActionNote] = useState('');
 
   const [dossierTab, setDossierTab] = useState('cves'); // 'cves' | 'iocs' | 'sources'
   const [cveSearch, setCveSearch] = useState('');
@@ -32,50 +49,114 @@ export function CampaignsPanel({ onAskInChat }) {
   const [copiedValue, setCopiedValue] = useState('');
   const [showWebExtractor, setShowWebExtractor] = useState(false);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const lastSearchKeyRef = useRef(0);
   const dossierRef = useRef(null);
+
+  useEffect(() => {
+    if (!initialSearchKey || initialSearchKey === lastSearchKeyRef.current) return undefined;
+    lastSearchKeyRef.current = initialSearchKey;
+    const q = String(initialSearch || '').trim();
+    const timer = setTimeout(() => {
+      setFamilyFilter('ALL');
+      setSearchQuery(q);
+      if (q && campaigns.length > 0) {
+        const lower = q.toLowerCase();
+        const hit = campaigns.find(
+          (c) =>
+            (c.name || '').toLowerCase().includes(lower) ||
+            (c.spyware_family || '').toLowerCase().includes(lower) ||
+            (c.suspected_actor || '').toLowerCase().includes(lower),
+        );
+        if (hit) {
+          setSelectedId(hit.id);
+          setMobileShowDetail(true);
+        }
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [initialSearchKey, initialSearch, campaigns]);
 
   useScrollReveal(dossierRef, [selectedId, dossierTab, showWebExtractor, loadingDetail, mobileShowDetail]);
 
+  async function loadCampaigns() {
+    setLoadingList(true);
+    setListError('');
+    try {
+      const data = await fetchCampaigns();
+      const list = Array.isArray(data?.campaigns) ? data.campaigns : [];
+      setCampaigns(list);
+      setSelectedId((prev) => {
+        const nextId = prev && list.some((c) => c.id === prev) ? prev : list[0]?.id ?? null;
+        if (nextId && nextId !== prev) {
+          setLoadingDetail(true);
+        }
+        return nextId;
+      });
+    } catch (err) {
+      setCampaigns([]);
+      setSelectedId(null);
+      setListError(err?.message || 'No se pudo cargar el catálogo de amenazas.');
+    } finally {
+      setLoadingList(false);
+    }
+  }
+
   useEffect(() => {
-    let active = true;
+    let cancelled = false;
     fetchCampaigns()
       .then((data) => {
-        if (!active) return;
+        if (cancelled) return;
         const list = Array.isArray(data?.campaigns) ? data.campaigns : [];
+        setListError('');
         setCampaigns(list);
-        if (list.length > 0) {
-          setSelectedId(list[0].id);
+        const firstId = list[0]?.id ?? null;
+        if (firstId) {
+          setLoadingDetail(true);
+          setSelectedId(firstId);
         }
       })
-      .catch(() => {
-        if (!active) return;
+      .catch((err) => {
+        if (cancelled) return;
         setCampaigns([]);
         setSelectedId(null);
+        setListError(err?.message || 'No se pudo cargar el catálogo de amenazas.');
       })
       .finally(() => {
-        if (active) setLoadingList(false);
+        if (!cancelled) setLoadingList(false);
       });
-
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
-
-    let active = true;
+  async function loadDetail(campaignId) {
+    if (!campaignId) return;
     setLoadingDetail(true);
-    setCveSearch('');
-    setIocSearch('');
-    setIocTypeFilter('ALL');
+    setDetailError('');
+    try {
+      const data = await fetchCampaignDetail(campaignId);
+      setDetail(data || null);
+      if (data) {
+        if ((data.cves?.length || 0) > 0) setDossierTab('cves');
+        else if ((data.iocs?.length || 0) > 0) setDossierTab('iocs');
+        else if ((data.reports?.length || 0) > 0) setDossierTab('sources');
+        else setDossierTab('cves');
+      }
+    } catch (err) {
+      setDetail(null);
+      setDetailError(err?.message || 'No se pudo cargar el expediente de la amenaza.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
 
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    let cancelled = false;
     fetchCampaignDetail(selectedId)
       .then((data) => {
-        if (!active) return;
+        if (cancelled) return;
+        setDetailError('');
         setDetail(data || null);
         if (data) {
           if ((data.cves?.length || 0) > 0) setDossierTab('cves');
@@ -84,15 +165,16 @@ export function CampaignsPanel({ onAskInChat }) {
           else setDossierTab('cves');
         }
       })
-      .catch(() => {
-        if (active) setDetail(null);
+      .catch((err) => {
+        if (cancelled) return;
+        setDetail(null);
+        setDetailError(err?.message || 'No se pudo cargar el expediente de la amenaza.');
       })
       .finally(() => {
-        if (active) setLoadingDetail(false);
+        if (!cancelled) setLoadingDetail(false);
       });
-
     return () => {
-      active = false;
+      cancelled = true;
     };
   }, [selectedId]);
 
@@ -108,6 +190,7 @@ export function CampaignsPanel({ onAskInChat }) {
       const matchesSearch =
         !q ||
         c.name.toLowerCase().includes(q) ||
+        (c.spyware_family || '').toLowerCase().includes(q) ||
         (c.suspected_actor || '').toLowerCase().includes(q) ||
         (c.target_sector || '').toLowerCase().includes(q) ||
         (c.cves || []).some((cve) => cve.toLowerCase().includes(q));
@@ -186,21 +269,55 @@ export function CampaignsPanel({ onAskInChat }) {
     a.download = `omega_${slug}.md`;
     a.click();
     URL.revokeObjectURL(url);
+    setActionNote(`Listo: expediente "${detail.name}" exportado a Markdown.`);
   }
 
   if (loadingList) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[13px] text-[#8E8E93]">
-        Cargando amenazas...
+      <div className="flex-1 flex items-center justify-center p-6">
+        <PanelSkeleton
+          label="Cargando catálogo de amenazas e indicadores CTI..."
+          lines={4}
+          className="w-full max-w-[440px]"
+        />
+      </div>
+    );
+  }
+
+  if (listError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-[480px] space-y-4">
+          <PanelErrorBanner message={listError} onRetry={loadCampaigns} />
+          <PanelEmptyState
+            icon={Shield}
+            title="Catálogo temporalmente no disponible"
+            description="Comprueba que el servicio OMEGA esté activo y reintenta cargar las campañas."
+            actionLabel="Reintentar carga"
+            onAction={loadCampaigns}
+          />
+        </div>
       </div>
     );
   }
 
   if (campaigns.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-        <Shield className="h-6 w-6 text-[#9097A5] mb-2" />
-        <p className="text-[13.5px] text-[#8E8E93]">No hay amenazas registradas.</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <PanelEmptyState
+          icon={Shield}
+          title="Aún no hay amenazas indexadas"
+          description="Sincroniza las fuentes STIX 2.1 desde Inicio o realiza una consulta en el Asistente para explorar reportes de spyware."
+          actionLabel={onAskInChat ? 'Consultar en Asistente' : undefined}
+          onAction={
+            onAskInChat
+              ? () => onAskInChat('Resume las principales campañas de spyware comercial y CVEs documentados.')
+              : undefined
+          }
+          secondaryLabel="Actualizar lista"
+          onSecondaryAction={loadCampaigns}
+          className="max-w-[480px]"
+        />
       </div>
     );
   }
@@ -226,7 +343,7 @@ export function CampaignsPanel({ onAskInChat }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar amenaza o CVE..."
-              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none transition-colors"
+              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none transition-colors"
             />
           </div>
 
@@ -241,7 +358,7 @@ export function CampaignsPanel({ onAskInChat }) {
                     onClick={() => setFamilyFilter(fam)}
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-all duration-150 active:scale-95 cursor-pointer ${
                       active
-                        ? 'bg-[#2F6FED]/20 text-[#8AB4FF] ring-1 ring-inset ring-[#2F6FED]/40'
+                        ? 'bg-[#1D4ED8]/20 text-[#93C5FD] ring-1 ring-inset ring-[#1D4ED8]/40'
                         : 'text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7]'
                     }`}
                   >
@@ -255,7 +372,16 @@ export function CampaignsPanel({ onAskInChat }) {
 
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {filteredCampaigns.length === 0 ? (
-            <div className="p-4 text-[13px] text-[#8E8E93]">Sin resultados.</div>
+            <PanelEmptyState
+              title="Sin amenazas coincidentes"
+              description="Ajusta el término de búsqueda o selecciona Todas las familias."
+              actionLabel="Limpiar filtros"
+              onAction={() => {
+                setSearchQuery('');
+                setFamilyFilter('ALL');
+              }}
+              className="m-2"
+            />
           ) : (
             filteredCampaigns.map((camp, idx) => {
               const isSelected = camp.id === selectedId;
@@ -268,13 +394,19 @@ export function CampaignsPanel({ onAskInChat }) {
                   key={camp.id}
                   type="button"
                   onClick={() => {
+                    setCveSearch('');
+                    setIocSearch('');
+                    setIocTypeFilter('ALL');
+                    setActionNote('');
+                    setDetailError('');
+                    if (camp.id !== selectedId) setLoadingDetail(true);
                     setSelectedId(camp.id);
                     setMobileShowDetail(true);
                   }}
                   style={{ animationDelay: `${Math.min(idx * 25, 200)}ms` }}
                   className={`animate-fade-up w-full rounded-[10px] px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer block ${
                     isSelected
-                      ? 'bg-[#2F6FED]/18 ring-1 ring-inset ring-[#2F6FED]/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                      ? 'bg-[#1D4ED8]/18 ring-1 ring-inset ring-[#1D4ED8]/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
                       : 'bg-transparent hover:bg-white/[0.05]'
                   }`}
                 >
@@ -283,7 +415,7 @@ export function CampaignsPanel({ onAskInChat }) {
                   </p>
                   <div className="mt-1.5 flex items-center justify-between gap-2 font-tech text-[11px] text-[#8E8E93]">
                     <span className="truncate">
-                      <span className="text-[#8AB4FF]">{camp.spyware_family}</span>
+                      <span className="text-[#93C5FD]">{camp.spyware_family}</span>
                       {stats.length > 0 && ` · ${stats.join(' · ')}`}
                     </span>
                     {camp.first_seen_date && (
@@ -311,33 +443,51 @@ export function CampaignsPanel({ onAskInChat }) {
             onClick={() => setMobileShowDetail(false)}
             className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.1] bg-white/[0.05] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.09] active:scale-[0.96] transition-all cursor-pointer"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#8AB4FF]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#93C5FD]" />
             <span>Todas las amenazas</span>
           </button>
 
           {detail?.spyware_family && (
-            <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[11px] text-[#8AB4FF] truncate">
+            <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[11px] text-[#93C5FD] truncate">
               {detail.spyware_family}
             </span>
           )}
         </div>
 
         {loadingDetail ? (
-          <div className="max-w-[820px] w-full mx-auto py-10 text-[13.5px] text-[#8E8E93] animate-fade-in">
-            Cargando detalle...
+          <div className="max-w-[820px] w-full mx-auto py-8">
+            <PanelSkeleton label="Cargando ficha técnica, CVEs e IOCs..." lines={5} />
+          </div>
+        ) : detailError ? (
+          <div className="max-w-[640px] w-full mx-auto py-8">
+            <PanelErrorBanner
+              message={detailError}
+              onRetry={() => loadDetail(selectedId)}
+            />
           </div>
         ) : !detail ? (
-          <div className="max-w-[820px] w-full mx-auto py-16 text-center text-[14px] text-[#8E8E93]">
-            Selecciona una amenaza.
+          <div className="max-w-[520px] w-full mx-auto my-auto py-12">
+            <PanelEmptyState
+              icon={Shield}
+              title="Selecciona una campaña para ver su ficha"
+              description="Explora las vulnerabilidades CVE, indicadores IOC y reportes primarios desde la columna izquierda."
+            />
           </div>
         ) : (
           <div className="animate-fade-up w-full max-w-[820px] mx-auto space-y-6 pb-8">
+            {actionNote && (
+              <ActionConfirmationBanner
+                message={actionNote}
+                tone="clean"
+                onDismiss={() => setActionNote('')}
+              />
+            )}
             {/* Cabecera */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5 font-tech text-[12px]">
                   {detail.spyware_family && (
-                    <span className="rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[#8AB4FF]">
+                    <span className="rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[#93C5FD]">
                       {detail.spyware_family}
                     </span>
                   )}
@@ -357,7 +507,7 @@ export function CampaignsPanel({ onAskInChat }) {
                   title="Extraer IPv4, dominios y CVEs desde artículo web en RAM (WebBaseLoader RNF4)"
                   className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3 py-1.5 text-[12.5px] active:scale-[0.97] transition-all cursor-pointer ${
                     showWebExtractor
-                      ? 'border-[#2F6FED]/50 bg-[#2F6FED]/18 text-[#8AB4FF]'
+                      ? 'border-[#1D4ED8]/50 bg-[#1D4ED8]/18 text-[#93C5FD]'
                       : 'border-white/[0.08] bg-white/[0.045] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
                   }`}
                 >
@@ -375,6 +525,18 @@ export function CampaignsPanel({ onAskInChat }) {
                   <span>.md</span>
                 </button>
 
+                {onAuditDevice && (
+                  <button
+                    type="button"
+                    onClick={() => onAuditDevice('android')}
+                    title="Auditar tu móvil o equipo frente a los IOCs de esta campaña"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
+                  >
+                    <Smartphone className="h-3.5 w-3.5 text-[#93C5FD]" />
+                    <span>Revisar equipo</span>
+                  </button>
+                )}
+
                 {onAskInChat && (
                   <button
                     type="button"
@@ -383,7 +545,7 @@ export function CampaignsPanel({ onAskInChat }) {
                         `Analiza en detalle la campaña "${detail.name}"${detail.spyware_family ? ` (${detail.spyware_family})` : ''}.`
                       )
                     }
-                    className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#3B7BF2] active:scale-[0.97] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#3B82F6] active:scale-[0.97] transition-all cursor-pointer"
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                     <span>Investigar en chat</span>
@@ -489,7 +651,7 @@ export function CampaignsPanel({ onAskInChat }) {
                         value={cveSearch}
                         onChange={(e) => setCveSearch(e.target.value)}
                         placeholder="Filtrar CVE..."
-                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none"
+                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none"
                       />
                     </div>
                   )}
@@ -514,12 +676,12 @@ export function CampaignsPanel({ onAskInChat }) {
                                   )
                                 }
                                 title="Preguntar en chat"
-                                className="font-tech text-[13.5px] font-medium text-[#F5F5F7] hover:text-[#8AB4FF] transition-colors cursor-pointer"
+                                className="font-tech text-[13.5px] font-medium text-[#F5F5F7] hover:text-[#93C5FD] transition-colors cursor-pointer"
                               >
                                 {cve.cve_code}
                               </button>
                               {cve.cvss_score != null && (
-                                <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2 py-0.5 text-[11px] text-[#8AB4FF]">
+                                <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2 py-0.5 text-[11px] text-[#93C5FD]">
                                   {cve.cvss_score}
                                 </span>
                               )}
@@ -549,7 +711,7 @@ export function CampaignsPanel({ onAskInChat }) {
                         <div
                           key={cve.cve_code}
                           style={{ animationDelay: `${Math.min(idx * 25, 160)}ms` }}
-                          className="apple-group animate-fade-up group rounded-[10px] h-9 px-2.5 sm:px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/45 hover:-translate-y-0.5 transition-all duration-200"
+                          className="apple-group animate-fade-up group rounded-[10px] h-9 px-2.5 sm:px-3 flex items-center justify-between gap-1.5 hover:border-[#1D4ED8]/45 hover:-translate-y-0.5 transition-all duration-200"
                         >
                           <button
                             type="button"
@@ -557,13 +719,13 @@ export function CampaignsPanel({ onAskInChat }) {
                               onAskInChat?.(`¿Cómo se explotó ${cve.cve_code} en "${detail.name}"?`)
                             }
                             title={`Preguntar por ${cve.cve_code}`}
-                            className="font-tech text-[12.5px] text-[#F5F5F7] group-hover:text-[#8AB4FF] truncate transition-colors cursor-pointer"
+                            className="font-tech text-[12.5px] text-[#F5F5F7] group-hover:text-[#93C5FD] truncate transition-colors cursor-pointer"
                           >
                             {cve.cve_code}
                           </button>
                           <div className="flex items-center gap-1 shrink-0">
                             {cve.cvss_score != null && (
-                              <span className="font-tech text-[11px] text-[#8AB4FF]">
+                              <span className="font-tech text-[11px] text-[#93C5FD]">
                                 {cve.cvss_score}
                               </span>
                             )}
@@ -600,7 +762,7 @@ export function CampaignsPanel({ onAskInChat }) {
                               onClick={() => setIocTypeFilter(t)}
                               className={`font-tech rounded-full px-2.5 py-0.5 text-[11px] uppercase transition-colors cursor-pointer ${
                                 iocTypeFilter === t
-                                  ? 'bg-[#2F6FED]/20 text-[#8AB4FF] ring-1 ring-inset ring-[#2F6FED]/40'
+                                  ? 'bg-[#1D4ED8]/20 text-[#93C5FD] ring-1 ring-inset ring-[#1D4ED8]/40'
                                   : 'bg-white/[0.04] text-[#8E8E93] border border-white/[0.08] hover:text-[#F5F5F7]'
                               }`}
                             >
@@ -616,7 +778,7 @@ export function CampaignsPanel({ onAskInChat }) {
                             value={iocSearch}
                             onChange={(e) => setIocSearch(e.target.value)}
                             placeholder="Filtrar indicador..."
-                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#2F6FED]/65 focus:outline-none"
+                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none"
                           />
                         </div>
                       </div>
@@ -647,7 +809,7 @@ export function CampaignsPanel({ onAskInChat }) {
                                     key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
                                     className="hover:bg-white/[0.035] transition-colors"
                                   >
-                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#8AB4FF] whitespace-nowrap">
+                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#93C5FD] whitespace-nowrap">
                                       {ioc.ioc_type}
                                     </td>
                                     <td className="px-3 sm:px-4 py-2.5 font-tech text-[12.5px] text-[#F5F5F7] break-all min-w-0">
@@ -656,19 +818,34 @@ export function CampaignsPanel({ onAskInChat }) {
                                     <td className="px-3 sm:px-4 py-2.5 text-[#A1A1A6] hidden md:table-cell">
                                       {ioc.context || ''}
                                     </td>
-                                    <td className="px-3 sm:px-4 py-2.5 text-right">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCopy(ioc.ioc_value)}
-                                        title="Copiar"
-                                        className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] transition-colors cursor-pointer"
-                                      >
-                                        {copiedValue === ioc.ioc_value ? (
-                                          <Check className="h-3.5 w-3.5 text-[#5E9BFF]" />
-                                        ) : (
-                                          <Copy className="h-3.5 w-3.5" />
-                                        )}
-                                      </button>
+                                    <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
+                                      <div className="inline-flex items-center justify-end gap-1">
+                                        {onVerifyLink &&
+                                          ['domain', 'url', 'hostname', 'fqdn', 'ipv4', 'ip'].includes(
+                                            String(ioc.ioc_type || '').toLowerCase(),
+                                          ) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => onVerifyLink(ioc.ioc_value)}
+                                              title="Inspeccionar indicador en Enlaces sin contacto HTTP"
+                                              className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#93C5FD] hover:bg-[#1D4ED8]/20 transition-colors cursor-pointer"
+                                            >
+                                              <Link2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopy(ioc.ioc_value)}
+                                          title="Copiar"
+                                          className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+                                        >
+                                          {copiedValue === ioc.ioc_value ? (
+                                            <Check className="h-3.5 w-3.5 text-[#3B82F6]" />
+                                          ) : (
+                                            <Copy className="h-3.5 w-3.5" />
+                                          )}
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                 ))}
@@ -696,7 +873,7 @@ export function CampaignsPanel({ onAskInChat }) {
                       >
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-start sm:items-center gap-2">
-                            <FileText className="h-4 w-4 text-[#5E9BFF] shrink-0 mt-0.5 sm:mt-0" />
+                            <FileText className="h-4 w-4 text-[#3B82F6] shrink-0 mt-0.5 sm:mt-0" />
                             <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F5F5F7] break-words sm:truncate">
                               {rep.title}
                             </p>
