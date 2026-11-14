@@ -7,7 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { StructuredResponse } from './StructuredResponse';
-import { OmegaReflexEmblem } from './OmegaReflexEmblem';
+import { OmegaShaderOrb } from './OmegaShaderOrb';
 
 const DRAWER_STARTERS = [
   '¿Qué señales visibles indican posible infección con Pegasus?',
@@ -101,7 +101,7 @@ export function CopilotDrawer({
         {/* Cabecera del copiloto */}
         <div className="h-14 shrink-0 border-b border-white/[0.08] px-4 flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">
-            <OmegaReflexEmblem variant="mini" size={22} isThinking={isLoading} />
+            <OmegaShaderOrb size={24} isThinking={isLoading} />
             <div className="min-w-0">
               <div className="text-[13.5px] font-semibold text-[#F4F6FA] truncate">
                 Copiloto OMEGA
@@ -161,7 +161,7 @@ export function CopilotDrawer({
             <div className="space-y-4 pt-2">
               <div className="apple-well relative overflow-hidden rounded-[14px] p-4 space-y-2.5 text-center">
                 <div className="flex justify-center py-1">
-                  <OmegaReflexEmblem variant="mini" size={44} isThinking={isLoading} />
+                  <OmegaShaderOrb size={48} isThinking={isLoading} />
                 </div>
                 <p className="text-[13px] leading-relaxed text-[#D6DAE2]">
                   Puedes consultar cualquier hallazgo, dominio o síntoma técnico mientras mantienes tu escaneo o revisión abierta detrás.

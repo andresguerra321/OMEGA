@@ -661,6 +661,7 @@ export default function App() {
           <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
             <ChatAtmosphere
               variant="workspace"
+              showWaves={activeNav !== 'preguntar'}
               dimmed={activeNav !== 'preguntar' || messages.length > 0}
             />
 
