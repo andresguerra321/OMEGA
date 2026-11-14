@@ -1,5 +1,8 @@
-Omega — De Proyecto de Grado a Producto Comercial
-Visión de negocio y hoja de ruta de comercialización
+# Omega — Visión Comercial y Hoja de Ruta de Producto
+
+> **Nota de Trazabilidad (Fuente Única de Verdad):** Este documento recoge la visión de negocio, mercado y ruta de comercialización de Omega. La especificación técnica vigente de requerimientos funcionales y no funcionales (**RF1–RF8** / **RNF1–RNF8**) mapeada al código implementado reside únicamente en [`omega/docs/matriz_trazabilidad.md`](omega/docs/matriz_trazabilidad.md), respaldada por [`omega/docs/declaracion_etica.md`](omega/docs/declaracion_etica.md) y [`omega/backend-java/README.md`](omega/backend-java/README.md).
+
+## Visión de negocio y hoja de ruta de comercialización
 Resumen ejecutivo
 Omega nació como un proyecto de grado: una plataforma de threat intelligence defensiva sobre spyware comercial, con RAG, verificación forense de IOCs y monitoreo OSINT consentido. Lo que la arquitectura ya construida permite, sin embargo, es algo más grande: un producto real de inteligencia de amenazas personal y organizacional, dirigido a un segmento que hoy está mal atendido —periodistas, defensores de derechos humanos, pymes y equipos de seguridad pequeños que no pueden pagar las plataformas de threat intel de nivel empresarial (Recorded Future, Flashpoint, Mandiant Advantage), pero que enfrentan riesgos reales.
 Este documento traza cómo llevar Omega de demo académica a producto viable, siendo honesto sobre los riesgos legales, éticos y de sostenibilidad que una versión comercial introduce y que una versión académica puede ignorar.
@@ -27,11 +30,11 @@ Esto es lo que una demo académica puede pasar por alto, pero un producto real n
 • Protección de datos personales (Colombia: Ley 1581 de 2012; si hay usuarios internacionales, GDPR aplica igual). Vas a almacenar correos institucionales, dominios y resultados de verificaciones — eso es tratamiento de datos personales con obligaciones reales de consentimiento, finalidad y seguridad, no solo un CHECK en la base de datos.
 • Responsabilidad por falsos negativos. Si Omega le dice a un periodista "no se encontró exposición" y luego es comprometido, ¿qué responsabilidad legal/reputacional asumes? Un término de servicio claro que delimite qué garantiza el sistema y qué no es indispensable antes de cobrar por esto.
 • Dependencia de terceros (Groq, XposedOrNot, etc.). Un modelo de negocio no puede depender de APIs gratuitas o de terceros que pueden cambiar sus términos o desaparecer; hay que presupuestar esos costos a escala real.
-• Seguridad del propio sistema. El hallazgo de autenticación débil que ya identificamos en el código actual no es aceptable en una versión comercial: si tu producto almacena quién ha sido comprometido o qué activos vigila, una brecha en Omega mismo sería catastrófica para la confianza del producto.
+• Seguridad operativa a escala comercial. Aunque el MVP técnico ya incorpora autenticación JWT HS256 multi-tenant, RBAC (`ADMIN`/`ANALYST`/`CLIENT`), ACL por expediente, `X-Internal-Service-Token` y cadena probatoria SHA-256 en `omega/backend-java`, una operación comercial SaaS exige adicionalmente gestión externa de llaves (KMS/HSM), auditorías externas periódicas y planes de respuesta ante incidentes.
 Hoja de ruta sugerida (de TFG a V1 comercial)
-1.  Fase actual (académica): completar el MVP ya definido, con autenticación real resuelta antes de cualquier intención comercial.
-2.  Fase de validación: conversar con 10-15 potenciales usuarios reales (periodistas, ONGs locales) para validar si pagarían o si necesitan el modelo subsidiado.
-3.  Fase de app de escritorio (Tauri): la versión distribuible que ya estás construyendo.
+1. Fase actual (académica): arquitectura de 3 contenedores con seguridad multi-tenant, ingesta Zero-Retention en `backend-java` y worker forense aislado (`omega-private`) validada mediante pruebas automatizadas.
+2. Fase de validación: conversar con 10-15 potenciales usuarios reales (periodistas, ONGs locales) para validar si pagarían o si necesitan el modelo subsidiado.
+3. Fase de app de escritorio (Electron 45 con `contextIsolation: true` y `sandbox: true`): empaquetado distribuible de la versión desktop ya construida para auditoría local sin subir evidencia cruda.
 4.  Fase de multiusuario real: roles, organizaciones, facturación.
 5.  Fase de alianzas institucionales: acercarse a ONGs de protección a periodistas/activistas (CPJ, Access Now, Fundación para la Libertad de Prensa en Colombia) como posibles socios de distribución o financiamiento del tier subsidiado.
 Riesgos principales a monitorear
