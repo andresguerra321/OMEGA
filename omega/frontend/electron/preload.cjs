@@ -18,5 +18,16 @@ contextBridge.exposeInMainWorld('omegaDesktop', {
   openExternalUrl: (targetUrl) => ipcRenderer.invoke('omega:open-external', targetUrl),
   inspectLinkEphemeral: (targetUrl) => ipcRenderer.invoke('omega:ephemeral-link-inspect', targetUrl),
   setTitleBarTheme: (theme) => ipcRenderer.invoke('omega:set-titlebar-theme', theme),
+  getBackendStatus: () => ipcRenderer.invoke('omega:backend-status'),
+  retryBackendStartup: (opts = {}) => ipcRenderer.invoke('omega:backend-retry', opts),
+  continueWithoutBackend: () => ipcRenderer.invoke('omega:backend-skip'),
+  onBackendStatus: (handler) => {
+    if (typeof handler !== 'function') return () => {};
+    const listener = (_event, state) => handler(state);
+    ipcRenderer.on('omega:backend-status-event', listener);
+    return () => {
+      ipcRenderer.removeListener('omega:backend-status-event', listener);
+    };
+  },
 });
 

@@ -13,6 +13,14 @@ const child = spawn(electronPath, ['.'], {
   stdio: 'inherit',
 });
 
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    if (!child.killed) {
+      child.kill(signal);
+    }
+  });
+}
+
 child.on('exit', (code) => {
   process.exit(code ?? 0);
 });
