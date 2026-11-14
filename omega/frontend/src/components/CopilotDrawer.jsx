@@ -89,12 +89,12 @@ export function CopilotDrawer({
         type="button"
         aria-label="Cerrar panel de copiloto"
         onClick={onClose}
-        className="flex-1 bg-black/55 backdrop-blur-[4px] cursor-default"
+        className="animate-fade-in flex-1 bg-black/55 backdrop-blur-[4px] cursor-default"
       />
 
       {/* Cajón lateral deslizable */}
       <aside
-        className={`relative h-full w-full max-w-[470px] border-l border-white/[0.1] bg-gradient-to-b from-[#13161E]/98 to-[#0B0D12]/98 backdrop-blur-2xl shadow-[-18px_0_48px_rgba(0,0,0,0.68)] flex flex-col ${
+        className={`animate-slide-right relative h-full w-full max-w-[470px] border-l border-white/[0.1] bg-gradient-to-b from-[#13161E]/98 to-[#0B0D12]/98 backdrop-blur-2xl shadow-[-18px_0_48px_rgba(0,0,0,0.68)] flex flex-col ${
           typeof window !== 'undefined' && window.omegaDesktop?.isDesktop ? 'pt-9' : ''
         }`}
       >
@@ -171,12 +171,13 @@ export function CopilotDrawer({
                 <div className="text-[11.5px] font-medium text-[#9BA2B0]">
                   Consultas rápidas
                 </div>
-                {DRAWER_STARTERS.map((q) => (
+                {DRAWER_STARTERS.map((q, idx) => (
                   <button
                     key={q}
                     type="button"
                     onClick={() => onSendPrompt?.(q)}
-                    className="w-full text-left rounded-[11px] border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] px-3.5 py-2.5 text-[12.5px] text-[#E4E8F0] transition-colors cursor-pointer"
+                    style={{ animationDelay: `${Math.min(idx * 50, 180)}ms` }}
+                    className="animate-fade-up w-full text-left rounded-[11px] border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:-translate-y-0.5 active:scale-[0.985] px-3.5 py-2.5 text-[12.5px] text-[#E4E8F0] transition-all duration-200 cursor-pointer"
                   >
                     {q}
                   </button>

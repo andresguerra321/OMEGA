@@ -23,7 +23,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
   });
 
   return (
-    <aside className="omega-panel-in w-[376px] shrink-0 h-full apple-vibrancy border-l border-white/[0.07] flex flex-col justify-between z-20">
+    <aside className="animate-slide-right absolute inset-0 md:static md:inset-auto w-full md:w-[340px] lg:w-[376px] shrink-0 h-full apple-vibrancy md:border-l border-white/[0.07] flex flex-col justify-between z-30 md:z-20">
       <div className="flex flex-col min-h-0 flex-1">
         {/* Header Inspector */}
         <div className="h-12 px-4 border-b border-white/[0.06] flex items-center justify-between">
@@ -70,7 +70,7 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
               No hay fuentes coincidentes con el filtro.
             </p>
           ) : (
-            filtered.map((cit) => {
+            filtered.map((cit, idx) => {
               const isSelected =
                 selectedCitation?.index === cit.index &&
                 selectedCitation?.title === cit.title;
@@ -83,7 +83,8 @@ export function SourcesPanel({ citations = [], selectedCitation, onSelectCitatio
                     else cardRefs.current.delete(key);
                   }}
                   onClick={() => onSelectCitation(cit)}
-                  className={`rounded-[12px] border p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 ease-apple ${
+                  style={{ animationDelay: `${Math.min(idx * 30, 180)}ms` }}
+                  className={`animate-fade-up rounded-[12px] border p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 ease-apple hover:-translate-y-0.5 active:scale-[0.99] ${
                     isSelected
                       ? 'border-[#2F6FED]/60 bg-[#2F6FED]/14 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
                       : 'border-white/[0.075] bg-white/[0.025] hover:border-white/[0.14] hover:bg-white/[0.045]'

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, Copy, Loader2, RefreshCw, X } from 'lucide-react';
 import {
   createOsintAsset,
@@ -6,6 +6,7 @@ import {
   fetchOsintAssets,
   scanOsintAsset,
 } from '../lib/api';
+import { useScrollReveal } from '../lib/useScrollReveal';
 
 function formatExposedData(val) {
   if (Array.isArray(val)) return val.join(', ');
@@ -24,6 +25,9 @@ export function OsintPanel({ onAskInChat }) {
   const [report, setReport] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedSubdomain, setCopiedSubdomain] = useState(null);
+  const reportContainerRef = useRef(null);
+
+  useScrollReveal(reportContainerRef, [report?.asset_value, isScanning]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,10 +115,13 @@ export function OsintPanel({ onAskInChat }) {
     const subdomains = report.exposed_subdomains || [];
 
     return (
-      <div className="omega-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6">
+      <div
+        ref={reportContainerRef}
+        className="animate-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6"
+      >
         {/* Cabecera */}
         <header className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.07]">
-          <div className="flex flex-wrap items-center gap-3 min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => {
@@ -127,12 +134,12 @@ export function OsintPanel({ onAskInChat }) {
               <span>Cambiar activo</span>
             </button>
 
-            <span className="font-tech text-[14px] font-medium text-[#F5F5F7] truncate">
+            <span className="font-tech text-[13.5px] sm:text-[14px] font-medium text-[#F5F5F7] break-all sm:truncate min-w-0">
               {report.asset_value}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {onAskInChat && (
               <button
                 type="button"
@@ -173,7 +180,7 @@ export function OsintPanel({ onAskInChat }) {
         {/* Secciones Agrupadas Apple Obsidian */}
         <div className="space-y-5">
           {/* 1. Cruce con Spyware */}
-          <section className="space-y-2">
+          <section className="animate-on-scroll space-y-2" data-delay="0">
             <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
               Cruce con infraestructura spyware
             </h2>
@@ -181,7 +188,7 @@ export function OsintPanel({ onAskInChat }) {
             <div className="apple-group rounded-[13px] overflow-hidden">
               {!hasCtiHits ? (
                 <div className="px-4 py-3.5 flex items-center gap-2.5 text-[13px] text-[#D1D1D6]">
-                  <span className="h-2 w-2 rounded-full bg-[#30D158]" />
+                  <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
                   <span>Sin coincidencias en infraestructura de spyware conocida</span>
                 </div>
               ) : (
@@ -194,10 +201,10 @@ export function OsintPanel({ onAskInChat }) {
                       key={`${m.ioc_value}-${idx}`}
                       className="px-4 py-3 flex flex-wrap items-center justify-between gap-2"
                     >
-                      <span className="font-tech text-[13px] text-[#F5F5F7]">
+                      <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
                         {m.ioc_value}
                       </span>
-                      <span className="text-[12px] text-[#8E8E93]">
+                      <span className="text-[12px] text-[#8E8E93] break-words">
                         {m.spyware_family} · {m.source_report}
                       </span>
                     </div>
@@ -209,7 +216,7 @@ export function OsintPanel({ onAskInChat }) {
 
           {/* 2. Brechas Documentadas (si es correo) */}
           {isEmailReport && (
-            <section className="space-y-2">
+            <section className="animate-on-scroll space-y-2" data-delay="60">
               <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
                 Brechas documentadas
               </h2>
@@ -221,7 +228,7 @@ export function OsintPanel({ onAskInChat }) {
                   </p>
                 ) : breaches.length === 0 ? (
                   <div className="px-4 py-3.5 flex items-center gap-2.5 text-[13px] text-[#D1D1D6]">
-                    <span className="h-2 w-2 rounded-full bg-[#30D158]" />
+                    <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
                     <span>Sin brechas públicas documentadas para este correo</span>
                   </div>
                 ) : (
@@ -229,13 +236,13 @@ export function OsintPanel({ onAskInChat }) {
                     {breaches.map((b, idx) => (
                       <div
                         key={`${b.breach_name}-${idx}`}
-                        className="px-4 py-3.5 flex flex-wrap items-baseline justify-between gap-3"
+                        className="px-4 py-3.5 flex flex-wrap items-baseline justify-between gap-2 sm:gap-3"
                       >
                         <div className="space-y-0.5 min-w-0">
-                          <div className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                          <div className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7] break-words">
                             {b.breach_name}
                           </div>
-                          <div className="text-[12px] text-[#8E8E93]">
+                          <div className="text-[12px] text-[#8E8E93] break-words">
                             Datos expuestos: {formatExposedData(b.exposed_data)}
                           </div>
                         </div>
@@ -252,13 +259,13 @@ export function OsintPanel({ onAskInChat }) {
           )}
 
           {/* 3. Postura DNS y Subdominios (crt.sh) */}
-          <section className="space-y-2">
+          <section className="animate-on-scroll space-y-2" data-delay="120">
             <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
               Postura DNS y Certificate Transparency (<span className="font-tech">crt.sh</span>)
             </h2>
 
             <div className="apple-group rounded-[13px] divide-y divide-white/[0.06]">
-              <div className="px-4 py-3 flex flex-wrap items-baseline gap-3 text-[13px]">
+              <div className="px-4 py-3 flex flex-wrap items-baseline gap-2.5 sm:gap-3 text-[13px]">
                 <span className="font-tech text-[12px] font-semibold text-[#F5F5F7] w-14 shrink-0">
                   SPF
                 </span>
@@ -272,7 +279,7 @@ export function OsintPanel({ onAskInChat }) {
                 )}
               </div>
 
-              <div className="px-4 py-3 flex flex-wrap items-baseline gap-3 text-[13px]">
+              <div className="px-4 py-3 flex flex-wrap items-baseline gap-2.5 sm:gap-3 text-[13px]">
                 <span className="font-tech text-[12px] font-semibold text-[#F5F5F7] w-14 shrink-0">
                   DMARC
                 </span>
@@ -303,7 +310,7 @@ export function OsintPanel({ onAskInChat }) {
                       key={sub}
                       className="px-4 py-2.5 flex items-center justify-between gap-3"
                     >
-                      <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate">
+                      <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate min-w-0">
                         {sub}
                       </span>
 
@@ -337,13 +344,13 @@ export function OsintPanel({ onAskInChat }) {
 
   // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente, max-w-[620px]) ---
   return (
-    <div className="omega-fade-up flex-1 flex flex-col items-center justify-center py-6">
+    <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-6">
       <div className="w-full max-w-[620px]">
-        <header className="text-center mb-7">
-          <h1 className="text-[28px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+        <header className="text-center mb-6 sm:mb-7">
+          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
             Auditar mi exposición pública
           </h1>
-          <p className="mt-2.5 text-[14px] text-[#8E8E93] leading-[1.55] max-w-[500px] mx-auto">
+          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#8E8E93] leading-[1.55] max-w-[500px] mx-auto">
             Revisa qué información pública existe sobre tu correo institucional o dominio propio sin interactuar con terceros.
           </p>
         </header>
@@ -351,10 +358,11 @@ export function OsintPanel({ onAskInChat }) {
         {/* Barra de Consulta Spotlight */}
         <form
           onSubmit={handleSubmitAudit}
-          className="omega-capsule rounded-[16px] p-3"
+          style={{ animationDelay: '60ms' }}
+          className="animate-scale-in omega-capsule rounded-[16px] p-3"
         >
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-            <div className="apple-segmented inline-flex rounded-[9px] p-0.5 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+            <div className="apple-segmented inline-flex self-start sm:self-auto rounded-[9px] p-0.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setAssetType('institutional_email')}
@@ -379,35 +387,37 @@ export function OsintPanel({ onAskInChat }) {
               </button>
             </div>
 
-            <input
-              type="text"
-              value={assetValue}
-              onChange={(e) => setAssetValue(e.target.value)}
-              placeholder={
-                assetType === 'institutional_email'
-                  ? 'prensa@organizacion.org'
-                  : 'organizacion.org'
-              }
-              className="font-tech flex-1 min-w-[180px] h-9 bg-transparent px-2 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
-            />
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <input
+                type="text"
+                value={assetValue}
+                onChange={(e) => setAssetValue(e.target.value)}
+                placeholder={
+                  assetType === 'institutional_email'
+                    ? 'prensa@organizacion.org'
+                    : 'organizacion.org'
+                }
+                className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+              />
 
-            <button
-              type="submit"
-              disabled={!assetValue.trim() || !consentChecked || isScanning}
-              className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
-            >
-              {isScanning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>Auditar</span>
-            </button>
+              <button
+                type="submit"
+                disabled={!assetValue.trim() || !consentChecked || isScanning}
+                className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+              >
+                {isScanning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <span>Auditar</span>
+              </button>
+            </div>
           </div>
 
           <div className="pt-2.5 mt-2.5 border-t border-white/[0.065]">
-            <label className="inline-flex items-center gap-2.5 text-[12px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer select-none">
+            <label className="inline-flex items-start sm:items-center gap-2.5 text-[12px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={consentChecked}
                 onChange={(e) => setConsentChecked(e.target.checked)}
-                className="h-3.5 w-3.5 rounded-[4px] accent-[#2F6FED] cursor-pointer"
+                className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#2F6FED] cursor-pointer shrink-0"
               />
               <span>Confirmo que soy titular de este activo o tengo autorización explícita.</span>
             </label>
@@ -420,18 +430,19 @@ export function OsintPanel({ onAskInChat }) {
 
         {assets.length > 0 && (
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {assets.map((asset) => (
+            {assets.map((asset, idx) => (
               <div
                 key={asset.id}
                 onClick={() => executeScan(asset)}
-                className="font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#E5E5EA] hover:border-[#2F6FED]/50 hover:bg-white/[0.07] cursor-pointer transition-all"
+                style={{ animationDelay: `${100 + idx * 35}ms` }}
+                className="animate-fade-up font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#E5E5EA] hover:border-[#2F6FED]/50 hover:bg-white/[0.07] hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer transition-all max-w-full"
               >
-                <span>{asset.asset_value}</span>
+                <span className="truncate">{asset.asset_value}</span>
                 <button
                   type="button"
                   title="Eliminar de la sesión"
                   onClick={(e) => handleRevokeAsset(e, asset)}
-                  className="text-[#8E8E93] hover:text-[#FF453A] cursor-pointer"
+                  className="text-[#8E8E93] hover:text-[#FF453A] cursor-pointer shrink-0"
                 >
                   <X className="h-3 w-3" />
                 </button>

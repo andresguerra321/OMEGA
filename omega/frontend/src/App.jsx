@@ -664,7 +664,7 @@ export default function App() {
             {/* Barra Principal Unificada — Navegación siempre centrada */}
             <header
               aria-label="Barra principal OMEGA"
-              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 px-5 sm:px-7 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
+              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.06] flex items-center justify-between gap-2 select-none ${
                 isDesktop
                   ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
                   : ''
@@ -767,23 +767,23 @@ export default function App() {
             {activeNav === 'preguntar' && (
               <header
                 aria-label="Controles de sesión de chat"
-                className="relative z-15 h-10 shrink-0 px-5 sm:px-7 border-b border-white/[0.05] bg-[#060910]/85 flex items-center justify-between gap-2 select-none"
+                className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-white/[0.05] bg-[#060910]/85 flex items-center justify-between gap-2 select-none"
               >
-                <div className="relative">
+                <div className="relative min-w-0 flex-1 max-w-[210px] sm:max-w-[300px]">
                   <button
                     type="button"
                     onClick={() => setSessionsMenuOpen((v) => !v)}
-                    className="h-7 max-w-[220px] sm:max-w-[300px] px-2.5 rounded-[7px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[11.5px] text-[#E4E8F0] transition-colors cursor-pointer"
+                    className="h-7 w-full px-2 sm:px-2.5 rounded-[7px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[11.5px] text-[#E4E8F0] transition-colors cursor-pointer"
                   >
                     <MessageSquare className="h-3 w-3 text-[#8AB4FF] shrink-0" />
-                    <span className="truncate">
+                    <span className="truncate flex-1 text-left">
                       {activeSession?.title || 'Nueva consulta'}
                     </span>
                     <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
                   </button>
 
                   {sessionsMenuOpen && (
-                    <div className="apple-popover absolute left-0 mt-1.5 w-[300px] rounded-[13px] p-1.5 z-50 space-y-1">
+                    <div className="apple-popover animate-scale-in origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] p-1.5 z-50 space-y-1">
                       <button
                         type="button"
                         onClick={() => {
@@ -842,19 +842,19 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {messages.length > 0 && activeConversationCitations.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setIsSourcesPanelOpen((v) => !v)}
                       title={`Fuentes (${activeConversationCitations.length})`}
-                      className={`h-7 px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
+                      className={`h-7 px-2 sm:px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                         isSourcesPanelOpen
                           ? 'border-[#2F6FED]/55 bg-[#2F6FED]/16 text-[#8AB4FF]'
                           : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
                       }`}
                     >
-                      <BookOpen className="h-3 w-3" />
+                      <BookOpen className="h-3 w-3 shrink-0" />
                       <span>Fuentes ({activeConversationCitations.length})</span>
                     </button>
                   )}
@@ -865,10 +865,10 @@ export default function App() {
                       onClick={handleExportSession}
                       title="Exportar investigación"
                       aria-label="Exportar investigación"
-                      className="h-7 px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F4F6FA] transition-colors cursor-pointer"
+                      className="h-7 px-2 sm:px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F4F6FA] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
                     >
-                      <Download className="h-3 w-3 text-[#9BA2B0]" />
-                      <span>Exportar</span>
+                      <Download className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+                      <span className="hidden min-[360px]:inline">Exportar</span>
                     </button>
                   )}
                 </div>
@@ -920,7 +920,7 @@ export default function App() {
                 ) : activeNav === 'amenazas' ? (
                   <CampaignsPanel onAskInChat={askInChat} />
                 ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
-                  <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col">
+                  <div className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-8 flex flex-col">
                     {activeNav === 'equipo' && (
                       <MvtVerifierPanel
                         key={`mvt-${deviceNavKey}`}

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   Search,
   Shield,
   ExternalLink,
@@ -11,6 +12,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { fetchCampaigns, fetchCampaignDetail } from '../lib/api';
+import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 export function CampaignsPanel({ onAskInChat }) {
@@ -29,6 +31,10 @@ export function CampaignsPanel({ onAskInChat }) {
   const [iocTypeFilter, setIocTypeFilter] = useState('ALL');
   const [copiedValue, setCopiedValue] = useState('');
   const [showWebExtractor, setShowWebExtractor] = useState(false);
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const dossierRef = useRef(null);
+
+  useScrollReveal(dossierRef, [selectedId, dossierTab, showWebExtractor, loadingDetail, mobileShowDetail]);
 
   useEffect(() => {
     let active = true;
@@ -205,9 +211,13 @@ export function CampaignsPanel({ onAskInChat }) {
     Boolean(detail?.target_regions?.length);
 
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden">
-      {/* Master List estilo macOS Mail / Notes Split View */}
-      <aside className="w-[316px] shrink-0 apple-vibrancy border-r border-white/[0.07] flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+      {/* Master List estilo macOS Mail / Notes Split View — ancho completo en móvil hasta elegir campaña */}
+      <aside
+        className={`${
+          mobileShowDetail ? 'hidden md:flex' : 'flex'
+        } w-full md:w-[296px] lg:w-[316px] shrink-0 apple-vibrancy md:border-r border-white/[0.07] flex-col min-h-0`}
+      >
         <div className="p-3 border-b border-white/[0.06] space-y-2.5">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#8E8E93]" />
@@ -229,7 +239,7 @@ export function CampaignsPanel({ onAskInChat }) {
                     key={fam}
                     type="button"
                     onClick={() => setFamilyFilter(fam)}
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-all duration-150 active:scale-95 cursor-pointer ${
                       active
                         ? 'bg-[#2F6FED]/20 text-[#8AB4FF] ring-1 ring-inset ring-[#2F6FED]/40'
                         : 'text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7]'
@@ -247,7 +257,7 @@ export function CampaignsPanel({ onAskInChat }) {
           {filteredCampaigns.length === 0 ? (
             <div className="p-4 text-[13px] text-[#8E8E93]">Sin resultados.</div>
           ) : (
-            filteredCampaigns.map((camp) => {
+            filteredCampaigns.map((camp, idx) => {
               const isSelected = camp.id === selectedId;
               const stats = [];
               if (camp.cves?.length > 0) stats.push(`${camp.cves.length} CVEs`);
@@ -257,8 +267,12 @@ export function CampaignsPanel({ onAskInChat }) {
                 <button
                   key={camp.id}
                   type="button"
-                  onClick={() => setSelectedId(camp.id)}
-                  className={`w-full rounded-[10px] px-3 py-2.5 text-left transition-all duration-150 cursor-pointer block ${
+                  onClick={() => {
+                    setSelectedId(camp.id);
+                    setMobileShowDetail(true);
+                  }}
+                  style={{ animationDelay: `${Math.min(idx * 25, 200)}ms` }}
+                  className={`animate-fade-up w-full rounded-[10px] px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer block ${
                     isSelected
                       ? 'bg-[#2F6FED]/18 ring-1 ring-inset ring-[#2F6FED]/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
                       : 'bg-transparent hover:bg-white/[0.05]'
@@ -283,22 +297,45 @@ export function CampaignsPanel({ onAskInChat }) {
         </div>
       </aside>
 
-      {/* Dossier derecho */}
-      <section className="flex-1 overflow-y-auto px-8 py-7">
+      {/* Dossier derecho — ocupa pantalla completa en móvil con botón de regreso */}
+      <section
+        ref={dossierRef}
+        className={`${
+          mobileShowDetail ? 'flex' : 'hidden md:flex'
+        } flex-1 flex-col min-w-0 overflow-y-auto px-4 sm:px-6 md:px-8 py-5 md:py-7`}
+      >
+        {/* Regreso rápido a la lista en teléfonos */}
+        <div className="md:hidden mb-4 pb-3 border-b border-white/[0.07] flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileShowDetail(false)}
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.1] bg-white/[0.05] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.09] active:scale-[0.96] transition-all cursor-pointer"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 text-[#8AB4FF]" />
+            <span>Todas las amenazas</span>
+          </button>
+
+          {detail?.spyware_family && (
+            <span className="font-tech rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[11px] text-[#8AB4FF] truncate">
+              {detail.spyware_family}
+            </span>
+          )}
+        </div>
+
         {loadingDetail ? (
-          <div className="max-w-[820px] mx-auto py-10 text-[13.5px] text-[#8E8E93]">
+          <div className="max-w-[820px] w-full mx-auto py-10 text-[13.5px] text-[#8E8E93] animate-fade-in">
             Cargando detalle...
           </div>
         ) : !detail ? (
-          <div className="max-w-[820px] mx-auto py-16 text-center text-[14px] text-[#8E8E93]">
+          <div className="max-w-[820px] w-full mx-auto py-16 text-center text-[14px] text-[#8E8E93]">
             Selecciona una amenaza.
           </div>
         ) : (
-          <div className="omega-fade-up max-w-[820px] mx-auto space-y-6">
+          <div className="animate-fade-up w-full max-w-[820px] mx-auto space-y-6 pb-8">
             {/* Cabecera */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2 min-w-0">
-                <div className="flex items-center gap-2.5 font-tech text-[12px]">
+                <div className="flex flex-wrap items-center gap-2.5 font-tech text-[12px]">
                   {detail.spyware_family && (
                     <span className="rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/15 px-2.5 py-0.5 text-[#8AB4FF]">
                       {detail.spyware_family}
@@ -308,12 +345,12 @@ export function CampaignsPanel({ onAskInChat }) {
                     <span className="text-[#8E8E93]">{detail.first_seen_date}</span>
                   )}
                 </div>
-                <h1 className="text-[24px] font-semibold tracking-[-0.024em] leading-[1.2] text-[#F5F5F7]">
+                <h1 className="text-[21px] sm:text-[24px] font-semibold tracking-[-0.024em] leading-[1.2] text-[#F5F5F7] break-words">
                   {detail.name}
                 </h1>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowWebExtractor((prev) => !prev)}
@@ -372,24 +409,24 @@ export function CampaignsPanel({ onAskInChat }) {
 
             {/* Ficha agrupada de atribución */}
             {hasAttribution && (
-              <dl className="apple-group rounded-[13px] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
+              <dl className="apple-group animate-on-scroll rounded-[13px] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
                 {detail.suspected_actor && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <dt className="text-[11.5px] font-medium text-[#8E8E93]">Actor</dt>
-                    <dd className="font-medium text-[#F5F5F7]">{detail.suspected_actor}</dd>
+                    <dd className="font-medium text-[#F5F5F7] break-words">{detail.suspected_actor}</dd>
                   </div>
                 )}
                 {detail.target_sector && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <dt className="text-[11.5px] font-medium text-[#8E8E93]">Objetivo</dt>
-                    <dd className="font-medium text-[#F5F5F7]">{detail.target_sector}</dd>
+                    <dd className="font-medium text-[#F5F5F7] break-words">{detail.target_sector}</dd>
                   </div>
                 )}
                 {detail.target_regions?.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <dt className="text-[11.5px] font-medium text-[#8E8E93]">Regiones</dt>
                     <dd
-                      className="font-medium text-[#F5F5F7]"
+                      className="font-medium text-[#F5F5F7] break-words"
                       title={detail.target_regions.join(', ')}
                     >
                       {detail.target_regions.length > 5
@@ -403,7 +440,7 @@ export function CampaignsPanel({ onAskInChat }) {
 
             {/* Control Segmentado macOS */}
             <div className="space-y-4">
-              <div className="apple-segmented inline-flex rounded-[10px] p-0.5">
+              <div className="apple-segmented inline-flex flex-wrap max-w-full gap-0.5 rounded-[10px] p-0.5">
                 <button
                   type="button"
                   onClick={() => setDossierTab('cves')}
@@ -461,10 +498,11 @@ export function CampaignsPanel({ onAskInChat }) {
                     <p className="text-[13px] text-[#8E8E93] py-2">Sin CVEs vinculados.</p>
                   ) : hasCveDescriptions ? (
                     <div className="grid gap-2.5 sm:grid-cols-2">
-                      {filteredCves.map((cve) => (
+                      {filteredCves.map((cve, idx) => (
                         <div
                           key={cve.cve_code}
-                          className="apple-group rounded-[12px] px-4 py-3 flex items-center justify-between gap-2.5 hover:border-white/[0.14] transition-colors"
+                          style={{ animationDelay: `${Math.min(idx * 35, 180)}ms` }}
+                          className="apple-group animate-fade-up rounded-[12px] px-4 py-3 flex items-center justify-between gap-2.5 hover:border-white/[0.16] hover:-translate-y-0.5 transition-all duration-200"
                         >
                           <div className="min-w-0 space-y-1">
                             <div className="flex items-center gap-2">
@@ -506,11 +544,12 @@ export function CampaignsPanel({ onAskInChat }) {
                       ))}
                     </div>
                   ) : (
-                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                      {filteredCves.map((cve) => (
+                    <div className="grid gap-2 grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                      {filteredCves.map((cve, idx) => (
                         <div
                           key={cve.cve_code}
-                          className="apple-group group rounded-[10px] h-9 px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/45 transition-colors"
+                          style={{ animationDelay: `${Math.min(idx * 25, 160)}ms` }}
+                          className="apple-group animate-fade-up group rounded-[10px] h-9 px-2.5 sm:px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/45 hover:-translate-y-0.5 transition-all duration-200"
                         >
                           <button
                             type="button"
@@ -591,15 +630,15 @@ export function CampaignsPanel({ onAskInChat }) {
                       {filteredIocs.length === 0 ? (
                         <p className="text-[13px] text-[#8E8E93] py-2">Sin coincidencias.</p>
                       ) : (
-                        <div className="apple-group rounded-[13px] overflow-hidden">
-                          <div className="max-h-[360px] overflow-y-auto">
+                        <div className="apple-group animate-fade-up rounded-[13px] overflow-hidden">
+                          <div className="max-h-[360px] overflow-y-auto overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                               <thead className="sticky top-0 apple-vibrancy border-b border-white/[0.07] text-[12px] font-medium text-[#8E8E93]">
                                 <tr>
-                                  <th className="px-4 py-2.5 w-24">Tipo</th>
-                                  <th className="px-4 py-2.5">Indicador</th>
-                                  <th className="px-4 py-2.5 hidden md:table-cell">Contexto</th>
-                                  <th className="px-4 py-2.5 w-12 text-right" />
+                                  <th className="px-3 sm:px-4 py-2.5 w-20 sm:w-24">Tipo</th>
+                                  <th className="px-3 sm:px-4 py-2.5">Indicador</th>
+                                  <th className="px-3 sm:px-4 py-2.5 hidden md:table-cell">Contexto</th>
+                                  <th className="px-3 sm:px-4 py-2.5 w-11 text-right" />
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-white/[0.06] text-[13px]">
@@ -608,16 +647,16 @@ export function CampaignsPanel({ onAskInChat }) {
                                     key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
                                     className="hover:bg-white/[0.035] transition-colors"
                                   >
-                                    <td className="px-4 py-2.5 font-tech text-[11.5px] uppercase text-[#8AB4FF]">
+                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#8AB4FF] whitespace-nowrap">
                                       {ioc.ioc_type}
                                     </td>
-                                    <td className="px-4 py-2.5 font-tech text-[#F5F5F7] break-all">
+                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[12.5px] text-[#F5F5F7] break-all min-w-0">
                                       {ioc.ioc_value}
                                     </td>
-                                    <td className="px-4 py-2.5 text-[#A1A1A6] hidden md:table-cell">
+                                    <td className="px-3 sm:px-4 py-2.5 text-[#A1A1A6] hidden md:table-cell">
                                       {ioc.context || ''}
                                     </td>
-                                    <td className="px-4 py-2.5 text-right">
+                                    <td className="px-3 sm:px-4 py-2.5 text-right">
                                       <button
                                         type="button"
                                         onClick={() => handleCopy(ioc.ioc_value)}
@@ -649,15 +688,16 @@ export function CampaignsPanel({ onAskInChat }) {
                   {!detail.reports || detail.reports.length === 0 ? (
                     <p className="text-[13px] text-[#8E8E93] py-2">Sin fuentes vinculadas.</p>
                   ) : (
-                    detail.reports.map((rep) => (
+                    detail.reports.map((rep, idx) => (
                       <div
                         key={rep.id}
-                        className="apple-group rounded-[12px] px-4 py-3.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                        style={{ animationDelay: `${Math.min(idx * 45, 220)}ms` }}
+                        className="apple-group animate-fade-up rounded-[12px] px-4 py-3.5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between hover:border-white/[0.16] hover:-translate-y-0.5 transition-all duration-200"
                       >
                         <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-[#5E9BFF] shrink-0" />
-                            <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F5F5F7] truncate">
+                          <div className="flex items-start sm:items-center gap-2">
+                            <FileText className="h-4 w-4 text-[#5E9BFF] shrink-0 mt-0.5 sm:mt-0" />
+                            <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F5F5F7] break-words sm:truncate">
                               {rep.title}
                             </p>
                           </div>
@@ -675,7 +715,7 @@ export function CampaignsPanel({ onAskInChat }) {
                             href={rep.source_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] text-[#F5F5F7] hover:bg-white/[0.08] transition-colors"
+                            className="inline-flex shrink-0 self-start sm:self-auto items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all"
                           >
                             <span>Abrir</span>
                             <ExternalLink className="h-3.5 w-3.5 text-[#8E8E93]" />

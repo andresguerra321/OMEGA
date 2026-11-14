@@ -79,7 +79,7 @@ export function OmegaWebIntelCard({
         </div>
       </div>
 
-      <form onSubmit={handleScan} className="apple-well rounded-[11px] p-1.5 flex items-center gap-2">
+      <form onSubmit={handleScan} className="apple-well rounded-[11px] p-1.5 flex flex-col sm:flex-row sm:items-center gap-2">
         <input
           type="text"
           value={urlInput}
@@ -90,7 +90,7 @@ export function OmegaWebIntelCard({
         <button
           type="submit"
           disabled={loading || !urlInput.trim()}
-          className="h-8 rounded-[8px] bg-[#2F6FED] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          className="h-8 w-full sm:w-auto justify-center rounded-[8px] bg-[#2F6FED] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
         >
           {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           <span>{activeNet4Ips.length > 0 ? 'Cruzar IPv4' : 'Extraer en RAM'}</span>
@@ -102,7 +102,7 @@ export function OmegaWebIntelCard({
       )}
 
       {scanResult && (
-        <div className="pt-2 border-t border-white/[0.06] space-y-3">
+        <div className="animate-fade-up pt-2 border-t border-white/[0.06] space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 space-y-0.5">
               <p className="text-[13px] font-medium text-[#F5F5F7] truncate">

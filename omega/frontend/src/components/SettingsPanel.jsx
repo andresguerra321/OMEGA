@@ -17,6 +17,7 @@ import {
   getWorkspaceId,
   rotateWorkspaceId,
 } from '../lib/api';
+import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 
 const CONFIG_SECTIONS = [
@@ -170,6 +171,9 @@ export function SettingsPanel({
   const ragRef = useRef(null);
   const permisosRef = useRef(null);
   const corpusRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+
+  useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
   useEffect(() => {
     let cancelled = false;
@@ -247,10 +251,10 @@ export function SettingsPanel({
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Barra superior segmentada (reemplaza cualquier menú lateral secundario) */}
-      <div className="shrink-0 border-b border-white/[0.07] bg-[#0C0E13]/85 backdrop-blur-xl px-4 sm:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div className="shrink-0 border-b border-white/[0.07] bg-[#0C0E13]/85 backdrop-blur-xl px-3.5 sm:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <nav
           aria-label="Secciones de configuración"
-          className="apple-segmented inline-flex flex-wrap items-center gap-1 rounded-[11px] p-1"
+          className="apple-segmented flex items-center gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto max-w-full rounded-[11px] p-1"
         >
           {CONFIG_SECTIONS.map((sec) => {
             const Icon = sec.icon;
@@ -260,7 +264,7 @@ export function SettingsPanel({
                 key={sec.id}
                 type="button"
                 onClick={() => scrollToSection(sec.id)}
-                className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] transition-all duration-150 cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] shrink-0 active:scale-[0.97] transition-all duration-150 cursor-pointer ${
                   isActive
                     ? 'apple-segmented-active'
                     : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
@@ -273,18 +277,18 @@ export function SettingsPanel({
           })}
         </nav>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center justify-end gap-2.5 shrink-0">
           <button
             type="button"
             onClick={handleDiscardChanges}
-            className="text-[12.5px] text-[#A9B0BE] hover:text-[#F4F6FA] px-2 py-1 transition-colors cursor-pointer"
+            className="text-[12.5px] text-[#A9B0BE] hover:text-[#F4F6FA] px-2 py-1 active:scale-[0.97] transition-all cursor-pointer"
           >
             Descartar
           </button>
           <button
             type="button"
             onClick={handleSaveChanges}
-            className="tactile-key-primary rounded-[9px] px-3.5 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 cursor-pointer"
+            className="tactile-key-primary rounded-[9px] px-3.5 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
           >
             {savedFeedback ? (
               <>
@@ -299,14 +303,14 @@ export function SettingsPanel({
       </div>
 
       {/* Área Scrollable con despeje inferior para el Dock */}
-      <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6">
-        <div className="omega-fade-up mx-auto max-w-[820px] space-y-8 pb-24">
-          <h1 className="text-[24px] font-semibold tracking-[-0.025em] text-[#F4F6FA]">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3.5 sm:px-8 py-5 sm:py-6">
+        <div className="animate-fade-up mx-auto max-w-[820px] space-y-8 pb-24">
+          <h1 className="text-[22px] sm:text-[24px] font-semibold tracking-[-0.025em] text-[#F4F6FA]">
             Configuración del espacio de trabajo
           </h1>
 
             {/* Bloque 1 — Identidad de Sesión Local */}
-            <section ref={cuentaRef} className="space-y-3 scroll-mt-6">
+            <section ref={cuentaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="0">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Cuenta y espacio de trabajo
@@ -358,7 +362,7 @@ export function SettingsPanel({
             </section>
 
             {/* Bloque 2 — Profundidad de Recuperación RAG */}
-            <section ref={ragRef} className="space-y-3 scroll-mt-6">
+            <section ref={ragRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="50">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Alcance de evidencia (<span className="font-tech">Top-K</span>)
@@ -377,7 +381,7 @@ export function SettingsPanel({
                       key={opt.value}
                       type="button"
                       onClick={() => onChangeTopK?.(opt.value)}
-                      className={`relative rounded-[13px] border p-4 text-left active:scale-[0.985] transition-all duration-150 cursor-pointer ${
+                      className={`relative rounded-[13px] border p-4 text-left hover:-translate-y-0.5 active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
                           ? 'bg-[#2F6FED]/15 border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
                           : 'apple-group hover:border-white/[0.15]'
@@ -407,7 +411,7 @@ export function SettingsPanel({
             </section>
 
             {/* Bloque 3 — Prioridad de Corpus CTI */}
-            <section className="space-y-3">
+            <section className="animate-on-scroll space-y-3" data-delay="90">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Fuentes documentales prioritarias
@@ -426,7 +430,7 @@ export function SettingsPanel({
                       key={opt.value}
                       type="button"
                       onClick={() => onChangeSourceScope?.(opt.value)}
-                      className={`relative rounded-[13px] border p-3.5 text-left active:scale-[0.985] transition-all duration-150 cursor-pointer ${
+                      className={`relative rounded-[13px] border p-3.5 text-left hover:-translate-y-0.5 active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
                           ? 'bg-[#2F6FED]/15 border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
                           : 'apple-group hover:border-white/[0.15]'
@@ -456,7 +460,7 @@ export function SettingsPanel({
             </section>
 
             {/* Bloque 4 — Permisos y Garantías Éticas */}
-            <section ref={permisosRef} className="space-y-3 scroll-mt-6">
+            <section ref={permisosRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="120">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                   Permisos y límites operativos
@@ -467,7 +471,7 @@ export function SettingsPanel({
               </div>
 
               <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
-                <div className="p-4 flex items-center justify-between gap-4">
+                <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[13.5px] font-medium text-[#F5F5F7]">
@@ -489,7 +493,7 @@ export function SettingsPanel({
                   />
                 </div>
 
-                <div className="p-4 flex items-center justify-between gap-4">
+                <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="text-[13.5px] font-medium text-[#F5F5F7]">
                       Inspección pasiva de enlaces (<span className="font-tech">RNF7</span>)
@@ -506,7 +510,7 @@ export function SettingsPanel({
                   />
                 </div>
 
-                <div className="p-4 flex items-center justify-between gap-4">
+                <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="text-[13.5px] font-medium text-[#F5F5F7]">
                       Consentimiento explícito OSINT (<span className="font-tech">RNF8</span>)
@@ -526,10 +530,10 @@ export function SettingsPanel({
             </section>
 
             {/* Bloque 5 — Trazabilidad del Corpus Indexado (RF7) */}
-            <section ref={corpusRef} className="space-y-3 scroll-mt-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <section ref={corpusRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="150">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-[#8E8E93]" />
+                  <Database className="h-4 w-4 text-[#8E8E93] shrink-0" />
                   <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                     Trazabilidad del Corpus Indexado (<span className="font-tech">RF7</span>)
                   </h2>
@@ -545,14 +549,14 @@ export function SettingsPanel({
                 {sources.map((rep, idx) => (
                   <div
                     key={`${rep.title}-${idx}`}
-                    className="px-4 py-3 flex items-center justify-between gap-4"
+                    className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4"
                   >
-                    <span className="text-[12.5px] text-[#F5F5F7] truncate">
+                    <span className="text-[12.5px] text-[#F5F5F7] break-words sm:truncate">
                       {rep.title}
                     </span>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[12px] text-[#8E8E93]">
+                    <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                      <span className="text-[11.5px] sm:text-[12px] text-[#8E8E93]">
                         {rep.organization}
                       </span>
                       <span className="font-tech text-[11px] text-[#8E8E93]">

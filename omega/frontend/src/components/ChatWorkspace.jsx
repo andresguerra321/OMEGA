@@ -356,23 +356,23 @@ export function ChatWorkspace({
           /* ============================================================
              ESTADO INICIAL: Minimalismo Apple — Emblema, pregunta y 3 tiles
              ============================================================ */
-          <main className="flex-1 overflow-y-auto flex flex-col items-center justify-between px-6 pt-4 pb-6">
-            <div className="flex-1 min-h-[16px] max-h-[84px]" />
+          <main className="flex-1 overflow-y-auto flex flex-col items-center justify-between px-3.5 sm:px-6 pt-4 pb-6">
+            <div className="flex-1 min-h-[12px] sm:min-h-[16px] max-h-[84px]" />
 
             <div className="w-full max-w-[700px] flex flex-col items-center">
               {/* Emblema luminoso + Título directo sin ruido superior */}
-              <div className="omega-fade-up flex flex-col items-center text-center mb-7">
+              <div className="animate-fade-up flex flex-col items-center text-center mb-6 sm:mb-7">
                 <div className="relative flex items-center justify-center">
                   <div
                     aria-hidden="true"
-                    className="absolute inset-0 rounded-full blur-2xl bg-[#2F6FED]/20 scale-125 pointer-events-none"
+                    className="absolute inset-0 rounded-full blur-2xl bg-[#2F6FED]/20 scale-125 pointer-events-none animate-glow-pulse"
                   />
                   <OmegaLogo size={62} isThinking={loading} />
                 </div>
-                <h1 className="mt-5 text-[28px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+                <h1 className="mt-5 text-[24px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
                   ¿Qué amenaza analizamos?
                 </h1>
-                <p className="mt-2 text-[14.5px] tracking-[-0.01em] text-[#8E8E93]">
+                <p className="mt-2 text-[13.5px] sm:text-[14.5px] tracking-[-0.01em] text-[#8E8E93]">
                   Inteligencia técnica sobre spyware comercial respaldada con citas verificables.
                 </p>
               </div>
@@ -384,7 +384,7 @@ export function ChatWorkspace({
                   submitQuery();
                 }}
                 style={{ animationDelay: '60ms' }}
-                className="omega-fade-up omega-capsule w-full rounded-[16px] p-4"
+                className="animate-scale-in omega-capsule w-full rounded-[16px] p-3.5 sm:p-4"
               >
                 <textarea
                   ref={textareaRef}
@@ -451,7 +451,7 @@ export function ChatWorkspace({
                     type="button"
                     onClick={() => submitQuery(item.prompt)}
                     style={{ animationDelay: `${110 + idx * 45}ms` }}
-                    className="omega-prompt-tile omega-fade-up group flex flex-col justify-between rounded-[13px] px-4 py-3.5 text-left cursor-pointer"
+                    className="omega-prompt-tile animate-fade-up group flex flex-col justify-between rounded-[13px] px-4 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#5E9BFF]">
@@ -486,18 +486,18 @@ export function ChatWorkspace({
              ESTADO ACTIVO: Hilo de conversación + evidencia
              ============================================================ */
           <>
-            <main ref={threadScrollRef} className="flex-1 overflow-y-auto px-6 py-7">
-              <div className="mx-auto max-w-[780px] space-y-7">
+            <main ref={threadScrollRef} className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-5 sm:py-7">
+              <div className="mx-auto max-w-[780px] space-y-6 sm:space-y-7">
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
-                    <div key={idx} className="omega-fade-up flex justify-end">
-                      <div className="max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#2F6FED]/28 bg-[#2F6FED]/15 px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                    <div key={idx} className="animate-fade-up flex justify-end">
+                      <div className="max-w-[90%] sm:max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#2F6FED]/28 bg-[#2F6FED]/15 px-3.5 sm:px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                         {msg.sourceScope && msg.sourceScope !== 'Todas las fuentes' && (
                           <span className="inline-block rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/18 px-2 py-0.5 text-[11px] font-medium text-[#8AB4FF]">
                             {msg.sourceScope}
                           </span>
                         )}
-                        <p className="text-[15px] leading-[1.6] tracking-[-0.008em] text-[#F5F5F7] whitespace-pre-wrap">
+                        <p className="text-[14.5px] sm:text-[15px] leading-[1.6] tracking-[-0.008em] text-[#F5F5F7] whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
                       </div>
@@ -505,24 +505,24 @@ export function ChatWorkspace({
                   ) : msg.isError ? (
                     <div
                       key={idx}
-                      className="omega-fade-up rounded-[12px] border border-[#FF453A]/30 bg-[#FF453A]/10 px-4 py-3.5 flex items-center justify-between gap-4"
+                      className="animate-fade-up rounded-[12px] border border-[#FF453A]/30 bg-[#FF453A]/10 px-4 py-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4"
                     >
-                      <div className="space-y-0.5 text-[14px]">
+                      <div className="space-y-0.5 text-[14px] min-w-0">
                         <p className="font-medium text-[#FFDAD6]">Error al consultar el motor</p>
-                        <p className="text-[13px] text-[#FFDAD6]/80">{msg.content}</p>
+                        <p className="text-[13px] text-[#FFDAD6]/80 break-words">{msg.content}</p>
                       </div>
                       {msg.retryQuery && (
                         <button
                           type="button"
                           onClick={() => onRetryFailedTurn(idx, msg.retryQuery, msg.sourceScope)}
-                          className="shrink-0 h-8 px-3 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/15 text-[12px] font-medium text-[#FFDAD6] hover:bg-[#FF453A]/25 transition-colors cursor-pointer"
+                          className="shrink-0 h-8 px-3 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/15 text-[12px] font-medium text-[#FFDAD6] hover:bg-[#FF453A]/25 active:scale-[0.97] transition-all cursor-pointer"
                         >
                           Reintentar
                         </button>
                       )}
                     </div>
                   ) : (
-                    <div key={idx} className="omega-fade-up">
+                    <div key={idx} className="animate-fade-up">
                       <StructuredResponse
                         message={msg}
                         activeCitation={activeCitation}
@@ -536,7 +536,7 @@ export function ChatWorkspace({
                 )}
 
                 {loading && (
-                  <div className="omega-fade-up inline-flex items-center gap-2.5 py-1 text-[13.5px] text-[#A1A1A6]">
+                  <div className="animate-fade-up inline-flex items-center gap-2.5 py-1 text-[13.5px] text-[#A1A1A6]">
                     <OmegaLogo size={20} isThinking={true} />
                     <span className="tracking-[-0.01em]">
                       {sourceScope === 'Todas las fuentes'
@@ -551,7 +551,7 @@ export function ChatWorkspace({
             </main>
 
             {/* Composer Inferior Flotante + Context Box */}
-            <div className="shrink-0 border-t border-white/[0.05] bg-[#08080A]/75 backdrop-blur-xl px-6 py-3.5">
+            <div className="shrink-0 border-t border-white/[0.05] bg-[#08080A]/75 backdrop-blur-xl px-3.5 sm:px-6 py-3 sm:py-3.5">
               <ContextBox
                 context={chatContext}
                 onUpdateContext={onUpdateChatContext}

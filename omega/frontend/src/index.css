@@ -10,6 +10,15 @@
   --color-cobalt: #2563EB;
   --color-ink-primary: #F8FAFC;
   --color-ink-secondary: #94A3B8;
+
+  /* Tailwind v4 native animation utilities (animate-*) */
+  --animate-fade-up: twFadeUp 0.44s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: twFadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-reveal: twRevealIn 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-scale-in: twScaleIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-slide-right: twSlideRight 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-float-slow: twFloatSlow 6s ease-in-out infinite;
+  --animate-glow-pulse: twGlowPulse 2.8s ease-in-out infinite;
 }
 
 @layer base {
@@ -367,7 +376,36 @@ h2 {
   }
 }
 
+/* Ocultar barras de scroll auxiliares manteniendo desplazamiento táctil */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Tailwind v4 Scroll-Reveal triggered via useScrollReveal IntersectionObserver */
+.animate-on-scroll {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+}
+
+.animate-on-scroll.is-visible {
+  animation: twRevealIn 0.5s var(--ease-apple) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-reveal,
+  .animate-scale-in,
+  .animate-slide-right,
+  .animate-float-slow,
+  .animate-glow-pulse,
+  .animate-on-scroll,
+  .animate-on-scroll.is-visible,
   .omega-fade-up,
   .omega-panel-in,
   .apple-modal-in,
@@ -379,6 +417,8 @@ h2 {
   .omega-prose-typing h2,
   .omega-prose-typing h3 {
     animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 
   .omega-prose-typing > :last-child::after,
@@ -481,5 +521,80 @@ h2 {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes twFadeUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes twFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes twRevealIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes twScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, -4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes twSlideRight {
+  from {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes twFloatSlow {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+@keyframes twGlowPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
   }
 }

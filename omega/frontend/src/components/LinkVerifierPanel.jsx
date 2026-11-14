@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ExternalLink, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
+import { useScrollReveal } from '../lib/useScrollReveal';
 
 function getVerdictPresentation(result) {
   if (result.risk_level === 'HIGH') {
@@ -39,6 +40,9 @@ export function LinkVerifierPanel({
   const [traceError, setTraceError] = useState('');
   const [finalCheckResult, setFinalCheckResult] = useState(null);
   const lastCheckKeyRef = useRef(0);
+  const resultContainerRef = useRef(null);
+
+  useScrollReveal(resultContainerRef, [result?.normalized_url, traceResult?.final_url]);
 
   const canTraceInRam =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.inspectLinkEphemeral);
@@ -133,9 +137,12 @@ export function LinkVerifierPanel({
     const ctiMatches = result.cti_matches || [];
 
     return (
-      <div className="omega-fade-up w-full max-w-[660px] mx-auto pt-2 pb-12 space-y-5">
+      <div
+        ref={resultContainerRef}
+        className="animate-fade-up w-full max-w-[660px] mx-auto pt-2 pb-12 space-y-5"
+      >
         {/* Barra superior */}
-        <header className="flex flex-wrap items-center justify-between gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={() => {
@@ -151,21 +158,21 @@ export function LinkVerifierPanel({
             <span>Verificar otro enlace</span>
           </button>
 
-          <span className="font-tech text-[12px] text-[#8E8E93] truncate max-w-[400px]">
+          <span className="font-tech text-[12px] text-[#8E8E93] truncate max-w-full sm:max-w-[400px]">
             {result.normalized_url}
           </span>
         </header>
 
         {/* Bloque de Veredicto Apple Glass (sin bordes laterales de 2px) */}
-        <section className="apple-group rounded-[15px] p-5">
+        <section className="animate-fade-up apple-group rounded-[15px] p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictMeta.dotColor}`} />
-              <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${verdictMeta.titleColor}`}>
+              <h2 className={`text-[16px] sm:text-[17px] font-semibold tracking-[-0.015em] ${verdictMeta.titleColor}`}>
                 {verdictMeta.headline}
               </h2>
             </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
               {canTraceInRam && (
                 <button
                   type="button"
@@ -204,16 +211,19 @@ export function LinkVerifierPanel({
               )}
             </div>
           </div>
-          <p className="mt-2.5 text-[14px] text-[#E5E5EA] leading-relaxed">
+          <p className="mt-2.5 text-[14px] text-[#E5E5EA] leading-relaxed break-words">
             {result.recommendation}
           </p>
-          <p className="mt-3 text-[12px] text-[#8E8E93]">
+          <p className="mt-3 text-[12px] text-[#8E8E93] break-words">
             {result.privacy_notice}
           </p>
         </section>
 
         {/* Desglose Agrupado en 3 datos */}
-        <section className="apple-group rounded-[13px] grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06] overflow-hidden">
+        <section
+          className="animate-on-scroll apple-group rounded-[13px] grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06] overflow-hidden"
+          data-delay="40"
+        >
           <div className="p-4 min-w-0">
             <div className="text-[11.5px] font-medium text-[#8E8E93]">Host</div>
             <div className="font-tech mt-1.5 text-[12.5px] text-[#F5F5F7] break-all">
@@ -240,13 +250,16 @@ export function LinkVerifierPanel({
 
         {/* Alertas estructurales */}
         {heuristics.length > 0 && (
-          <section className="apple-group rounded-[13px] overflow-hidden">
+          <section
+            className="animate-on-scroll apple-group rounded-[13px] overflow-hidden"
+            data-delay="80"
+          >
             <div className="px-4 py-2.5 border-b border-white/[0.06] text-[12.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
               Alertas estructurales
             </div>
             <ul className="divide-y divide-white/[0.06]">
               {heuristics.map((item, idx) => (
-                <li key={idx} className="px-4 py-3 text-[13px] text-[#D1D1D6]">
+                <li key={idx} className="px-4 py-3 text-[13px] text-[#D1D1D6] break-words">
                   {item}
                 </li>
               ))}
@@ -255,14 +268,17 @@ export function LinkVerifierPanel({
         )}
 
         {traceError && (
-          <div className="rounded-[12px] border border-[#FF453A]/35 bg-[#FF453A]/10 px-4 py-2.5 text-[12.5px] text-[#FF6961]">
+          <div className="animate-fade-in rounded-[12px] border border-[#FF453A]/35 bg-[#FF453A]/10 px-4 py-2.5 text-[12.5px] text-[#FF6961]">
             {traceError}
           </div>
         )}
 
         {/* Trazado Sandboxed en RAM (Electron sin JS ni imágenes) */}
         {traceResult && (
-          <section className="apple-group rounded-[13px] overflow-hidden">
+          <section
+            className="animate-on-scroll apple-group rounded-[13px] overflow-hidden"
+            data-delay="120"
+          >
             <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
               <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
                 Trazado efímero en RAM (Sandbox sin JS)
@@ -391,33 +407,34 @@ export function LinkVerifierPanel({
 
   // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente, max-w-[620px]) ---
   return (
-    <div className="omega-fade-up flex-1 flex flex-col items-center justify-center py-6">
+    <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-6">
       <div className="w-full max-w-[620px]">
-        <header className="text-center mb-7">
-          <h1 className="text-[28px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+        <header className="text-center mb-6 sm:mb-7">
+          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
             Verifica un enlace antes de abrirlo
           </h1>
-          <p className="mt-2.5 text-[14px] text-[#8E8E93] leading-[1.55] max-w-[500px] mx-auto">
+          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#8E8E93] leading-[1.55] max-w-[500px] mx-auto">
             Detecta dominios vinculados a campañas 1-click o URLs ofuscadas sin realizar peticiones HTTP al servidor destino.
           </p>
         </header>
 
         <form
           onSubmit={handleCheck}
-          className="omega-capsule rounded-[15px] p-2.5 flex items-center gap-2.5"
+          style={{ animationDelay: '60ms' }}
+          className="animate-scale-in omega-capsule rounded-[15px] p-2 sm:p-2.5 flex items-center gap-2 sm:gap-2.5"
         >
           <input
             type="text"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="https://enlace-sospechoso.ejemplo/ruta"
-            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2.5 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 sm:px-2.5 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
           />
 
           <button
             type="submit"
             disabled={loading || !urlInput.trim()}
-            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B7BF2] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-3.5 sm:px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Verificar</span>

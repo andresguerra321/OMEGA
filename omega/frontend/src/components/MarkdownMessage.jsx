@@ -180,8 +180,26 @@ export function MarkdownMessage({
               {enhance(children)}
             </blockquote>
           ),
+          table: ({ children }) => (
+            <div className="my-2 w-full overflow-x-auto rounded-[10px] border border-white/[0.08]">
+              <table className="w-full min-w-[420px] border-collapse text-left text-[13px] text-[#E5E5EA]">
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({ children }) => (
+            <thead className="border-b border-white/[0.08] bg-white/[0.04] text-[11px] font-medium uppercase tracking-wide text-[#A1A1A6]">
+              {children}
+            </thead>
+          ),
+          th: ({ children }) => (
+            <th className="px-3 py-2 font-medium">{enhance(children)}</th>
+          ),
+          td: ({ children }) => (
+            <td className="border-t border-white/[0.05] px-3 py-2 align-top">{enhance(children)}</td>
+          ),
           pre: ({ children }) => (
-            <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-4 text-[12.5px] leading-[1.6] text-[#F5F5F7]">
+            <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-3.5 sm:p-4 text-[12.5px] leading-[1.6] text-[#F5F5F7]">
               {children}
             </pre>
           ),
@@ -191,7 +209,7 @@ export function MarkdownMessage({
               return <code className={className}>{children}</code>;
             }
             return (
-              <code className="font-tech whitespace-nowrap rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]">
+              <code className="font-tech break-words rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F5F5F7]">
                 {children}
               </code>
             );

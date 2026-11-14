@@ -28,6 +28,7 @@ import {
 } from '../lib/api';
 import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
+import { useScrollReveal } from '../lib/useScrollReveal';
 
 const SAMPLE_SAFARI_JSON = JSON.stringify(
   [
@@ -210,6 +211,7 @@ export function MvtVerifierPanel({
 }) {
   const fileInputRef = useRef(null);
   const lastPreloadedRef = useRef(null);
+  const resultContainerRef = useRef(null);
 
   const [deviceTab, setDeviceTab] = useState(initialTab || 'android');
   const [inputMode, setInputMode] = useState('upload');
@@ -250,6 +252,8 @@ export function MvtVerifierPanel({
   const hasDesktopBridge =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
   const desktopPlatform = typeof window !== 'undefined' ? window.omegaDesktop?.platform || 'win32' : 'win32';
+
+  useScrollReveal(resultContainerRef, [result?.sourceLabel, result?.verdictCode]);
 
   const fetchUsbStatuses = useCallback(
     async (explicitPath = customAdbPath, includeIos = false, isManual = false) => {
@@ -792,9 +796,12 @@ export function MvtVerifierPanel({
       typeof window !== 'undefined' && Boolean(window.omegaDesktop?.hardenPrivateDns);
 
     return (
-      <div className="omega-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6">
+      <div
+        ref={resultContainerRef}
+        className="animate-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6"
+      >
         {/* Barra superior */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <button
             type="button"
             onClick={handleReset}
@@ -815,11 +822,11 @@ export function MvtVerifierPanel({
         </div>
 
         {/* 1 · Veredicto y contención */}
-        <section className="space-y-2">
+        <section className="animate-fade-up space-y-2">
           <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
             1 · Veredicto y contención
           </span>
-          <div className="apple-group rounded-[15px] p-5 space-y-4">
+          <div className="apple-group rounded-[15px] p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 {!hasAnyThreatSignal ? (
@@ -889,7 +896,7 @@ export function MvtVerifierPanel({
         )}
 
         {/* 2 · Anomalías conductuales y hardening */}
-        <section className="space-y-2">
+        <section className="animate-on-scroll space-y-2" data-delay="50">
           <div className="px-1 flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
               2 · Anomalías conductuales y hardening
@@ -925,7 +932,7 @@ export function MvtVerifierPanel({
 
               return (
                 <div key={chk.control} className="px-4 py-3.5 space-y-2.5">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
@@ -935,11 +942,11 @@ export function MvtVerifierPanel({
                           {chk.control}
                         </span>
                       </div>
-                      <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
+                      <p className="text-[12.5px] text-[#8E8E93] leading-relaxed break-words">
                         {chk.detail}
                       </p>
                     </div>
-                    <span className="font-tech shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
+                    <span className="font-tech self-start shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
                       {chk.value}
                     </span>
                   </div>
@@ -985,7 +992,7 @@ export function MvtVerifierPanel({
             })}
 
             {abuseAlerts.map((al, idx) => (
-              <div key={`${al.indicator}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
+              <div key={`${al.indicator}-${idx}`} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-4">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
@@ -1004,7 +1011,7 @@ export function MvtVerifierPanel({
                   <div className="font-tech text-[12.5px] text-[#E5E5EA] break-all">
                     {al.indicator}
                   </div>
-                  <p className="text-[12.5px] text-[#8E8E93] leading-relaxed">
+                  <p className="text-[12.5px] text-[#8E8E93] leading-relaxed break-words">
                     {al.detail}
                   </p>
                 </div>
@@ -1013,7 +1020,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
-                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1025,7 +1032,7 @@ export function MvtVerifierPanel({
               return (
                 <div
                   key={`${anom.category}-${anom.artifact}-${anom.indicator}-${idx}`}
-                  className="px-4 py-3.5 flex items-start justify-between gap-4"
+                  className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-4"
                 >
                   <div className="min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1045,7 +1052,7 @@ export function MvtVerifierPanel({
                         {anom.category}
                       </span>
                     </div>
-                    <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
+                    <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed break-words">
                       {anom.detail}
                     </p>
                     <div className="font-tech text-[11px] text-[#8E8E93] truncate">
@@ -1057,7 +1064,7 @@ export function MvtVerifierPanel({
                     type="button"
                     disabled={!onAskInChat}
                     onClick={() => handleInvestigateAnomaly(anom)}
-                    className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                    className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
                     Investigar en Preguntar
                   </button>
@@ -1067,7 +1074,7 @@ export function MvtVerifierPanel({
 
             {liveSockets.length > 0 && (
               <div>
-                <div className="px-4 py-2.5 bg-white/[0.02] flex items-center justify-between gap-3">
+                <div className="px-4 py-2.5 bg-white/[0.02] flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[12px] font-medium text-[#D1D1D6]">
                     {isPcPlatform ? 'Conexiones TCP activas' : 'Sockets kernel activos /proc/net/tcp'} ({hardeningReport?.live_sockets_total || liveSockets.length})
                   </span>
@@ -1081,7 +1088,7 @@ export function MvtVerifierPanel({
                   {liveSockets.slice(0, 20).map((sock, idx) => (
                     <div
                       key={`${sock.remote_ip}-${sock.remote_port}-${idx}`}
-                      className="px-4 py-2 flex items-center justify-between gap-3"
+                      className="px-4 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 sm:gap-3"
                     >
                       <div className="min-w-0 flex items-center gap-2.5">
                         <span
@@ -1094,7 +1101,7 @@ export function MvtVerifierPanel({
                           {sock.process_name ? ` · ${sock.process_name}` : ''}
                         </span>
                         {sock.cti_match && (
-                          <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
+                          <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961] shrink-0">
                             CTI · {sock.spyware_family}
                           </span>
                         )}
@@ -1136,7 +1143,7 @@ export function MvtVerifierPanel({
             <div className="apple-group rounded-[13px] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F5F5F7]">
-                  <Clock className="h-3.5 w-3.5 text-[#8AB4FF]" />
+                  <Clock className="h-3.5 w-3.5 text-[#8AB4FF] shrink-0" />
                   <span>
                     Línea temporal correlacionada en RAM ({result.timelineSummary?.events_total || result.timeline.length} eventos)
                   </span>
@@ -1149,8 +1156,8 @@ export function MvtVerifierPanel({
               </div>
               <div className="divide-y divide-white/[0.04] max-h-48 overflow-y-auto">
                 {result.timeline.slice(-8).reverse().map((ev, idx) => (
-                  <div key={`${ev.timestamp}-${ev.kind}-${idx}`} className="px-4 py-2 flex items-start justify-between gap-3 text-[11.5px]">
-                    <div className="min-w-0">
+                  <div key={`${ev.timestamp}-${ev.kind}-${idx}`} className="px-4 py-2 flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-3 text-[11.5px]">
+                    <div className="min-w-0 break-words">
                       <span className={`font-medium ${ev.suspicious ? 'text-[#FF6961]' : 'text-[#E5E5EA]'}`}>
                         {ev.actor}
                       </span>{' '}
@@ -1167,16 +1174,16 @@ export function MvtVerifierPanel({
         </section>
 
         {/* 3 · Coincidencias CTI y firmas YARA */}
-        <section className="space-y-2">
+        <section className="animate-on-scroll space-y-2" data-delay="100">
           <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
             3 · Coincidencias CTI y firmas YARA ({yaraHits.length + result.findings.length})
           </span>
           <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
             {yaraHits.map((hit, idx) => (
-              <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex items-start justify-between gap-4">
+              <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-4">
                 <div className="min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-tech text-[13px] font-medium text-[#F5F5F7]">
+                    <span className="font-tech text-[13px] font-medium text-[#F5F5F7] break-all">
                       {hit.rule_name}
                     </span>
                     <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
@@ -1188,7 +1195,7 @@ export function MvtVerifierPanel({
                       </span>
                     )}
                   </div>
-                  <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
+                  <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed break-words">
                     {hit.description}
                   </p>
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -1200,7 +1207,7 @@ export function MvtVerifierPanel({
                         {tok}
                       </span>
                     ))}
-                    <span className="font-tech text-[11px] text-[#8E8E93] truncate">
+                    <span className="font-tech text-[11px] text-[#8E8E93] break-all sm:truncate">
                       · {hit.artifact}
                     </span>
                   </div>
@@ -1210,7 +1217,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateYara(hit)}
-                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1220,7 +1227,7 @@ export function MvtVerifierPanel({
             {result.findings.map((finding) => (
               <div
                 key={finding.id}
-                className="px-4 py-3.5 flex items-center justify-between gap-4"
+                className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4"
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1240,7 +1247,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateFinding(finding)}
-                  className="shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1260,13 +1267,13 @@ export function MvtVerifierPanel({
 
   // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente) ---
   return (
-    <div className="omega-fade-up flex-1 flex flex-col items-center justify-center py-3">
+    <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-3">
       <div className="w-full max-w-[740px]">
         <header className="text-center mb-3.5">
-          <h1 className="text-[26px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+          <h1 className="text-[23px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
             Verificar integridad del dispositivo
           </h1>
-          <p className="mt-1.5 text-[13.5px] text-[#8E8E93] leading-[1.5] max-w-[540px] mx-auto">
+          <p className="mt-1.5 text-[13px] sm:text-[13.5px] text-[#8E8E93] leading-[1.5] max-w-[540px] mx-auto">
             Revisa tu celular por cable USB o con una copia guardada. Todo se analiza de forma temporal, sin guardar tus fotos ni archivos en esta computadora.
           </p>
         </header>
@@ -1348,12 +1355,12 @@ export function MvtVerifierPanel({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <div className="apple-segmented inline-flex rounded-[8px] p-0.5">
+                <div className="flex flex-wrap items-center gap-1.5 max-w-full">
+                  <div className="apple-segmented inline-flex max-w-full overflow-x-auto no-scrollbar rounded-[8px] p-0.5">
                     <button
                       type="button"
                       onClick={() => setDeviceTab('android')}
-                      className={`rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                      className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
                         deviceTab === 'android'
                           ? 'apple-segmented-active'
                           : 'text-[#8E8E93] hover:text-[#F5F5F7]'
@@ -1364,7 +1371,7 @@ export function MvtVerifierPanel({
                     <button
                       type="button"
                       onClick={() => setDeviceTab('ios')}
-                      className={`rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                      className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
                         deviceTab === 'ios'
                           ? 'apple-segmented-active'
                           : 'text-[#8E8E93] hover:text-[#F5F5F7]'
@@ -1375,7 +1382,7 @@ export function MvtVerifierPanel({
                     <button
                       type="button"
                       onClick={() => setDeviceTab('pc')}
-                      className={`rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                      className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
                         deviceTab === 'pc'
                           ? 'apple-segmented-active'
                           : 'text-[#8E8E93] hover:text-[#F5F5F7]'
@@ -1889,7 +1896,7 @@ export function MvtVerifierPanel({
         })()}
 
         {/* Disparador 2: Cargar respaldo / volcado */}
-        <div className="omega-capsule rounded-[16px] p-4">
+        <div style={{ animationDelay: '60ms' }} className="animate-scale-in omega-capsule rounded-[16px] p-3.5 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
               Cargar respaldo / volcado
@@ -1908,14 +1915,14 @@ export function MvtVerifierPanel({
           </div>
 
           <div className="mb-3">
-            <div className="apple-segmented inline-flex rounded-[9px] p-0.5">
+            <div className="apple-segmented grid grid-cols-1 sm:inline-flex gap-1 sm:gap-0 w-full sm:w-auto rounded-[9px] p-0.5">
               <button
                 type="button"
                 onClick={() => {
                   setInputMode('upload');
                   setErrorMsg('');
                 }}
-                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium text-center active:scale-[0.98] transition-all duration-150 cursor-pointer ${
                   inputMode === 'upload'
                     ? 'apple-segmented-active'
                     : 'text-[#8E8E93] hover:text-[#F5F5F7]'
@@ -1929,7 +1936,7 @@ export function MvtVerifierPanel({
                   setInputMode('paste');
                   setErrorMsg('');
                 }}
-                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium text-center active:scale-[0.98] transition-all duration-150 cursor-pointer ${
                   inputMode === 'paste'
                     ? 'apple-segmented-active'
                     : 'text-[#8E8E93] hover:text-[#F5F5F7]'
@@ -1957,7 +1964,7 @@ export function MvtVerifierPanel({
                   analyzeFiles(e.dataTransfer.files);
                 }
               }}
-              className={`rounded-[12px] border border-dashed py-5 px-6 flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer ${
+              className={`rounded-[12px] border border-dashed py-5 px-4 sm:px-6 flex flex-col items-center justify-center text-center transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
                 isDragging
                   ? 'border-[#2F6FED] bg-[#2F6FED]/12'
                   : 'border-white/[0.12] bg-black/25 hover:border-[#2F6FED]/55 hover:bg-black/35'
@@ -1996,7 +2003,7 @@ export function MvtVerifierPanel({
                 type="button"
                 disabled={isAnalyzing}
                 onClick={handleRunSample}
-                className="mt-3 rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-1 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/20 disabled:opacity-50 transition-colors cursor-pointer"
+                className="mt-3 rounded-full border border-[#2F6FED]/35 bg-[#2F6FED]/12 px-3 py-1 text-[12px] font-medium text-[#8AB4FF] hover:bg-[#2F6FED]/20 active:scale-[0.97] disabled:opacity-50 transition-all cursor-pointer"
               >
                 Probar con muestra de ejemplo
               </button>
@@ -2013,7 +2020,7 @@ export function MvtVerifierPanel({
                 />
               </div>
 
-              <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5">
                 <span className="text-[12px] text-[#8E8E93]">
                   Uno por línea · Enlaces web, dominios, IPs o códigos
                 </span>

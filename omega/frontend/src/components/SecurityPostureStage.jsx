@@ -416,7 +416,7 @@ export function SecurityPostureStage({
             <div
               role="listbox"
               aria-label="Cambiar superficie mostrada"
-              className="mt-2 w-[260px] rounded-[14px] border border-white/[0.12] bg-[#070B14]/95 backdrop-blur-xl p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.65)] text-left"
+              className="animate-scale-in origin-top mt-2 w-[260px] rounded-[14px] border border-white/[0.12] bg-[#070B14]/95 backdrop-blur-xl p-1.5 shadow-[0_20px_48px_rgba(0,0,0,0.65)] text-left"
             >
               {SURFACE_ORDER.map((id) => {
                 const s = surfaces[id];
@@ -477,7 +477,7 @@ export function SecurityPostureStage({
             />
           </svg>
 
-          <div className="pointer-events-auto -mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#070B14]/90 border border-white/[0.1] backdrop-blur-md px-2.5 py-1 shadow-lg">
+          <div className="animate-fade-up pointer-events-auto -mt-4 inline-flex items-center gap-2.5 rounded-full bg-[#070B14]/90 border border-white/[0.1] backdrop-blur-md px-2.5 py-1 shadow-lg">
             <button
               type="button"
               onClick={() => stepSurface(-1)}
@@ -554,10 +554,13 @@ export function SecurityPostureStage({
       </div>
 
       {/* Trío Inferior de Tarjetas de Vidrio Oscuro (Bento Sereno Negro · Blanco · Azul Rey) */}
-      <footer className="relative z-20 shrink-0 px-5 sm:px-7 pb-4 pt-2">
+      <footer className="relative z-20 shrink-0 px-3.5 sm:px-7 pb-4 pt-2">
         <div className="mx-auto max-w-[1280px] grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Tarjeta 1: Detalles del Equipo Local & Acción Primaria en Azul Rey */}
-          <div className="omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5">
+          <div
+            style={{ animationDelay: '60ms' }}
+            className="animate-fade-up omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.16]"
+          >
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h2 className="text-[14px] font-semibold text-white leading-tight">
@@ -637,7 +640,10 @@ export function SecurityPostureStage({
           </div>
 
           {/* Tarjeta 2: Dispositivos USB (Android ADB & iPhone iOS) */}
-          <div className="omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5">
+          <div
+            style={{ animationDelay: '120ms' }}
+            className="animate-fade-up omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.16]"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="inline-flex items-center gap-2">
                 <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#60A5FA] inline-flex items-center justify-center">
@@ -703,7 +709,10 @@ export function SecurityPostureStage({
           </div>
 
           {/* Tarjeta 3: Escudo Web Pasivo & Corpus STIX 2.1 */}
-          <div className="omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5">
+          <div
+            style={{ animationDelay: '180ms' }}
+            className="animate-fade-up omega-glass-card rounded-[20px] p-4 flex flex-col justify-between gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.16]"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="inline-flex items-center gap-2">
                 <span className="h-7 w-7 rounded-lg bg-[#1D4ED8]/20 border border-[#3B82F6]/30 text-[#60A5FA] inline-flex items-center justify-center">
