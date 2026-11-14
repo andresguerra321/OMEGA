@@ -15,6 +15,10 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * Proveedor OpenAI para embeddings vectoriales (`text-embedding-3-small`, 1536 dimensiones)
  * con soporte de batching, validación dimensional estricta y reintentos ante fallos transitorios.
+ * <p>Alcance ético y de privacidad (RNF4/RNF7): desacoplado tras {@link EmbeddingProvider}
+ * para ser reemplazable por inferencia local; únicamente vectoriza texto del corpus CTI
+ * e indexación documental en {@code omega_rag} y jamás recibe evidencia forense volátil
+ * procesada en RAM por {@code omega/api/} ni activos OSINT.</p>
  */
 @Service
 @ConditionalOnProperty(prefix = "omega.rag", name = "embedding-provider", havingValue = "openai", matchIfMissing = true)
