@@ -15,7 +15,7 @@ import ipaddress
 import json
 from typing import Any
 
-from services import DB_DSN
+from cti_db import lookup_iocs_detailed
 from yara_engine import scan_artifacts_with_yara
 
 IMPERSONATED_WIN_BINARIES = {
@@ -205,38 +205,19 @@ def _lookup_host_cti_matches(
         return []
 
     try:
-        import psycopg
-
-        with psycopg.connect(DB_DSN) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT DISTINCT ON (LOWER(i.ioc_value), COALESCE(c.spyware_family, 'Spyware Comercial'))
-                        i.ioc_value,
-                        i.ioc_type,
-                        COALESCE(c.spyware_family, 'Spyware Comercial'),
-                        COALESCE(c.name, 'Catálogo OMEGA'),
-                        COALESCE(r.title, '')
-                    FROM iocs i
-                    LEFT JOIN campaigns c ON i.campaign_id = c.id
-                    LEFT JOIN reports r ON c.report_id = r.id
-                    WHERE LOWER(i.ioc_value) = ANY(%s)
-                    ORDER BY LOWER(i.ioc_value), COALESCE(c.spyware_family, 'Spyware Comercial');
-                    """,
-                    (candidates,),
-                )
-                return [
-                    {
-                        "ioc_value": row[0],
-                        "ioc_type": row[1],
-                        "spyware_family": row[2],
-                        "campaign": row[3],
-                        "source_report": row[4],
-                        "artifact_origin": f"Host Live Audit ({row[1]})",
-                        "context": f"Coincidencia directa detectada en memoria del equipo ({row[1]}).",
-                    }
-                    for row in cur.fetchall()
-                ]
+        rows = lookup_iocs_detailed(candidates)
+        return [
+            {
+                "ioc_value": row["ioc_value"],
+                "ioc_type": row["ioc_type"],
+                "spyware_family": row["spyware_family"],
+                "campaign": row["campaign"],
+                "source_report": row["source_report"],
+                "artifact_origin": f"Host Live Audit ({row['ioc_type']})",
+                "context": f"Coincidencia directa detectada en memoria del equipo ({row['ioc_type']}).",
+            }
+            for row in rows
+        ]
     except Exception:
         return []
 

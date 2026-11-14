@@ -89,4 +89,13 @@ public final class ForensicWorkerContracts {
             @JsonProperty("ephemeral_notice") String ephemeralNotice
     ) {
     }
+
+    public record YaraScanResponse(
+            @JsonProperty("scan_mode") String scanMode,
+            @JsonProperty("files_scanned") int filesScanned,
+            @JsonProperty("hits_count") int hitsCount,
+            List<Map<String, Object>> hits,
+            @JsonProperty("yara_engine") Map<String, Object> yaraEngine
+    ) {
+    }
 }

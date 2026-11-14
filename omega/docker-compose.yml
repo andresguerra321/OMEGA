@@ -1,26 +1,27 @@
 services:
+  # 1. PostgreSQL 16 + pgvector + tsvector híbrido (aislado en red privada)
   postgres:
     image: pgvector/pgvector:pg16
     container_name: omega_postgres
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     volumes:
       - omega_pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      omega-internal:
+      omega-private:
         aliases:
           - omega-db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omega_admin} -d ${POSTGRES_DB:-omega_cti}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 6
 
-  # Worker forense interno aislado (sin exposición pública directa de puertos)
+  # 2. Microservicio Forense Stateless (In-RAM Only, sin puertos públicos y protegido por X-Internal-Service-Token)
   forensic-worker:
     build:
       context: ./api
@@ -31,25 +32,30 @@ services:
       - .env
     environment:
       POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}
     expose:
       - "8000"
-    volumes:
-      - omega_hf_cache:/root/.cache/huggingface
-      - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
     networks:
-      omega-internal:
+      omega-private:
         aliases:
           - omega-api
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os, urllib.request; req = urllib.request.Request('http://127.0.0.1:8000/api/health', headers={'X-Internal-Service-Token': os.environ['INTERNAL_SERVICE_TOKEN']}); urllib.request.urlopen(req, timeout=3)",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
 
-  # Núcleo transaccional, seguridad multi-tenant, OCR Zero-Retention y motor RAG híbrido
+  # 3. Core Transaccional, Seguridad Multi-Tenant, OCR Zero-Retention y Motor RAG Híbrido (Java 21 / Spring Boot)
   backend-java:
     build:
       context: ./backend-java
@@ -60,19 +66,26 @@ services:
       - .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-omega_cti}?currentSchema=omega_rag,public
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
       OMEGA_JWT_SECRET: ${OMEGA_JWT_SECRET:-omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}
       OMEGA_INGEST_TMP_DIR: /tmp/omega_ingest
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/4.00/tessdata
       OMEGA_FORENSIC_WORKER_URL: http://forensic-worker:8000
       OMEGA_EMBEDDING_MODEL: ${OMEGA_EMBEDDING_MODEL:-text-embedding-3-small}
+      OMEGA_STIX_CORPUS_DIR: /app/corpus_mvp/iocs
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - "${JAVA_BACKEND_PORT:-8080}:8080"
-    # Directorio temporal volátil estrictamente en RAM sin ejecución de binarios (Zero-Retention)
+    # Directorio temporal volátil estrictamente en RAM sin ejecución (Zero-Retention; uid=10001 = usuario no-root omega)
     tmpfs:
-      - /tmp/omega_ingest:rw,noexec,nosuid,nodev,size=256m,mode=0700,uid=10001,gid=10001
+      - /tmp/omega_ingest:rw,noexec,nosuid,nodev,size=512m,mode=0700,uid=10001,gid=10001
+    volumes:
+      - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
     networks:
-      - omega-internal
+      - omega-public
+      - omega-private
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,26 +98,12 @@ services:
       retries: 6
       start_period: 30s
 
-  omega-frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: omega_frontend
-    restart: unless-stopped
-    ports:
-      - "5173:80"
-    networks:
-      - omega-internal
-    depends_on:
-      forensic-worker:
-        condition: service_started
-      backend-java:
-        condition: service_healthy
-
 networks:
-  omega-internal:
+  omega-public:
     driver: bridge
+  omega-private:
+    driver: bridge
+    internal: true
 
 volumes:
   omega_pgdata:
-  omega_hf_cache:

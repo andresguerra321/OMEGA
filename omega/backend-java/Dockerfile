@@ -21,6 +21,8 @@ RUN apt-get update \
        libleptonica-dev \
     && rm -rf /var/lib/apt/lists/*
 
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
+
 RUN groupadd -g 10001 omega \
     && useradd -u 10001 -g omega -m -s /usr/sbin/nologin omega \
     && mkdir -p /tmp/omega_ingest \

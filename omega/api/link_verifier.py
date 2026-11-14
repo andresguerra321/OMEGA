@@ -1,19 +1,10 @@
 import json
-import os
 import re
 import urllib.parse
 import urllib.request
-from pathlib import Path
 from urllib.parse import urlparse
-import psycopg
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
-DB_DSN = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
-)
+from cti_db import lookup_iocs_detailed
 
 URL_SHORTENERS = {
     "bit.ly",
@@ -58,7 +49,7 @@ def _passive_cert_count(domain: str) -> int | None:
             f"https://crt.sh/?q={q}&output=json",
             headers={"User-Agent": "Omega-CTI-Passive-Check/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=6) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
             return len(data) if isinstance(data, list) else 0
     except Exception:
@@ -93,41 +84,7 @@ def inspect_suspicious_link(raw_url: str) -> dict:
     # Búsqueda exacta en base local de IOCs indexados (URL completa, host y dominio raíz)
     candidates = list({normalized_url.lower(), host, *([root_domain] if root_domain else [])})
 
-    with psycopg.connect(DB_DSN) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    i.ioc_type,
-                    i.ioc_value,
-                    i.context,
-                    COALESCE(c.name, 'Sin campaña vinculada') AS campaign_name,
-                    COALESCE(c.spyware_family, 'Desconocida') AS spyware_family,
-                    r.title AS report_title,
-                    r.organization,
-                    r.source_url
-                FROM iocs i
-                JOIN reports r ON i.report_id = r.id
-                LEFT JOIN campaigns c ON i.campaign_id = c.id
-                WHERE i.ioc_value = ANY(%s);
-                """,
-                (candidates,),
-            )
-            rows = cur.fetchall()
-
-    cti_matches = [
-        {
-            "ioc_type": r[0],
-            "ioc_value": r[1],
-            "context": r[2],
-            "campaign": r[3],
-            "spyware_family": r[4],
-            "source_report": r[5],
-            "organization": r[6],
-            "source_url": r[7],
-        }
-        for r in rows
-    ]
+    cti_matches = lookup_iocs_detailed(candidates)
 
     cert_records = _passive_cert_count(host) if not IPV4_HOST_RE.match(host) else None
 

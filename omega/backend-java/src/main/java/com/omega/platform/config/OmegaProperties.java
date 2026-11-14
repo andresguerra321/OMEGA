@@ -14,7 +14,8 @@ public record OmegaProperties(
         @Valid Security security,
         @Valid Ingest ingest,
         @Valid Rag rag,
-        @Valid ForensicWorker forensicWorker
+        @Valid ForensicWorker forensicWorker,
+        @Valid Cti cti
 ) {
 
     public record Security(
@@ -23,7 +24,8 @@ public record OmegaProperties(
             @Positive long jwtExpirationSeconds,
             @NotBlank String jwtIssuer,
             boolean allowTenantSelfRegistration,
-            String bootstrapSecret
+            String bootstrapSecret,
+            @NotBlank String internalServiceToken
     ) {
     }
 
@@ -35,8 +37,17 @@ public record OmegaProperties(
     }
 
     public record Rag(
+            @NotBlank String embeddingProvider,
             @NotBlank String embeddingModel,
             @Positive int embeddingDimensions,
+            @NotBlank String openAiBaseUrl,
+            String openAiApiKey,
+            @Min(1) int openAiBatchSize,
+            @Min(0) int openAiMaxRetries,
+            @NotBlank String chatModel,
+            @Positive int rrfK,
+            @Positive double vectorWeight,
+            @Positive double lexicalWeight,
             @Min(100) int minChunkTokens,
             @Min(200) int maxChunkTokens,
             @Min(0) int chunkOverlapTokens
@@ -47,6 +58,11 @@ public record OmegaProperties(
             @NotBlank String baseUrl,
             @Positive int connectTimeoutMs,
             @Positive int readTimeoutMs
+    ) {
+    }
+
+    public record Cti(
+            @NotBlank String stixCorpusDir
     ) {
     }
 }

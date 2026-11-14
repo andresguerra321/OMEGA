@@ -1,16 +1,7 @@
-import os
 import re
 from datetime import datetime, timezone
-from pathlib import Path
-import psycopg
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
-DB_DSN = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
-)
+from cti_db import fetch_campaign_detection_bundle
 
 
 def _sanitize_rule_name(name: str) -> str:
@@ -23,57 +14,13 @@ def _sanitize_rule_name(name: str) -> str:
 
 def generate_yara_for_campaign(campaign_id: str) -> dict | None:
     """Genera una regla YARA defensiva trazable a partir de IOCs públicos de una campaña (RNF7)."""
-    with psycopg.connect(DB_DSN) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT name, spyware_family, suspected_actor, first_seen_date::text
-                FROM campaigns
-                WHERE id = %s::uuid;
-                """,
-                (campaign_id,),
-            )
-            camp = cur.fetchone()
-            if not camp:
-                return None
+    camp, iocs, cves, sources = fetch_campaign_detection_bundle(campaign_id)
+    if not camp:
+        return None
 
-            cur.execute(
-                """
-                SELECT DISTINCT ioc_type, ioc_value
-                FROM iocs
-                WHERE campaign_id = %s::uuid
-                ORDER BY ioc_type, ioc_value
-                LIMIT 80;
-                """,
-                (campaign_id,),
-            )
-            iocs = cur.fetchall()
-
-            cur.execute(
-                """
-                SELECT DISTINCT cv.cve_code
-                FROM campaign_cves cc
-                JOIN cves cv ON cc.cve_id = cv.id
-                WHERE cc.campaign_id = %s::uuid;
-                """,
-                (campaign_id,),
-            )
-            cves = [r[0] for r in cur.fetchall()]
-
-            cur.execute(
-                """
-                SELECT DISTINCT source_url
-                FROM reports
-                WHERE campaign_id = %s::uuid
-                LIMIT 5;
-                """,
-                (campaign_id,),
-            )
-            sources = [r[0] for r in cur.fetchall()]
-
-    rule_name = _sanitize_rule_name(camp[0])
+    rule_name = _sanitize_rule_name(camp["name"])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    safe_desc = camp[0].replace('"', "'")
+    safe_desc = camp["name"].replace('"', "'")
 
     string_defs = []
     idx = 1
@@ -104,8 +51,8 @@ rule {rule_name} {{
         author = "Omega Defensive CTI Platform"
         date = "{today}"
         campaign = "{safe_desc}"
-        spyware_family = "{camp[1]}"
-        suspected_actor = "{camp[2] or 'No atribuido'}"
+        spyware_family = "{camp['spyware_family']}"
+        suspected_actor = "{camp['suspected_actor']}"
         cves = "{', '.join(cves) if cves else 'N/A'}"
         reference = "{sources[0] if sources else 'Corpus público CTI'}"
         tlp = "TLP:CLEAR"
@@ -120,7 +67,7 @@ rule {rule_name} {{
 
     return {
         "campaign_id": campaign_id,
-        "campaign_name": camp[0],
+        "campaign_name": camp["name"],
         "rule_name": rule_name,
         "filename": f"{rule_name.lower()}.yar",
         "ioc_count": len(iocs),
@@ -130,26 +77,9 @@ rule {rule_name} {{
 
 def generate_mvt_triage_script(campaign_id: str) -> dict | None:
     """Genera un script Bash defensivo de solo lectura para ejecutar MVT localmente (RNF7)."""
-    with psycopg.connect(DB_DSN) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT name, spyware_family FROM campaigns WHERE id = %s::uuid;",
-                (campaign_id,),
-            )
-            camp = cur.fetchone()
-            if not camp:
-                return None
-
-            cur.execute(
-                """
-                SELECT DISTINCT ioc_type, ioc_value
-                FROM iocs
-                WHERE campaign_id = %s::uuid
-                LIMIT 100;
-                """,
-                (campaign_id,),
-            )
-            iocs = cur.fetchall()
+    camp, iocs, _cves, _sources = fetch_campaign_detection_bundle(campaign_id)
+    if not camp:
+        return None
 
     stix_objects = []
     for idx, (ioc_type, val) in enumerate(iocs, start=1):
@@ -177,11 +107,11 @@ def generate_mvt_triage_script(campaign_id: str) -> dict | None:
         + "\n  ]\n}"
     )
 
-    slug = _sanitize_rule_name(camp[0]).lower()
+    slug = _sanitize_rule_name(camp["name"]).lower()
     script_sh = f"""#!/usr/bin/env bash
 # ==============================================================================
 # Omega CTI — Script Defensivo de Extracción Local con Mobile Verification Toolkit
-# Campaña: {camp[0]} ({camp[1]})
+# Campaña: {camp["name"]} ({camp["spyware_family"]})
 # Alcance Ético (RNF7): Ejecutar EXCLUSIVAMENTE sobre dispositivos propios con
 # autorización explícita del titular. No realiza modificaciones en el dispositivo.
 # ==============================================================================

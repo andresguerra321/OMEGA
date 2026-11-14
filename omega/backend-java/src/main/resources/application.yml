@@ -32,6 +32,11 @@ spring:
 
 server:
   port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
   error:
     include-message: never
     include-binding-errors: never
@@ -48,18 +53,28 @@ management:
 
 omega:
   security:
-    jwt-secret: ${OMEGA_JWT_SECRET:omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}
+    jwt-secret: ${OMEGA_JWT_SECRET:${JWT_SECRET:omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}}
     jwt-expiration-seconds: ${OMEGA_JWT_EXPIRATION_SECONDS:3600}
     jwt-issuer: omega-rag-core
     allow-tenant-self-registration: ${OMEGA_ALLOW_TENANT_SELF_REGISTRATION:true}
     bootstrap-secret: ${OMEGA_BOOTSTRAP_SECRET:}
+    internal-service-token: ${INTERNAL_SERVICE_TOKEN:omega-dev-internal-service-token-change-in-prod}
   ingest:
     temp-dir: ${OMEGA_INGEST_TMP_DIR:/tmp/omega_ingest}
     max-pdf-bytes: ${OMEGA_MAX_PDF_BYTES:26214400}
-    tesseract-data-path: ${TESSDATA_PREFIX:/usr/share/tesseract-ocr/5/tessdata}
+    tesseract-data-path: ${TESSDATA_PREFIX:/usr/share/tesseract-ocr/4.00/tessdata}
   rag:
+    embedding-provider: ${OMEGA_EMBEDDING_PROVIDER:openai}
     embedding-model: ${OMEGA_EMBEDDING_MODEL:text-embedding-3-small}
-    embedding-dimensions: 1536
+    embedding-dimensions: ${OMEGA_EMBEDDING_DIMENSIONS:1536}
+    open-ai-base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    open-ai-api-key: ${OPENAI_API_KEY:}
+    open-ai-batch-size: ${OPENAI_BATCH_SIZE:32}
+    open-ai-max-retries: ${OPENAI_MAX_RETRIES:2}
+    chat-model: ${OMEGA_CHAT_MODEL:gpt-4o-mini}
+    rrf-k: 60
+    vector-weight: 1.0
+    lexical-weight: 1.0
     min-chunk-tokens: 500
     max-chunk-tokens: 1000
     chunk-overlap-tokens: 120
@@ -67,3 +82,5 @@ omega:
     base-url: ${OMEGA_FORENSIC_WORKER_URL:http://forensic-worker:8000}
     connect-timeout-ms: 5000
     read-timeout-ms: 120000
+  cti:
+    stix-corpus-dir: ${OMEGA_STIX_CORPUS_DIR:/app/corpus_mvp/iocs}

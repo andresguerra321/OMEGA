@@ -1,17 +1,8 @@
 import json
-import os
 import re
-from pathlib import Path
 from urllib.parse import urlparse
-import psycopg
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
-DB_DSN = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
-)
+from cti_db import lookup_iocs_detailed
 
 DEFANG_RULES = [
     (re.compile(r"hxxps://", re.IGNORECASE), "https://"),
@@ -271,45 +262,18 @@ def analyze_forensic_payload(raw_text: str, filename: str | None = None) -> dict
             "matches": [],
         }
 
-    with psycopg.connect(DB_DSN) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    i.ioc_type,
-                    i.ioc_value,
-                    i.context,
-                    COALESCE(c.name, 'Sin campaña vinculada') AS campaign_name,
-                    COALESCE(c.spyware_family, 'Desconocida') AS spyware_family,
-                    r.title AS report_title,
-                    r.organization,
-                    r.source_url
-                FROM iocs i
-                JOIN reports r ON i.report_id = r.id
-                LEFT JOIN campaigns c ON i.campaign_id = c.id
-                WHERE i.ioc_value = ANY(%s);
-                """,
-                (candidate_values,),
-            )
-            rows = cur.fetchall()
+    rows = lookup_iocs_detailed(candidate_values)
 
     matches = []
-    for r in rows:
-        matched_val = r[1]
+    for row in rows:
+        matched_val = row["ioc_value"]
         token_meta = registry.get(matched_val, {})
         is_root = token_meta.get("is_derived_root", False)
         matches.append(
             {
-                "ioc_type": r[0],
-                "ioc_value": matched_val,
+                **row,
                 "match_precision": "Dominio Raíz Relacionado" if is_root else "Exacto",
                 "artifact_origin": token_meta.get("origin", "Entrada del usuario"),
-                "context": r[2],
-                "campaign": r[3],
-                "spyware_family": r[4],
-                "source_report": r[5],
-                "organization": r[6],
-                "source_url": r[7],
             }
         )
 

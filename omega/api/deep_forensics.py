@@ -12,8 +12,7 @@ import json
 import re
 import sqlite3
 from typing import Any
-import psycopg
-from cti_ingestor_core import DB_DSN
+from cti_db import fetch_yara_iocs, lookup_ioc_families
 
 # Firmas YARA / Patrones binarios defensivos de cadenas de explotación conocidas
 BUILTIN_DETECTION_SIGNATURES: list[dict[str, Any]] = [
@@ -205,23 +204,9 @@ def annotate_sockets_with_cti(sockets: list[dict]) -> list[dict]:
     if not remote_ips:
         return sockets
 
-    matched_map: dict[str, str] = {}
     try:
-        with psycopg.connect(DB_DSN) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT i.ioc_value, COALESCE(c.spyware_family, 'Spyware')
-                    FROM iocs i
-                    LEFT JOIN campaigns c ON i.campaign_id = c.id
-                    WHERE i.ioc_value = ANY(%s)
-                      AND i.ioc_type IN ('ip', 'domain');
-                    """,
-                    (remote_ips,),
-                )
-                for ip_val, fam in cur.fetchall():
-                    matched_map[str(ip_val).lower()] = str(fam)
-    except psycopg.Error:
+        matched_map = lookup_ioc_families(remote_ips, ("ip", "domain"))
+    except Exception:
         return sockets
 
     for sock in sockets:
@@ -452,29 +437,11 @@ def _load_db_yara_iocs() -> list[tuple[bytes, str, str, str]]:
     """Carga IOCs de cadena y red desde PostgreSQL para caza binaria en RAM."""
     records: list[tuple[bytes, str, str, str]] = []
     try:
-        with psycopg.connect(DB_DSN) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT DISTINCT ON (i.ioc_value, c.spyware_family)
-                        i.ioc_value,
-                        i.ioc_type,
-                        COALESCE(c.spyware_family, 'Spyware'),
-                        r.title
-                    FROM iocs i
-                    JOIN reports r ON i.report_id = r.id
-                    LEFT JOIN campaigns c ON i.campaign_id = c.id
-                    WHERE i.ioc_type IN ('domain', 'url', 'process', 'package', 'ip', 'file_path')
-                      AND LENGTH(i.ioc_value) >= 7
-                    ORDER BY i.ioc_value, c.spyware_family
-                    LIMIT 3500;
-                    """
-                )
-                for val, ioc_type, fam, title in cur.fetchall():
-                    clean_val = str(val).strip().lower()
-                    if clean_val:
-                        records.append((clean_val.encode("utf-8", errors="ignore"), str(ioc_type), str(fam), str(title)))
-    except psycopg.Error:
+        for val, ioc_type, fam in fetch_yara_iocs(limit=3500):
+            clean_val = str(val).strip().lower()
+            if clean_val:
+                records.append((clean_val.encode("utf-8", errors="ignore"), str(ioc_type), str(fam), "Catálogo CTI OMEGA"))
+    except Exception:
         pass
     return records
 

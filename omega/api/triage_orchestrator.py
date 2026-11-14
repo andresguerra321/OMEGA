@@ -5,11 +5,9 @@ import os
 import re
 import sqlite3
 from urllib.parse import urlparse
-import psycopg
-from groq import Groq
 
 from behavioral_forensics import run_behavioral_forensics, unpack_forensic_archives_in_ram
-from cti_ingestor_core import DB_DSN
+from cti_db import lookup_iocs_detailed
 from deep_forensics import (
     inspect_ios_manifest_db,
     parse_kernel_network_sockets,
@@ -18,9 +16,6 @@ from deep_forensics import (
 )
 from temporal_correlator import correlate_temporal_chains, inspect_mobile_profiles_and_certs
 from yara_engine import get_yara_engine_status
-
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 DEFANG_RULES = [
     (re.compile(r"hxxps://", re.IGNORECASE), "https://"),
@@ -273,45 +268,16 @@ def _correlate_with_cti_db(tokens: dict[str, dict]) -> list[dict]:
     if not tokens:
         return []
 
-    candidate_vals = list(tokens.keys())
-    with psycopg.connect(DB_DSN) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    i.ioc_type,
-                    i.ioc_value,
-                    i.context,
-                    COALESCE(c.name, 'Sin campaña vinculada') AS campaign_name,
-                    COALESCE(c.spyware_family, 'Desconocida') AS spyware_family,
-                    r.title AS report_title,
-                    r.organization,
-                    r.source_url
-                FROM iocs i
-                JOIN reports r ON i.report_id = r.id
-                LEFT JOIN campaigns c ON i.campaign_id = c.id
-                WHERE i.ioc_value = ANY(%s);
-                """,
-                (candidate_vals,),
-            )
-            rows = cur.fetchall()
-
+    rows = lookup_iocs_detailed(list(tokens.keys()))
     matches = []
-    for r in rows:
-        val = r[1]
+    for row in rows:
+        val = row["ioc_value"]
         meta = tokens.get(val, {})
         matches.append(
             {
-                "ioc_type": r[0],
-                "ioc_value": val,
+                **row,
                 "match_precision": "Dominio Raíz Relacionado" if meta.get("derived") else "Exacto",
                 "artifact_origin": meta.get("origin", "Artefacto"),
-                "context": r[2],
-                "campaign": r[3],
-                "spyware_family": r[4],
-                "source_report": r[5],
-                "organization": r[6],
-                "source_url": r[7],
             }
         )
     return matches

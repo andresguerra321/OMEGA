@@ -7,10 +7,13 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
- * Cliente HTTP tipado para comunicarse únicamente con el worker forense interno en Docker (`omega/api`).
+ * Clientes HTTP tipados para comunicarse con el worker forense interno en Docker
+ * (`X-Internal-Service-Token`) y con el proveedor de embeddings/LLM configurado.
  */
 @Configuration
 public class RestClientConfig {
+
+    public static final String INTERNAL_TOKEN_HEADER = "X-Internal-Service-Token";
 
     @Bean
     public RestClient forensicWorkerRestClient(OmegaProperties properties) {
@@ -20,6 +23,19 @@ public class RestClientConfig {
 
         return RestClient.builder()
                 .baseUrl(properties.forensicWorker().baseUrl())
+                .defaultHeader(INTERNAL_TOKEN_HEADER, properties.security().internalServiceToken())
+                .requestFactory(factory)
+                .build();
+    }
+
+    @Bean
+    public RestClient openAiRestClient(OmegaProperties properties) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(10));
+        factory.setReadTimeout(Duration.ofSeconds(60));
+
+        return RestClient.builder()
+                .baseUrl(properties.rag().openAiBaseUrl())
                 .requestFactory(factory)
                 .build();
     }

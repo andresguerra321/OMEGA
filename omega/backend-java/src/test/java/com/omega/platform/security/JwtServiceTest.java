@@ -49,10 +49,33 @@ class JwtServiceTest {
 
     private static OmegaProperties defaultProps(String secret, String ignoredProfile) {
         return new OmegaProperties(
-                new OmegaProperties.Security(secret, 3600, "omega-rag-core", true, ""),
-                new OmegaProperties.Ingest("/tmp/omega_ingest", 26214400L, "/usr/share/tesseract-ocr/5/tessdata"),
-                new OmegaProperties.Rag("text-embedding-3-small", 1536, 500, 1000, 120),
-                new OmegaProperties.ForensicWorker("http://forensic-worker:8000", 5000, 120000)
+                new OmegaProperties.Security(
+                        secret,
+                        3600,
+                        "omega-rag-core",
+                        true,
+                        "",
+                        "omega-test-internal-service-token"
+                ),
+                new OmegaProperties.Ingest("/tmp/omega_ingest", 26214400L, "/usr/share/tesseract-ocr/4.00/tessdata"),
+                new OmegaProperties.Rag(
+                        "openai",
+                        "text-embedding-3-small",
+                        1536,
+                        "https://api.openai.com/v1",
+                        "",
+                        32,
+                        2,
+                        "gpt-4o-mini",
+                        60,
+                        1.0,
+                        1.0,
+                        500,
+                        1000,
+                        120
+                ),
+                new OmegaProperties.ForensicWorker("http://forensic-worker:8000", 5000, 120000),
+                new OmegaProperties.Cti("/app/corpus_mvp/iocs")
         );
     }
 }

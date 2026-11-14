@@ -11,7 +11,7 @@ import re
 import time
 from typing import Any
 
-from services import DB_DSN
+from cti_db import fetch_yara_iocs
 
 try:
     import yara  # type: ignore
@@ -269,26 +269,7 @@ def _escape_yara_literal(value: str) -> str:
 def _fetch_db_yara_iocs() -> list[tuple[str, str, str]]:
     """Extrae hasta 180 IOCs de alto valor desde PostgreSQL para compilación YARA en RAM."""
     try:
-        import psycopg
-
-        with psycopg.connect(DB_DSN) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT DISTINCT ON (LOWER(i.ioc_value))
-                        i.ioc_value,
-                        i.ioc_type,
-                        COALESCE(c.spyware_family, 'Spyware Comercial')
-                    FROM iocs i
-                    LEFT JOIN campaigns c ON i.campaign_id = c.id
-                    WHERE i.ioc_type IN ('domain', 'process', 'package', 'file_path', 'sha256')
-                      AND LENGTH(TRIM(i.ioc_value)) >= 6
-                      AND LENGTH(TRIM(i.ioc_value)) <= 140
-                    ORDER BY LOWER(i.ioc_value)
-                    LIMIT 180;
-                    """
-                )
-                rows = cur.fetchall()
+        rows = fetch_yara_iocs(limit=180)
         cleaned: list[tuple[str, str, str]] = []
         for val, ioc_type, family in rows:
             s = (val or "").strip()

@@ -1,3 +1,10 @@
+server:
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
 spring:
   jpa:
     hibernate:
@@ -15,13 +22,23 @@ omega:
     jwt-issuer: omega-rag-core
     allow-tenant-self-registration: true
     bootstrap-secret: ""
+    internal-service-token: omega-test-internal-service-token
   ingest:
-    temp-dir: /tmp/omega_ingest_test
+    temp-dir: ${java.io.tmpdir}/omega_ingest_test
     max-pdf-bytes: 26214400
-    tesseract-data-path: /usr/share/tesseract-ocr/5/tessdata
+    tesseract-data-path: /usr/share/tesseract-ocr/4.00/tessdata
   rag:
+    embedding-provider: openai
     embedding-model: text-embedding-3-small
     embedding-dimensions: 1536
+    open-ai-base-url: https://api.openai.com/v1
+    open-ai-api-key: ""
+    open-ai-batch-size: 16
+    open-ai-max-retries: 1
+    chat-model: gpt-4o-mini
+    rrf-k: 60
+    vector-weight: 1.0
+    lexical-weight: 1.0
     min-chunk-tokens: 500
     max-chunk-tokens: 1000
     chunk-overlap-tokens: 120
@@ -29,3 +46,5 @@ omega:
     base-url: http://localhost:18000
     connect-timeout-ms: 1000
     read-timeout-ms: 5000
+  cti:
+    stix-corpus-dir: ../corpus_mvp/iocs
