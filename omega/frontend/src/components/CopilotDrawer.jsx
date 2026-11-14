@@ -4,10 +4,10 @@ import {
   Maximize2,
   Pin,
   RotateCcw,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { StructuredResponse } from './StructuredResponse';
+import { OmegaReflexEmblem } from './OmegaReflexEmblem';
 
 const DRAWER_STARTERS = [
   '¿Qué señales visibles indican posible infección con Pegasus?',
@@ -101,9 +101,7 @@ export function CopilotDrawer({
         {/* Cabecera del copiloto */}
         <div className="h-14 shrink-0 border-b border-white/[0.08] px-4 flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">
-            <span className="h-7 w-7 rounded-[9px] bg-[#2F6FED]/18 border border-[#5E9BFF]/35 flex items-center justify-center shrink-0">
-              <Sparkles className="h-3.5 w-3.5 text-[#8AB4FF]" />
-            </span>
+            <OmegaReflexEmblem variant="mini" size={22} isThinking={isLoading} />
             <div className="min-w-0">
               <div className="text-[13.5px] font-semibold text-[#F4F6FA] truncate">
                 Copiloto OMEGA
@@ -161,7 +159,10 @@ export function CopilotDrawer({
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {messages.length === 0 ? (
             <div className="space-y-4 pt-2">
-              <div className="apple-well rounded-[13px] p-4 space-y-2">
+              <div className="apple-well relative overflow-hidden rounded-[14px] p-4 space-y-2.5 text-center">
+                <div className="flex justify-center py-1">
+                  <OmegaReflexEmblem variant="mini" size={44} isThinking={isLoading} />
+                </div>
                 <p className="text-[13px] leading-relaxed text-[#D6DAE2]">
                   Puedes consultar cualquier hallazgo, dominio o síntoma técnico mientras mantienes tu escaneo o revisión abierta detrás.
                 </p>

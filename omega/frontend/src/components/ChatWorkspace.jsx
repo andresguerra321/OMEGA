@@ -6,7 +6,7 @@ import {
   X,
   Plus,
 } from 'lucide-react';
-import { OmegaLogo } from './OmegaLogo';
+import { OmegaReflexEmblem } from './OmegaReflexEmblem';
 import { StructuredResponse } from './StructuredResponse';
 import { SourcesPanel } from './SourcesPanel';
 
@@ -360,19 +360,13 @@ export function ChatWorkspace({
             <div className="flex-1 min-h-[12px] sm:min-h-[16px] max-h-[84px]" />
 
             <div className="w-full max-w-[700px] flex flex-col items-center">
-              {/* Emblema luminoso + Título directo sin ruido superior */}
-              <div className="animate-fade-up flex flex-col items-center text-center mb-6 sm:mb-7">
-                <div className="relative flex items-center justify-center">
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-0 rounded-full blur-2xl bg-[#2F6FED]/20 scale-125 pointer-events-none animate-glow-pulse"
-                  />
-                  <OmegaLogo size={62} isThinking={loading} />
-                </div>
-                <h1 className="mt-5 text-[24px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+              {/* Emblema OMEGA con corona fotónica e inclinación orbital estilo Reflex */}
+              <div className="animate-kowalski-in flex flex-col items-center text-center mb-5 sm:mb-6">
+                <OmegaReflexEmblem variant="hero" size={64} isThinking={loading} />
+                <h1 className="mt-3 sm:mt-3.5 text-[24px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F8FAFC]">
                   ¿Qué amenaza analizamos?
                 </h1>
-                <p className="mt-2 text-[13.5px] sm:text-[14.5px] tracking-[-0.01em] text-[#8E8E93]">
+                <p className="mt-2 text-[13.5px] sm:text-[14.5px] tracking-[-0.01em] text-[#94A3B8]">
                   Inteligencia técnica sobre spyware comercial respaldada con citas verificables.
                 </p>
               </div>
@@ -537,7 +531,7 @@ export function ChatWorkspace({
 
                 {loading && (
                   <div className="animate-fade-up inline-flex items-center gap-2.5 py-1 text-[13.5px] text-[#A1A1A6]">
-                    <OmegaLogo size={20} isThinking={true} />
+                    <OmegaReflexEmblem variant="mini" size={20} isThinking={true} />
                     <span className="tracking-[-0.01em]">
                       {sourceScope === 'Todas las fuentes'
                         ? 'Buscando en reportes...'
