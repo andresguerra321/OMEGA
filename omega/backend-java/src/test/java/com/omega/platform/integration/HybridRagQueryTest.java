@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omega.platform.domain.DocumentStatus;
+import com.omega.platform.rag.EmbeddingException;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentRepository;
 import java.io.ByteArrayOutputStream;
@@ -169,7 +170,30 @@ class HybridRagQueryTest {
                                 """))
                 .andExpect(status().isNotFound());
 
-        // 2. Simular cambio de modelo de embeddings -> debe marcar REINDEX_REQUIRED y advertir al cliente
+        // 2. Simular caída del proveedor de embeddings -> debe degradar a búsqueda léxica pura tsvector
+        when(embeddingProvider.embedQuery(anyString()))
+                .thenThrow(new EmbeddingException("Simulación de indisponibilidad de OpenAI Embeddings"));
+
+        MvcResult degradedRes = mockMvc.perform(post("/api/v1/expedientes/" + expA1 + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "question": "Predator Intellexa", "topK": 5 }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DEGRADED_LEXICAL"))
+                .andExpect(jsonPath("$.citations.length()").value(1))
+                .andReturn();
+
+        JsonNode degradedJson = objectMapper.readTree(degradedRes.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        assertThat(degradedJson.get("warnings").get(0).asText()).contains("tsvector");
+        assertThat(degradedJson.get("citations").get(0).get("originalFilename").asText()).isEqualTo("predator-cytrox.pdf");
+        assertThat(degradedJson.get("answer").asText())
+                .contains("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]")
+                .doesNotContain("MARCADOR_EXCLUSIVO_EXPEDIENTE_A2")
+                .doesNotContain("MARCADOR_EXCLUSIVO_TENANT_B");
+
+        // 3. Simular cambio de modelo de embeddings -> debe marcar REINDEX_REQUIRED y advertir al cliente
         activeModelHolder[0] = "local-bge-m3-phase2";
         MvcResult driftRes = mockMvc.perform(post("/api/v1/expedientes/" + expA1 + "/query")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA)

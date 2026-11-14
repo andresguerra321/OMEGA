@@ -76,6 +76,13 @@ class PdfChunkExtractorTest {
                 });
     }
 
+    @Test
+    void normalizesPdfTypographicLigaturesAndUnicodeDashes() {
+        String raw = "The \ufb01x was not \ufb02agged for CVE\u20112021\u20111048 or o\ufb03ce \ufb04ow\u00a0checks.";
+        assertThat(PdfChunkExtractor.normalizeText(raw))
+                .isEqualTo("The fix was not flagged for CVE-2021-1048 or office fflow checks.");
+    }
+
     private static OmegaProperties testProps() {
         return new OmegaProperties(
                 new OmegaProperties.Security("omega-unit-test-hmac-sha256-secret-key-32-chars", 3600, "omega-rag-core", true, "", "tok"),

@@ -4,6 +4,8 @@ import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.Normalizer;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -23,10 +25,13 @@ import org.springframework.stereotype.Repository;
 public class HybridRagSearchRepository {
 
     private static final Pattern TOKEN_PATTERN = Pattern.compile("[\\p{L}\\p{N}]{3,64}");
+    private static final Pattern CVE_PATTERN = Pattern.compile("\\bcve-(\\d{4})-(\\d{4,7})\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
     private static final Set<String> STOP_WORDS = Set.of(
             "que", "los", "las", "una", "uno", "unos", "unas", "con", "por", "para", "como",
-            "donde", "sobre", "entre", "esta", "este", "estos", "estas", "ese", "esa", "del",
-            "hay", "son", "fue", "fueron", "desde", "hasta", "cual", "cuales", "quien", "quienes",
+            "donde", "sobre", "entre", "esta", "este", "estos", "estas", "ese", "esa", "esos",
+            "esas", "del", "hay", "son", "fue", "fueron", "desde", "hasta", "cual", "cuales",
+            "quien", "quienes", "segun", "sus", "sin", "mas", "pero", "estan", "tienen",
             "the", "and", "for", "with", "what", "how", "where", "when", "who", "from", "this", "that", "into"
     );
 
@@ -53,9 +58,9 @@ public class HybridRagSearchRepository {
                 SELECT
                     c.id,
                     ROW_NUMBER() OVER (
-                        ORDER BY ts_rank_cd(c.search_vector, to_tsquery('pg_catalog.simple', :lexicalTsQuery)) DESC, c.id
+                        ORDER BY ts_rank_cd(c.search_vector, to_tsquery('pg_catalog.simple', :lexicalTsQuery), 32) DESC, c.id
                     ) AS lex_rank,
-                    ts_rank_cd(c.search_vector, to_tsquery('pg_catalog.simple', :lexicalTsQuery)) AS lex_score
+                    ts_rank_cd(c.search_vector, to_tsquery('pg_catalog.simple', :lexicalTsQuery), 32) AS lex_score
                 FROM omega_rag.document_chunks c
                 INNER JOIN omega_rag.documents d
                     ON d.id = c.document_id
@@ -106,6 +111,51 @@ public class HybridRagSearchRepository {
             LIMIT :topK
             """;
 
+    private static final String LEXICAL_ONLY_SQL = """
+            WITH lexical_ranked AS (
+                SELECT
+                    c.id,
+                    ROW_NUMBER() OVER (
+                        ORDER BY ts_rank_cd(c.search_vector, to_tsquery('pg_catalog.simple', :lexicalTsQuery), 32) DESC, c.id
+                    ) AS lex_rank,
+                    ts_rank_cd(c.search_vector, to_tsquery('pg_catalog.simple', :lexicalTsQuery), 32) AS lex_score
+                FROM omega_rag.document_chunks c
+                INNER JOIN omega_rag.documents d
+                    ON d.id = c.document_id
+                   AND d.tenant_id = c.tenant_id
+                   AND d.expediente_id = c.expediente_id
+                WHERE c.tenant_id = :tenantId
+                  AND c.expediente_id = :expedienteId
+                  AND d.status = 'INDEXED'
+                  AND d.embedding_model = :embeddingModel
+                  AND c.embedding_model = :embeddingModel
+                  AND c.search_vector @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
+                ORDER BY lex_score DESC
+                LIMIT :topK
+            )
+            SELECT
+                c.document_id,
+                d.original_filename,
+                d.sha256_hash,
+                c.page_number,
+                c.section_title,
+                c.chunk_order,
+                c.content,
+                CAST(0.0 AS double precision) AS vector_score,
+                CAST(lr.lex_score AS double precision) AS lexical_score,
+                (CAST(:lexicalWeight AS double precision) / (:rrfK + lr.lex_rank)) AS rrf_score
+            FROM lexical_ranked lr
+            INNER JOIN omega_rag.document_chunks c ON c.id = lr.id
+            INNER JOIN omega_rag.documents d
+                ON d.id = c.document_id
+               AND d.tenant_id = c.tenant_id
+               AND d.expediente_id = c.expediente_id
+            WHERE c.tenant_id = :tenantId
+              AND c.expediente_id = :expedienteId
+            ORDER BY lr.lex_score DESC, c.page_number ASC, c.chunk_order ASC
+            LIMIT :topK
+            """;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final OmegaProperties properties;
 
@@ -143,20 +193,68 @@ public class HybridRagSearchRepository {
         return jdbcTemplate.query(HYBRID_RRF_SQL, params, HybridRagSearchRepository::mapRow);
     }
 
+    /**
+     * Búsqueda de respaldo léxica pura (`tsvector` GIN) usada cuando el proveedor remoto
+     * de embeddings no responde, manteniendo intacto el aislamiento por tenant y expediente.
+     */
+    public List<RankedChunk> searchLexicalOnly(
+            UUID tenantId,
+            UUID expedienteId,
+            String question,
+            String embeddingModel,
+            int topK
+    ) {
+        String tsQuery = buildSanitizedOrTsQuery(question);
+        if (tsQuery.isBlank()) {
+            return List.of();
+        }
+        int safeTopK = Math.max(1, Math.min(topK, 20));
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("expedienteId", expedienteId)
+                .addValue("embeddingModel", embeddingModel)
+                .addValue("lexicalTsQuery", tsQuery)
+                .addValue("topK", safeTopK)
+                .addValue("rrfK", (double) properties.rag().rrfK())
+                .addValue("lexicalWeight", properties.rag().lexicalWeight());
+
+        return jdbcTemplate.query(LEXICAL_ONLY_SQL, params, HybridRagSearchRepository::mapRow);
+    }
+
     static String buildSanitizedOrTsQuery(String question) {
         if (question == null || question.isBlank()) {
             return "";
         }
-        String normalized = question.toLowerCase(Locale.ROOT);
+        String normalized = question.toLowerCase(Locale.ROOT)
+                .replaceAll("[\\u2010\\u2011\\u2012\\u2013\\u2014\\u2212]", "-");
+        Set<String> clauses = new LinkedHashSet<>();
+        Set<String> cveSubTokensToSkip = new HashSet<>();
+
+        Matcher cveMatcher = CVE_PATTERN.matcher(normalized);
+        while (cveMatcher.find() && clauses.size() < 8) {
+            String year = cveMatcher.group(1);
+            String number = cveMatcher.group(2);
+            clauses.add("(cve <-> " + year + " <-> " + number + ")");
+            cveSubTokensToSkip.add("cve");
+            cveSubTokensToSkip.add(year);
+            cveSubTokensToSkip.add(number);
+        }
+
         Matcher m = TOKEN_PATTERN.matcher(normalized);
-        Set<String> tokens = new LinkedHashSet<>();
-        while (m.find() && tokens.size() < 24) {
+        while (m.find() && clauses.size() < 24) {
             String tok = m.group();
-            if (!STOP_WORDS.contains(tok)) {
-                tokens.add(tok);
+            String ascii = stripAccents(tok);
+            if (!ascii.chars().allMatch(Character::isDigit)
+                    && !STOP_WORDS.contains(ascii)
+                    && !cveSubTokensToSkip.contains(ascii)) {
+                clauses.add(tok);
             }
         }
-        return String.join(" | ", tokens);
+        return String.join(" | ", clauses);
+    }
+
+    private static String stripAccents(String value) {
+        return DIACRITICS.matcher(Normalizer.normalize(value, Normalizer.Form.NFD)).replaceAll("");
     }
 
     static String toVectorLiteral(float[] vector) {
