@@ -1,47 +1,50 @@
 # OMEGA Desktop Design System (`DESIGN.md`)
 
 ## 1. Visual World & Product Character
-**Minimalist Negro · Blanco · Azul Rey Architectural Instrumentation Cockpit** (`framed-tech-dark-border-gradient` × `background-grid-webgl` × `webgl-3d-object` × `add-mouse-driven-orbit`). Eliminates heavy blurred spotlight gradients and empty backgrounds in favor of a calm matte `#05070B` obsidian ground anchored by hairline `max-w-[1320px]` structural guide rails, side calibration markers (`HOST WINDOWS` · `MEMORIA VOLÁTIL`), and a full-viewport Three.js WebGL scene (`SecurityCenterpiece3D.jsx`) with a receding vertex-faded perspective floor grid and sparse atmospheric micro-motes.
+**Dark Frosted Glassmorphism Night Control Panel** ("vidrio esmerilado sobre un panel de control nocturno"): calm, disciplined threat-intelligence instrumentation combining a `#0A0A0C` matte chassis ground, subtle `24px` dot-grid texture, `2.5%` inline SVG film grain, beveled frosted glass panels, a single consolidated cobalt accent (`#2F6FED`), and a deferred interactive Three.js centerpiece (`SecurityCenterpiece3D.jsx`) — with strictly zero multicolor/pastel gradients.
 
-## 2. Shell & Navigation Architecture (`App.jsx` + `electron/main.js`)
-- **Mathematically Centered Navigation Across All Views & Sizes:** `SpatialNavPill.jsx` (`aria-label="Navegación espacial OMEGA"`, `rounded-[14px] p-1`) is pinned to exact viewport center (`md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2`) inside a symmetric `px-5 sm:px-7` unified header (`h-14`) across every view (`Inicio` and all forensic modules), auto-compacting below `xl` (`w-12` active / `w-8` inactive) while keeping right-side controls cleanly clear of Windows `- □ ✕` controls (`sm:mr-36`).
-- **Preguntar Chat Session Sub-Toolbar (`App.jsx`):** Conversation selector (`Nueva consulta` / case threads), `Fuentes`, and `Exportar` live inside a dedicated `h-10` secondary `<header aria-label="Controles de sesión de chat">` right beneath the Global Top Bar so the top navigation pill never drifts left or right between modules.
-- **Full-Viewport `Inicio` Cockpit (`SecurityPostureStage.jsx`, `<section aria-label="Cabina de postura OMEGA">`):**
-  - **Full-Stage Deferred WebGL Canvas (`SecurityCenterpiece3D.jsx` + `SecurityCenterpieceFallback.jsx`):** Renders an immediate architectural vector SVG seal (`SecurityCenterpieceFallback`) on first load to protect initial Time-to-Interactive (TTI) of `Inicio`, and defers code-split `React.lazy` + `Suspense` WebGL initialization via `requestIdleCallback` (`timeout: 600ms`, skipped cleanly under `prefers-reduced-motion: reduce)`). Uses `powerPreference: 'default'`, caps `pixelRatio <= 1.5`, handles `webglcontextlost` recovery back to the SVG fallback, and exposes semantic ARIA region + live posture announcements (`role="region"` + `sr-only` `role="status" aria-live="polite"`) describing the active surface and verdict (`Verificado limpio`, `Alerta detectada`, `En espera`).
-  - **Minimalist Matte Copilot Indicator (`OmegaShaderOrb.jsx` + `ChatWorkspace.jsx` + `CopilotDrawer.jsx`):** Eliminates idle WebGL loops, blurred conic gradients, and `mix-blend-screen` compositing in favor of a matte architectural obsidian seal (`#060C1A`) with `1px` crisp rim, flat geometric `Ω` vector glyph, and a discrete `#3B82F6` telemetry dot that pulses subtly (`omega-core-pulse`) strictly during active inference (`isThinking === true`), exposed with `role="status"` semantics.
-  - **Clean `Preguntar` Backdrop (`ChatAtmosphere.jsx`):** Uses `showWaves={activeNav !== 'preguntar'}` so no horizontal SVG lines cut across behind `"¿Qué amenaza analizamos hoy?"`, keeping the obsidian field quiet around the orb and `text-slate-400` subtitle (`Inteligencia forense sobre spyware comercial con citas verificables por página y expediente.`).
-  - **Mobile, Container Proxy & Chunk Splitting (`nginx.conf`, `vite.config.js`, `lib/api.js`):** Nginx proxies `/api/` -> `http://omega-api:8000/api/` (network alias of isolated `forensic-worker`) on port `5173` while `api.js` uses relative `/api` over HTTP/HTTPS (keeping `http://localhost:8000/api` for packaged `file://`); `vite.config.js` splits `three`, `react`/`react-dom`, `react-markdown`/remark, and `lucide-react` into explicit vendor chunks (`vendor-three`, `vendor-react`, `vendor-markdown`, `vendor-icons`); and `SecurityPostureStage.jsx` allows smooth vertical scrolling below `<768px` (`overflow-y-auto md:overflow-hidden`) with `touch-pan-y` canvas handling.
-  - **Headline Subject Switcher:** Clean editorial `h1.font-display` (`Sora`) surface dropdown selector (`Esta PC Windows`, etc.) with zero decorative eyebrow kickers above the heading.
-  - **Turntable & Studio Micro-Rail:** Dashed `< 360° >` orbital arc (`Superficie anterior`, `Rotar objeto 360 grados`, `Siguiente superficie`) beneath the 3D centerpiece, plus a discreet right-edge 3-button studio stack (primary surface check, STIX2 sync, open technical view).
-  - **Bottom Matte Bento Trio (`.omega-glass-card`):**
-    1. `Equipo Local`: Volatile RAM/WMI readiness/verdict, primary `#1D4ED8` Azul Rey CTA (`Analizar esta PC ahora` / `Reanalizar PC`) + conditional `Ver informe` after scan, and real socket/YARA counters.
-    2. `Celulares USB`: Live Android ADB / iOS Lockdown cable readiness paired with a minimal circular status ring gauge.
-    3. `Escudo Web y STIX2`: Active IOC/report corpus summary + embedded zero-navigation passive URL verifier (`input[aria-label="Enlace sospechoso para verificar"]` → `Detalle →`).
-- **Specialized Workbench Modules (`equipo`, `enlace`, `amenazas`, `exposicion`, `preguntar`, `ajustes`):**
-  - Full-width `.roam-obsidian-sheet` (`#05070B`) sharing the exact same symmetric `h-14` centered Global Top Bar (`OmegaLogo`, `SpatialNavPill`, `Simple | Técnico`, `Copiloto`, `⌘K`, and `sm:mr-36`), framed by `ChatAtmosphere.jsx` subtle grid rails and micro-dots.
-- **Unified Native Electron TitleBar (`electron/main.js` + `preload.cjs`):** `titleBarStyle: 'hidden'` + dark `titleBarOverlay` (`#05070B` / `#CBD5E1`, `height: 40`) synchronized across `Inicio` and all forensic modules via `omega:set-titlebar-theme`.
-- **Non-destructive Slide-Over Copilot (`CopilotDrawer.jsx`):** Slides in at `max-w-[470px]` over any active view (`pt-9` desktop clearance under `- □ ✕`) with pinned context support, preserving underlying scans or audits on dismiss (`Escape` or backdrop click).
+## 2. Color Palette, Glass Surfaces & WCAG Roles (`omega/frontend/src/index.css`)
+- **Base Canvas:**
+  - `#0A0A0C` (`--bg-canvas`, `--color-obsidian`, `.omega-studio-bg`, `.roam-obsidian-sheet`) layered over `.omega-chassis-grid` (`24px` `radial-gradient` dot matrix), `.omega-film-grain` (`opacity: 0.025`, `mix-blend-mode: overlay` SVG noise), and low-opacity `#2F6FED` atmospheric depth pools (`.omega-fold-left`, `.omega-fold-right`) so frosted blur panels always sit over structured visual texture rather than flat empty voids.
+- **Glass Surfaces:**
+  - **Primary Glass Panel (`.omega-glass-panel`, `.omega-capsule`):** `rgba(20, 20, 24, 0.55)` (`--glass-bg`) + `backdrop-filter: blur(16px)`
+  - **Elevated Glass Frame & Floating Nav (`.omega-glass-panel-strong`, `.roam-pill-nav`, `.omega-dock`):** `rgba(20, 20, 24, 0.60–0.62)` (`--glass-bg-nav`, `--glass-bg-strong`) + `backdrop-filter: blur(20px)`
+  - **Drawer / Sidebar Vibrancy (`.apple-vibrancy`):** `rgba(20, 20, 24, 0.58)` + `backdrop-filter: blur(16px)`
+  - **Active / Hover Glass Surface (`--glass-bg-hover`, `.apple-segmented-active`, `.omega-glass-card:hover`, `.omega-glass-chip:hover`):** `rgba(28, 36, 56, 0.65)` (subtle midnight-blue tint)
+  - **Subordinate Unblurred Containers (`.apple-group`, `.tactile-chassis`, `.omega-glass-card`, `.apple-well`):** `rgba(20, 20, 24, 0.76)` (`--glass-bg-solid`) / `rgba(10, 10, 12, 0.72)` (`--bg-well`) with no `backdrop-filter`
+- **Beveled Edge Simulation (No Gradient Borders):**
+  - Top & Left highlight: `rgba(255, 255, 255, 0.08)` (`--glass-border-highlight`) paired with subtle `inset 0 1px 0 rgba(255, 255, 255, 0.06–0.10)`
+  - Bottom & Right depth: `rgba(0, 0, 0, 0.40)` (`--glass-border-depth`)
+- **Consolidated Single Blue Accent (`--accent-cobalt` / `--color-cobalt`):**
+  - **Primary Blue:** `#2F6FED` (replaces legacy `#1D4ED8`, `#3B82F6`, `#3B7BF2`, `#5E9BFF`, `#8AB4FF`, `#93C5FD`)
+  - **Interactive Glow (`--accent-glow`):** `0 0 24px rgba(47, 111, 237, 0.25)` — applied exclusively on active controls, focus-within states (`.omega-capsule:focus-within`), hovered interactive cards/chips (`.omega-glass-card:hover`, `.omega-glass-chip:hover`), and active primary CTAs. Never used as an idle decoration.
+  - **WCAG AA Contrast Discipline:** Solid `#2F6FED` buttons pair with `#FFFFFF` text; small interactive badges, chips, and segmented controls use `rgba(28, 36, 56, 0.65)` fill + `#2F6FED` border opacity + `#F2F2F4` text to avoid low-contrast small blue copy over dark translucent glass.
+- **Typography Ink Tokens:**
+  - **Primary Text (`--text-primary`):** `#F2F2F4`
+  - **Secondary Text (`--text-secondary`):** `#9A9AA2`
+- **Semantic Severity States Only:**
+  - Clean / Verified: `#30D158` / `#22C55E` (plus tinted soft greens inside positive verdict badges)
+  - Warning / Caution: `#FF9F0A` / `#FFD60A`
+  - Alert / Compromised: `#FF453A` / `#FF6961` / `#EF4444` (plus `#FFD0CE` / `#FFDAD6` high-contrast badge text)
 
-## 3. Surfaces, Elevation & Color Roles (`index.css`)
-- **Architectural Matte Ground (`.omega-studio-bg` / `.roam-obsidian-sheet`):** Crisp matte `#05070B` base with whisper-quiet subtle depth (`rgba(29, 78, 216, 0.06)` micro-vignette) and hairline `rgba(255, 255, 255, 0.06)` frame lines — zero bloated blurred radial clouds.
-- **Architectural Obsidian Cards (`.omega-glass-card` / `.omega-glass-chip` / `.roam-pill-nav`):** Controlled translucent dark slate (`rgba(9, 13, 21, 0.90)`) with `backdrop-filter: blur(12px)`, crisp `1px solid rgba(255, 255, 255, 0.09)` borders, and delicate top edge highlight.
-- **Strict Palette Discipline (Obsidiana · Blanco · 3 Roles de Azul):**
-  - Studio Obsidian / Near-Black Surfaces: `#03050B` / `#05070B` / `#060C1A` / `#0A0E16`
-  - Crisp Ink & Neutral Whites: `#FFFFFF` / `#F8FAFC` / `#E2E8F0` / `#CBD5E1` / `#94A3B8`
-  - Consolidated Blue Tokens (CSS vars `--omega-blue-primary`, `--omega-blue-interactive`, `--omega-blue-soft` in `index.css`):
-    - **Primary CTA / Active Fill:** `#1D4ED8` (`--omega-blue-primary`)
-    - **Interactive / Focus / Hover Ring:** `#3B82F6` (`--omega-blue-interactive`)
-    - **Soft Tech Labels / Hairlines:** `#93C5FD` (`--omega-blue-soft`)
-  - Semantic Operational States Only: `#22C55E` / `#30D158` (clean/verified), `#EF4444` / `#FF453A` (high risk/alert), `#FF9F0A` (medium/warn)
+## 3. Strict GPU Blur Budget (`<= 3–4` Simultaneous `backdrop-filter` Layers)
+To keep real-time Three.js WebGL smooth without GPU compositor bottlenecks:
+- Every view enforces **at most 3–4 simultaneous `backdrop-filter: blur(...)` surfaces visible on screen**:
+  - **Global Shell:** Floating `SpatialNavPill` (`roam-pill-nav`, 1)
+  - **`Inicio` (`SecurityPostureStage.jsx`):** Top telemetry bar (`omega-glass-panel`, 2), central 3D frame (`omega-glass-panel-strong`, 3), bottom action bento (`omega-glass-panel`, 4) — individual inner cards keep no redundant blur.
+  - **`Asistente` / `Equipos` / `Enlaces` / `Amenazas` / `Exposición` / `Ajustes`:** Primary top status/verdict card (`omega-glass-panel`), search/query composer (`omega-capsule`), or open side drawer/rail (`apple-vibrancy` / `CopilotDrawer`), while sticky footers, table headers (`<thead>`), lists, and secondary detail cards remain non-blurred (`#141418` / `#0A0A0C` alpha fills) and fullscreen modal scrims (`AuthModal.jsx`, Command Palette in `App.jsx`) use dim `bg-[#0A0A0C]/72–74` so the inner `.omega-glass-panel` dialog supplies the sole blur layer.
+- **Graceful Degradation:** `@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))` and `@media (prefers-reduced-transparency: reduce)` disable blur and resolve glass surfaces cleanly to `#141418`.
 
-## 4. Typography & Clarity Modes (Self-Hosted `@fontsource`)
-- **Display Heading Font (`Sora`, `.font-display` / `h1` / `h2`):** Crisp geometric instrumentation display (`-0.028em` tracking), self-hosted offline via `@fontsource/sora`.
-- **UI Body Sans (`IBM Plex Sans`):** High-legibility technical sans-serif self-hosted via `@fontsource/ibm-plex-sans`, eliminating generic `-apple-system` / Windows `Segoe UI` fallback.
-- **Technical Mono (`IBM Plex Mono`, `.font-tech`):** Self-hosted via `@fontsource/ibm-plex-mono`; applied strictly to live sensor counts, CVEs, hashes, URLs, `360°`, timestamps, and keycap hints (`⌘K`, `ESC`, `RAM`).
-- **Global `Simple` / `Técnico` Toggle:** Available directly on the unified Global Top Bar across every view; switches between plain Spanish clarity and technical metadata (`WMI / Sockets RAM · Tiempo real`, `ADB local · Lockdown iOS`, `hits YARA`).
+## 4. Shell, 3D Centerpiece & Navigation Architecture (`App.jsx` + `electron/`)
+- **Unified Centered Navigation (`SpatialNavPill.jsx`):** Floating frosted pill (`roam-pill-nav`, `rounded-[14px] p-1`) centered inside the symmetric `h-14` header across every view, keeping clear of Windows `- □ ✕` titlebar controls (`sm:mr-36`), paired with a matching `#0A0A0C` / `#F2F2F4` dark Electron `titleBarOverlay` (`electron/main.js`) and harmonized `#0A0A0C` + `#2F6FED` frosted loader card (`electron/splash.html`).
+- **Deferred Three.js Centerpiece (`SecurityCenterpiece3D.jsx` + `SecurityCenterpieceFallback.jsx`):** Renders the SVG vector seal immediately on mount to protect Time-to-Interactive (TTI), then lazy-loads WebGL (`requestIdleCallback`, skipped under `prefers-reduced-motion: reduce`), caps `pixelRatio <= 1.5`, pauses under `document.hidden`, recovers on `webglcontextlost`, and exposes live `role="region"` + `role="status"` ARIA announcements synchronized with `lib/centerpieceStatus.js` (`#2F6FED` active/ready, `#30D158` verified clean, `#FF453A` alert).
+- **Minimalist Copilot Seal (`OmegaShaderOrb.jsx`):** Frosted monochrome obsidian badge (`rgba(20, 20, 24, 0.72)`) with geometric `Ω` vector glyph and a discrete `#2F6FED` pulse strictly during active inference (`isThinking`), free of idle conic-gradient spinners.
+- **Workbench Consistency (`PanelStatePrimitives.jsx` + `DeviceSetupVisuals.jsx`):** Shared `PanelSkeleton`, `PanelErrorBanner`, `PanelEmptyState`, and `ActionConfirmationBanner` primitives plus `#0A0A0C` / `#141418` / `#2F6FED` / `#30D158` setup diagrams across `MvtVerifierPanel.jsx`, `LinkVerifierPanel.jsx`, `CampaignsPanel.jsx`, `OsintPanel.jsx`, `ChatWorkspace.jsx`, `SourcesPanel.jsx`, `CitationDrawer.jsx`, `CopilotDrawer.jsx`, `AuthModal.jsx`, and `SettingsPanel.jsx`.
 
-## 5. Tactile Controls & Accessibility
-- **Physical controls & First-Time Guidance:**
-  - `SecurityPostureStage.jsx` includes a dismissible 10-second onboarding strip (`localStorage` key `omega_onboarding_dismissed`) pointing to `1. Equipos`, `2. Enlaces`, and `3. Asistente` without obstructing the central WebGL stage.
-  - All workbench panels share `PanelStatePrimitives.jsx` (`PanelSkeleton`, `PanelErrorBanner`, `PanelEmptyState`, `ActionConfirmationBanner`) for consistent loading skeletons, retryable errors, actionable empty states, and post-action confirmations across every view.
-- Physical press feedback, explicit keyboard navigation (`⌘K`, `Ctrl+J`, `Esc`), semantic landmarks (`<section aria-label="Cabina de postura OMEGA">`, `<nav aria-label="Navegación espacial OMEGA">`, `<header aria-label="Controles de sesión de chat">`, `<main>`), accessible live posture status (`role="region"` + `role="status"` on `SecurityCenterpiece3D` / `SecurityCenterpieceFallback` and `OmegaShaderOrb`), listbox semantics for the 3D subject switcher (`aria-haspopup="listbox"` / `role="listbox"` / `role="option"`), WCAG AA focus rings (`#3B82F6`), `document.hidden` WebGL throttling, `webglcontextlost` recovery, and complete `@media (prefers-reduced-motion: reduce)` guards.
+## 5. Typography, Modes & Accessibility
+- **Self-Hosted `@fontsource` Faces:**
+  - Display Headings (`Sora`, `.font-display` / `h1` / `h2`, tabular numerals)
+  - Body UI (`IBM Plex Sans`)
+  - Technical Telemetry (`IBM Plex Mono`, `.font-tech`, tabular numerals) for sockets, CVEs, hashes, URLs, `360°` angles, timestamps, and keycaps (`⌘K`, `ESC`, `Ctrl+J`).
+- **Clarity Toggle (`Simple` | `Técnico`):** Persistent header toggle adapting plain Spanish labels vs. forensic metadata without layout shift.
+- **Keyboard & Reduced Motion/Transparency:** `⌘K` Command Palette, `Ctrl+J` Copilot drawer, `Escape` dismissal, `#2F6FED` `focus-visible` outlines (`2px`), semantic landmarks, and full `@media (prefers-reduced-motion: reduce)` and `@media (prefers-reduced-transparency: reduce)` support.

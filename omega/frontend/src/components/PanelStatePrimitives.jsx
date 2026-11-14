@@ -20,10 +20,10 @@ export function PanelSkeleton({
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className={`rounded-[13px] border border-[#93C5FD]/14 bg-[#060C1A]/75 p-4 space-y-3 ${className}`}
+      className={`apple-group rounded-[13px] p-4 space-y-3 ${className}`}
     >
-      <div className="flex items-center gap-2 text-[12.5px] font-medium text-[#93C5FD]">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#3B82F6] shrink-0 motion-reduce:animate-none" />
+      <div className="flex items-center gap-2 text-[12.5px] font-medium text-[#F2F2F4]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#2F6FED] shrink-0 motion-reduce:animate-none" />
         <span>{label}</span>
       </div>
       <div className="space-y-2" aria-hidden="true">
@@ -31,7 +31,7 @@ export function PanelSkeleton({
           <div
             key={idx}
             style={{ width: `${92 - idx * 14}%` }}
-            className="h-3 rounded-full bg-[#93C5FD]/10 animate-pulse motion-reduce:animate-none"
+            className="h-3 rounded-full bg-white/[0.08] animate-pulse motion-reduce:animate-none"
           />
         ))}
       </div>
@@ -102,20 +102,20 @@ export function PanelEmptyState({
 }) {
   return (
     <div
-      className={`rounded-[14px] border border-[#93C5FD]/14 bg-[#060C1A]/70 px-5 py-6 text-center flex flex-col items-center gap-3 ${className}`}
+      className={`apple-group rounded-[14px] px-5 py-6 text-center flex flex-col items-center gap-3 ${className}`}
     >
       {Icon && (
-        <div className="h-10 w-10 rounded-[11px] border border-[#3B82F6]/30 bg-[#1D4ED8]/15 flex items-center justify-center text-[#93C5FD]">
+        <div className="h-10 w-10 rounded-[11px] border border-[#2F6FED]/40 bg-[#2F6FED]/15 flex items-center justify-center text-[#2F6FED]">
           <Icon className="h-4.5 w-4.5" />
         </div>
       )}
 
       <div className="space-y-1 max-w-[440px]">
-        <p className="text-[13.5px] font-semibold tracking-[-0.01em] text-[#F8FAFC]">
+        <p className="text-[13.5px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
           {title}
         </p>
         {description && (
-          <p className="text-[12.5px] text-[#94A3B8] leading-relaxed">
+          <p className="text-[12.5px] text-[#9A9AA2] leading-relaxed">
             {description}
           </p>
         )}
@@ -127,7 +127,7 @@ export function PanelEmptyState({
             <button
               type="button"
               onClick={onAction}
-              className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#1D4ED8] hover:bg-[#3B82F6] px-3.5 py-1.5 text-[12px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] active:scale-[0.97] transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] hover:brightness-110 px-3.5 py-1.5 text-[12px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
             >
               <span>{actionLabel}</span>
             </button>
@@ -136,7 +136,7 @@ export function PanelEmptyState({
             <button
               type="button"
               onClick={onSecondaryAction}
-              className="inline-flex items-center gap-1.5 rounded-[9px] border border-[#93C5FD]/20 bg-white/[0.04] hover:bg-white/[0.08] px-3 py-1.5 text-[12px] font-medium text-[#E2E8F0] active:scale-[0.97] transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.1] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
             >
               <span>{secondaryLabel}</span>
             </button>
@@ -164,7 +164,7 @@ export function ActionConfirmationBanner({
     tone === 'alert'
       ? 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FCA5A5]'
       : tone === 'info'
-        ? 'border-[#3B82F6]/35 bg-[#1D4ED8]/15 text-[#93C5FD]'
+        ? 'border-[#2F6FED]/45 bg-[#2F6FED]/14 text-[#F2F2F4]'
         : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]';
 
   const Icon =

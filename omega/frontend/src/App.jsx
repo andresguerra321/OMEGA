@@ -14,6 +14,7 @@ import {
   BookOpen,
   Gauge,
   Sparkles,
+  KeyRound,
 } from 'lucide-react';
 import {
   fetchApiHealth,
@@ -21,6 +22,12 @@ import {
   sendChatQuery,
   analyzePcLiveSnapshot,
   syncStixFeeds,
+  getAuthSession,
+  clearAuthSession,
+  listExpedientes,
+  createExpediente,
+  listExpedienteDocuments,
+  uploadExpedientePdf,
 } from './lib/api';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaLogo } from './components/OmegaLogo';
@@ -33,6 +40,7 @@ import { MvtVerifierPanel } from './components/MvtVerifierPanel';
 import { OsintPanel } from './components/OsintPanel';
 import { LinkVerifierPanel } from './components/LinkVerifierPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { AuthModal } from './components/AuthModal';
 
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Centro de Protección', subtitle: 'Estado en vivo y escudos', icon: Gauge },
@@ -201,20 +209,180 @@ export default function App() {
   const [isSourcesPanelOpen, setIsSourcesPanelOpen] = useState(false);
   const [draftContext, setDraftContext] = useState(null);
 
+  const [authSession, setAuthSession] = useState(() => getAuthSession());
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState('');
+  const [expedientes, setExpedientes] = useState([]);
+  const [activeExpedienteId, setActiveExpedienteId] = useState('');
+  const [expedienteDocs, setExpedienteDocs] = useState([]);
+  const [loadingExpedientes, setLoadingExpedientes] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [expedienteNotice, setExpedienteNotice] = useState('');
+  const [expedienteError, setExpedienteError] = useState('');
+
   const textareaRef = useRef(null);
+
+  const openAuthModal = useCallback((reason = '') => {
+    setAuthModalReason(reason || '');
+    setAuthModalOpen(true);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    clearAuthSession();
+    setAuthSession(null);
+    setExpedientes([]);
+    setActiveExpedienteId('');
+    setExpedienteDocs([]);
+    setGovStats(null);
+    setExpedienteNotice('');
+    setExpedienteError('');
+  }, []);
 
   const refreshSystemTelemetry = useCallback(async () => {
     try {
+      const hasSession = Boolean(getAuthSession()?.accessToken);
       const [health, gov] = await Promise.all([
         fetchApiHealth(),
-        fetchSystemGovernance().catch(() => null),
+        hasSession ? fetchSystemGovernance().catch(() => null) : Promise.resolve(null),
       ]);
       setApiOnline(Boolean(health && health.status === 'ok'));
       if (gov) setGovStats(gov);
+      else if (!hasSession) setGovStats(null);
     } catch {
       setApiOnline(false);
     }
   }, []);
+
+  const refreshExpedientes = useCallback(async () => {
+    if (!getAuthSession()?.accessToken) {
+      setExpedientes([]);
+      setExpedienteDocs([]);
+      return;
+    }
+    setLoadingExpedientes(true);
+    try {
+      const list = await listExpedientes();
+      const safeList = Array.isArray(list) ? list : [];
+      setExpedientes(safeList);
+      setActiveExpedienteId((prev) =>
+        prev && safeList.some((e) => e.id === prev) ? prev : '',
+      );
+    } catch (err) {
+      setExpedienteError(err?.message || 'No se pudieron cargar los expedientes.');
+    } finally {
+      setLoadingExpedientes(false);
+    }
+  }, []);
+
+  const refreshActiveExpedienteDocs = useCallback(async (targetId = activeExpedienteId) => {
+    if (!targetId || !getAuthSession()?.accessToken) {
+      setExpedienteDocs([]);
+      return;
+    }
+    setLoadingExpedientes(true);
+    try {
+      const docs = await listExpedienteDocuments(targetId);
+      setExpedienteDocs(Array.isArray(docs) ? docs : []);
+    } catch (err) {
+      setExpedienteError(err?.message || 'No se pudo consultar la lista de documentos.');
+    } finally {
+      setLoadingExpedientes(false);
+    }
+  }, [activeExpedienteId]);
+
+  useEffect(() => {
+    const onAuthChanged = (e) => {
+      const next = e?.detail ?? getAuthSession();
+      setAuthSession(next);
+      if (!next) {
+        setExpedientes([]);
+        setActiveExpedienteId('');
+        setExpedienteDocs([]);
+        setGovStats(null);
+      }
+    };
+    const onAuthRequired = () => {
+      setAuthModalReason('Este módulo requiere una sesión JWT activa en tu tenant OMEGA.');
+      setAuthModalOpen(true);
+    };
+    window.addEventListener('omega:auth-changed', onAuthChanged);
+    window.addEventListener('omega:auth-required', onAuthRequired);
+    return () => {
+      window.removeEventListener('omega:auth-changed', onAuthChanged);
+      window.removeEventListener('omega:auth-required', onAuthRequired);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void refreshSystemTelemetry();
+      if (authSession?.accessToken) {
+        void refreshExpedientes();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [authSession?.accessToken, refreshSystemTelemetry, refreshExpedientes]);
+
+  useEffect(() => {
+    if (!activeExpedienteId || !authSession?.accessToken) return undefined;
+    const timer = setTimeout(() => {
+      void refreshActiveExpedienteDocs(activeExpedienteId);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [activeExpedienteId, authSession?.accessToken, refreshActiveExpedienteDocs]);
+
+  useEffect(() => {
+    const hasPending = expedienteDocs.some(
+      (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
+    );
+    if (!hasPending || !activeExpedienteId || !authSession?.accessToken) return undefined;
+    const timer = setInterval(() => {
+      void listExpedienteDocuments(activeExpedienteId)
+        .then((docs) => {
+          const next = Array.isArray(docs) ? docs : [];
+          setExpedienteDocs(next);
+          if (!next.some((d) => d.status === 'PENDING' || d.status === 'PROCESSING')) {
+            void refreshSystemTelemetry();
+          }
+        })
+        .catch(() => {});
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [expedienteDocs, activeExpedienteId, authSession?.accessToken, refreshSystemTelemetry]);
+
+  async function handleCreateExpediente({ title, classification }) {
+    setExpedienteError('');
+    setExpedienteNotice('');
+    try {
+      const created = await createExpediente({ title, classification });
+      await refreshExpedientes();
+      setActiveExpedienteId(created.id);
+      setExpedienteNotice(`Expediente "${created.title}" creado (${created.classification}).`);
+      return created;
+    } catch (err) {
+      setExpedienteError(err?.message || 'No se pudo crear el expediente.');
+      return null;
+    }
+  }
+
+  async function handleUploadExpedientePdf(file) {
+    if (!activeExpedienteId || !file) return;
+    setUploadingPdf(true);
+    setExpedienteError('');
+    setExpedienteNotice('');
+    try {
+      const meta = await uploadExpedientePdf(activeExpedienteId, file);
+      await refreshActiveExpedienteDocs(activeExpedienteId);
+      setExpedienteNotice(
+        `PDF "${meta.originalFilename}" recibido (SHA-256 ${String(meta.sha256Hash || '').slice(0, 12)}…) · Custodia Zero-Retention en curso.`,
+      );
+      void refreshSystemTelemetry();
+    } catch (err) {
+      setExpedienteError(err?.message || 'No se pudo procesar el PDF.');
+    } finally {
+      setUploadingPdf(false);
+    }
+  }
 
   useEffect(() => {
     const initTimer = setTimeout(() => {
@@ -425,6 +593,7 @@ export default function App() {
         topK,
         effectiveScope,
         pinnedContextPayload,
+        { expedienteId: activeExpedienteId || null },
       );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
@@ -432,6 +601,8 @@ export default function App() {
         role: 'assistant',
         content: res.answer,
         citations: res.citations || [],
+        warnings: res.warnings || [],
+        reindexRequiredDocuments: res.reindexRequiredDocuments || [],
         model: res.model,
         analysis: res.analysis,
         standaloneQuery: res.rewritten_query || res.standalone_query,
@@ -669,7 +840,7 @@ export default function App() {
   const isHome = activeNav === 'inicio';
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#03050B] text-[#F8FAFC] select-none">
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none">
       <main className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text">
         {isHome ? (
           <SecurityPostureStage
@@ -700,19 +871,21 @@ export default function App() {
             }}
             onNavigate={handleNavigate}
             onLinkVerified={handleLinkVerified}
+            authSession={authSession}
+            onOpenAuth={openAuthModal}
           />
         ) : (
-          <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F4F6FA]">
+          <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]">
             <ChatAtmosphere
               variant="workspace"
               showWaves={activeNav !== 'preguntar'}
               dimmed={activeNav !== 'preguntar' || messages.length > 0}
             />
 
-            {/* Barra Principal Unificada — Navegación siempre centrada */}
+            {/* Barra Principal Unificada — Pill de navegación flotante separada (sin doble blur debajo) */}
             <header
               aria-label="Barra principal OMEGA"
-              className={`relative z-20 min-h-[56px] h-[56px] shrink-0 px-3.5 sm:px-7 border-b border-[#93C5FD]/[0.08] bg-[#040812]/72 backdrop-blur-xl flex items-center justify-between gap-2 select-none ${
+              className={`relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.07] bg-[#0A0A0C]/55 flex items-center justify-between gap-2 select-none ${
                 isDesktop
                   ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
                   : ''
@@ -726,13 +899,13 @@ export default function App() {
                   title="Volver a Inicio"
                 >
                   <OmegaLogo size={22} isThinking={loadingChat} />
-                  <span className="font-display hidden sm:inline text-[14px] font-semibold tracking-[0.06em] text-[#F8FAFC]">
+                  <span className="font-display hidden sm:inline text-[14px] font-semibold tracking-[0.06em] text-[#F2F2F4]">
                     OMEGA
                   </span>
                 </button>
 
-                <span className="hidden sm:inline text-white/25 text-[12px]">/</span>
-                <span className="text-[13px] font-medium text-[#E2E8F0] truncate max-w-[115px] lg:max-w-[165px]">
+                <span className="hidden sm:inline text-white/20 text-[12px]">/</span>
+                <span className="text-[13px] font-medium text-[#F2F2F4] truncate max-w-[115px] lg:max-w-[165px]">
                   {activeNavItem.label}
                 </span>
               </div>
@@ -751,6 +924,41 @@ export default function App() {
 
               {/* Controles globales derechos uniformes en todas las vistas */}
               <div className={`titlebar-no-drag relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openAuthModal(
+                      authSession
+                        ? 'Cambia de tenant o administra tus credenciales JWT activas.'
+                        : 'Inicia sesión o genera un Sandbox Demo para habilitar expedientes privados, OSINT y triaje.',
+                    )
+                  }
+                  title={
+                    authSession
+                      ? `Sesión activa: ${authSession.email} (${authSession.tenantSlug} · ${authSession.role})`
+                      : 'Conectar o crear sesión Tenant JWT'
+                  }
+                  className={`h-8 px-2 xl:px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
+                    authSession
+                      ? 'border-[#30D158]/35 bg-[#30D158]/10 text-[#F2F2F4] hover:bg-[#30D158]/18'
+                      : 'border-[#2F6FED]/45 bg-[#2F6FED]/14 text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)]'
+                  }`}
+                >
+                  {authSession ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
+                      <span className="hidden lg:inline max-w-[110px] truncate font-tech">
+                        {authSession.tenantSlug}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                      <span className="hidden lg:inline">Conectar</span>
+                    </>
+                  )}
+                </button>
+
                 <div
                   role="group"
                   aria-label="Nivel de detalle"
@@ -762,7 +970,7 @@ export default function App() {
                     className={`px-2 py-1 rounded-[6px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
                       !technicalMode
                         ? 'apple-segmented-active'
-                        : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                     }`}
                   >
                     Simple
@@ -773,7 +981,7 @@ export default function App() {
                     className={`px-2 py-1 rounded-[6px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
                       technicalMode
                         ? 'apple-segmented-active'
-                        : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                     }`}
                   >
                     Técnico
@@ -787,11 +995,11 @@ export default function App() {
                   title="Copiloto deslizable (Ctrl+J)"
                   className={`h-8 px-2 xl:px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
                     isCopilotOpen
-                      ? 'border-[#3B82F6]/55 bg-[#1D4ED8]/20 text-[#93C5FD]'
-                      : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08] hover:text-[#F4F6FA]'
+                      ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.22)]'
+                      : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4]'
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-[#93C5FD]" />
+                  <Sparkles className="h-3.5 w-3.5 text-[#2F6FED]" />
                   <span className="hidden xl:inline">Copiloto</span>
                 </button>
 
@@ -803,7 +1011,7 @@ export default function App() {
                   }}
                   aria-label="Abrir búsqueda rápida (⌘K)"
                   title="Saltar a módulo o acción (⌘K)"
-                  className="h-8 px-2 xl:px-2.5 rounded-[8px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-[11.5px] text-[#B4BAC6] hover:text-[#F4F6FA] transition-colors cursor-pointer"
+                  className="h-8 px-2 xl:px-2.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                 >
                   <Search className="h-3.5 w-3.5" />
                   <span className="font-tech hidden xl:inline">⌘K</span>
@@ -815,36 +1023,36 @@ export default function App() {
             {activeNav === 'preguntar' && (
               <header
                 aria-label="Controles de sesión de chat"
-                className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-[#93C5FD]/[0.07] bg-[#040812]/80 backdrop-blur-md flex items-center justify-between gap-2 select-none"
+                className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-white/[0.07] bg-[#0A0A0C]/65 flex items-center justify-between gap-2 select-none"
               >
                 <div className="relative min-w-0 flex-1 max-w-[210px] sm:max-w-[300px]">
                   <button
                     type="button"
                     onClick={() => setSessionsMenuOpen((v) => !v)}
-                    className="h-7 w-full px-2 sm:px-2.5 rounded-[7px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-1.5 text-[11.5px] text-[#E4E8F0] transition-colors cursor-pointer"
+                    className="h-7 w-full px-2 sm:px-2.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] flex items-center gap-1.5 text-[11.5px] text-[#F2F2F4] transition-colors cursor-pointer"
                   >
-                    <MessageSquare className="h-3 w-3 text-[#93C5FD] shrink-0" />
+                    <MessageSquare className="h-3 w-3 text-[#2F6FED] shrink-0" />
                     <span className="truncate flex-1 text-left">
                       {activeSession?.title || 'Nueva consulta'}
                     </span>
-                    <ChevronDown className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+                    <ChevronDown className="h-3 w-3 text-[#9A9AA2] shrink-0" />
                   </button>
 
                   {sessionsMenuOpen && (
-                    <div className="apple-popover animate-scale-in origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] p-1.5 z-50 space-y-1">
+                    <div className="apple-group animate-scale-in origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] bg-[#141418]/96 p-1.5 z-50 space-y-1">
                       <button
                         type="button"
                         onClick={() => {
                           setSessionsMenuOpen(false);
                           startNewInvestigation();
                         }}
-                        className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/15 transition-colors cursor-pointer"
+                        className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-3.5 w-3.5 text-[#2F6FED]" />
                         <span>Nueva consulta limpia</span>
                       </button>
 
-                      <div className="h-px bg-white/[0.07] my-1" />
+                      <div className="h-px bg-white/[0.08] my-1" />
 
                       <div className="max-h-[240px] overflow-y-auto space-y-0.5">
                         {sessions.map((sess) => {
@@ -854,8 +1062,8 @@ export default function App() {
                               key={sess.id}
                               className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
                                 selected
-                                  ? 'bg-white/[0.08] text-[#F4F6FA]'
-                                  : 'text-[#C4CAD4] hover:bg-white/[0.05]'
+                                  ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4]'
+                                  : 'text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4]'
                               }`}
                             >
                               <button
@@ -868,7 +1076,7 @@ export default function App() {
                                 className="flex-1 min-w-0 text-left truncate cursor-pointer"
                               >
                                 <span className="block truncate font-medium">{sess.title}</span>
-                                <span className="font-tech text-[10.5px] text-[#9097A5]">
+                                <span className="font-tech text-[10.5px] text-[#9A9AA2]">
                                   {formatRelativeTime(sess.updatedAt)}
                                 </span>
                               </button>
@@ -878,7 +1086,7 @@ export default function App() {
                                 onClick={(e) => deleteSession(e, sess.id)}
                                 title="Eliminar conversación"
                                 aria-label="Eliminar conversación"
-                                className="p-1 rounded-[6px] text-[#9097A5] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
+                                className="p-1 rounded-[6px] text-[#9A9AA2] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -898,11 +1106,11 @@ export default function App() {
                       title={`Fuentes (${activeConversationCitations.length})`}
                       className={`h-7 px-2 sm:px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                         isSourcesPanelOpen
-                          ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
-                          : 'border-white/[0.09] bg-white/[0.04] text-[#D6DAE2] hover:bg-white/[0.08]'
+                          ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4]'
+                          : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4]'
                       }`}
                     >
-                      <BookOpen className="h-3 w-3 shrink-0" />
+                      <BookOpen className="h-3 w-3 shrink-0 text-[#2F6FED]" />
                       <span>Fuentes ({activeConversationCitations.length})</span>
                     </button>
                   )}
@@ -913,9 +1121,9 @@ export default function App() {
                       onClick={handleExportSession}
                       title="Exportar investigación"
                       aria-label="Exportar investigación"
-                      className="h-7 px-2 sm:px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F4F6FA] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                      className="h-7 px-2 sm:px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] border border-white/[0.08] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F2F2F4] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
                     >
-                      <Download className="h-3 w-3 text-[#9BA2B0] shrink-0" />
+                      <Download className="h-3 w-3 text-[#9A9AA2] shrink-0" />
                       <span className="hidden min-[360px]:inline">Exportar</span>
                     </button>
                   )}
@@ -964,6 +1172,26 @@ export default function App() {
                       }
                     }}
                     textareaRef={textareaRef}
+                    authSession={authSession}
+                    onOpenAuth={openAuthModal}
+                    expedientes={expedientes}
+                    activeExpedienteId={activeExpedienteId}
+                    onSelectExpediente={(nextId) => {
+                      setActiveExpedienteId(nextId);
+                      if (!nextId) setExpedienteDocs([]);
+                    }}
+                    expedienteDocs={expedienteDocs}
+                    loadingExpedientes={loadingExpedientes}
+                    uploadingPdf={uploadingPdf}
+                    expedienteNotice={expedienteNotice}
+                    expedienteError={expedienteError}
+                    onDismissExpedienteBanner={() => {
+                      setExpedienteNotice('');
+                      setExpedienteError('');
+                    }}
+                    onCreateExpediente={handleCreateExpediente}
+                    onUploadExpedientePdf={handleUploadExpedientePdf}
+                    onRefreshExpedienteDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
                   />
                 ) : activeNav === 'amenazas' ? (
                   <CampaignsPanel
@@ -1016,6 +1244,9 @@ export default function App() {
                     onChangeTopK={setTopK}
                     sourceScope={sourceScope}
                     onChangeSourceScope={setSourceScope}
+                    authSession={authSession}
+                    onOpenAuth={openAuthModal}
+                    onLogout={handleLogout}
                   />
                 )}
               </div>
@@ -1055,29 +1286,29 @@ export default function App() {
       {commandOpen && (
         <div
           onClick={() => setCommandOpen(false)}
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-md flex items-start justify-center pt-[14vh] px-4"
+          className="fixed inset-0 z-50 bg-[#0A0A0C]/72 flex items-start justify-center pt-[14vh] px-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="apple-modal-in w-full max-w-[540px] rounded-[16px] border border-[#93C5FD]/[0.15] bg-[#070D1B]/95 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(219,234,254,0.12),0_32px_84px_rgba(2,6,18,0.82)] overflow-hidden"
+            className="apple-modal-in omega-glass-panel w-full max-w-[540px] rounded-[16px] overflow-hidden"
           >
             <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3.5">
-              <Search strokeWidth={1.7} className="h-[18px] w-[18px] text-[#9BA2B0] shrink-0" />
+              <Search strokeWidth={1.7} className="h-[18px] w-[18px] text-[#9A9AA2] shrink-0" />
               <input
                 type="text"
                 autoFocus
                 value={commandQuery}
                 onChange={(e) => setCommandQuery(e.target.value)}
                 placeholder="Ir a módulo, herramienta o conversación reciente..."
-                className="flex-1 bg-transparent text-[14.5px] tracking-[-0.01em] text-[#F4F6FA] placeholder-[#9097A5] focus:outline-none"
+                className="flex-1 bg-transparent text-[14.5px] tracking-[-0.01em] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
               />
-              <span className="font-tech rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10.5px] text-[#9BA2B0]">
+              <span className="font-tech rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10.5px] text-[#9A9AA2]">
                 ESC
               </span>
             </div>
 
             <div className="max-h-[460px] overflow-y-auto p-2 pb-2.5 space-y-1">
-              <p className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9097A5]">
+              <p className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9A9AA2]">
                 Instrumentos y módulos
               </p>
               {NAV_ITEMS.filter(
@@ -1095,18 +1326,18 @@ export default function App() {
                       handleNavigate(item.id);
                       setCommandOpen(false);
                     }}
-                    className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors duration-150 cursor-pointer"
+                    className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors duration-150 cursor-pointer"
                   >
                     <span className="inline-flex items-center gap-3">
-                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#93C5FD]" />
+                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#2F6FED]" />
                       <span className="font-medium tracking-[-0.01em]">{item.label}</span>
                     </span>
-                    <span className="text-[11.5px] text-[#9BA2B0]">{item.subtitle}</span>
+                    <span className="text-[11.5px] text-[#9A9AA2]">{item.subtitle}</span>
                   </button>
                 );
               })}
 
-              <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9097A5]">
+              <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9A9AA2]">
                 Acciones rápidas
               </p>
               <button
@@ -1115,13 +1346,13 @@ export default function App() {
                   setIsCopilotOpen(true);
                   setCommandOpen(false);
                 }}
-                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
               >
                 <span className="inline-flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-[#93C5FD]" />
+                  <Sparkles className="h-4 w-4 text-[#2F6FED]" />
                   <span>Abrir Copiloto lateral</span>
                 </span>
-                <span className="font-tech text-[11px] text-[#9BA2B0]">⌘J</span>
+                <span className="font-tech text-[11px] text-[#9A9AA2]">⌘J</span>
               </button>
               <button
                 type="button"
@@ -1129,20 +1360,20 @@ export default function App() {
                   setTechnicalMode((v) => !v);
                   setCommandOpen(false);
                 }}
-                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F4F6FA] hover:bg-white/[0.07] transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
               >
                 <span className="inline-flex items-center gap-3">
-                  <Gauge className="h-4 w-4 text-[#93C5FD]" />
+                  <Gauge className="h-4 w-4 text-[#2F6FED]" />
                   <span>
                     Cambiar a modo {technicalMode ? 'Simple (lenguaje claro)' : 'Técnico'}
                   </span>
                 </span>
-                <span className="text-[11.5px] text-[#9BA2B0]">Vista actual</span>
+                <span className="text-[11.5px] text-[#9A9AA2]">Vista actual</span>
               </button>
 
               {sessions.length > 0 && (
                 <>
-                  <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9097A5]">
+                  <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9A9AA2]">
                     Investigaciones recientes
                   </p>
                   {sessions
@@ -1160,9 +1391,9 @@ export default function App() {
                           setActiveNav('preguntar');
                           setCommandOpen(false);
                         }}
-                        className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[12.5px] text-[#D6DAE2] hover:bg-white/[0.07] hover:text-[#F4F6FA] transition-colors duration-150 cursor-pointer"
+                        className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[12.5px] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4] transition-colors duration-150 cursor-pointer"
                       >
-                        <MessageSquare strokeWidth={1.65} className="h-3.5 w-3.5 text-[#9BA2B0] shrink-0" />
+                        <MessageSquare strokeWidth={1.65} className="h-3.5 w-3.5 text-[#9A9AA2] shrink-0" />
                         <span className="truncate">{s.title}</span>
                       </button>
                     ))}
@@ -1172,6 +1403,22 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => {
+          setAuthModalOpen(false);
+          setAuthModalReason('');
+        }}
+        onAuthenticated={(session) => {
+          setAuthSession(session);
+          setAuthModalOpen(false);
+          setAuthModalReason('');
+          void refreshSystemTelemetry();
+          void refreshExpedientes();
+        }}
+        reasonMessage={authModalReason}
+      />
     </div>
   );
 }

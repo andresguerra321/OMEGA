@@ -12,8 +12,15 @@ import {
   Globe,
   Link2,
   Smartphone,
+  FileCode2,
+  Terminal,
 } from 'lucide-react';
-import { fetchCampaigns, fetchCampaignDetail } from '../lib/api';
+import {
+  fetchCampaigns,
+  fetchCampaignDetail,
+  fetchCampaignYara,
+  fetchCampaignMvtScript,
+} from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import {
@@ -41,6 +48,8 @@ export function CampaignsPanel({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [actionNote, setActionNote] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exportingType, setExportingType] = useState('');
 
   const [dossierTab, setDossierTab] = useState('cves'); // 'cves' | 'iocs' | 'sources'
   const [cveSearch, setCveSearch] = useState('');
@@ -127,6 +136,16 @@ export function CampaignsPanel({
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const onAuthChanged = (e) => {
+      if (e?.detail?.accessToken) {
+        void loadCampaigns();
+      }
+    };
+    window.addEventListener('omega:auth-changed', onAuthChanged);
+    return () => window.removeEventListener('omega:auth-changed', onAuthChanged);
   }, []);
 
   async function loadDetail(campaignId) {
@@ -239,8 +258,26 @@ export function CampaignsPanel({
     setTimeout(() => setCopiedValue(''), 1500);
   }
 
+  function triggerTextDownload(filename, content, mimeType = 'text/plain;charset=utf-8') {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function buildCampaignSlug() {
+    return (detail?.spyware_family || detail?.name || 'amenaza')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'amenaza';
+  }
+
   function handleExportDossier() {
     if (!detail) return;
+    setExportError('');
     const lines = [`# ${detail.name}`, ''];
     if (detail.spyware_family) lines.push(`- **Familia:** ${detail.spyware_family}`);
     if (detail.suspected_actor) lines.push(`- **Actor:** ${detail.suspected_actor}`);
@@ -261,15 +298,52 @@ export function CampaignsPanel({
       );
     }
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const slug = (detail.spyware_family || 'amenaza').toLowerCase().replace(/\s+/g, '_');
-    a.download = `omega_${slug}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerTextDownload(`omega_${buildCampaignSlug()}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
     setActionNote(`Listo: expediente "${detail.name}" exportado a Markdown.`);
+  }
+
+  async function handleExportYara() {
+    if (!detail?.id || exportingType) return;
+    setExportingType('yara');
+    setExportError('');
+    try {
+      const data = await fetchCampaignYara(detail.id);
+      const yaraContent = data?.yara_rule || '';
+      if (!yaraContent) {
+        throw new Error('La campaña no devolvió contenido YARA exportable.');
+      }
+      const fname = data?.filename || `omega_${buildCampaignSlug()}.yar`;
+      triggerTextDownload(fname, yaraContent, 'text/plain;charset=utf-8');
+      setActionNote(
+        `Regla YARA "${fname}" exportada (${Number(data?.ioc_count || 0)} indicadores compilados).`
+      );
+    } catch (err) {
+      setExportError(err?.message || 'No se pudo generar la regla YARA de esta campaña.');
+    } finally {
+      setExportingType('');
+    }
+  }
+
+  async function handleExportMvt() {
+    if (!detail?.id || exportingType) return;
+    setExportingType('mvt');
+    setExportError('');
+    try {
+      const data = await fetchCampaignMvtScript(detail.id);
+      const scriptContent = data?.script || '';
+      if (!scriptContent) {
+        throw new Error('El worker forense no devolvió script MVT exportable.');
+      }
+      const fname = data?.filename || `omega_${buildCampaignSlug()}_mvt.sh`;
+      triggerTextDownload(fname, scriptContent, 'text/x-shellscript;charset=utf-8');
+      setActionNote(
+        `Script MVT "${fname}" exportado (${Number(data?.ioc_count || 0)} IOCs STIX2 incluidos).`
+      );
+    } catch (err) {
+      setExportError(err?.message || 'No se pudo exportar el script MVT de esta campaña.');
+    } finally {
+      setExportingType('');
+    }
   }
 
   if (loadingList) {
@@ -337,13 +411,13 @@ export function CampaignsPanel({
       >
         <div className="p-3 border-b border-white/[0.06] space-y-2.5">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#8E8E93]" />
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#9A9AA2]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar amenaza o CVE..."
-              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none transition-colors"
+              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:shadow-[0_0_24px_rgba(47,111,237,0.2)] focus:outline-none transition-all"
             />
           </div>
 
@@ -358,8 +432,8 @@ export function CampaignsPanel({
                     onClick={() => setFamilyFilter(fam)}
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-all duration-150 active:scale-95 cursor-pointer ${
                       active
-                        ? 'bg-[#1D4ED8]/20 text-[#93C5FD] ring-1 ring-inset ring-[#1D4ED8]/40'
-                        : 'text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7]'
+                        ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] ring-1 ring-inset ring-[#2F6FED]/55 shadow-[0_0_20px_rgba(47,111,237,0.2)]'
+                        : 'text-[#9A9AA2] hover:bg-white/[0.06] hover:text-[#F2F2F4]'
                     }`}
                   >
                     {fam === 'ALL' ? `Todas (${campaigns.length})` : fam}
@@ -406,16 +480,16 @@ export function CampaignsPanel({
                   style={{ animationDelay: `${Math.min(idx * 25, 200)}ms` }}
                   className={`animate-fade-up w-full rounded-[10px] px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer block ${
                     isSelected
-                      ? 'bg-[#1D4ED8]/18 ring-1 ring-inset ring-[#1D4ED8]/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                      ? 'bg-[rgba(28,36,56,0.65)] ring-1 ring-inset ring-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_20px_rgba(47,111,237,0.2)]'
                       : 'bg-transparent hover:bg-white/[0.05]'
                   }`}
                 >
-                  <p className="text-[13.5px] font-medium tracking-[-0.01em] leading-[1.4] text-[#F5F5F7] line-clamp-2">
+                  <p className="text-[13.5px] font-medium tracking-[-0.01em] leading-[1.4] text-[#F2F2F4] line-clamp-2">
                     {camp.name}
                   </p>
-                  <div className="mt-1.5 flex items-center justify-between gap-2 font-tech text-[11px] text-[#8E8E93]">
+                  <div className="mt-1.5 flex items-center justify-between gap-2 font-tech text-[11px] text-[#9A9AA2]">
                     <span className="truncate">
-                      <span className="text-[#93C5FD]">{camp.spyware_family}</span>
+                      <span className="text-[#F2F2F4]/90">{camp.spyware_family}</span>
                       {stats.length > 0 && ` · ${stats.join(' · ')}`}
                     </span>
                     {camp.first_seen_date && (
@@ -441,14 +515,14 @@ export function CampaignsPanel({
           <button
             type="button"
             onClick={() => setMobileShowDetail(false)}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.1] bg-white/[0.05] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.09] active:scale-[0.96] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.1] bg-white/[0.05] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.09] active:scale-[0.96] transition-all cursor-pointer"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#93C5FD]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#2F6FED]" />
             <span>Todas las amenazas</span>
           </button>
 
           {detail?.spyware_family && (
-            <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[11px] text-[#93C5FD] truncate">
+            <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[11px] text-[#F2F2F4] truncate">
               {detail.spyware_family}
             </span>
           )}
@@ -482,20 +556,26 @@ export function CampaignsPanel({
                 onDismiss={() => setActionNote('')}
               />
             )}
+            {exportError && (
+              <PanelErrorBanner
+                message={exportError}
+                onDismiss={() => setExportError('')}
+              />
+            )}
             {/* Cabecera */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5 font-tech text-[12px]">
                   {detail.spyware_family && (
-                    <span className="rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[#93C5FD]">
+                    <span className="rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[#F2F2F4]">
                       {detail.spyware_family}
                     </span>
                   )}
                   {detail.first_seen_date && (
-                    <span className="text-[#8E8E93]">{detail.first_seen_date}</span>
+                    <span className="text-[#9A9AA2]">{detail.first_seen_date}</span>
                   )}
                 </div>
-                <h1 className="text-[21px] sm:text-[24px] font-semibold tracking-[-0.024em] leading-[1.2] text-[#F5F5F7] break-words">
+                <h1 className="text-[21px] sm:text-[24px] font-semibold tracking-[-0.024em] leading-[1.2] text-[#F2F2F4] break-words">
                   {detail.name}
                 </h1>
               </div>
@@ -507,8 +587,8 @@ export function CampaignsPanel({
                   title="Extraer IPv4, dominios y CVEs desde artículo web en RAM (WebBaseLoader RNF4)"
                   className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3 py-1.5 text-[12.5px] active:scale-[0.97] transition-all cursor-pointer ${
                     showWebExtractor
-                      ? 'border-[#1D4ED8]/50 bg-[#1D4ED8]/18 text-[#93C5FD]'
-                      : 'border-white/[0.08] bg-white/[0.045] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
+                      ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.2)]'
+                      : 'border-white/[0.08] bg-white/[0.045] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4]'
                   }`}
                 >
                   <Globe className="h-3.5 w-3.5" />
@@ -519,10 +599,32 @@ export function CampaignsPanel({
                   type="button"
                   onClick={handleExportDossier}
                   title="Exportar ficha en Markdown"
-                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span>.md</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportYara}
+                  disabled={Boolean(exportingType)}
+                  title="Descargar regla YARA-X para detección local"
+                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <FileCode2 className="h-3.5 w-3.5 text-[#2F6FED]" />
+                  <span>{exportingType === 'yara' ? '...' : 'YARA'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportMvt}
+                  disabled={Boolean(exportingType)}
+                  title="Exportar script bash MVT con STIX2 embebidos"
+                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <Terminal className="h-3.5 w-3.5 text-[#30D158]" />
+                  <span>{exportingType === 'mvt' ? '...' : 'MVT'}</span>
                 </button>
 
                 {onAuditDevice && (
@@ -530,9 +632,9 @@ export function CampaignsPanel({
                     type="button"
                     onClick={() => onAuditDevice('android')}
                     title="Auditar tu móvil o equipo frente a los IOCs de esta campaña"
-                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
                   >
-                    <Smartphone className="h-3.5 w-3.5 text-[#93C5FD]" />
+                    <Smartphone className="h-3.5 w-3.5 text-[#2F6FED]" />
                     <span>Revisar equipo</span>
                   </button>
                 )}
@@ -545,7 +647,7 @@ export function CampaignsPanel({
                         `Analiza en detalle la campaña "${detail.name}"${detail.spyware_family ? ` (${detail.spyware_family})` : ''}.`
                       )
                     }
-                    className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#3B82F6] active:scale-[0.97] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] active:scale-[0.97] transition-all cursor-pointer"
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                     <span>Investigar en chat</span>
@@ -564,31 +666,31 @@ export function CampaignsPanel({
             )}
 
             {detail.summary && (
-              <p className="max-w-[68ch] text-[15px] leading-[1.7] text-[#D1D1D6]">
+              <p className="max-w-[68ch] text-[15px] leading-[1.7] text-[#F2F2F4]/85">
                 {detail.summary}
               </p>
             )}
 
             {/* Ficha agrupada de atribución */}
             {hasAttribution && (
-              <dl className="apple-group animate-on-scroll rounded-[13px] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
+              <dl className="omega-glass-panel animate-on-scroll rounded-[13px] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
                 {detail.suspected_actor && (
                   <div className="space-y-1 min-w-0">
-                    <dt className="text-[11.5px] font-medium text-[#8E8E93]">Actor</dt>
-                    <dd className="font-medium text-[#F5F5F7] break-words">{detail.suspected_actor}</dd>
+                    <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Actor</dt>
+                    <dd className="font-medium text-[#F2F2F4] break-words">{detail.suspected_actor}</dd>
                   </div>
                 )}
                 {detail.target_sector && (
                   <div className="space-y-1 min-w-0">
-                    <dt className="text-[11.5px] font-medium text-[#8E8E93]">Objetivo</dt>
-                    <dd className="font-medium text-[#F5F5F7] break-words">{detail.target_sector}</dd>
+                    <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Objetivo</dt>
+                    <dd className="font-medium text-[#F2F2F4] break-words">{detail.target_sector}</dd>
                   </div>
                 )}
                 {detail.target_regions?.length > 0 && (
                   <div className="space-y-1 min-w-0">
-                    <dt className="text-[11.5px] font-medium text-[#8E8E93]">Regiones</dt>
+                    <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Regiones</dt>
                     <dd
-                      className="font-medium text-[#F5F5F7] break-words"
+                      className="font-medium text-[#F2F2F4] break-words"
                       title={detail.target_regions.join(', ')}
                     >
                       {detail.target_regions.length > 5
@@ -600,7 +702,7 @@ export function CampaignsPanel({
               </dl>
             )}
 
-            {/* Control Segmentado macOS */}
+            {/* Control Segmentado Glass */}
             <div className="space-y-4">
               <div className="apple-segmented inline-flex flex-wrap max-w-full gap-0.5 rounded-[10px] p-0.5">
                 <button
@@ -609,7 +711,7 @@ export function CampaignsPanel({
                   className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
                     dossierTab === 'cves'
                       ? 'apple-segmented-active'
-                      : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                   }`}
                 >
                   CVEs ({detail.cves?.length || 0})
@@ -621,7 +723,7 @@ export function CampaignsPanel({
                   className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
                     dossierTab === 'iocs'
                       ? 'apple-segmented-active'
-                      : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                   }`}
                 >
                   IOCs ({totalIocCount})
@@ -633,7 +735,7 @@ export function CampaignsPanel({
                   className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
                     dossierTab === 'sources'
                       ? 'apple-segmented-active'
-                      : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                   }`}
                 >
                   Fuentes ({detail.reports?.length || 0})
@@ -645,19 +747,19 @@ export function CampaignsPanel({
                 <div className="space-y-3">
                   {(detail.cves?.length || 0) > 10 && (
                     <div className="relative w-full sm:w-64">
-                      <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#8E8E93]" />
+                      <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" />
                       <input
                         type="text"
                         value={cveSearch}
                         onChange={(e) => setCveSearch(e.target.value)}
                         placeholder="Filtrar CVE..."
-                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none"
+                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none"
                       />
                     </div>
                   )}
 
                   {filteredCves.length === 0 ? (
-                    <p className="text-[13px] text-[#8E8E93] py-2">Sin CVEs vinculados.</p>
+                    <p className="text-[13px] text-[#9A9AA2] py-2">Sin CVEs vinculados.</p>
                   ) : hasCveDescriptions ? (
                     <div className="grid gap-2.5 sm:grid-cols-2">
                       {filteredCves.map((cve, idx) => (
@@ -676,18 +778,18 @@ export function CampaignsPanel({
                                   )
                                 }
                                 title="Preguntar en chat"
-                                className="font-tech text-[13.5px] font-medium text-[#F5F5F7] hover:text-[#93C5FD] transition-colors cursor-pointer"
+                                className="font-tech text-[13.5px] font-medium text-[#F2F2F4] hover:underline decoration-[#2F6FED] underline-offset-4 transition-colors cursor-pointer"
                               >
                                 {cve.cve_code}
                               </button>
                               {cve.cvss_score != null && (
-                                <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2 py-0.5 text-[11px] text-[#93C5FD]">
+                                <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2 py-0.5 text-[11px] text-[#F2F2F4]">
                                   {cve.cvss_score}
                                 </span>
                               )}
                             </div>
                             {cve.description && (
-                              <p className="text-[12.5px] leading-[1.5] text-[#A1A1A6] line-clamp-2">
+                              <p className="text-[12.5px] leading-[1.5] text-[#9A9AA2] line-clamp-2">
                                 {cve.description}
                               </p>
                             )}
@@ -698,7 +800,7 @@ export function CampaignsPanel({
                             target="_blank"
                             rel="noreferrer"
                             title="Abrir en NIST NVD"
-                            className="shrink-0 p-1.5 rounded-[7px] text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] transition-colors"
+                            className="shrink-0 p-1.5 rounded-[7px] text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] transition-colors"
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
@@ -711,7 +813,7 @@ export function CampaignsPanel({
                         <div
                           key={cve.cve_code}
                           style={{ animationDelay: `${Math.min(idx * 25, 160)}ms` }}
-                          className="apple-group animate-fade-up group rounded-[10px] h-9 px-2.5 sm:px-3 flex items-center justify-between gap-1.5 hover:border-[#1D4ED8]/45 hover:-translate-y-0.5 transition-all duration-200"
+                          className="apple-group animate-fade-up group rounded-[10px] h-9 px-2.5 sm:px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/50 hover:-translate-y-0.5 transition-all duration-200"
                         >
                           <button
                             type="button"
@@ -719,13 +821,13 @@ export function CampaignsPanel({
                               onAskInChat?.(`¿Cómo se explotó ${cve.cve_code} en "${detail.name}"?`)
                             }
                             title={`Preguntar por ${cve.cve_code}`}
-                            className="font-tech text-[12.5px] text-[#F5F5F7] group-hover:text-[#93C5FD] truncate transition-colors cursor-pointer"
+                            className="font-tech text-[12.5px] text-[#F2F2F4] group-hover:text-white truncate transition-colors cursor-pointer"
                           >
                             {cve.cve_code}
                           </button>
                           <div className="flex items-center gap-1 shrink-0">
                             {cve.cvss_score != null && (
-                              <span className="font-tech text-[11px] text-[#93C5FD]">
+                              <span className="font-tech text-[11px] text-[#9A9AA2]">
                                 {cve.cvss_score}
                               </span>
                             )}
@@ -734,7 +836,7 @@ export function CampaignsPanel({
                               target="_blank"
                               rel="noreferrer"
                               title="Ver en NIST NVD"
-                              className="text-[#8E8E93] hover:text-[#F5F5F7] transition-colors"
+                              className="text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
                             </a>
@@ -750,7 +852,7 @@ export function CampaignsPanel({
               {dossierTab === 'iocs' && (
                 <div className="space-y-3">
                   {totalIocCount === 0 ? (
-                    <p className="text-[12.5px] text-[#8E8E93] py-2">Sin IOCs vinculados.</p>
+                    <p className="text-[12.5px] text-[#9A9AA2] py-2">Sin IOCs vinculados.</p>
                   ) : (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -762,8 +864,8 @@ export function CampaignsPanel({
                               onClick={() => setIocTypeFilter(t)}
                               className={`font-tech rounded-full px-2.5 py-0.5 text-[11px] uppercase transition-colors cursor-pointer ${
                                 iocTypeFilter === t
-                                  ? 'bg-[#1D4ED8]/20 text-[#93C5FD] ring-1 ring-inset ring-[#1D4ED8]/40'
-                                  : 'bg-white/[0.04] text-[#8E8E93] border border-white/[0.08] hover:text-[#F5F5F7]'
+                                  ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] ring-1 ring-inset ring-[#2F6FED]/55 shadow-[0_0_18px_rgba(47,111,237,0.2)]'
+                                  : 'bg-white/[0.04] text-[#9A9AA2] border border-white/[0.08] hover:text-[#F2F2F4]'
                               }`}
                             >
                               {t}
@@ -772,30 +874,30 @@ export function CampaignsPanel({
                         </div>
 
                         <div className="relative w-full sm:w-56">
-                          <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#8E8E93]" />
+                          <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" />
                           <input
                             type="text"
                             value={iocSearch}
                             onChange={(e) => setIocSearch(e.target.value)}
                             placeholder="Filtrar indicador..."
-                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/65 focus:outline-none"
+                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none"
                           />
                         </div>
                       </div>
 
                       {totalIocCount > (detail.iocs?.length || 0) && (
-                        <p className="font-tech text-[11px] text-[#8E8E93]">
+                        <p className="font-tech text-[11px] text-[#9A9AA2]">
                           Mostrando {detail.iocs.length} de {totalIocCount}.
                         </p>
                       )}
 
                       {filteredIocs.length === 0 ? (
-                        <p className="text-[13px] text-[#8E8E93] py-2">Sin coincidencias.</p>
+                        <p className="text-[13px] text-[#9A9AA2] py-2">Sin coincidencias.</p>
                       ) : (
                         <div className="apple-group animate-fade-up rounded-[13px] overflow-hidden">
                           <div className="max-h-[360px] overflow-y-auto overflow-x-auto">
                             <table className="w-full text-left border-collapse">
-                              <thead className="sticky top-0 apple-vibrancy border-b border-white/[0.07] text-[12px] font-medium text-[#8E8E93]">
+                              <thead className="sticky top-0 bg-[#141418]/95 border-b border-white/[0.08] text-[12px] font-medium text-[#9A9AA2]">
                                 <tr>
                                   <th className="px-3 sm:px-4 py-2.5 w-20 sm:w-24">Tipo</th>
                                   <th className="px-3 sm:px-4 py-2.5">Indicador</th>
@@ -809,13 +911,13 @@ export function CampaignsPanel({
                                     key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
                                     className="hover:bg-white/[0.035] transition-colors"
                                   >
-                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#93C5FD] whitespace-nowrap">
+                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#9A9AA2] whitespace-nowrap">
                                       {ioc.ioc_type}
                                     </td>
-                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[12.5px] text-[#F5F5F7] break-all min-w-0">
+                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[12.5px] text-[#F2F2F4] break-all min-w-0">
                                       {ioc.ioc_value}
                                     </td>
-                                    <td className="px-3 sm:px-4 py-2.5 text-[#A1A1A6] hidden md:table-cell">
+                                    <td className="px-3 sm:px-4 py-2.5 text-[#9A9AA2] hidden md:table-cell">
                                       {ioc.context || ''}
                                     </td>
                                     <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
@@ -828,7 +930,7 @@ export function CampaignsPanel({
                                               type="button"
                                               onClick={() => onVerifyLink(ioc.ioc_value)}
                                               title="Inspeccionar indicador en Enlaces sin contacto HTTP"
-                                              className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#93C5FD] hover:bg-[#1D4ED8]/20 transition-colors cursor-pointer"
+                                              className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#2F6FED] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                                             >
                                               <Link2 className="h-3.5 w-3.5" />
                                             </button>
@@ -837,10 +939,10 @@ export function CampaignsPanel({
                                           type="button"
                                           onClick={() => handleCopy(ioc.ioc_value)}
                                           title="Copiar"
-                                          className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+                                          className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                                         >
                                           {copiedValue === ioc.ioc_value ? (
-                                            <Check className="h-3.5 w-3.5 text-[#3B82F6]" />
+                                            <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
                                           ) : (
                                             <Copy className="h-3.5 w-3.5" />
                                           )}
@@ -863,7 +965,7 @@ export function CampaignsPanel({
               {dossierTab === 'sources' && (
                 <div className="space-y-2.5">
                   {!detail.reports || detail.reports.length === 0 ? (
-                    <p className="text-[13px] text-[#8E8E93] py-2">Sin fuentes vinculadas.</p>
+                    <p className="text-[13px] text-[#9A9AA2] py-2">Sin fuentes vinculadas.</p>
                   ) : (
                     detail.reports.map((rep, idx) => (
                       <div
@@ -873,12 +975,12 @@ export function CampaignsPanel({
                       >
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-start sm:items-center gap-2">
-                            <FileText className="h-4 w-4 text-[#3B82F6] shrink-0 mt-0.5 sm:mt-0" />
-                            <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F5F5F7] break-words sm:truncate">
+                            <FileText className="h-4 w-4 text-[#2F6FED] shrink-0 mt-0.5 sm:mt-0" />
+                            <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F2F2F4] break-words sm:truncate">
                               {rep.title}
                             </p>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 font-tech text-[12px] text-[#8E8E93]">
+                          <div className="flex flex-wrap items-center gap-2 font-tech text-[12px] text-[#9A9AA2]">
                             {rep.organization && <span>{rep.organization}</span>}
                             {rep.publication_date && <span>· {rep.publication_date}</span>}
                             {rep.file_hash && (
@@ -892,10 +994,10 @@ export function CampaignsPanel({
                             href={rep.source_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex shrink-0 self-start sm:self-auto items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all"
+                            className="inline-flex shrink-0 self-start sm:self-auto items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all"
                           >
                             <span>Abrir</span>
-                            <ExternalLink className="h-3.5 w-3.5 text-[#8E8E93]" />
+                            <ExternalLink className="h-3.5 w-3.5 text-[#9A9AA2]" />
                           </a>
                         )}
                       </div>

@@ -3,19 +3,28 @@ import {
   Check,
   Copy,
   Database,
+  FileCheck2,
   Globe,
+  KeyRound,
   Layers,
+  Lock,
+  LogOut,
   Microscope,
+  RefreshCw,
   RotateCcw,
   Scale,
   Shield,
   ShieldCheck,
+  UserPlus,
   Zap,
 } from 'lucide-react';
 import {
+  createTenantUser,
+  fetchAuditLogs,
   fetchSystemGovernance,
   getWorkspaceId,
   rotateWorkspaceId,
+  verifyAuditChain,
 } from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
@@ -80,33 +89,9 @@ const SOURCE_OPTIONS = [
   },
 ];
 
-const FALLBACK_GOVERNANCE = {
-  corpus_stats: {
-    reports: 15,
-    chunks: 530,
-    iocs: 4855,
-    campaigns: 11,
-  },
-  indexed_sources: [
-    {
-      title: 'BLASTPASS: NSO Group iPhone Zero-Click Exploit Captured in the Wild',
-      organization: 'Citizen Lab',
-      publication_date: '2023-09-07',
-      ingested_at: '2026-11-12',
-    },
-    {
-      title: 'Predator Files: Technical deep-dive into Intellexa Alliance products',
-      organization: 'Amnesty Tech',
-      publication_date: '2023-10-09',
-      ingested_at: '2026-11-12',
-    },
-    {
-      title: 'Buying Spying: Insights into Commercial Surveillance Vendors',
-      organization: 'Google TAG',
-      publication_date: '2024-02-06',
-      ingested_at: '2026-11-12',
-    },
-  ],
+const EMPTY_GOVERNANCE = {
+  corpus_stats: null,
+  indexed_sources: [],
 };
 
 function formatDateTag(rawDate) {
@@ -119,7 +104,7 @@ function RadioDot({ selected }) {
     <span
       className={`h-4 w-4 rounded-full inline-flex items-center justify-center shrink-0 transition-all duration-150 ${
         selected
-          ? 'bg-[#1D4ED8] shadow-[0_0_0_2px_rgba(29,78,216,0.22)]'
+          ? 'bg-[#2F6FED] shadow-[0_0_0_2px_rgba(47,111,237,0.25)]'
           : 'border border-white/20 bg-black/30'
       }`}
     >
@@ -141,7 +126,7 @@ function TogglePill({ checked, disabled = false, onChange, label }) {
       }}
       className={`w-10 h-[22px] rounded-full p-0.5 transition-colors duration-200 flex items-center shrink-0 ${
         checked
-          ? 'bg-[#1D4ED8] justify-end shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]'
+          ? 'bg-[#2F6FED] justify-end shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]'
           : 'bg-white/[0.14] justify-start'
       } ${disabled ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}
     >
@@ -155,10 +140,24 @@ export function SettingsPanel({
   onChangeTopK,
   sourceScope = 'Todas las fuentes',
   onChangeSourceScope,
+  authSession = null,
+  onOpenAuth,
+  onLogout,
 }) {
   const [activeSection, setActiveSection] = useState('cuenta');
   const [gov, setGov] = useState(null);
   const [workspaceId, setWorkspaceId] = useState(() => getWorkspaceId());
+  const [auditVerification, setAuditVerification] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [verifyingAudit, setVerifyingAudit] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    role: 'ANALYST',
+  });
+  const [invitingUser, setInvitingUser] = useState(false);
 
   const [savedTopK, setSavedTopK] = useState(topK);
   const [savedScope, setSavedScope] = useState(sourceScope);
@@ -180,38 +179,52 @@ export function SettingsPanel({
 
   useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
-  const [loadingGov, setLoadingGov] = useState(true);
+  const [loadingGov, setLoadingGov] = useState(Boolean(authSession?.accessToken));
   const [govError, setGovError] = useState('');
   const [actionBanner, setActionBanner] = useState(null);
 
   useEffect(() => {
+    if (!authSession?.accessToken) {
+      return undefined;
+    }
+
     let cancelled = false;
-    fetchSystemGovernance()
-      .then((data) => {
-        if (cancelled) return;
-        setGovError('');
-        if (data) {
-          setGov(data);
-          if (data.workspace_id) setWorkspaceId(data.workspace_id);
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setGov(null);
-        setGovError(
-          err?.message ||
-            'No se pudo sincronizar la gobernanza desde el backend; mostrando políticas locales de respaldo.',
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingGov(false);
-      });
+    const initTimer = setTimeout(() => {
+      if (cancelled) return;
+      setWorkspaceId(getWorkspaceId());
+      setLoadingGov(true);
+      fetchSystemGovernance()
+        .then((data) => {
+          if (cancelled) return;
+          setGovError('');
+          if (data) {
+            setGov(data);
+            if (data.workspace_id) setWorkspaceId(data.workspace_id);
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setGov(null);
+          setGovError(
+            err?.message ||
+              'No se pudo sincronizar la gobernanza desde el backend; verifica tu sesión activa.',
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingGov(false);
+        });
+    }, 0);
     return () => {
       cancelled = true;
+      clearTimeout(initTimer);
     };
-  }, []);
+  }, [authSession?.accessToken]);
 
   function handleRetryGovernance() {
+    if (!authSession?.accessToken) {
+      onOpenAuth?.('Conecta una sesión tenant para consultar el estado y trazabilidad en vivo.');
+      return;
+    }
     setLoadingGov(true);
     setGovError('');
     fetchSystemGovernance()
@@ -226,12 +239,60 @@ export function SettingsPanel({
         setGov(null);
         setGovError(
           err?.message ||
-            'No se pudo sincronizar la gobernanza desde el backend; mostrando políticas locales de respaldo.',
+            'No se pudo sincronizar la gobernanza desde el backend; verifica tu sesión activa.',
         );
       })
       .finally(() => {
         setLoadingGov(false);
       });
+  }
+
+  async function handleVerifyAuditChain() {
+    if (!authSession?.accessToken) return;
+    setVerifyingAudit(true);
+    setGovError('');
+    try {
+      const [verification, logs] = await Promise.all([
+        verifyAuditChain(),
+        fetchAuditLogs(10),
+      ]);
+      setAuditVerification(verification);
+      setAuditLogs(Array.isArray(logs) ? logs : []);
+      setActionBanner({
+        tone: verification?.valid ? 'clean' : 'danger',
+        message: verification?.valid
+          ? `Cadena de auditoría íntegra (${verification.verifiedCount} de ${verification.totalEntries} eventos verificados por SHA-256).`
+          : `Alerta de integridad: ${verification?.detail || 'Cadena inconsistente'}.`,
+      });
+    } catch (err) {
+      setActionBanner({
+        tone: 'danger',
+        message: err?.message || 'No se pudo verificar la cadena de auditoría.',
+      });
+    } finally {
+      setVerifyingAudit(false);
+    }
+  }
+
+  async function handleInviteSubmit(e) {
+    e.preventDefault();
+    setInvitingUser(true);
+    try {
+      const created = await createTenantUser(inviteForm);
+      setActionBanner({
+        tone: 'clean',
+        message: `Usuario ${created.email} creado con rol ${created.role} dentro del tenant ${authSession?.tenantSlug}.`,
+      });
+      setInviteForm({ fullName: '', email: '', password: '', role: 'ANALYST' });
+      setShowInviteForm(false);
+    } catch (err) {
+      setActionBanner({
+        tone: 'danger',
+        message: err?.message || 'No se pudo crear el usuario en el tenant.',
+      });
+    } finally {
+      setInvitingUser(false);
+    }
   }
 
   function scrollToSection(id) {
@@ -247,7 +308,7 @@ export function SettingsPanel({
 
   async function handleCopyWorkspaceId() {
     try {
-      await navigator.clipboard.writeText(workspaceId);
+      await navigator.clipboard.writeText(displayWorkspaceId);
       setCopiedId(true);
       setTimeout(() => setCopiedId(false), 1600);
     } catch {
@@ -260,8 +321,10 @@ export function SettingsPanel({
     setWorkspaceId(nextId);
     setRotated(true);
     try {
-      const refreshed = await fetchSystemGovernance();
-      if (refreshed) setGov(refreshed);
+      if (authSession?.accessToken) {
+        const refreshed = await fetchSystemGovernance();
+        if (refreshed) setGov(refreshed);
+      }
     } catch {
       // Offline fallback keeps new workspaceId locally
     } finally {
@@ -294,14 +357,16 @@ export function SettingsPanel({
     });
   }
 
-  const effectiveGov = gov || FALLBACK_GOVERNANCE;
-  const stats = effectiveGov.corpus_stats || FALLBACK_GOVERNANCE.corpus_stats;
-  const sources = effectiveGov.indexed_sources || FALLBACK_GOVERNANCE.indexed_sources;
+  const effectiveGov = authSession?.accessToken ? (gov || EMPTY_GOVERNANCE) : EMPTY_GOVERNANCE;
+  const displayWorkspaceId = authSession?.tenantId || workspaceId;
+  const stats = effectiveGov.corpus_stats;
+  const tenantStats = effectiveGov.tenant_stats || null;
+  const sources = effectiveGov.indexed_sources || [];
 
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Barra superior segmentada (reemplaza cualquier menú lateral secundario) */}
-      <div className="shrink-0 border-b border-[#93C5FD]/[0.08] bg-[#050914]/82 backdrop-blur-xl px-3.5 sm:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+      <div className="shrink-0 border-b border-white/[0.08] bg-[#0A0A0C]/65 px-3.5 sm:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <nav
           aria-label="Secciones de configuración"
           className="apple-segmented flex items-center gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto max-w-full rounded-[11px] p-1"
@@ -317,7 +382,7 @@ export function SettingsPanel({
                 className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] shrink-0 active:scale-[0.97] transition-all duration-150 cursor-pointer ${
                   isActive
                     ? 'apple-segmented-active'
-                    : 'text-[#9BA2B0] hover:text-[#F4F6FA]'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -331,7 +396,7 @@ export function SettingsPanel({
           <button
             type="button"
             onClick={handleDiscardChanges}
-            className="text-[12.5px] text-[#A9B0BE] hover:text-[#F4F6FA] px-2 py-1 active:scale-[0.97] transition-all cursor-pointer"
+            className="text-[12.5px] text-[#9A9AA2] hover:text-[#F2F2F4] px-2 py-1 active:scale-[0.97] transition-all cursor-pointer"
           >
             Descartar
           </button>
@@ -355,7 +420,7 @@ export function SettingsPanel({
       {/* Área Scrollable con despeje inferior para el Dock */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3.5 sm:px-8 py-5 sm:py-6">
         <div className="animate-fade-up mx-auto max-w-[820px] space-y-8 pb-24">
-          <h1 className="text-[22px] sm:text-[24px] font-semibold tracking-[-0.025em] text-[#F4F6FA]">
+          <h1 className="text-[22px] sm:text-[24px] font-semibold tracking-[-0.025em] text-[#F2F2F4]">
             Configuración del espacio de trabajo
           </h1>
 
@@ -367,7 +432,7 @@ export function SettingsPanel({
             />
           )}
 
-          {loadingGov && (
+          {Boolean(authSession?.accessToken) && loadingGov && (
             <PanelSkeleton
               label="Cargando estado del sistema y trazabilidad..."
               lines={3}
@@ -382,24 +447,230 @@ export function SettingsPanel({
             />
           )}
 
-            {/* Bloque 1 — Identidad de Sesión Local */}
+            {/* Bloque 1 — Cuenta Multi-Tenant JWT, Auditoría & Workspace */}
             <section ref={cuentaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="0">
               <div>
-                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Cuenta y espacio de trabajo
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
-                  Identificador local utilizado para aislar tus activos OSINT autorizados sin requerir cuentas en la nube.
+                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
+                  Sesión multi-tenant aislada mediante JWT y control de integridad SHA-256 sobre expedientes y volcados en RAM.
                 </p>
+              </div>
+
+              <div className="omega-glass-panel rounded-[13px] p-4 space-y-4">
+                {authSession ? (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-[#30D158]" />
+                          <span className="text-[13.5px] font-semibold text-[#F2F2F4]">
+                            {authSession.tenantSlug}
+                          </span>
+                          <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2 py-0.5 text-[10.5px] text-[#F2F2F4]">
+                            {authSession.role}
+                          </span>
+                        </div>
+                        <div className="font-tech text-[12px] text-[#9A9AA2] break-all">
+                          {authSession.email} · Tenant ID: {authSession.tenantId}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onOpenAuth?.('Cambia a otro tenant o inicia sesión con otra cuenta.')}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
+                        >
+                          <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                          <span>Cambiar cuenta</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onLogout?.()}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 px-3 py-1.5 text-[12px] text-[#FFDAD6] active:scale-[0.97] transition-all cursor-pointer"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          <span>Cerrar sesión</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {tenantStats && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-white/[0.06]">
+                        <div className="rounded-[9px] bg-black/25 border border-white/[0.06] px-3 py-2">
+                          <div className="text-[11px] text-[#9A9AA2]">Expedientes</div>
+                          <div className="font-tech text-[15px] font-semibold text-[#F2F2F4]">
+                            {Number(tenantStats.expedientes || 0)}
+                          </div>
+                        </div>
+                        <div className="rounded-[9px] bg-black/25 border border-white/[0.06] px-3 py-2">
+                          <div className="text-[11px] text-[#9A9AA2]">PDFs indexados</div>
+                          <div className="font-tech text-[15px] font-semibold text-[#F2F2F4]">
+                            {Number(tenantStats.documents || 0)}
+                          </div>
+                        </div>
+                        <div className="rounded-[9px] bg-black/25 border border-white/[0.06] px-3 py-2">
+                          <div className="text-[11px] text-[#9A9AA2]">Zero-Retention purgados</div>
+                          <div className="font-tech text-[15px] font-semibold text-[#30D158]">
+                            {Number(tenantStats.zero_retention_purged_pdfs || 0)}
+                          </div>
+                        </div>
+                        <div className="rounded-[9px] bg-black/25 border border-white/[0.06] px-3 py-2">
+                          <div className="text-[11px] text-[#9A9AA2]">Activos OSINT</div>
+                          <div className="font-tech text-[15px] font-semibold text-[#F2F2F4]">
+                            {Number(tenantStats.osint_assets || 0)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {authSession.role === 'ADMIN' && (
+                      <div className="pt-3 border-t border-white/[0.06] space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={verifyingAudit}
+                            onClick={handleVerifyAuditChain}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] disabled:opacity-50 cursor-pointer transition-all"
+                          >
+                            <FileCheck2 className={`h-3.5 w-3.5 ${verifyingAudit ? 'animate-pulse' : ''}`} />
+                            <span>
+                              {verifyingAudit ? 'Verificando SHA-256...' : 'Verificar cadena de auditoría'}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowInviteForm((v) => !v)}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F2F2F4] cursor-pointer transition-colors"
+                          >
+                            <UserPlus className="h-3.5 w-3.5 text-[#30D158]" />
+                            <span>Crear analista / cliente</span>
+                          </button>
+                        </div>
+
+                        {showInviteForm && (
+                          <form
+                            onSubmit={handleInviteSubmit}
+                            className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-[10px] border border-white/[0.08] bg-black/25 p-3"
+                          >
+                            <input
+                              type="text"
+                              required
+                              minLength={2}
+                              value={inviteForm.fullName}
+                              onChange={(e) => setInviteForm((f) => ({ ...f, fullName: e.target.value }))}
+                              placeholder="Nombre completo"
+                              className="h-8 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2]"
+                            />
+                            <input
+                              type="email"
+                              required
+                              value={inviteForm.email}
+                              onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                              placeholder="usuario@organizacion.org"
+                              className="h-8 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2]"
+                            />
+                            <input
+                              type="password"
+                              required
+                              minLength={12}
+                              value={inviteForm.password}
+                              onChange={(e) => setInviteForm((f) => ({ ...f, password: e.target.value }))}
+                              placeholder="Contraseña inicial (mín. 12 caracteres)"
+                              className="h-8 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2]"
+                            />
+                            <div className="flex items-center gap-2">
+                              <select
+                                aria-label="Rol del nuevo usuario"
+                                value={inviteForm.role}
+                                onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))}
+                                className="h-8 flex-1 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2 text-[12px] text-[#F2F2F4]"
+                              >
+                                <option value="ANALYST">ANALYST (forense + CTI)</option>
+                                <option value="CLIENT">CLIENT (lectura + IOCs)</option>
+                                <option value="ADMIN">ADMIN (gestión total)</option>
+                              </select>
+                              <button
+                                type="submit"
+                                disabled={invitingUser}
+                                className="h-8 rounded-[7px] bg-[#2F6FED] hover:bg-[#2F6FED]/90 px-3 text-[12px] font-medium text-white disabled:opacity-50 cursor-pointer"
+                              >
+                                {invitingUser ? '...' : 'Añadir'}
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        {auditVerification && (
+                          <div className="space-y-2 rounded-[10px] border border-white/[0.08] bg-black/25 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                              <span
+                                className={`font-semibold ${
+                                  auditVerification.valid ? 'text-[#30D158]' : 'text-[#FF453A]'
+                                }`}
+                              >
+                                {auditVerification.valid ? 'Integridad SHA-256 verificada' : 'Ruptura de cadena detectada'}
+                              </span>
+                              <span className="font-tech text-[11px] text-[#9A9AA2]">
+                                {auditVerification.verifiedCount}/{auditVerification.totalEntries} eventos ·{' '}
+                                {auditVerification.detail}
+                              </span>
+                            </div>
+                            {auditLogs.length > 0 && (
+                              <div className="max-h-40 overflow-y-auto divide-y divide-white/[0.05]">
+                                {auditLogs.map((ev) => (
+                                  <div
+                                    key={ev.id}
+                                    className="py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-tech"
+                                  >
+                                    <span className="text-[#F2F2F4]">
+                                      #{ev.chainSeq} · {ev.action} ({ev.resourceType})
+                                    </span>
+                                    <span className="text-[#9A9AA2]">
+                                      {String(ev.currentHash || '').slice(0, 14)}… · {formatDateTag(ev.createdAt)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[#F2F2F4]">
+                        <Lock className="h-4 w-4 text-[#2F6FED]" />
+                        <span>Sin sesión tenant conectada</span>
+                      </div>
+                      <p className="text-[12px] text-[#9A9AA2]">
+                        Conecta tu cuenta JWT o crea un Sandbox Demo para habilitar expedientes Zero-Retention, OSINT y triaje forense.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenAuth?.('Inicia sesión o genera un tenant Sandbox Demo para sincronizar métricas en vivo.')}
+                      className="tactile-key-primary inline-flex items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-medium cursor-pointer"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      <span>Conectar / Crear Tenant</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="apple-group rounded-[13px] p-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[12px] text-[#8E8E93]">
-                    ID de sesión activo
+                  <div className="text-[12px] text-[#9A9AA2]">
+                    {authSession ? 'Tenant / Workspace ID activo' : 'ID local provisional'}
                   </div>
-                  <div className="font-tech mt-1 text-[13px] text-[#F5F5F7] break-all">
-                    {workspaceId}
+                  <div className="font-tech mt-1 text-[13px] text-[#F2F2F4] break-all">
+                    {displayWorkspaceId}
                   </div>
                 </div>
 
@@ -407,29 +678,31 @@ export function SettingsPanel({
                   <button
                     type="button"
                     onClick={handleCopyWorkspaceId}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
                   >
                     {copiedId ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-[#3B82F6]" />
+                        <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
                         <span>Copiado</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="h-3.5 w-3.5 text-[#8E8E93]" />
+                        <Copy className="h-3.5 w-3.5 text-[#9A9AA2]" />
                         <span>Copiar ID</span>
                       </>
                     )}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={handleRotateId}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F5F5F7] active:scale-[0.97] transition-all cursor-pointer"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 text-[#8E8E93]" />
-                    <span>{rotated ? 'Rotado' : 'Rotar ID'}</span>
-                  </button>
+                  {!authSession && (
+                    <button
+                      type="button"
+                      onClick={handleRotateId}
+                      className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 text-[#9A9AA2]" />
+                      <span>{rotated ? 'Rotado' : 'Rotar ID'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </section>
@@ -437,10 +710,10 @@ export function SettingsPanel({
             {/* Bloque 2 — Profundidad de Recuperación RAG */}
             <section ref={ragRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="50">
               <div>
-                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Alcance de evidencia (<span className="font-tech">Top-K</span>)
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
+                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
                   Define cuántos fragmentos documentales evalúa el motor híbrido RRF antes de redactar cada respuesta.
                 </p>
               </div>
@@ -456,7 +729,7 @@ export function SettingsPanel({
                       onClick={() => onChangeTopK?.(opt.value)}
                       className={`relative rounded-[13px] border p-4 text-left hover:-translate-y-0.5 active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
-                          ? 'bg-[#1D4ED8]/15 border-[#1D4ED8]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+                          ? 'bg-[rgba(28,36,56,0.65)] border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_24px_rgba(47,111,237,0.22)]'
                           : 'apple-group hover:border-white/[0.15]'
                       }`}
                     >
@@ -467,13 +740,13 @@ export function SettingsPanel({
                       <div className="pt-4 pb-1 flex flex-col items-center text-center">
                         <Icon
                           className={`h-[19px] w-[19px] mb-2 ${
-                            selected ? 'text-[#3B82F6]' : 'text-[#8E8E93]'
+                            selected ? 'text-[#2F6FED]' : 'text-[#9A9AA2]'
                           }`}
                         />
-                        <div className="font-tech text-[12.5px] font-medium text-[#F5F5F7]">
+                        <div className="font-tech text-[12.5px] font-medium text-[#F2F2F4]">
                           {opt.label}
                         </div>
-                        <div className="mt-0.5 text-[11.5px] text-[#8E8E93]">
+                        <div className="mt-0.5 text-[11.5px] text-[#9A9AA2]">
                           {opt.caption}
                         </div>
                       </div>
@@ -486,10 +759,10 @@ export function SettingsPanel({
             {/* Bloque 3 — Prioridad de Corpus CTI */}
             <section className="animate-on-scroll space-y-3" data-delay="90">
               <div>
-                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Fuentes documentales prioritarias
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
+                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
                   Selecciona qué investigaciones públicas tienen prioridad por defecto en tus consultas.
                 </p>
               </div>
@@ -505,7 +778,7 @@ export function SettingsPanel({
                       onClick={() => onChangeSourceScope?.(opt.value)}
                       className={`relative rounded-[13px] border p-3.5 text-left hover:-translate-y-0.5 active:scale-[0.985] transition-all duration-150 cursor-pointer ${
                         selected
-                          ? 'bg-[#1D4ED8]/15 border-[#1D4ED8]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+                          ? 'bg-[rgba(28,36,56,0.65)] border-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_24px_rgba(47,111,237,0.22)]'
                           : 'apple-group hover:border-white/[0.15]'
                       }`}
                     >
@@ -516,13 +789,13 @@ export function SettingsPanel({
                       <div className="pt-4 flex flex-col items-center text-center">
                         <Icon
                           className={`h-[18px] w-[18px] mb-1.5 ${
-                            selected ? 'text-[#3B82F6]' : 'text-[#8E8E93]'
+                            selected ? 'text-[#2F6FED]' : 'text-[#9A9AA2]'
                           }`}
                         />
-                        <div className="text-[13px] font-semibold text-[#F5F5F7]">
+                        <div className="text-[13px] font-semibold text-[#F2F2F4]">
                           {opt.title}
                         </div>
-                        <p className="mt-1 text-[11.5px] text-[#8E8E93] leading-snug line-clamp-2">
+                        <p className="mt-1 text-[11.5px] text-[#9A9AA2] leading-snug line-clamp-2">
                           {opt.description}
                         </p>
                       </div>
@@ -535,36 +808,36 @@ export function SettingsPanel({
             {/* Bloque 4 — Permisos y Garantías Éticas */}
             <section ref={permisosRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="120">
               <div>
-                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+                <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Permisos y transparencia de datos
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#8E8E93]">
+                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
                   Qué permanece en tu equipo, qué se analiza únicamente en RAM y qué controles éticos aplica cada módulo.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="apple-group rounded-[12px] p-3.5 space-y-1">
-                  <div className="text-[12px] font-semibold text-[#F5F5F7]">
+                  <div className="text-[12px] font-semibold text-[#F2F2F4]">
                     Custodia local (Zero-Retention)
                   </div>
-                  <p className="text-[11.5px] text-[#A1A1A6] leading-relaxed">
+                  <p className="text-[11.5px] text-[#9A9AA2] leading-relaxed">
                     Tus PDFs originales y respaldos completos nunca se retienen en el servidor; solo se conservan metadatos, hash SHA-256 y fragmentos de expediente autorizados.
                   </p>
                 </div>
                 <div className="apple-group rounded-[12px] p-3.5 space-y-1">
-                  <div className="text-[12px] font-semibold text-[#F5F5F7]">
+                  <div className="text-[12px] font-semibold text-[#F2F2F4]">
                     Evidencia volátil en RAM
                   </div>
-                  <p className="text-[11.5px] text-[#A1A1A6] leading-relaxed">
+                  <p className="text-[11.5px] text-[#9A9AA2] leading-relaxed">
                     Volcados MVT, backups iOS, YARA y auditorías de PC se procesan en memoria aislada sin red externa y se liberan al finalizar el análisis.
                   </p>
                 </div>
                 <div className="apple-group rounded-[12px] p-3.5 space-y-1">
-                  <div className="text-[12px] font-semibold text-[#F5F5F7]">
+                  <div className="text-[12px] font-semibold text-[#F2F2F4]">
                     Aislamiento estricto de IA
                   </div>
-                  <p className="text-[11.5px] text-[#A1A1A6] leading-relaxed">
+                  <p className="text-[11.5px] text-[#9A9AA2] leading-relaxed">
                     El proveedor externo de embeddings/LLM solo recibe corpus público CTI o fragmentos RAG autorizados; nunca recibe volcados forenses ni activos OSINT.
                   </p>
                 </div>
@@ -574,14 +847,14 @@ export function SettingsPanel({
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13.5px] font-medium text-[#F5F5F7]">
+                      <span className="text-[13.5px] font-medium text-[#F2F2F4]">
                         Procesamiento forense volátil (<span className="font-tech">RNF4</span>)
                       </span>
-                      <span className="rounded-full bg-[#1D4ED8]/15 border border-[#1D4ED8]/35 px-2.5 py-0.5 text-[10.5px] font-medium text-[#93C5FD]">
+                      <span className="rounded-full bg-[rgba(28,36,56,0.65)] border border-[#2F6FED]/45 px-2.5 py-0.5 text-[10.5px] font-medium text-[#F2F2F4]">
                         Obligatorio
                       </span>
                     </div>
-                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">
+                    <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
                       Analiza respaldos MVT y SQLite exclusivamente en RAM; descarta los buffers al finalizar sin escribir en disco.
                     </p>
                   </div>
@@ -595,10 +868,10 @@ export function SettingsPanel({
 
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
-                    <div className="text-[13.5px] font-medium text-[#F5F5F7]">
+                    <div className="text-[13.5px] font-medium text-[#F2F2F4]">
                       Inspección pasiva de enlaces (<span className="font-tech">RNF7</span>)
                     </div>
-                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">
+                    <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
                       Verifica URLs sospechosas contra IOCs y crt.sh sin emitir peticiones HTTP hacia el servidor destino.
                     </p>
                   </div>
@@ -612,10 +885,10 @@ export function SettingsPanel({
 
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
-                    <div className="text-[13.5px] font-medium text-[#F5F5F7]">
+                    <div className="text-[13.5px] font-medium text-[#F2F2F4]">
                       Consentimiento explícito OSINT (<span className="font-tech">RNF8</span>)
                     </div>
-                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">
+                    <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
                       Exige confirmación de titularidad antes de auditar dominios o correos institucionales.
                     </p>
                   </div>
@@ -633,38 +906,59 @@ export function SettingsPanel({
             <section ref={corpusRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="150">
               <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-[#8E8E93] shrink-0" />
-                  <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F5F5F7]">
+                  <Database className="h-4 w-4 text-[#9A9AA2] shrink-0" />
+                  <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                     Trazabilidad del Corpus Indexado (<span className="font-tech">RF7</span>)
                   </h2>
                 </div>
 
-                <span className="font-tech rounded-full bg-[#1D4ED8]/15 border border-[#1D4ED8]/35 px-3 py-1 text-[11px] text-[#93C5FD]">
-                  {stats.reports} Reportes · {stats.chunks} Fragmentos ·{' '}
-                  {Number(stats.iocs || 0).toLocaleString('en-US')} IOCs
+                <span className="font-tech rounded-full bg-[rgba(28,36,56,0.65)] border border-[#2F6FED]/45 px-3 py-1 text-[11px] text-[#F2F2F4]">
+                  {stats
+                    ? `${stats.reports} Reportes · ${stats.chunks} Fragmentos · ${Number(stats.iocs || 0).toLocaleString('en-US')} IOCs`
+                    : 'Sesión requerida para métricas en vivo'}
                 </span>
               </div>
 
               <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] max-h-56 overflow-y-auto">
-                {sources.map((rep, idx) => (
-                  <div
-                    key={`${rep.title}-${idx}`}
-                    className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4"
-                  >
-                    <span className="text-[12.5px] text-[#F5F5F7] break-words sm:truncate">
-                      {rep.title}
-                    </span>
+                {sources.length > 0 ? (
+                  sources.map((rep, idx) => (
+                    <div
+                      key={`${rep.title}-${idx}`}
+                      className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4"
+                    >
+                      <span className="text-[12.5px] text-[#F2F2F4] break-words sm:truncate">
+                        {rep.title}
+                      </span>
 
-                    <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-                      <span className="text-[11.5px] sm:text-[12px] text-[#8E8E93]">
-                        {rep.organization}
-                      </span>
-                      <span className="font-tech text-[11px] text-[#8E8E93]">
-                        {formatDateTag(rep.ingested_at || rep.publication_date)}
-                      </span>
+                      <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                        <span className="text-[11.5px] sm:text-[12px] text-[#9A9AA2]">
+                          {rep.organization}
+                        </span>
+                        <span className="font-tech text-[11px] text-[#9A9AA2]">
+                          {formatDateTag(rep.ingested_at || rep.publication_date)}
+                        </span>
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="px-4 py-4 flex items-center justify-between gap-3 text-[12px] text-[#9A9AA2]">
+                    <span>
+                      {authSession
+                        ? 'No se reportaron fuentes indexadas en PostgreSQL.'
+                        : 'Conecta una sesión JWT para listar los reportes públicos indexados y su modelo de embeddings.'}
+                    </span>
+                    {!authSession && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAuth?.('Conecta tu sesión para consultar el corpus CTI indexado en PostgreSQL.')}
+                        className="inline-flex items-center gap-1 rounded-[7px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/75 px-2.5 py-1 text-[11.5px] text-[#F2F2F4] cursor-pointer"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        <span>Conectar</span>
+                      </button>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
 
               <OmegaWebIntelCard

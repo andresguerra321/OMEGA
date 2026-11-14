@@ -10,8 +10,8 @@ export const CENTERPIECE_STATE_META = {
     badge: 'Verificado limpio',
   },
   standby: {
-    ring: '#3B82F6',
-    glyph: '#93C5FD',
+    ring: '#2F6FED',
+    glyph: '#F2F2F4',
     badge: 'En espera',
   },
 };
