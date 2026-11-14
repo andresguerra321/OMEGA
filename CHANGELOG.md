@@ -2,6 +2,19 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [1.2.0] - 2026-11-14
+
+### Integración Gateway Frontend–Backend & Seguridad Operativa
+- **Gateway unificado en Java (`omega/backend-java`):** Nuevos controladores y servicios (`OsintController`, `SystemController`, `CtiDossierService`, `PublicCorpusRagService`, `WebIntelExtractorService`, `OsintExposureService`) integrados con `CtiCatalogController`, `ForensicController`, `AuthController`, `ForensicBridgeService` y `omega/api/detection_engineering.py`, más suite `FrontendGatewayIntegrationTest`.
+- **Persistencia multi-tenant OSINT con consentimiento (`V4__osint_monitored_assets_rag.sql`):** Tabla `omega_rag.osint_monitored_assets` con restricción `CHECK (explicit_consent = TRUE)` y clave foránea compuesta por `(tenant_id, user_id)`.
+- **Autenticación JWT, Expedientes y Proxy Compose:** Sesión multi-tenant y gestión de expedientes en `omega/frontend/src/lib/api.js` y `AuthModal.jsx`, más servicio `frontend` en `omega/docker-compose.yml` y enrutamiento Nginx/Vite hacia `backend-java:8080`.
+
+### Auto-Orquestación Desktop (Electron)
+- **Ciclo de vida automático del backend (`omega/frontend/electron/dockerOrchestrator.js`, `main.js`, `preload.cjs`, `launch.js`):** Arranque y apagado controlado de Docker Compose al abrir/cerrar Electron con generación segura de secretos faltantes, redacción de credenciales en logs, pantalla de carga `splash.html` y pruebas `dockerOrchestrator.test.js` (`6/6`).
+
+### Sistema Visual Dark Glassmorphism (`DESIGN.md`)
+- **Identidad "vidrio esmerilado sobre panel de control nocturno":** Lienzo `#0A0A0C` con rejilla punteada (`24px`) y film grain (`2.5%`), paneles translúcidos biselados (`rgba(20, 20, 24, 0.55)` + `backdrop-filter: blur(16px)`), estado activo/hover `rgba(28, 36, 56, 0.65)`, texto `#F2F2F4` / `#9A9AA2`, consolidación del acento único `#2F6FED` y presupuesto estricto de `<= 3–4` capas `backdrop-filter` simultáneas por vista con soporte para `prefers-reduced-transparency` y contraste WCAG AA verificado sin hallazgos en `impeccable`.
+
 ## [1.1.0] - 2026-11-14
 
 ### Seguridad y Resiliencia
