@@ -778,7 +778,7 @@ export function MvtVerifierPanel({
       result.verdictCode === 'BEHAVIORAL_ZERO_DAY_SUSPICION';
 
     let verdictDot = 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.5)]';
-    let verdictHeadingTone = 'text-[#F5F5F7]';
+    let verdictHeadingTone = 'text-[#F2F2F4]';
     if (hasMatches || hasCriticalBehavioral || hasYara || hasCriticalAlert) {
       verdictDot = 'bg-[#FF453A] shadow-[0_0_10px_rgba(255,69,58,0.55)]';
       verdictHeadingTone = 'text-[#FF6961]';
@@ -835,18 +835,18 @@ export function MvtVerifierPanel({
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#8E8E93]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#9A9AA2]" />
             <span>Nuevo análisis</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportMarkdown}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
           >
-            <Download className="h-3.5 w-3.5 text-[#8E8E93]" />
+            <Download className="h-3.5 w-3.5 text-[#9A9AA2]" />
             <span>Exportar (.md)</span>
           </button>
         </div>
@@ -874,10 +874,10 @@ export function MvtVerifierPanel({
 
         {/* 1 · Veredicto y contención */}
         <section className="animate-fade-up space-y-2">
-          <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
+          <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#9A9AA2]">
             1 · Veredicto y contención
           </span>
-          <div className="apple-group rounded-[15px] p-4 sm:p-5 space-y-4">
+          <div className="omega-glass-panel rounded-[15px] p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 {!hasAnyThreatSignal ? (
@@ -904,19 +904,19 @@ export function MvtVerifierPanel({
               )}
             </div>
 
-            <p className="text-[13.5px] text-[#D1D1D6] leading-relaxed">
+            <p className="text-[13.5px] text-[#F2F2F4]/85 leading-relaxed">
               {verdictBody}
             </p>
 
             {result.recommendedActions?.length > 0 && (
               <div className="rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-4 py-3 space-y-2">
-                <div className="text-[11.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+                <div className="text-[11.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
                   Acciones de contención recomendadas
                 </div>
                 <ul className="space-y-1.5">
                   {result.recommendedActions.map((act, idx) => (
-                    <li key={`${idx}-${act.slice(0, 24)}`} className="flex items-start gap-2 text-[12.5px] text-[#E5E5EA] leading-snug">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#1D4ED8] shrink-0" />
+                    <li key={`${idx}-${act.slice(0, 24)}`} className="flex items-start gap-2 text-[12.5px] text-[#F2F2F4]/90 leading-snug">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#2F6FED] shrink-0" />
                       <span>{act}</span>
                     </li>
                   ))}
@@ -924,7 +924,7 @@ export function MvtVerifierPanel({
               </div>
             )}
 
-            <div className="font-tech pt-3 border-t border-white/[0.06] text-[11.5px] text-[#8E8E93]">
+            <div className="font-tech pt-3 border-t border-white/[0.06] text-[11.5px] text-[#9A9AA2]">
               {result.sourceLabel}
               {result.filesAnalyzed ? ` · ${result.filesAnalyzed} artefacto(s) en RAM` : ''}
               {` · ${result.analyzedCount} indicadores evaluados`}
@@ -952,12 +952,12 @@ export function MvtVerifierPanel({
         {/* 2 · Anomalías conductuales y hardening */}
         <section className="animate-on-scroll space-y-2" data-delay="50">
           <div className="px-1 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
+            <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-[#9A9AA2]">
               2 · Anomalías conductuales y hardening
             </span>
             {hardeningReport?.device_summary &&
               Object.keys(hardeningReport.device_summary).length > 0 && (
-                <span className="font-tech text-[11px] text-[#8E8E93]">
+                <span className="font-tech text-[11px] text-[#9A9AA2]">
                   {hardeningReport.device_summary.platform === 'ios'
                     ? `iOS ${hardeningReport.device_summary.ios_version || 'N/D'} · ${hardeningReport.device_summary.model || 'iPhone/iPad'}`
                     : hardeningReport.device_summary.platform === 'pc'
@@ -969,7 +969,7 @@ export function MvtVerifierPanel({
 
           <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
             {hardeningReport?.hardening_checks?.map((chk) => {
-              let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
+              let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#9A9AA2]';
               if (chk.status === 'OK') {
                 badgeCls = 'border-[#30D158]/35 bg-[#30D158]/12 text-[#30D158]';
               } else if (chk.status === 'CRITICAL') {
@@ -992,15 +992,15 @@ export function MvtVerifierPanel({
                         <span className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${badgeCls}`}>
                           {chk.status}
                         </span>
-                        <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                        <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F2F2F4]">
                           {chk.control}
                         </span>
                       </div>
-                      <p className="text-[12.5px] text-[#8E8E93] leading-relaxed break-words">
+                      <p className="text-[12.5px] text-[#9A9AA2] leading-relaxed break-words">
                         {chk.detail}
                       </p>
                     </div>
-                    <span className="font-tech self-start shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#E5E5EA]">
+                    <span className="font-tech self-start shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#F2F2F4]/90">
                       {chk.value}
                     </span>
                   </div>
@@ -1011,20 +1011,20 @@ export function MvtVerifierPanel({
                         <button
                           type="button"
                           onClick={() => setConfirmingDns(true)}
-                          className="rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
+                          className="rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
                         >
                           Activar DNS Privado (Quad9 DoT)
                         </button>
                       ) : (
                         <>
-                          <span className="text-[12px] text-[#D1D1D6]">
-                            ¿Forzar <span className="font-tech text-[#F5F5F7]">dns.quad9.net</span> por USB?
+                          <span className="text-[12px] text-[#F2F2F4]/85">
+                            ¿Forzar <span className="font-tech text-[#F2F2F4]">dns.quad9.net</span> por USB?
                           </span>
                           <button
                             type="button"
                             disabled={hardeningDns}
                             onClick={handleConfirmHardenDns}
-                            className="rounded-[8px] bg-[#1D4ED8] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
+                            className="rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
                           >
                             {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" />}
                             <span>Confirmar</span>
@@ -1033,7 +1033,7 @@ export function MvtVerifierPanel({
                             type="button"
                             disabled={hardeningDns}
                             onClick={() => setConfirmingDns(false)}
-                            className="rounded-[8px] border border-white/[0.1] px-2.5 py-1 text-[12px] text-[#8E8E93] hover:text-[#F5F5F7] cursor-pointer"
+                            className="rounded-[8px] border border-white/[0.1] px-2.5 py-1 text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
                           >
                             Cancelar
                           </button>
@@ -1058,14 +1058,14 @@ export function MvtVerifierPanel({
                     >
                       {al.severity}
                     </span>
-                    <span className="text-[13px] font-medium text-[#F5F5F7]">
+                    <span className="text-[13px] font-medium text-[#F2F2F4]">
                       {al.category}
                     </span>
                   </div>
-                  <div className="font-tech text-[12.5px] text-[#E5E5EA] break-all">
+                  <div className="font-tech text-[12.5px] text-[#F2F2F4]/90 break-all">
                     {al.indicator}
                   </div>
-                  <p className="text-[12.5px] text-[#8E8E93] leading-relaxed break-words">
+                  <p className="text-[12.5px] text-[#9A9AA2] leading-relaxed break-words">
                     {al.detail}
                   </p>
                 </div>
@@ -1074,7 +1074,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1099,17 +1099,17 @@ export function MvtVerifierPanel({
                       >
                         {anom.severity}
                       </span>
-                      <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
+                      <span className="font-tech text-[13px] text-[#F2F2F4] break-all">
                         {anom.indicator}
                       </span>
-                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
+                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#9A9AA2]">
                         {anom.category}
                       </span>
                     </div>
-                    <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed break-words">
+                    <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed break-words">
                       {anom.detail}
                     </p>
-                    <div className="font-tech text-[11px] text-[#8E8E93] truncate">
+                    <div className="font-tech text-[11px] text-[#9A9AA2] truncate">
                       {anom.artifact}
                     </div>
                   </div>
@@ -1118,7 +1118,7 @@ export function MvtVerifierPanel({
                     type="button"
                     disabled={!onAskInChat}
                     onClick={() => handleInvestigateAnomaly(anom)}
-                    className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                    className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
                     Investigar en Preguntar
                   </button>
@@ -1129,10 +1129,10 @@ export function MvtVerifierPanel({
             {liveSockets.length > 0 && (
               <div>
                 <div className="px-4 py-2.5 bg-white/[0.02] flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[12px] font-medium text-[#D1D1D6]">
+                  <span className="text-[12px] font-medium text-[#F2F2F4]/85">
                     {isPcPlatform ? 'Conexiones TCP activas' : 'Sockets kernel activos /proc/net/tcp'} ({hardeningReport?.live_sockets_total || liveSockets.length})
                   </span>
-                  <span className="font-tech text-[11px] text-[#8E8E93]">
+                  <span className="font-tech text-[11px] text-[#9A9AA2]">
                     {isPcPlatform
                       ? `${liveSockets.filter((s) => s.process_name).length} con proceso`
                       : `${hardeningReport?.cached_dns_count || 0} DNS en caché`}
@@ -1147,10 +1147,10 @@ export function MvtVerifierPanel({
                       <div className="min-w-0 flex items-center gap-2.5">
                         <span
                           className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                            sock.cti_match ? 'bg-[#FF453A]' : 'bg-[#8E8E93]/60'
+                            sock.cti_match ? 'bg-[#FF453A]' : 'bg-[#9A9AA2]/60'
                           }`}
                         />
-                        <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate">
+                        <span className="font-tech text-[12.5px] text-[#F2F2F4] truncate">
                           {sock.remote_ip}:{sock.remote_port}
                           {sock.process_name ? ` · ${sock.process_name}` : ''}
                         </span>
@@ -1160,7 +1160,7 @@ export function MvtVerifierPanel({
                           </span>
                         )}
                       </div>
-                      <span className="font-tech shrink-0 text-[11px] text-[#8E8E93]">
+                      <span className="font-tech shrink-0 text-[11px] text-[#9A9AA2]">
                         {sock.state}{sock.local_port ? ` · local:${sock.local_port}` : ''}
                       </span>
                     </div>
@@ -1173,7 +1173,7 @@ export function MvtVerifierPanel({
               !abuseAlerts.length &&
               !hasBehavioral &&
               !liveSockets.length && (
-                <div className="px-4 py-3.5 text-[12.5px] text-[#8E8E93]">
+                <div className="px-4 py-3.5 text-[12.5px] text-[#9A9AA2]">
                   Sin anomalías conductuales, privilegios anómalos ni brechas de endurecimiento detectadas en este análisis.
                 </div>
               )}
@@ -1196,8 +1196,8 @@ export function MvtVerifierPanel({
           {result.timeline?.length > 0 && (
             <div className="apple-group rounded-[13px] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F5F5F7]">
-                  <Clock className="h-3.5 w-3.5 text-[#93C5FD] shrink-0" />
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4]">
+                  <Clock className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
                   <span>
                     Línea temporal correlacionada en RAM ({result.timelineSummary?.events_total || result.timeline.length} eventos)
                   </span>
@@ -1212,12 +1212,12 @@ export function MvtVerifierPanel({
                 {result.timeline.slice(-8).reverse().map((ev, idx) => (
                   <div key={`${ev.timestamp}-${ev.kind}-${idx}`} className="px-4 py-2 flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-3 text-[11.5px]">
                     <div className="min-w-0 break-words">
-                      <span className={`font-medium ${ev.suspicious ? 'text-[#FF6961]' : 'text-[#E5E5EA]'}`}>
+                      <span className={`font-medium ${ev.suspicious ? 'text-[#FF6961]' : 'text-[#F2F2F4]/90'}`}>
                         {ev.actor}
                       </span>{' '}
-                      <span className="text-[#8E8E93]">{ev.detail}</span>
+                      <span className="text-[#9A9AA2]">{ev.detail}</span>
                     </div>
-                    <span className="font-tech text-[10.5px] text-[#8E8E93] shrink-0">
+                    <span className="font-tech text-[10.5px] text-[#9A9AA2] shrink-0">
                       {ev.timestamp}
                     </span>
                   </div>
@@ -1229,7 +1229,7 @@ export function MvtVerifierPanel({
 
         {/* 3 · Coincidencias CTI y firmas YARA */}
         <section className="animate-on-scroll space-y-2" data-delay="100">
-          <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#8E8E93]">
+          <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#9A9AA2]">
             3 · Coincidencias CTI y firmas YARA ({yaraHits.length + result.findings.length})
           </span>
           <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
@@ -1237,31 +1237,31 @@ export function MvtVerifierPanel({
               <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-4">
                 <div className="min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-tech text-[13px] font-medium text-[#F5F5F7] break-all">
+                    <span className="font-tech text-[13px] font-medium text-[#F2F2F4] break-all">
                       {hit.rule_name}
                     </span>
                     <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
                       YARA · {hit.spyware_family}
                     </span>
                     {hit.cve && (
-                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#8E8E93]">
+                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#9A9AA2]">
                         {hit.cve}
                       </span>
                     )}
                   </div>
-                  <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed break-words">
+                  <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed break-words">
                     {hit.description}
                   </p>
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     {(hit.matched_strings || []).map((tok) => (
                       <span
                         key={tok}
-                        className="font-tech rounded-[5px] border border-white/[0.08] bg-black/35 px-2 py-0.5 text-[11px] text-[#93C5FD]"
+                        className="font-tech rounded-[5px] border border-[#2F6FED]/40 bg-[rgba(28,36,56,0.65)] px-2 py-0.5 text-[11px] text-[#F2F2F4]"
                       >
                         {tok}
                       </span>
                     ))}
-                    <span className="font-tech text-[11px] text-[#8E8E93] break-all sm:truncate">
+                    <span className="font-tech text-[11px] text-[#9A9AA2] break-all sm:truncate">
                       · {hit.artifact}
                     </span>
                   </div>
@@ -1271,7 +1271,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateYara(hit)}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Investigar en Preguntar
                 </button>
@@ -1285,14 +1285,14 @@ export function MvtVerifierPanel({
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-tech text-[13px] text-[#F5F5F7] break-all">
+                    <span className="font-tech text-[13px] text-[#F2F2F4] break-all">
                       {finding.ioc_value}
                     </span>
                     <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
                       {finding.spyware_family}
                     </span>
                   </div>
-                  <div className="font-tech text-[11.5px] text-[#8E8E93] truncate">
+                  <div className="font-tech text-[11.5px] text-[#9A9AA2] truncate">
                     {finding.artifact_origin}
                   </div>
                 </div>
@@ -1302,9 +1302,9 @@ export function MvtVerifierPanel({
                     <button
                       type="button"
                       onClick={() => onVerifyLink(finding.ioc_value)}
-                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4]/90 hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
                     >
-                      <Link2 className="h-3 w-3 text-[#93C5FD]" />
+                      <Link2 className="h-3 w-3 text-[#2F6FED]" />
                       <span>Ver enlace</span>
                     </button>
                   )}
@@ -1313,9 +1313,9 @@ export function MvtVerifierPanel({
                     <button
                       type="button"
                       onClick={() => onOpenThreat(finding.spyware_family)}
-                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#E5E5EA] hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4]/90 hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
                     >
-                      <Shield className="h-3 w-3 text-[#93C5FD]" />
+                      <Shield className="h-3 w-3 text-[#2F6FED]" />
                       <span>Campaña</span>
                     </button>
                   )}
@@ -1324,7 +1324,7 @@ export function MvtVerifierPanel({
                     type="button"
                     disabled={!onAskInChat}
                     onClick={() => handleInvestigateFinding(finding)}
-                    className="rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                    className="rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
                     Investigar en Preguntar
                   </button>
@@ -1333,7 +1333,7 @@ export function MvtVerifierPanel({
             ))}
 
             {!hasYara && !hasMatches && (
-              <div className="px-4 py-3.5 text-[12.5px] text-[#8E8E93]">
+              <div className="px-4 py-3.5 text-[12.5px] text-[#9A9AA2]">
                 0 firmas YARA activadas y 0 coincidencias contra campañas conocidas (STIX 2.1 / Citizen Lab / Amnesty Tech).
               </div>
             )}
@@ -1348,10 +1348,10 @@ export function MvtVerifierPanel({
     <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-3">
       <div className="w-full max-w-[740px]">
         <header className="text-center mb-3.5">
-          <h1 className="text-[23px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+          <h1 className="text-[23px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
             Verificar integridad del dispositivo
           </h1>
-          <p className="mt-1.5 text-[13px] sm:text-[13.5px] text-[#8E8E93] leading-[1.5] max-w-[540px] mx-auto">
+          <p className="mt-1.5 text-[13px] sm:text-[13.5px] text-[#9A9AA2] leading-[1.5] max-w-[540px] mx-auto">
             Revisa tu celular por cable USB o con una copia guardada. Todo se analiza de forma temporal, sin guardar tus fotos ni archivos en esta computadora.
           </p>
         </header>
@@ -1367,12 +1367,12 @@ export function MvtVerifierPanel({
             : 'pip install pymobiledevice3';
 
           let statusPillLabel = 'Solo app Desktop';
-          let statusPillTone = 'border-white/[0.08] bg-white/[0.04] text-[#8E8E93]';
+          let statusPillTone = 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2]';
           if (deviceTab === 'pc') {
             statusPillLabel = hasDesktopBridge ? 'Auditoría de solo lectura' : 'Solo en OMEGA Desktop';
             statusPillTone = hasDesktopBridge
               ? 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]'
-              : 'border-white/[0.1] bg-white/[0.04] text-[#8E8E93]';
+              : 'border-white/[0.1] bg-white/[0.04] text-[#9A9AA2]';
           } else if (hasDesktopBridge) {
             if (deviceTab === 'android') {
               if (usbDevice?.connected) {
@@ -1403,12 +1403,12 @@ export function MvtVerifierPanel({
           }
 
           return (
-            <div className="apple-group mb-3.5 rounded-[14px] p-4 space-y-3">
+            <div className="omega-glass-panel mb-3.5 rounded-[14px] p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
                     {deviceTab === 'pc' ? (
-                      <Laptop className={`h-4 w-4 ${hasDesktopBridge ? 'text-[#30D158]' : 'text-[#8E8E93]'}`} />
+                      <Laptop className={`h-4 w-4 ${hasDesktopBridge ? 'text-[#30D158]' : 'text-[#9A9AA2]'}`} />
                     ) : (
                       <Smartphone
                         className={`h-4 w-4 ${
@@ -1416,14 +1416,14 @@ export function MvtVerifierPanel({
                           ((deviceTab === 'android' && usbDevice?.connected) ||
                             (deviceTab === 'ios' && iosStatus?.connected))
                             ? 'text-[#30D158]'
-                            : 'text-[#8E8E93]'
+                            : 'text-[#9A9AA2]'
                         }`}
                       />
                     )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+                      <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F2F2F4]">
                         {deviceTab === 'pc' ? 'Revisar esta computadora' : 'Analizar dispositivo USB'}
                       </span>
                       <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${statusPillTone}`}>
@@ -1441,7 +1441,7 @@ export function MvtVerifierPanel({
                       className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
                         deviceTab === 'android'
                           ? 'apple-segmented-active'
-                          : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                          : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                       }`}
                     >
                       Android
@@ -1452,7 +1452,7 @@ export function MvtVerifierPanel({
                       className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
                         deviceTab === 'ios'
                           ? 'apple-segmented-active'
-                          : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                          : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                       }`}
                     >
                       iPhone / iPad
@@ -1463,7 +1463,7 @@ export function MvtVerifierPanel({
                       className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
                         deviceTab === 'pc'
                           ? 'apple-segmented-active'
-                          : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                          : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                       }`}
                     >
                       Esta PC
@@ -1477,9 +1477,9 @@ export function MvtVerifierPanel({
                       onClick={() => fetchUsbStatuses(customAdbPath, deviceTab === 'ios', true)}
                       title="Volver a buscar teléfono conectado"
                       aria-label="Volver a buscar teléfono conectado"
-                      className="h-7 w-7 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#8E8E93] hover:text-[#F5F5F7] disabled:opacity-50 transition-colors cursor-pointer"
+                      className="h-7 w-7 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#9A9AA2] hover:text-[#F2F2F4] disabled:opacity-50 transition-colors cursor-pointer"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#93C5FD]' : ''}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#2F6FED]' : ''}`} />
                     </button>
                   )}
                 </div>
@@ -1491,17 +1491,17 @@ export function MvtVerifierPanel({
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[12.5px] font-medium text-[#F5F5F7]">
+                          <span className="text-[12.5px] font-medium text-[#F2F2F4]">
                             {usbDevice.model || 'Teléfono Android'}
                           </span>
-                          <span className="font-tech text-[11px] text-[#8E8E93]">
+                          <span className="font-tech text-[11px] text-[#9A9AA2]">
                             {selectedSerial || usbDevice.serial}
                           </span>
                           {usbDevice.devices?.length > 1 && (
                             <select
                               value={selectedSerial}
                               onChange={(e) => setSelectedSerial(e.target.value)}
-                              className="font-tech rounded-[6px] border border-white/[0.12] bg-black/50 px-1.5 py-0.5 text-[11px] text-[#E5E5EA]"
+                              className="font-tech rounded-[6px] border border-white/[0.12] bg-black/50 px-1.5 py-0.5 text-[11px] text-[#F2F2F4]/90"
                             >
                               {usbDevice.devices
                                 .filter((d) => d.state === 'device')
@@ -1513,7 +1513,7 @@ export function MvtVerifierPanel({
                             </select>
                           )}
                         </div>
-                        <p className="text-[12px] text-[#8E8E93]">
+                        <p className="text-[12px] text-[#9A9AA2]">
                           Teléfono listo. OMEGA revisará conexiones activas, permisos especiales y protección del sistema sin borrar ni cambiar nada.
                         </p>
                       </div>
@@ -1522,7 +1522,7 @@ export function MvtVerifierPanel({
                         type="button"
                         disabled={scanningUsb || isAnalyzing}
                         onClick={handleLiveUsbScan}
-                        className="shrink-0 rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         <span>{scanningUsb ? 'Revisando teléfono...' : 'Iniciar revisión segura'}</span>
@@ -1531,7 +1531,7 @@ export function MvtVerifierPanel({
                   ) : (
                     <div className="space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
-                        <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed flex-1 min-w-[220px]">
+                        <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed flex-1 min-w-[220px]">
                           {hasDesktopBridge
                             ? usbDevice?.reason || 'Buscando conector USB de Android en tu computadora...'
                             : 'Para revisar un Android por cable USB necesitas la app de escritorio OMEGA. En navegador web, puedes subir una copia abajo.'}
@@ -1540,7 +1540,7 @@ export function MvtVerifierPanel({
                         <button
                           type="button"
                           onClick={() => setShowAndroidGuide((v) => !v)}
-                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#93C5FD] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED]/50 hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
                         >
                           <HelpCircle className="h-3.5 w-3.5" />
                           <span>
@@ -1561,11 +1561,11 @@ export function MvtVerifierPanel({
                             <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
                               <AndroidStepVisual step={1} />
                               <div>
-                                <div className="text-[12px] font-medium text-[#F5F5F7]">
+                                <div className="text-[12px] font-medium text-[#F2F2F4]">
                                   1. Activa el modo revisión
                                 </div>
-                                <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
-                                  En tu teléfono ve a <span className="text-[#D1D1D6]">Ajustes → Acerca del teléfono</span>, toca 7 veces <span className="text-[#D1D1D6]">N.º de compilación</span> y enciende <span className="text-[#D1D1D6]">Depuración USB</span>.
+                                <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
+                                  En tu teléfono ve a <span className="text-[#F2F2F4]/85">Ajustes → Acerca del teléfono</span>, toca 7 veces <span className="text-[#F2F2F4]/85">N.º de compilación</span> y enciende <span className="text-[#F2F2F4]/85">Depuración USB</span>.
                                 </p>
                               </div>
                             </div>
@@ -1573,10 +1573,10 @@ export function MvtVerifierPanel({
                             <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
                               <AndroidStepVisual step={2} adbReady={Boolean(usbDevice?.adb_path)} />
                               <div>
-                                <div className="text-[12px] font-medium text-[#F5F5F7]">
+                                <div className="text-[12px] font-medium text-[#F2F2F4]">
                                   2. Conecta tu cable USB
                                 </div>
-                                <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                                <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
                                   {usbDevice?.adb_path
                                     ? 'Tu computadora ya está lista. Conecta el teléfono con cable de datos y elige "Transferir archivos".'
                                     : 'Usa un cable USB de datos (no solo de carga) y descarga o señala el conector gratuito abajo.'}
@@ -1587,11 +1587,11 @@ export function MvtVerifierPanel({
                             <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
                               <AndroidStepVisual step={3} />
                               <div>
-                                <div className="text-[12px] font-medium text-[#F5F5F7]">
+                                <div className="text-[12px] font-medium text-[#F2F2F4]">
                                   3. Toca “Permitir”
                                 </div>
-                                <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
-                                  Desbloquea la pantalla del teléfono. Cuando salga la ventana de permiso, marca confiar y pulsa <span className="text-[#D1D1D6]">Permitir</span>.
+                                <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
+                                  Desbloquea la pantalla del teléfono. Cuando salga la ventana de permiso, marca confiar y pulsa <span className="text-[#F2F2F4]/85">Permitir</span>.
                                 </p>
                               </div>
                             </div>
@@ -1605,7 +1605,7 @@ export function MvtVerifierPanel({
                                     type="button"
                                     disabled={installingAdb}
                                     onClick={handleInstallPortableAdb}
-                                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#1D4ED8] px-3 py-1 text-[11.5px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 transition-colors cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[11.5px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:opacity-50 transition-all cursor-pointer"
                                   >
                                     {installingAdb ? (
                                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1621,7 +1621,7 @@ export function MvtVerifierPanel({
                                 <button
                                   type="button"
                                   onClick={handlePickAdbBinary}
-                                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_20px_rgba(47,111,237,0.22)] transition-all cursor-pointer"
                                 >
                                   <FolderOpen className="h-3.5 w-3.5" />
                                   <span>
@@ -1637,7 +1637,7 @@ export function MvtVerifierPanel({
                                         'https://developer.android.com/tools/releases/platform-tools',
                                       )
                                     }
-                                    className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                                    className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
                                   >
                                     <ExternalLink className="h-3 w-3" />
                                     <span>Descargar conector oficial (Google)</span>
@@ -1647,24 +1647,24 @@ export function MvtVerifierPanel({
                                 <button
                                   type="button"
                                   onClick={() => setShowAdvancedCmds((v) => !v)}
-                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#9A9AA2] hover:text-[#F2F2F4]/85 transition-colors cursor-pointer"
                                 >
                                   <span>{showAdvancedCmds ? 'Ocultar comandos' : 'Opciones para técnicos'}</span>
                                 </button>
                               </div>
 
                               {showAdvancedCmds && (
-                                <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#8E8E93]">
+                                <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#9A9AA2]">
                                   <span>Instalar por terminal:</span>
                                   <button
                                     type="button"
                                     onClick={() => handleCopyCommand('adb', installAdbCmd)}
-                                    className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                                    className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
                                   >
                                     {copiedHintKey === 'adb' ? (
                                       <Check className="h-3 w-3 text-[#30D158]" />
                                     ) : (
-                                      <Copy className="h-3 w-3 text-[#8E8E93]" />
+                                      <Copy className="h-3 w-3 text-[#9A9AA2]" />
                                     )}
                                     <span>{installAdbCmd}</span>
                                   </button>
@@ -1688,14 +1688,14 @@ export function MvtVerifierPanel({
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[12.5px] font-medium text-[#F5F5F7]">
+                          <span className="text-[12.5px] font-medium text-[#F2F2F4]">
                             {iosStatus.device?.name || 'iPhone / iPad'}
                           </span>
-                          <span className="font-tech text-[11px] text-[#8E8E93]">
+                          <span className="font-tech text-[11px] text-[#9A9AA2]">
                             {iosStatus.device?.model} · iOS {iosStatus.device?.ios_version || 'N/D'}
                           </span>
                         </div>
-                        <p className="text-[12px] text-[#8E8E93]">
+                        <p className="text-[12px] text-[#9A9AA2]">
                           iPhone conectado por cable. Revisaremos reportes internos recientes y registro de fallos en memoria temporal sin tocar tus fotos ni mensajes.
                         </p>
                       </div>
@@ -1704,7 +1704,7 @@ export function MvtVerifierPanel({
                         type="button"
                         disabled={scanningIos || isAnalyzing}
                         onClick={handleLiveIosScan}
-                        className="shrink-0 rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningIos && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         <span>{scanningIos ? 'Revisando iPhone...' : 'Iniciar revisión de iPhone'}</span>
@@ -1712,7 +1712,7 @@ export function MvtVerifierPanel({
                     </div>
                   ) : (
                     <div className="rounded-[12px] border border-white/[0.06] bg-black/30 p-3 space-y-3">
-                      <p className="text-[12.5px] text-[#D1D1D6] leading-relaxed">
+                      <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed">
                         {hasDesktopBridge
                           ? iosStatus?.reason || 'Apple bloquea el análisis directo sin permisos especiales. Sigue estas 3 imágenes para revisar tu iPhone sin riesgo:'
                           : 'Por seguridad de Apple, el navegador web no puede leer un iPhone por cable. Sigue estos 3 pasos fáciles en tu iPhone y sube el archivo abajo:'}
@@ -1722,11 +1722,11 @@ export function MvtVerifierPanel({
                         <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
                           <IosStepVisual step={1} />
                           <div>
-                            <div className="text-[12px] font-medium text-[#F5F5F7]">
+                            <div className="text-[12px] font-medium text-[#F2F2F4]">
                               1. Genera el archivo en iPhone
                             </div>
-                            <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
-                              Ve a <span className="text-[#D1D1D6]">Ajustes → Privacidad y seguridad → Análisis y mejoras → Datos de análisis</span>, o pulsa <span className="text-[#D1D1D6]">Vol+ · Vol- + Lateral</span> 1 segundo.
+                            <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
+                              Ve a <span className="text-[#F2F2F4]/85">Ajustes → Privacidad y seguridad → Análisis y mejoras → Datos de análisis</span>, o pulsa <span className="text-[#F2F2F4]/85">Vol+ · Vol- + Lateral</span> 1 segundo.
                             </p>
                           </div>
                         </div>
@@ -1734,11 +1734,11 @@ export function MvtVerifierPanel({
                         <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
                           <IosStepVisual step={2} />
                           <div>
-                            <div className="text-[12px] font-medium text-[#F5F5F7]">
+                            <div className="text-[12px] font-medium text-[#F2F2F4]">
                               2. O usa una copia en PC
                             </div>
-                            <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
-                              Si conectas tu iPhone por cable para hacer una copia en esta PC, desbloquéalo y toca <span className="text-[#D1D1D6]">Confiar</span> con tu código PIN.
+                            <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
+                              Si conectas tu iPhone por cable para hacer una copia en esta PC, desbloquéalo y toca <span className="text-[#F2F2F4]/85">Confiar</span> con tu código PIN.
                             </p>
                           </div>
                         </div>
@@ -1746,10 +1746,10 @@ export function MvtVerifierPanel({
                         <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
                           <IosStepVisual step={3} />
                           <div>
-                            <div className="text-[12px] font-medium text-[#F5F5F7]">
+                            <div className="text-[12px] font-medium text-[#F2F2F4]">
                               3. Súbelo sin guardar nada
                             </div>
-                            <p className="mt-0.5 text-[11.5px] text-[#8E8E93] leading-snug">
+                            <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
                               Envía el archivo de diagnóstico a tu PC o elige la carpeta de respaldo. Se revisa al instante y no se guarda nada privado.
                             </p>
                           </div>
@@ -1763,7 +1763,7 @@ export function MvtVerifierPanel({
                               type="button"
                               disabled={scanningIos || isAnalyzing}
                               onClick={handlePickIosBackupDir}
-                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 disabled:opacity-50 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_20px_rgba(47,111,237,0.22)] disabled:opacity-50 transition-all cursor-pointer"
                             >
                               {scanningIos ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1777,7 +1777,7 @@ export function MvtVerifierPanel({
                               <button
                                 type="button"
                                 onClick={() => setShowAdvancedCmds((v) => !v)}
-                                className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#9A9AA2] hover:text-[#F2F2F4]/85 transition-colors cursor-pointer"
                               >
                                 <span>{showAdvancedCmds ? 'Ocultar comandos' : 'Opciones para técnicos (cable directo)'}</span>
                               </button>
@@ -1785,17 +1785,17 @@ export function MvtVerifierPanel({
                           </div>
 
                           {showAdvancedCmds && !iosStatus?.tools_available && (
-                            <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#8E8E93]">
+                            <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#9A9AA2]">
                               <span>Para conexión USB Lockdown directa (requiere Apple Devices / iTunes):</span>
                               <button
                                 type="button"
                                 onClick={() => handleCopyCommand('ios', installIosCmd)}
-                                className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#E5E5EA] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                                className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
                               >
                                 {copiedHintKey === 'ios' ? (
                                   <Check className="h-3 w-3 text-[#30D158]" />
                                 ) : (
-                                  <Copy className="h-3 w-3 text-[#8E8E93]" />
+                                  <Copy className="h-3 w-3 text-[#9A9AA2]" />
                                 )}
                                 <span>{installIosCmd}</span>
                               </button>
@@ -1808,18 +1808,18 @@ export function MvtVerifierPanel({
 
                   {hasDesktopBridge && iosStatus?.local_backups?.length > 0 && (
                     <div className="rounded-[11px] border border-white/[0.06] bg-black/30 divide-y divide-white/[0.05] overflow-hidden">
-                      <div className="px-3 py-1.5 text-[11px] font-medium text-[#8E8E93]">
+                      <div className="px-3 py-1.5 text-[11px] font-medium text-[#9A9AA2]">
                         Copias de seguridad encontradas en tu computadora ({iosStatus.local_backups.length})
                       </div>
                       {iosStatus.local_backups.slice(0, 3).map((bk) => (
                         <div key={bk.id} className="px-3 py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[12px] font-medium text-[#F5F5F7] truncate">
+                              <span className="text-[12px] font-medium text-[#F2F2F4] truncate">
                                 {bk.deviceName}
                               </span>
                               {bk.iosVersion && (
-                                <span className="font-tech text-[10.5px] text-[#8E8E93]">
+                                <span className="font-tech text-[10.5px] text-[#9A9AA2]">
                                   iOS {bk.iosVersion}
                                 </span>
                               )}
@@ -1845,7 +1845,7 @@ export function MvtVerifierPanel({
                               type="button"
                               disabled={scanningIos || isAnalyzing}
                               onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
-                              className="shrink-0 rounded-[7px] bg-[#1D4ED8] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 cursor-pointer"
+                              className="shrink-0 rounded-[7px] bg-[#2F6FED] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#2F6FED]/90 disabled:opacity-50 cursor-pointer"
                             >
                               Revisar copia ahora
                             </button>
@@ -1858,17 +1858,17 @@ export function MvtVerifierPanel({
                   {encryptedBackupPrompt && (
                     <form
                       onSubmit={handleUnlockEncryptedBackup}
-                      className="rounded-[11px] border border-[#FF9F0A]/30 bg-[#121217] p-3.5 space-y-2.5"
+                      className="rounded-[11px] border border-[#FF9F0A]/30 bg-[#141418] p-3.5 space-y-2.5"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5F5F7]">
+                          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F2F2F4]">
                             <KeyRound className="h-3.5 w-3.5 text-[#FFD60A]" />
                             <span>
                               Contraseña de la copia «{encryptedBackupPrompt.meta?.deviceName || 'iPhone'}»
                             </span>
                           </div>
-                          <p className="text-[11px] text-[#8E8E93]">
+                          <p className="text-[11px] text-[#9A9AA2]">
                             Solo se usa en memoria temporal (RAM) para revisar SMS, Safari, DataUsage y perfiles. Nunca se guarda ni sale de tu computadora.
                           </p>
                         </div>
@@ -1881,12 +1881,12 @@ export function MvtVerifierPanel({
                           value={backupPassword}
                           onChange={(e) => setBackupPassword(e.target.value)}
                           placeholder="Contraseña de respaldo iTunes / Finder"
-                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8] focus:outline-none"
+                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED] focus:outline-none"
                         />
                         <button
                           type="submit"
                           disabled={!backupPassword || unlockingBackup}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#1D4ED8] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B82F6] disabled:opacity-50 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:opacity-50 cursor-pointer"
                         >
                           {unlockingBackup && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                           <span>Desbloquear y revisar en RAM</span>
@@ -1899,7 +1899,7 @@ export function MvtVerifierPanel({
                             setBackupPassword('');
                             setBackupUnlockError('');
                           }}
-                          className="rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] text-[#8E8E93] hover:text-[#F5F5F7] cursor-pointer"
+                          className="rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
                         >
                           Cancelar
                         </button>
@@ -1913,35 +1913,35 @@ export function MvtVerifierPanel({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-[12px] text-[#8E8E93] leading-relaxed">
-                    Revisa si esta computadora Windows o macOS tiene programas ocultos sin firma digital, persistencia silenciosa en WMI (técnica asociada a <span className="text-[#D1D1D6]">Candiru / Predator</span>) o conexiones externas sospechosas — sin leer tus archivos personales.
+                  <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
+                    Revisa si esta computadora Windows o macOS tiene programas ocultos sin firma digital, persistencia silenciosa en WMI (técnica asociada a <span className="text-[#F2F2F4]/85">Candiru / Predator</span>) o conexiones externas sospechosas — sin leer tus archivos personales.
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
                       <PcStepVisual step={1} />
-                      <div className="text-[11.5px] font-medium text-[#F5F5F7]">
+                      <div className="text-[11.5px] font-medium text-[#F2F2F4]">
                         1. Conexiones externas
                       </div>
-                      <p className="text-[11px] text-[#8E8E93] leading-snug">
+                      <p className="text-[11px] text-[#9A9AA2] leading-snug">
                         Cruza direcciones IP abiertas por tus aplicaciones contra campañas conocidas y reglas YARA.
                       </p>
                     </div>
                     <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
                       <PcStepVisual step={2} />
-                      <div className="text-[11.5px] font-medium text-[#F5F5F7]">
+                      <div className="text-[11.5px] font-medium text-[#F2F2F4]">
                         2. Persistencia oculta
                       </div>
-                      <p className="text-[11px] text-[#8E8E93] leading-snug">
+                      <p className="text-[11px] text-[#9A9AA2] leading-snug">
                         Inspecciona eventos WMI, tareas programadas y ejecutables sin firma en carpetas temporales.
                       </p>
                     </div>
                     <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
                       <PcStepVisual step={3} />
-                      <div className="text-[11.5px] font-medium text-[#F5F5F7]">
+                      <div className="text-[11.5px] font-medium text-[#F2F2F4]">
                         3. Escudos del sistema
                       </div>
-                      <p className="text-[11px] text-[#8E8E93] leading-snug">
+                      <p className="text-[11px] text-[#9A9AA2] leading-snug">
                         Verifica que Defender, Firewall, UAC y SmartScreen (o Gatekeeper/SIP) sigan activos.
                       </p>
                     </div>
@@ -1949,22 +1949,22 @@ export function MvtVerifierPanel({
 
                   {hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                      <span className="text-[11.5px] text-[#8E8E93]">
+                      <span className="text-[11.5px] text-[#9A9AA2]">
                         Análisis instantáneo en RAM · Tarda ~2 segundos · 0 modificaciones en tu equipo.
                       </span>
                       <button
                         type="button"
                         disabled={scanningPc || isAnalyzing}
                         onClick={handlePcLiveAudit}
-                        className="rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_12px_rgba(29,78,216,0.32)] hover:bg-[#3B82F6] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
+                        className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
                       >
                         {scanningPc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Laptop className="h-3.5 w-3.5" />}
                         <span>{scanningPc ? 'Revisando equipo...' : 'Analizar esta computadora'}</span>
                       </button>
                     </div>
                   ) : (
-                    <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-[11.5px] text-[#8E8E93]">
-                      La revisión directa de procesos y WMI locales está disponible en la aplicación de escritorio <span className="text-[#D1D1D6]">OMEGA Desktop</span>.
+                    <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-[11.5px] text-[#9A9AA2]">
+                      La revisión directa de procesos y WMI locales está disponible en la aplicación de escritorio <span className="text-[#F2F2F4]/85">OMEGA Desktop</span>.
                     </div>
                   )}
                 </div>
@@ -1976,7 +1976,7 @@ export function MvtVerifierPanel({
         {/* Disparador 2: Cargar respaldo / volcado */}
         <div style={{ animationDelay: '60ms' }} className="animate-scale-in omega-capsule rounded-[16px] p-3.5 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7]">
+            <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F2F2F4]">
               Cargar respaldo / volcado
             </span>
 
@@ -1985,9 +1985,9 @@ export function MvtVerifierPanel({
               disabled={syncingStix}
               onClick={handleSyncStix}
               title="Actualizar base de amenazas conocidas en memoria"
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
             >
-              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#3B82F6]' : ''}`} />
+              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#2F6FED]' : ''}`} />
               <span>{stixSyncNote || (syncingStix ? 'Actualizando...' : 'Feeds STIX 2.1')}</span>
             </button>
           </div>
@@ -2003,7 +2003,7 @@ export function MvtVerifierPanel({
                 className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium text-center active:scale-[0.98] transition-all duration-150 cursor-pointer ${
                   inputMode === 'upload'
                     ? 'apple-segmented-active'
-                    : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                 }`}
               >
                 Subir archivo del teléfono
@@ -2017,7 +2017,7 @@ export function MvtVerifierPanel({
                 className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium text-center active:scale-[0.98] transition-all duration-150 cursor-pointer ${
                   inputMode === 'paste'
                     ? 'apple-segmented-active'
-                    : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                 }`}
               >
                 Pegar enlaces o datos sospechosos
@@ -2044,8 +2044,8 @@ export function MvtVerifierPanel({
               }}
               className={`rounded-[12px] border border-dashed py-5 px-4 sm:px-6 flex flex-col items-center justify-center text-center transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
                 isDragging
-                  ? 'border-[#1D4ED8] bg-[#1D4ED8]/12'
-                  : 'border-white/[0.12] bg-black/25 hover:border-[#1D4ED8]/55 hover:bg-black/35'
+                  ? 'border-[#2F6FED] bg-[rgba(28,36,56,0.65)]'
+                  : 'border-white/[0.12] bg-black/25 hover:border-[#2F6FED]/55 hover:bg-[rgba(28,36,56,0.35)]'
               }`}
             >
               <input
@@ -2059,20 +2059,20 @@ export function MvtVerifierPanel({
 
               <div className="mb-2.5 h-10 w-10 rounded-[11px] bg-white/[0.045] border border-white/[0.08] flex items-center justify-center">
                 {isAnalyzing ? (
-                  <Loader2 className="h-5 w-5 text-[#3B82F6] animate-spin" />
+                  <Loader2 className="h-5 w-5 text-[#2F6FED] animate-spin" />
                 ) : (
-                  <Upload className="h-4.5 w-4.5 text-[#8E8E93]" />
+                  <Upload className="h-4.5 w-4.5 text-[#9A9AA2]" />
                 )}
               </div>
 
-              <p className="text-[13.5px] font-medium text-[#F5F5F7]">
+              <p className="text-[13.5px] font-medium text-[#F2F2F4]">
                 {isAnalyzing
                   ? 'Revisando archivos en memoria temporal...'
                   : 'Arrastra aquí el archivo de diagnóstico o copia de tu celular'}
               </p>
 
               {!isAnalyzing && (
-                <p className="mt-1 text-[11.5px] text-[#8E8E93]">
+                <p className="mt-1 text-[11.5px] text-[#9A9AA2]">
                   Acepta reportes de iPhone (.tar.gz, .ips), respaldos (.db, .zip) o archivos de análisis (.json)
                 </p>
               )}
@@ -2081,7 +2081,7 @@ export function MvtVerifierPanel({
                 type="button"
                 disabled={isAnalyzing}
                 onClick={handleRunSample}
-                className="mt-3 rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-3 py-1 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/20 active:scale-[0.97] disabled:opacity-50 transition-all cursor-pointer"
+                className="mt-3 rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] disabled:opacity-50 transition-all cursor-pointer"
               >
                 Probar con muestra de ejemplo
               </button>
@@ -2094,18 +2094,18 @@ export function MvtVerifierPanel({
                   value={manualText}
                   onChange={(e) => setManualText(e.target.value)}
                   placeholder={'https://enlace-sospechoso.com\n185.220.101.44\nPega un dominio, dirección IP o texto extraño por línea'}
-                  className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+                  className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
                 />
               </div>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5">
-                <span className="text-[12px] text-[#8E8E93]">
+                <span className="text-[12px] text-[#9A9AA2]">
                   Uno por línea · Enlaces web, dominios, IPs o códigos
                 </span>
                 <button
                   type="submit"
                   disabled={isAnalyzing || !manualText.trim()}
-                  className="rounded-[9px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
+                  className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Revisar</span>

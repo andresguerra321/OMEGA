@@ -47,26 +47,25 @@ export function SecurityCenterpieceFallback({
           cx="320"
           cy="196"
           r="84"
-          stroke="#93C5FD"
-          strokeOpacity="0.16"
+          stroke="rgba(255,255,255,0.12)"
           strokeWidth="1"
         />
-        {/* Núcleo obsidiana */}
+        {/* Núcleo vidrio oscuro */}
         <circle
           cx="320"
           cy="196"
           r="62"
-          fill="#060C1A"
-          fillOpacity="0.88"
+          fill="#141418"
+          fillOpacity="0.82"
           stroke={palette.ring}
           strokeOpacity="0.55"
           strokeWidth="1.25"
         />
         {/* Ejes cardinales discretos */}
-        <line x1="176" y1="196" x2="216" y2="196" stroke="#93C5FD" strokeOpacity="0.18" strokeWidth="1" />
-        <line x1="424" y1="196" x2="464" y2="196" stroke="#93C5FD" strokeOpacity="0.18" strokeWidth="1" />
-        <line x1="320" y1="54" x2="320" y2="94" stroke="#93C5FD" strokeOpacity="0.18" strokeWidth="1" />
-        <line x1="320" y1="298" x2="320" y2="338" stroke="#93C5FD" strokeOpacity="0.18" strokeWidth="1" />
+        <line x1="176" y1="196" x2="216" y2="196" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+        <line x1="424" y1="196" x2="464" y2="196" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+        <line x1="320" y1="54" x2="320" y2="94" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+        <line x1="320" y1="298" x2="320" y2="338" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
 
         {/* Glifo Omega vectorial de precisión */}
         <path

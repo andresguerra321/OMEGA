@@ -218,20 +218,20 @@ export function StructuredResponse({
     <div className="space-y-4">
       {/* Barra compacta superior sin selector de tarjetas */}
       <div className="apple-group rounded-[11px] overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 text-[12.5px] text-[#98989D]">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 text-[12.5px] text-[#9A9AA2]">
           <button
             type="button"
             onClick={() => setShowTelemetry((v) => !v)}
             aria-expanded={showTelemetry}
             title="Ver detalle de recuperación"
-            className="flex flex-wrap items-center gap-1.5 text-left hover:text-[#F5F5F7] transition-colors cursor-pointer"
+            className="flex flex-wrap items-center gap-1.5 text-left hover:text-[#F2F2F4] transition-colors cursor-pointer"
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                isExtractiveFallback ? 'bg-[#FF9F0A]' : 'bg-[#1D4ED8]'
+                isExtractiveFallback ? 'bg-[#FF9F0A]' : 'bg-[#2F6FED]'
               } ${isTyping ? 'omega-core-pulse' : ''}`}
             />
-            <span className="font-tech text-[#F5F5F7]">
+            <span className="font-tech text-[#F2F2F4]">
               {telemetry.fragmentCount} {telemetry.fragmentCount === 1 ? 'fuente' : 'fuentes'}
             </span>
             <span className="text-white/25">·</span>
@@ -241,7 +241,7 @@ export function StructuredResponse({
             {message.latency && (
               <>
                 <span className="text-white/25">·</span>
-                <span className="font-tech inline-flex items-center gap-1 text-[#93C5FD]">
+                <span className="font-tech inline-flex items-center gap-1 text-[#F2F2F4]/90">
                   <Clock className="h-3 w-3" />
                   {message.latency}s
                 </span>
@@ -253,9 +253,9 @@ export function StructuredResponse({
               </span>
             )}
             {showTelemetry ? (
-              <ChevronUp className="h-3.5 w-3.5 text-[#8E8E93]" />
+              <ChevronUp className="h-3.5 w-3.5 text-[#9A9AA2]" />
             ) : (
-              <ChevronDown className="h-3.5 w-3.5 text-[#8E8E93]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#9A9AA2]" />
             )}
           </button>
 
@@ -264,7 +264,7 @@ export function StructuredResponse({
               <button
                 type="button"
                 onClick={finishTypingNow}
-                className="px-2 py-1 rounded-[7px] text-[11.5px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+                className="px-2 py-1 rounded-[7px] text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
               >
                 Completar
               </button>
@@ -276,11 +276,11 @@ export function StructuredResponse({
                 onClick={onToggleSources}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] border text-[12px] font-medium active:scale-[0.96] transition-all duration-150 cursor-pointer ${
                   isSourcesOpen
-                    ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
-                    : 'border-white/[0.08] bg-white/[0.04] text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
+                    ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.22)]'
+                    : 'border-white/[0.08] bg-white/[0.04] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4]'
                 }`}
               >
-                <BookOpen className="h-3.5 w-3.5 text-[#3B82F6]" />
+                <BookOpen className="h-3.5 w-3.5 text-[#2F6FED]" />
                 <span>{isSourcesOpen ? 'Ocultar fuentes' : `Ver fuentes (${citations.length})`}</span>
               </button>
             )}
@@ -290,12 +290,12 @@ export function StructuredResponse({
               onClick={handleCopy}
               title="Copiar respuesta"
               aria-label="Copiar respuesta"
-              className="h-7 px-2.5 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] text-[12px] text-[#8E8E93] hover:bg-white/[0.08] hover:text-[#F5F5F7] active:scale-[0.94] transition-all duration-150 cursor-pointer"
+              className="h-7 px-2.5 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] text-[12px] text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] active:scale-[0.94] transition-all duration-150 cursor-pointer"
             >
               {copied ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-[#3B82F6]" />
-                  <span className="text-[#F5F5F7]">Copiado</span>
+                  <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
+                  <span className="text-[#F2F2F4]">Copiado</span>
                 </>
               ) : (
                 <Copy className="h-3.5 w-3.5" />
@@ -306,30 +306,30 @@ export function StructuredResponse({
 
         {/* Telemetría técnica opcional */}
         {showTelemetry && (
-          <div className="border-t border-white/[0.06] bg-black/25 px-3.5 py-2.5 text-[12px] text-[#8E8E93] grid gap-1.5 sm:grid-cols-2">
+          <div className="border-t border-white/[0.06] bg-black/25 px-3.5 py-2.5 text-[12px] text-[#9A9AA2] grid gap-1.5 sm:grid-cols-2">
             <div className="flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5 text-[#3B82F6] shrink-0" />
+              <Activity className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
               <span>{telemetry.modeLabel}:</span>
-              <span className="font-tech text-[#F5F5F7]">
+              <span className="font-tech text-[#F2F2F4]">
                 {telemetry.hybridCount} híbrido · {telemetry.exactCount} exacto · {telemetry.semanticCount} semántico
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:justify-end">
               <span>Similitud máx:</span>
-              <span className="font-tech text-[#93C5FD]">
+              <span className="font-tech text-[#F2F2F4]/90">
                 {(Number(telemetry.maxSimilarity || 0) * 100).toFixed(1)}%
               </span>
             </div>
             {telemetry.orgs.length > 0 && (
               <div className="sm:col-span-2 flex flex-wrap items-center gap-1.5">
                 <span>Publicadores:</span>
-                <span className="text-[#F5F5F7]">{telemetry.orgs.join(', ')}</span>
+                <span className="text-[#F2F2F4]">{telemetry.orgs.join(', ')}</span>
               </div>
             )}
             {message.standaloneQuery && (
               <div className="sm:col-span-2 flex flex-wrap items-center gap-1.5">
                 <span>Consulta:</span>
-                <span className="font-tech text-[#D1D1D6]">{message.standaloneQuery}</span>
+                <span className="font-tech text-[#F2F2F4]/85">{message.standaloneQuery}</span>
               </div>
             )}
           </div>
@@ -359,13 +359,13 @@ export function StructuredResponse({
                 onClick={() => onSelectCitation?.(cit)}
                 className={`inline-flex items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] active:scale-[0.97] transition-all cursor-pointer ${
                   isSelected
-                    ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#F5F5F7]'
-                    : 'border-white/[0.08] bg-white/[0.03] text-[#A1A1A6] hover:bg-white/[0.07] hover:text-[#F5F5F7]'
+                    ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_18px_rgba(47,111,237,0.2)]'
+                    : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:bg-white/[0.07] hover:text-[#F2F2F4]'
                 }`}
               >
-                <span className="font-tech font-medium text-[#93C5FD]">[{cit.index}]</span>
+                <span className="font-tech font-medium text-[#F2F2F4]/90">[{cit.index}]</span>
                 <span className="max-w-[210px] truncate">{cit.title}</span>
-                <span className="font-tech text-[#8E8E93]">p.{cit.page}</span>
+                <span className="font-tech text-[#9A9AA2]">p.{cit.page}</span>
               </button>
             );
           })}

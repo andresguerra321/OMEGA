@@ -110,6 +110,20 @@ export function OsintPanel({
     };
   }, []);
 
+  useEffect(() => {
+    const onAuthChanged = (e) => {
+      if (e?.detail?.accessToken) {
+        void loadSessionAssets();
+      } else {
+        setAssets([]);
+        setActiveAsset(null);
+        setReport(null);
+      }
+    };
+    window.addEventListener('omega:auth-changed', onAuthChanged);
+    return () => window.removeEventListener('omega:auth-changed', onAuthChanged);
+  }, []);
+
   async function executeScan(asset) {
     setIsScanning(true);
     setErrorMsg('');
@@ -212,13 +226,13 @@ export function OsintPanel({
                 setReport(null);
                 setErrorMsg('');
               }}
-              className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer shrink-0"
             >
-              <ArrowLeft className="h-3.5 w-3.5 text-[#8E8E93]" />
+              <ArrowLeft className="h-3.5 w-3.5 text-[#9A9AA2]" />
               <span>Cambiar activo</span>
             </button>
 
-            <span className="font-tech text-[13.5px] sm:text-[14px] font-medium text-[#F5F5F7] break-all sm:truncate min-w-0">
+            <span className="font-tech text-[13.5px] sm:text-[14px] font-medium text-[#F2F2F4] break-all sm:truncate min-w-0">
               {report.asset_value}
             </span>
           </div>
@@ -238,7 +252,7 @@ export function OsintPanel({
                   ].join('\n');
                   onAskInChat(prompt);
                 }}
-                className="inline-flex items-center rounded-[9px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-3 py-1.5 text-[12px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
+                className="inline-flex items-center rounded-[9px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
               >
                 Investigar en Preguntar
               </button>
@@ -248,7 +262,7 @@ export function OsintPanel({
                 type="button"
                 disabled={isScanning}
                 onClick={() => executeScan(activeAsset)}
-                className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] font-medium text-[#D1D1D6] hover:bg-white/[0.08] hover:text-[#F5F5F7] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
               >
                 <RefreshCw className={`h-3 w-3 ${isScanning ? 'animate-spin' : ''}`} />
                 <span>Re-auditar</span>
@@ -273,17 +287,17 @@ export function OsintPanel({
           />
         )}
 
-        {/* Secciones Agrupadas Apple Obsidian */}
+        {/* Secciones Agrupadas Glass */}
         <div className="space-y-5">
           {/* 1. Cruce con Spyware */}
           <section className="animate-on-scroll space-y-2" data-delay="0">
-            <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+            <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
               Cruce con infraestructura spyware
             </h2>
 
-            <div className="apple-group rounded-[13px] overflow-hidden">
+            <div className="omega-glass-panel rounded-[13px] overflow-hidden">
               {!hasCtiHits ? (
-                <div className="px-4 py-3.5 flex items-center gap-2.5 text-[13px] text-[#D1D1D6]">
+                <div className="px-4 py-3.5 flex items-center gap-2.5 text-[13px] text-[#F2F2F4]/90">
                   <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
                   <span>Sin coincidencias en infraestructura de spyware conocida</span>
                 </div>
@@ -310,10 +324,10 @@ export function OsintPanel({
                       className="px-4 py-3 flex flex-wrap items-center justify-between gap-2.5"
                     >
                       <div className="min-w-0 space-y-0.5">
-                        <span className="font-tech text-[13px] text-[#F5F5F7] break-all block">
+                        <span className="font-tech text-[13px] text-[#F2F2F4] break-all block">
                           {m.ioc_value}
                         </span>
-                        <span className="text-[12px] text-[#8E8E93] break-words block">
+                        <span className="text-[12px] text-[#9A9AA2] break-words block">
                           {m.spyware_family} · {m.source_report}
                         </span>
                       </div>
@@ -323,7 +337,7 @@ export function OsintPanel({
                           <button
                             type="button"
                             onClick={() => onVerifyLink(m.ioc_value)}
-                            className="inline-flex items-center gap-1 rounded-[7px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.96] transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-[7px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.96] transition-all cursor-pointer"
                           >
                             <Link2 className="h-3 w-3" />
                             <span>Inspeccionar enlace</span>
@@ -333,7 +347,7 @@ export function OsintPanel({
                           <button
                             type="button"
                             onClick={() => onOpenThreat(m.spyware_family)}
-                            className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#D1D1D6] hover:text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#F2F2F4]/85 hover:text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
                           >
                             <Shield className="h-3 w-3" />
                             <span>Ver campaña</span>
@@ -350,17 +364,17 @@ export function OsintPanel({
           {/* 2. Brechas Documentadas (si es correo) */}
           {isEmailReport && (
             <section className="animate-on-scroll space-y-2" data-delay="60">
-              <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+              <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
                 Brechas documentadas
               </h2>
 
               <div className="apple-group rounded-[13px] overflow-hidden">
                 {report.email_breaches.status === 'unavailable' ? (
-                  <p className="px-4 py-3.5 text-[13px] text-[#8E8E93]">
+                  <p className="px-4 py-3.5 text-[13px] text-[#9A9AA2]">
                     Fuente pública de brechas no disponible temporalmente durante esta consulta.
                   </p>
                 ) : breaches.length === 0 ? (
-                  <div className="px-4 py-3.5 flex items-center gap-2.5 text-[13px] text-[#D1D1D6]">
+                  <div className="px-4 py-3.5 flex items-center gap-2.5 text-[13px] text-[#F2F2F4]/90">
                     <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
                     <span>Sin brechas públicas documentadas para este correo</span>
                   </div>
@@ -372,15 +386,15 @@ export function OsintPanel({
                         className="px-4 py-3.5 flex flex-wrap items-baseline justify-between gap-2 sm:gap-3"
                       >
                         <div className="space-y-0.5 min-w-0">
-                          <div className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F5F5F7] break-words">
+                          <div className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F2F2F4] break-words">
                             {b.breach_name}
                           </div>
-                          <div className="text-[12px] text-[#8E8E93] break-words">
+                          <div className="text-[12px] text-[#9A9AA2] break-words">
                             Datos expuestos: {formatExposedData(b.exposed_data)}
                           </div>
                         </div>
 
-                        <span className="font-tech text-[11.5px] text-[#8E8E93] shrink-0">
+                        <span className="font-tech text-[11.5px] text-[#9A9AA2] shrink-0">
                           {b.breach_date || 'Fecha N/D'}
                         </span>
                       </div>
@@ -393,34 +407,34 @@ export function OsintPanel({
 
           {/* 3. Postura DNS y Subdominios (crt.sh) */}
           <section className="animate-on-scroll space-y-2" data-delay="120">
-            <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#8E8E93]">
+            <h2 className="px-1 text-[12.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
               Postura DNS y Certificate Transparency (<span className="font-tech">crt.sh</span>)
             </h2>
 
             <div className="apple-group rounded-[13px] divide-y divide-white/[0.06]">
               <div className="px-4 py-3 flex flex-wrap items-baseline gap-2.5 sm:gap-3 text-[13px]">
-                <span className="font-tech text-[12px] font-semibold text-[#F5F5F7] w-14 shrink-0">
+                <span className="font-tech text-[12px] font-semibold text-[#F2F2F4] w-14 shrink-0">
                   SPF
                 </span>
-                <span className={`font-medium ${dns.spf_configured ? 'text-[#30D158]' : 'text-[#8E8E93]'}`}>
+                <span className={`font-medium ${dns.spf_configured ? 'text-[#30D158]' : 'text-[#9A9AA2]'}`}>
                   {dns.spf_configured ? 'Configurado' : 'Ausente'}
                 </span>
                 {dns.spf_record && (
-                  <span className="font-tech text-[12px] text-[#8E8E93] break-all">
+                  <span className="font-tech text-[12px] text-[#9A9AA2] break-all">
                     {dns.spf_record}
                   </span>
                 )}
               </div>
 
               <div className="px-4 py-3 flex flex-wrap items-baseline gap-2.5 sm:gap-3 text-[13px]">
-                <span className="font-tech text-[12px] font-semibold text-[#F5F5F7] w-14 shrink-0">
+                <span className="font-tech text-[12px] font-semibold text-[#F2F2F4] w-14 shrink-0">
                   DMARC
                 </span>
-                <span className={`font-medium ${dns.dmarc_configured ? 'text-[#30D158]' : 'text-[#8E8E93]'}`}>
+                <span className={`font-medium ${dns.dmarc_configured ? 'text-[#30D158]' : 'text-[#9A9AA2]'}`}>
                   {dns.dmarc_configured ? 'Configurado' : 'Ausente'}
                 </span>
                 {dns.dmarc_record && (
-                  <span className="font-tech text-[12px] text-[#8E8E93] break-all">
+                  <span className="font-tech text-[12px] text-[#9A9AA2] break-all">
                     {dns.dmarc_record}
                   </span>
                 )}
@@ -428,12 +442,12 @@ export function OsintPanel({
             </div>
 
             <div className="pt-2">
-              <div className="px-1 text-[12px] text-[#8E8E93] mb-2">
+              <div className="px-1 text-[12px] text-[#9A9AA2] mb-2">
                 Subdominios públicos observados ({subdomains.length})
               </div>
 
               {subdomains.length === 0 ? (
-                <div className="apple-group rounded-[13px] px-4 py-3.5 text-[12.5px] text-[#8E8E93]">
+                <div className="apple-group rounded-[13px] px-4 py-3.5 text-[12.5px] text-[#9A9AA2]">
                   No se registraron subdominios en Certificate Transparency para este dominio.
                 </div>
               ) : (
@@ -443,7 +457,7 @@ export function OsintPanel({
                       key={sub}
                       className="px-4 py-2.5 flex items-center justify-between gap-3"
                     >
-                      <span className="font-tech text-[12.5px] text-[#F5F5F7] truncate min-w-0">
+                      <span className="font-tech text-[12.5px] text-[#F2F2F4] truncate min-w-0">
                         {sub}
                       </span>
 
@@ -453,7 +467,7 @@ export function OsintPanel({
                             type="button"
                             onClick={() => onVerifyLink(sub)}
                             title="Verificar subdominio en el módulo de enlaces sin contacto HTTP"
-                            className="inline-flex items-center gap-1 rounded-[7px] border border-[#1D4ED8]/35 bg-[#1D4ED8]/12 px-2.5 py-1 text-[11px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/22 active:scale-[0.96] transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-[7px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.96] transition-all cursor-pointer"
                           >
                             <Link2 className="h-3 w-3" />
                             <span>Verificar</span>
@@ -462,12 +476,12 @@ export function OsintPanel({
                         <button
                           type="button"
                           onClick={() => handleCopySubdomain(sub)}
-                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#8E8E93] hover:text-[#F5F5F7] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
+                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1 text-[11px] text-[#9A9AA2] hover:text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
                         >
                           {copiedSubdomain === sub ? (
                             <>
-                              <Check className="h-3 w-3 text-[#3B82F6]" />
-                              <span className="text-[#93C5FD]">Copiado</span>
+                              <Check className="h-3 w-3 text-[#2F6FED]" />
+                              <span className="text-[#F2F2F4]">Copiado</span>
                             </>
                           ) : (
                             <>
@@ -493,10 +507,10 @@ export function OsintPanel({
     <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-6">
       <div className="w-full max-w-[620px]">
         <header className="text-center mb-6 sm:mb-7">
-          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F5F5F7]">
+          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
             Auditar mi exposición pública
           </h1>
-          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#8E8E93] leading-[1.55] max-w-[500px] mx-auto">
+          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#9A9AA2] leading-[1.55] max-w-[500px] mx-auto">
             Revisa qué información pública existe sobre tu correo institucional o dominio propio sin interactuar con terceros.
           </p>
         </header>
@@ -515,7 +529,7 @@ export function OsintPanel({
                 className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150 cursor-pointer ${
                   assetType === 'institutional_email'
                     ? 'apple-segmented-active'
-                    : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                 }`}
               >
                 Correo
@@ -526,7 +540,7 @@ export function OsintPanel({
                 className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150 cursor-pointer ${
                   assetType === 'domain'
                     ? 'apple-segmented-active'
-                    : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                 }`}
               >
                 Dominio
@@ -543,13 +557,13 @@ export function OsintPanel({
                     ? 'prensa@organizacion.org'
                     : 'organizacion.org'
                 }
-                className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 text-[13.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+                className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 text-[13.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
               />
 
               <button
                 type="submit"
                 disabled={!assetValue.trim() || !consentChecked || isScanning}
-                className="h-9 rounded-[10px] bg-[#1D4ED8] shadow-[0_4px_14px_rgba(29,78,216,0.35),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+                className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
               >
                 {isScanning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>Auditar</span>
@@ -558,12 +572,12 @@ export function OsintPanel({
           </div>
 
           <div className="pt-2.5 mt-2.5 border-t border-white/[0.065]">
-            <label className="inline-flex items-start sm:items-center gap-2.5 text-[12px] text-[#8E8E93] hover:text-[#D1D1D6] transition-colors cursor-pointer select-none">
+            <label className="inline-flex items-start sm:items-center gap-2.5 text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={consentChecked}
                 onChange={(e) => setConsentChecked(e.target.checked)}
-                className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#1D4ED8] cursor-pointer shrink-0"
+                className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#2F6FED] cursor-pointer shrink-0"
               />
               <span>Confirmo que soy titular de este activo o tengo autorización explícita.</span>
             </label>
@@ -613,14 +627,14 @@ export function OsintPanel({
                 key={asset.id}
                 onClick={() => executeScan(asset)}
                 style={{ animationDelay: `${100 + idx * 35}ms` }}
-                className="animate-fade-up font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#E5E5EA] hover:border-[#1D4ED8]/50 hover:bg-white/[0.07] hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer transition-all max-w-full"
+                className="animate-fade-up font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED]/55 hover:bg-[rgba(28,36,56,0.65)] hover:shadow-[0_0_20px_rgba(47,111,237,0.2)] hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer transition-all max-w-full"
               >
                 <span className="truncate">{asset.asset_value}</span>
                 <button
                   type="button"
                   title="Eliminar de la sesión"
                   onClick={(e) => handleRevokeAsset(e, asset)}
-                  className="text-[#8E8E93] hover:text-[#FF453A] cursor-pointer shrink-0"
+                  className="text-[#9A9AA2] hover:text-[#FF453A] cursor-pointer shrink-0"
                 >
                   <X className="h-3 w-3" />
                 </button>

@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OMEGA — Iniciando servicios</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0a0c;
+        --panel: rgba(20, 20, 24, 0.58);
+        --panel-subtle: rgba(10, 10, 12, 0.72);
+        --border-light: rgba(255, 255, 255, 0.08);
+        --border-dark: rgba(0, 0, 0, 0.4);
+        --text: #f2f2f4;
+        --muted: #9a9aa2;
+        --accent: #2f6fed;
+        --accent-soft: rgba(47, 111, 237, 0.16);
+        --ok: #22c55e;
+        --ok-soft: rgba(34, 197, 94, 0.14);
+        --warn: #f59e0b;
+        --err: #ef4444;
+        --err-soft: rgba(239, 68, 68, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: var(--bg);
+        background-image: radial-gradient(circle, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+        background-size: 24px 24px;
+        color: var(--text);
+        font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden;
+        user-select: none;
+      }
+
+      .titlebar-drag {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        -webkit-app-region: drag;
+        display: flex;
+        align-items: center;
+        padding-left: 16px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(10, 10, 12, 0.85);
+      }
+
+      .stage {
+        height: 100%;
+        padding: 56px 24px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 560px;
+        background: var(--panel);
+        backdrop-filter: blur(16px);
+        border: 1px solid var(--border-light);
+        border-bottom-color: var(--border-dark);
+        border-right-color: var(--border-dark);
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 60px rgba(0, 0, 0, 0.6);
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 20px;
+      }
+
+      .logo-wrap {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: var(--accent-soft);
+        border: 1px solid rgba(47, 111, 237, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .logo-wrap svg {
+        width: 22px;
+        height: 22px;
+        color: var(--accent);
+      }
+
+      .eyebrow {
+        font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        color: var(--text);
+      }
+
+      .subtitle {
+        margin: 0 0 18px;
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: var(--muted);
+        min-height: 20px;
+      }
+
+      .progress-track {
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 24%;
+        border-radius: 999px;
+        background: var(--accent);
+        transition: width 320ms ease, background-color 220ms ease;
+      }
+
+      .progress-bar.indeterminate {
+        animation: pulseWidth 2.4s ease-in-out infinite;
+      }
+
+      @keyframes pulseWidth {
+        0%,
+        100% {
+          opacity: 0.78;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .progress-bar.indeterminate {
+          animation: none;
+        }
+      }
+
+      .services {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .svc-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        background: var(--panel-subtle);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+      }
+
+      .svc-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .svc-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+
+      .svc-desc {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .badge {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: var(--muted);
+        background: rgba(20, 20, 24, 0.85);
+        white-space: nowrap;
+      }
+
+      .badge.starting {
+        color: var(--text);
+        border-color: rgba(47, 111, 237, 0.45);
+        background: var(--accent-soft);
+      }
+
+      .badge.healthy {
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.35);
+        background: var(--ok-soft);
+      }
+
+      .badge.error {
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.4);
+        background: var(--err-soft);
+      }
+
+      .log-strip {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--muted);
+        background: rgba(10, 10, 12, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 8px 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-height: 33px;
+      }
+
+      .log-strip.hidden {
+        display: none;
+      }
+
+      .error-box {
+        margin-top: 16px;
+        padding: 14px;
+        border-radius: 10px;
+        background: var(--err-soft);
+        border: 1px solid rgba(239, 68, 68, 0.32);
+      }
+
+      .error-box.hidden {
+        display: none;
+      }
+
+      .error-detail {
+        margin: 0 0 12px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: #fecaca;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .prod-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .prod-toggle input {
+        accent-color: var(--accent);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      button {
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: background-color 140ms ease, border-color 140ms ease, box-shadow 160ms ease;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      .btn-primary:hover {
+        filter: brightness(1.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 8px 20px rgba(0, 0, 0, 0.48);
+      }
+
+      .btn-secondary {
+        background: rgba(20, 20, 24, 0.85);
+        color: var(--text);
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+
+      .btn-secondary:hover {
+        background: rgba(28, 36, 56, 0.65);
+        border-color: rgba(47, 111, 237, 0.4);
+      }
+
+      .footer-note {
+        margin-top: 14px;
+        font-size: 11.5px;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="titlebar-drag">OMEGA DESKTOP</div>
+    <main class="stage">
+      <section class="card" aria-live="polite">
+        <div class="header">
+          <div class="logo-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+              <path d="M12 2.5 4.5 5.8v5.9c0 4.9 3.2 9.4 7.5 10.8 4.3-1.4 7.5-5.9 7.5-10.8V5.8L12 2.5Z" />
+              <path d="M9.5 12.2 11.3 14l3.5-3.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <div class="eyebrow" id="modeBadge">ORQUESTACIÓN DOCKER LOCAL</div>
+            <h1 id="headline">Iniciando servicios de OMEGA…</h1>
+          </div>
+        </div>
+
+        <p class="subtitle" id="subtitle">Verificando el estado del stack local y healthchecks…</p>
+
+        <div class="progress-track">
+          <div class="progress-bar indeterminate" id="progressBar"></div>
+        </div>
+
+        <div class="services" id="servicesList">
+          <div class="svc-row" data-service="postgres">
+            <div class="svc-meta">
+              <span class="svc-name">PostgreSQL 16 + pgvector</span>
+              <span class="svc-desc">Almacén vectorial híbrido y auditoría SHA-256</span>
+            </div>
+            <span class="badge" id="badge-postgres">Pendiente</span>
+          </div>
+          <div class="svc-row" data-service="forensic-worker">
+            <div class="svc-meta">
+              <span class="svc-name">Forensic Worker (FastAPI)</span>
+              <span class="svc-desc">Motor stateless anti-spyware en memoria RAM</span>
+            </div>
+            <span class="badge" id="badge-forensic-worker">Pendiente</span>
+          </div>
+          <div class="svc-row" data-service="backend-java">
+            <div class="svc-meta">
+              <span class="svc-name">OMEGA Core Gateway (Java 21)</span>
+              <span class="svc-desc">API multi-tenant, Zero-Retention OCR y RAG</span>
+            </div>
+            <span class="badge" id="badge-backend-java">Pendiente</span>
+          </div>
+        </div>
+
+        <div class="log-strip hidden" id="logStrip"></div>
+
+        <div class="error-box hidden" id="errorBox">
+          <p class="error-detail" id="errorDetail"></p>
+          <label class="prod-toggle">
+            <input type="checkbox" id="prodModeCheckbox" />
+            <span>Arrancar con override fail-closed (<code>docker-compose.prod.yml</code>)</span>
+          </label>
+          <div class="actions">
+            <button type="button" class="btn-primary" id="retryBtn">Reintentar arranque</button>
+            <button type="button" class="btn-secondary" id="skipBtn">Abrir sin backend (diagnóstico local)</button>
+          </div>
+        </div>
+
+        <div class="footer-note">
+          <span id="ownershipNote">Red aislada · Volúmenes persistentes protegidos</span>
+          <span id="secretsNote"></span>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const headlineEl = document.getElementById('headline');
+      const subtitleEl = document.getElementById('subtitle');
+      const modeBadgeEl = document.getElementById('modeBadge');
+      const progressBarEl = document.getElementById('progressBar');
+      const logStripEl = document.getElementById('logStrip');
+      const errorBoxEl = document.getElementById('errorBox');
+      const errorDetailEl = document.getElementById('errorDetail');
+      const prodCheckboxEl = document.getElementById('prodModeCheckbox');
+      const retryBtn = document.getElementById('retryBtn');
+      const skipBtn = document.getElementById('skipBtn');
+      const servicesListEl = document.getElementById('servicesList');
+      const ownershipNoteEl = document.getElementById('ownershipNote');
+      const secretsNoteEl = document.getElementById('secretsNote');
+
+      const params = new URLSearchParams(window.location.search);
+      const isClosingView = params.get('mode') === 'closing';
+
+      function formatBadge(svcState) {
+        if (!svcState) return { label: 'Pendiente', cls: '' };
+        if (svcState.healthy) return { label: 'Listo', cls: 'healthy' };
+        if (svcState.health === 'unhealthy' || svcState.state === 'exited' || svcState.state === 'dead') {
+          return { label: 'Error', cls: 'error' };
+        }
+        if (svcState.running || svcState.state === 'created' || svcState.state === 'restarting') {
+          return { label: 'Iniciando…', cls: 'starting' };
+        }
+        return { label: 'Pendiente', cls: '' };
+      }
+
+      function computeProgress(state) {
+        if (state.phase === 'ready') return 100;
+        if (state.phase === 'checking_existing') return 14;
+        if (state.phase === 'checking_docker') return 22;
+        if (state.phase === 'starting_containers') return 36;
+        const svcs = state.services || {};
+        let score = 42;
+        if (svcs.postgres?.healthy) score += 18;
+        if (svcs['forensic-worker']?.healthy) score += 18;
+        if (svcs['backend-java']?.running) score += 10;
+        if (svcs['backend-java']?.healthy) score = 100;
+        return Math.min(94, score);
+      }
+
+      function renderState(state) {
+        if (!state || isClosingView) return;
+
+        headlineEl.textContent = state.message || 'Iniciando servicios de OMEGA…';
+        subtitleEl.textContent = state.detail || '';
+        modeBadgeEl.textContent = state.prodMode
+          ? 'PERFIL PRODUCCIÓN FAIL-CLOSED'
+          : 'ORQUESTACIÓN DOCKER LOCAL';
+
+        if (typeof state.prodMode === 'boolean') {
+          prodCheckboxEl.checked = state.prodMode;
+        }
+
+        const pct = computeProgress(state);
+        progressBarEl.style.width = `${pct}%`;
+
+        if (state.phase === 'error') {
+          progressBarEl.classList.remove('indeterminate');
+          progressBarEl.style.backgroundColor = '#ef4444';
+          errorBoxEl.classList.remove('hidden');
+          errorDetailEl.textContent = state.detail || 'No se pudieron iniciar los servicios locales.';
+        } else if (state.phase === 'ready') {
+          progressBarEl.classList.remove('indeterminate');
+          progressBarEl.style.backgroundColor = '#22c55e';
+          errorBoxEl.classList.add('hidden');
+        } else {
+          progressBarEl.classList.add('indeterminate');
+          progressBarEl.style.backgroundColor = '#2f6fed';
+          errorBoxEl.classList.add('hidden');
+        }
+
+        for (const svcName of ['postgres', 'forensic-worker', 'backend-java']) {
+          const el = document.getElementById(`badge-${svcName}`);
+          if (!el) continue;
+          const badge = formatBadge(state.services?.[svcName]);
+          el.textContent = badge.label;
+          el.className = `badge ${badge.cls}`.trim();
+        }
+
+        const lastLog = Array.isArray(state.logLines) && state.logLines.length > 0
+          ? state.logLines[state.logLines.length - 1]
+          : '';
+        if (lastLog && state.phase !== 'ready') {
+          logStripEl.textContent = lastLog;
+          logStripEl.classList.remove('hidden');
+        } else {
+          logStripEl.classList.add('hidden');
+        }
+
+        ownershipNoteEl.textContent = state.startedByElectron
+          ? 'Ciclo automático activo (se cerrará al salir · datos en omega_pgdata protegidos)'
+          : 'Conectando con instancia Docker de OMEGA o arrancando servicios…';
+
+        secretsNoteEl.textContent = state.secretsGenerated
+          ? 'Secretos generados en userData'
+          : '';
+      }
+
+      if (isClosingView) {
+        modeBadgeEl.textContent = 'CIERRE SEGURO';
+        headlineEl.textContent = 'Deteniendo contenedores de OMEGA…';
+        subtitleEl.textContent = 'Ejecutando cierre limpio sin eliminar el volumen de datos (omega_pgdata).';
+        progressBarEl.style.width = '72%';
+        servicesListEl.style.display = 'none';
+        logStripEl.classList.add('hidden');
+        errorBoxEl.classList.add('hidden');
+        ownershipNoteEl.textContent = 'Conservando postgres volume omega_pgdata';
+      } else if (window.omegaDesktop) {
+        const bridge = window.omegaDesktop;
+        if (typeof bridge.getBackendStatus === 'function') {
+          bridge.getBackendStatus().then(renderState).catch(() => {});
+        }
+        if (typeof bridge.onBackendStatus === 'function') {
+          bridge.onBackendStatus(renderState);
+        }
+        retryBtn.addEventListener('click', () => {
+          errorBoxEl.classList.add('hidden');
+          bridge.retryBackendStartup?.({ prodMode: Boolean(prodCheckboxEl.checked) });
+        });
+        skipBtn.addEventListener('click', () => {
+          bridge.continueWithoutBackend?.();
+        });
+      }
+    </script>
+  </body>
+</html>

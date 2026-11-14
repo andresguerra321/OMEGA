@@ -120,6 +120,10 @@ public class DocumentEntity {
         return embeddingModel;
     }
 
+    public void setEmbeddingModel(String embeddingModel) {
+        this.embeddingModel = embeddingModel;
+    }
+
     public boolean isOcrApplied() {
         return ocrApplied;
     }

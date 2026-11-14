@@ -1,5 +1,6 @@
 package com.omega.platform.web;
 
+import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuthService;
 import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
@@ -25,9 +26,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final OmegaProperties properties;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, OmegaProperties properties) {
         this.authService = authService;
+        this.properties = properties;
+    }
+
+    @GetMapping("/config")
+    public AuthConfigResponse config() {
+        String bootstrap = properties.security().bootstrapSecret();
+        boolean bootstrapRequired = bootstrap != null && !bootstrap.isBlank();
+        return new AuthConfigResponse(properties.security().allowTenantSelfRegistration(), bootstrapRequired);
+    }
+
+    public record AuthConfigResponse(boolean tenantSelfRegistrationEnabled, boolean bootstrapSecretRequired) {
     }
 
     @PostMapping("/tenants/register")

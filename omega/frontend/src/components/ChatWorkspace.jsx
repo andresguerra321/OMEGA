@@ -5,6 +5,13 @@ import {
   ClipboardPaste,
   X,
   Plus,
+  FolderLock,
+  FileUp,
+  CheckCircle2,
+  Database,
+  RefreshCw,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { OmegaShaderOrb } from './OmegaShaderOrb';
 import { StructuredResponse } from './StructuredResponse';
@@ -62,7 +69,7 @@ function SourceScopePills({ value, onChange, compact = false }) {
             } ${
               active
                 ? 'apple-segmented-active'
-                : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
             }`}
           >
             {opt.label}
@@ -91,12 +98,12 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
       className="mx-auto max-w-[780px] mb-2 flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px]"
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[#8E8E93]">Contexto activo:</span>
+        <span className="text-[#9A9AA2]">Contexto activo:</span>
 
         {hasContext ? (
           <>
             {safeCtx.family && (
-              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[11px] text-[#93C5FD]">
+              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[11px] text-[#F2F2F4]">
                 {safeCtx.family}
                 <button
                   type="button"
@@ -109,7 +116,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
               </span>
             )}
             {safeCtx.os && (
-              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.05] px-2.5 py-0.5 text-[11px] text-[#F5F5F7]">
+              <span className="font-tech inline-flex items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.05] px-2.5 py-0.5 text-[11px] text-[#F2F2F4]">
                 SO: {safeCtx.os}
                 <button
                   type="button"
@@ -144,7 +151,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
                 onUpdateContext?.({ ...safeCtx, family: e.target.value });
               }
             }}
-            className="font-tech rounded-[7px] border border-white/[0.09] bg-[#121216] px-2.5 py-0.5 text-[11px] text-[#8E8E93] focus:border-[#1D4ED8]/70 focus:text-[#F5F5F7] focus:outline-none cursor-pointer"
+            className="font-tech rounded-[7px] border border-white/[0.09] bg-[#141418] px-2.5 py-0.5 text-[11px] text-[#9A9AA2] focus:border-[#2F6FED]/70 focus:text-[#F2F2F4] focus:outline-none cursor-pointer"
           >
             <option value="">Auto-detectar entidad...</option>
             {QUICK_FAMILIES.map((fam) => (
@@ -160,7 +167,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
         {lastRewrittenQuery && (
           <span
             title={`Consulta expandida para RRF: ${lastRewrittenQuery}`}
-            className="font-tech hidden sm:inline max-w-[260px] truncate text-[10.5px] text-[#8E8E93]"
+            className="font-tech hidden sm:inline max-w-[260px] truncate text-[10.5px] text-[#9A9AA2]"
           >
             RRF → {lastRewrittenQuery}
           </span>
@@ -169,7 +176,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
           <button
             type="button"
             onClick={() => onClearContext?.()}
-            className="text-[11px] text-[#8E8E93] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+            className="text-[11px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
           >
             Limpiar
           </button>
@@ -199,14 +206,32 @@ export function ChatWorkspace({
   hasHistory,
   onResumeLastSession,
   textareaRef,
+  authSession = null,
+  onOpenAuth,
+  expedientes = [],
+  activeExpedienteId = '',
+  onSelectExpediente,
+  expedienteDocs = [],
+  loadingExpedientes = false,
+  uploadingPdf = false,
+  expedienteNotice = '',
+  expedienteError = '',
+  onDismissExpedienteBanner,
+  onCreateExpediente,
+  onUploadExpedientePdf,
+  onRefreshExpedienteDocs,
 }) {
   const [input, setInput] = useState('');
   const [iocPopoverOpen, setIocPopoverOpen] = useState(false);
   const [iocDraft, setIocDraft] = useState('');
   const [iocFeedback, setIocFeedback] = useState('');
+  const [creatingExp, setCreatingExp] = useState(false);
+  const [newExpTitle, setNewExpTitle] = useState('');
+  const [newExpClass, setNewExpClass] = useState('CONFIDENTIAL');
   const bottomRef = useRef(null);
   const threadScrollRef = useRef(null);
   const iocInputRef = useRef(null);
+  const pdfInputRef = useRef(null);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -303,13 +328,13 @@ export function ChatWorkspace({
               }
             }}
             placeholder="CVE-2023-41064, dominio o hash..."
-            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:border-[#1D4ED8]/70 focus:outline-none transition-colors"
+            className="font-tech flex-1 min-w-[180px] rounded-[8px] border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[12.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none transition-colors"
           />
           <button
             type="button"
             onClick={() => insertIocValue(iocDraft)}
             disabled={!iocDraft.trim()}
-            className="rounded-[8px] bg-[#1D4ED8] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#3B82F6] disabled:bg-white/[0.06] disabled:text-[#9097A5] active:scale-[0.96] transition-all cursor-pointer"
+            className="rounded-[8px] bg-[#2F6FED] px-3.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:bg-white/[0.06] disabled:text-[#9A9AA2] active:scale-[0.96] transition-all cursor-pointer"
           >
             Usar
           </button>
@@ -317,16 +342,16 @@ export function ChatWorkspace({
             type="button"
             onClick={handlePasteClipboardIoc}
             title="Pegar desde el portapapeles"
-            className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1.5 text-[12px] text-[#E5E5EA] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-2.5 py-1.5 text-[12px] text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.96] transition-all cursor-pointer"
           >
-            <ClipboardPaste className="h-3.5 w-3.5 text-[#3B82F6]" />
+            <ClipboardPaste className="h-3.5 w-3.5 text-[#2F6FED]" />
             <span>Pegar</span>
           </button>
           <button
             type="button"
             onClick={() => setIocPopoverOpen(false)}
             aria-label="Cerrar"
-            className="p-1.5 rounded-full text-[#8E8E93] hover:bg-white/[0.07] hover:text-[#F5F5F7] transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-[#9A9AA2] hover:bg-white/[0.07] hover:text-[#F2F2F4] transition-colors cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -338,12 +363,263 @@ export function ChatWorkspace({
               key={sample}
               type="button"
               onClick={() => insertIocValue(sample)}
-              className="font-tech rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[#93C5FD] hover:border-[#1D4ED8]/50 hover:bg-[#1D4ED8]/15 transition-colors cursor-pointer"
+              className="font-tech rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[#F2F2F4]/90 hover:border-[#2F6FED]/55 hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
             >
               + {sample}
             </button>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  const activeExpediente = useMemo(
+    () => expedientes.find((ex) => ex.id === activeExpedienteId) || null,
+    [expedientes, activeExpedienteId],
+  );
+
+  async function handleCreateExpSubmit(e) {
+    e.preventDefault();
+    if (!newExpTitle.trim() || !onCreateExpediente) return;
+    const created = await onCreateExpediente({
+      title: newExpTitle.trim(),
+      classification: newExpClass,
+    });
+    if (created) {
+      setNewExpTitle('');
+      setCreatingExp(false);
+    }
+  }
+
+  function renderKnowledgeBaseBar(compact = false) {
+    return (
+      <div
+        className={`omega-glass-panel rounded-[13px] ${
+          compact ? 'px-3 py-2.5' : 'px-3.5 py-3 mb-3.5'
+        } space-y-2.5`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div
+              role="group"
+              aria-label="Base de conocimiento RAG"
+              className="apple-segmented inline-flex items-center rounded-[8px] p-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatingExp(false);
+                  onSelectExpediente?.('');
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-colors cursor-pointer ${
+                  !activeExpedienteId
+                    ? 'apple-segmented-active'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                }`}
+              >
+                <Database className="h-3 w-3 text-[#2F6FED]" />
+                <span>Corpus CTI</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!authSession) {
+                    onOpenAuth?.('Conecta un tenant OMEGA para consultar y subir PDFs Zero-Retention en tus expedientes privados.');
+                    return;
+                  }
+                  if (!activeExpedienteId && expedientes.length > 0) {
+                    onSelectExpediente?.(expedientes[0].id);
+                  } else if (!activeExpedienteId) {
+                    setCreatingExp(true);
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-colors cursor-pointer ${
+                  activeExpedienteId || creatingExp
+                    ? 'apple-segmented-active'
+                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                }`}
+              >
+                <FolderLock className="h-3 w-3 text-[#30D158]" />
+                <span>Expediente</span>
+              </button>
+            </div>
+
+            {authSession && (
+              <>
+                {expedientes.length > 0 && (
+                  <select
+                    aria-label="Seleccionar expediente"
+                    value={activeExpedienteId}
+                    onChange={(e) => {
+                      setCreatingExp(false);
+                      onSelectExpediente?.(e.target.value);
+                    }}
+                    className="h-7 max-w-[230px] rounded-[7px] border border-white/[0.09] bg-[#141418] px-2 text-[11.5px] text-[#F2F2F4] focus:border-[#2F6FED] focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Corpus público (general)</option>
+                    {expedientes.map((exp) => (
+                      <option key={exp.id} value={exp.id}>
+                        {exp.title} ({exp.classification})
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setCreatingExp((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] px-2 py-1 text-[11px] text-[#F2F2F4] cursor-pointer transition-colors"
+                >
+                  <Plus className="h-3 w-3 text-[#2F6FED]" />
+                  <span>Nuevo</span>
+                </button>
+              </>
+            )}
+
+            {!authSession && (
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenAuth?.('Conecta un tenant OMEGA para crear expedientes e indexar PDFs bajo custodia Zero-Retention.')
+                }
+                className="inline-flex items-center gap-1 rounded-[7px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer transition-all"
+              >
+                <Lock className="h-3 w-3" />
+                <span>Conectar sesión</span>
+              </button>
+            )}
+          </div>
+
+          {authSession && activeExpediente && (
+            <div className="flex items-center gap-1.5">
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void onUploadExpedientePdf?.(file);
+                }}
+              />
+              <button
+                type="button"
+                disabled={uploadingPdf}
+                onClick={() => pdfInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-[7px] border border-[#30D158]/35 bg-[#30D158]/14 hover:bg-[#30D158]/22 px-2.5 py-1 text-[11.5px] font-medium text-[#7FE89A] disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                <FileUp className="h-3.5 w-3.5" />
+                <span>{uploadingPdf ? 'Extrayendo...' : 'Subir PDF (0-Retention)'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={loadingExpedientes}
+                onClick={() => onRefreshExpedienteDocs?.()}
+                title="Actualizar estado de documentos"
+                className="inline-flex items-center justify-center h-7 w-7 rounded-[7px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+              >
+                <RefreshCw className={`h-3 w-3 ${loadingExpedientes ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {creatingExp && authSession && (
+          <form onSubmit={handleCreateExpSubmit} className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/[0.06]">
+            <input
+              type="text"
+              required
+              minLength={3}
+              maxLength={255}
+              value={newExpTitle}
+              onChange={(e) => setNewExpTitle(e.target.value)}
+              placeholder="Título del expediente (mín. 3 caracteres)..."
+              className="flex-1 min-w-[190px] h-7 rounded-[7px] border border-white/[0.12] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED] focus:outline-none"
+            />
+            <select
+              value={newExpClass}
+              onChange={(e) => setNewExpClass(e.target.value)}
+              aria-label="Clasificación del expediente"
+              className="h-7 rounded-[7px] border border-white/[0.12] bg-[#141418] px-2 text-[11.5px] text-[#F2F2F4]"
+            >
+              <option value="INTERNAL">INTERNAL</option>
+              <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+              <option value="RESTRICTED">RESTRICTED</option>
+              <option value="PUBLIC">PUBLIC</option>
+            </select>
+            <button
+              type="submit"
+              className="h-7 rounded-[7px] bg-[#2F6FED] hover:bg-[#2F6FED]/90 px-2.5 text-[11.5px] font-medium text-white cursor-pointer"
+            >
+              Crear
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreatingExp(false)}
+              className="h-7 px-2 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </form>
+        )}
+
+        {activeExpediente && expedienteDocs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-white/[0.05]">
+            {expedienteDocs.map((doc) => {
+              const indexed = doc.status === 'INDEXED';
+              const failed = doc.status === 'FAILED';
+              return (
+                <span
+                  key={doc.id}
+                  title={`SHA-256: ${doc.sha256Hash || 'N/D'} · ${doc.tempDeletedAt ? `PDF original eliminado del disco (${doc.tempDeletedAt})` : `Estado: ${doc.status}`}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-tech ${
+                    indexed
+                      ? 'border-[#30D158]/30 bg-[#30D158]/10 text-[#8AEBA1]'
+                      : failed
+                      ? 'border-[#FF453A]/35 bg-[#FF453A]/12 text-[#FFDAD6]'
+                      : 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD591]'
+                  }`}
+                >
+                  {indexed ? (
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                  ) : (
+                    <RefreshCw className={`h-3 w-3 shrink-0 ${failed ? '' : 'animate-spin'}`} />
+                  )}
+                  <span className="max-w-[160px] truncate">{doc.originalFilename}</span>
+                  <span className="opacity-80">
+                    {indexed
+                      ? `${doc.totalPages || 0}p · 0B`
+                      : failed
+                      ? 'Error'
+                      : doc.status}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {(expedienteNotice || expedienteError) && (
+          <div
+            className={`flex items-center justify-between gap-2 rounded-[8px] px-2.5 py-1.5 text-[11.5px] ${
+              expedienteError
+                ? 'border border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FFDAD6]'
+                : 'border border-[#30D158]/30 bg-[#30D158]/10 text-[#8AEBA1]'
+            }`}
+          >
+            <span className="truncate">{expedienteError || expedienteNotice}</span>
+            <button
+              type="button"
+              onClick={() => onDismissExpedienteBanner?.()}
+              className="text-current/80 hover:text-white cursor-pointer"
+              aria-label="Cerrar aviso"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -365,13 +641,15 @@ export function ChatWorkspace({
                 <div className="mb-7">
                   <OmegaShaderOrb size={136} isThinking={loading} />
                 </div>
-                <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-[1.14] text-white">
+                <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight leading-[1.14] text-[#F2F2F4]">
                   ¿Qué amenaza analizamos hoy?
                 </h1>
-                <p className="mt-3 max-w-md text-sm sm:text-base leading-relaxed text-slate-400">
+                <p className="mt-3 max-w-md text-sm sm:text-base leading-relaxed text-[#9A9AA2]">
                   Inteligencia forense sobre spyware comercial con citas verificables por página y expediente.
                 </p>
               </div>
+
+              {renderKnowledgeBaseBar(false)}
 
               {/* Composer Spotlight Obsidian */}
               <form
@@ -389,19 +667,19 @@ export function ChatWorkspace({
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Pregunta por Pegasus, un CVE, dominio o artefacto forense..."
-                  className="w-full resize-none bg-transparent px-1 pt-0.5 pb-2.5 text-[15px] leading-[1.58] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+                  className="w-full resize-none bg-transparent px-1 pt-0.5 pb-2.5 text-[15px] leading-[1.58] tracking-[-0.008em] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
                 />
 
                 {(detectedIoc || iocFeedback) && (
                   <div className="px-1 pb-2.5 flex flex-wrap items-center gap-2 text-[12px]">
                     {detectedIoc && (
-                      <span className="font-tech inline-flex items-center gap-1.5 rounded-full border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[#93C5FD]">
-                        <Fingerprint className="h-3 w-3 text-[#3B82F6]" />
+                      <span className="font-tech inline-flex items-center gap-1.5 rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[#F2F2F4]">
+                        <Fingerprint className="h-3 w-3 text-[#2F6FED]" />
                         {detectedIoc}
                       </span>
                     )}
                     {iocFeedback && (
-                      <span className="font-tech text-[#8E8E93]">{iocFeedback}</span>
+                      <span className="font-tech text-[#9A9AA2]">{iocFeedback}</span>
                     )}
                   </div>
                 )}
@@ -416,11 +694,11 @@ export function ChatWorkspace({
                       title="Pegar o insertar un CVE, dominio o hash"
                       className={`inline-flex items-center gap-1 rounded-[8px] border px-2.5 py-1.5 font-tech text-[11.5px] active:scale-[0.96] transition-all duration-150 cursor-pointer ${
                         iocPopoverOpen
-                          ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
-                          : 'border-white/[0.08] bg-white/[0.04] text-[#98989D] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
+                          ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.22)]'
+                          : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4]'
                       }`}
                     >
-                      <Plus className="h-3.5 w-3.5 text-[#3B82F6]" />
+                      <Plus className="h-3.5 w-3.5 text-[#2F6FED]" />
                       <span>IOC</span>
                     </button>
 
@@ -429,7 +707,7 @@ export function ChatWorkspace({
                       disabled={loading || !input.trim()}
                       title="Analizar (Enter)"
                       aria-label="Analizar"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#1D4ED8] text-white shadow-[0_4px_14px_rgba(29,78,216,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                     >
                       <ArrowRight className="h-4 w-4" />
                     </button>
@@ -450,12 +728,12 @@ export function ChatWorkspace({
                     className="omega-prompt-tile animate-fade-up group flex flex-col justify-between rounded-[13px] px-4 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#3B82F6]">
+                      <span className="text-[11.5px] font-medium tracking-[-0.01em] text-[#9A9AA2] group-hover:text-[#F2F2F4] transition-colors">
                         {item.tag}
                       </span>
-                      <ArrowRight className="h-3.5 w-3.5 text-[#9097A5] group-hover:text-[#F5F5F7] group-hover:translate-x-0.5 transition-all duration-200 ease-apple" />
+                      <ArrowRight className="h-3.5 w-3.5 text-[#9A9AA2] group-hover:text-[#F2F2F4] group-hover:translate-x-0.5 transition-all duration-200 ease-apple" />
                     </div>
-                    <p className="mt-1.5 text-[13.5px] font-medium tracking-[-0.01em] leading-[1.42] text-[#D1D1D6] group-hover:text-[#F5F5F7] transition-colors">
+                    <p className="mt-1.5 text-[13.5px] font-medium tracking-[-0.01em] leading-[1.42] text-[#F2F2F4]/85 group-hover:text-[#F2F2F4] transition-colors">
                       {item.title}
                     </p>
                   </button>
@@ -465,12 +743,12 @@ export function ChatWorkspace({
 
             <div className="flex-1 min-h-[16px] max-h-[84px]" />
 
-            <footer className="h-6 flex items-center justify-center text-[12px] text-[#8E8E93]">
+            <footer className="h-6 flex items-center justify-center text-[12px] text-[#9A9AA2]">
               {hasHistory && (
                 <button
                   type="button"
                   onClick={onResumeLastSession}
-                  className="hover:text-[#F5F5F7] transition-colors cursor-pointer"
+                  className="hover:text-[#F2F2F4] transition-colors cursor-pointer"
                 >
                   Retomar última investigación →
                 </button>
@@ -482,18 +760,21 @@ export function ChatWorkspace({
              ESTADO ACTIVO: Hilo de conversación + evidencia
              ============================================================ */
           <>
-            <main ref={threadScrollRef} className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-5 sm:py-7">
+            <div className="shrink-0 px-3.5 sm:px-6 pt-2.5">
+              <div className="mx-auto max-w-[780px]">{renderKnowledgeBaseBar(true)}</div>
+            </div>
+            <main ref={threadScrollRef} className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-6">
               <div className="mx-auto max-w-[780px] space-y-6 sm:space-y-7">
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
                     <div key={idx} className="animate-fade-up flex justify-end">
-                      <div className="max-w-[90%] sm:max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#1D4ED8]/28 bg-[#1D4ED8]/15 px-3.5 sm:px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                      <div className="max-w-[90%] sm:max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3.5 sm:px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                         {msg.sourceScope && msg.sourceScope !== 'Todas las fuentes' && (
-                          <span className="inline-block rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/18 px-2 py-0.5 text-[11px] font-medium text-[#93C5FD]">
+                          <span className="inline-block rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/20 px-2 py-0.5 text-[11px] font-medium text-[#F2F2F4]">
                             {msg.sourceScope}
                           </span>
                         )}
-                        <p className="text-[14.5px] sm:text-[15px] leading-[1.6] tracking-[-0.008em] text-[#F5F5F7] whitespace-pre-wrap break-words">
+                        <p className="text-[14.5px] sm:text-[15px] leading-[1.6] tracking-[-0.008em] text-[#F2F2F4] whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
                       </div>
@@ -518,7 +799,13 @@ export function ChatWorkspace({
                       )}
                     </div>
                   ) : (
-                    <div key={idx} className="animate-fade-up">
+                    <div key={idx} className="animate-fade-up space-y-2">
+                      {Array.isArray(msg.warnings) && msg.warnings.length > 0 && (
+                        <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[9px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/10 px-2.5 py-1 text-[11px] text-[#FFD591]">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{msg.warnings.join(' · ')}</span>
+                        </div>
+                      )}
                       <StructuredResponse
                         message={msg}
                         activeCitation={activeCitation}
@@ -532,7 +819,7 @@ export function ChatWorkspace({
                 )}
 
                 {loading && (
-                  <div className="animate-fade-up inline-flex items-center gap-2.5 py-1 text-[13.5px] text-[#A1A1A6]">
+                  <div className="animate-fade-up inline-flex items-center gap-2.5 py-1 text-[13.5px] text-[#9A9AA2]">
                     <OmegaShaderOrb size={20} isThinking={true} />
                     <span className="tracking-[-0.01em]">
                       {sourceScope === 'Todas las fuentes'
@@ -547,7 +834,7 @@ export function ChatWorkspace({
             </main>
 
             {/* Composer Inferior Flotante + Context Box */}
-            <div className="shrink-0 border-t border-[#93C5FD]/[0.075] bg-[#040812]/78 backdrop-blur-xl px-3.5 sm:px-6 py-3 sm:py-3.5">
+            <div className="shrink-0 border-t border-white/[0.08] bg-[#0A0A0C]/65 px-3.5 sm:px-6 py-3 sm:py-3.5">
               <ContextBox
                 context={chatContext}
                 onUpdateContext={onUpdateChatContext}
@@ -569,14 +856,14 @@ export function ChatWorkspace({
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Haz una pregunta de seguimiento..."
-                    className="flex-1 resize-none bg-transparent px-1.5 py-1 text-[15px] leading-[1.55] tracking-[-0.008em] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+                    className="flex-1 resize-none bg-transparent px-1.5 py-1 text-[15px] leading-[1.55] tracking-[-0.008em] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
                   />
 
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
                     aria-label="Enviar"
-                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#1D4ED8] text-white shadow-[0_4px_14px_rgba(29,78,216,0.38),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
+                    className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F6FED] text-white shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none active:scale-[0.94] transition-all duration-200 ease-apple cursor-pointer disabled:cursor-not-allowed"
                   >
                     <ArrowRight className="h-4 w-4" />
                   </button>
@@ -587,7 +874,7 @@ export function ChatWorkspace({
 
                   <div className="flex items-center gap-2">
                     {detectedIoc && (
-                      <span className="font-tech text-[11.5px] text-[#93C5FD]">
+                      <span className="font-tech text-[11.5px] text-[#F2F2F4]/90">
                         {detectedIoc}
                       </span>
                     )}
@@ -597,11 +884,11 @@ export function ChatWorkspace({
                       title="Pegar o insertar un CVE, dominio o hash"
                       className={`inline-flex items-center gap-1 rounded-[7px] border px-2.5 py-1 font-tech text-[11.5px] active:scale-[0.96] transition-all cursor-pointer ${
                         iocPopoverOpen
-                          ? 'border-[#1D4ED8]/55 bg-[#1D4ED8]/16 text-[#93C5FD]'
-                          : 'border-white/[0.08] bg-white/[0.04] text-[#98989D] hover:bg-white/[0.08] hover:text-[#F5F5F7]'
+                          ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.22)]'
+                          : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4]'
                       }`}
                     >
-                      <Plus className="h-3 w-3 text-[#3B82F6]" />
+                      <Plus className="h-3 w-3 text-[#2F6FED]" />
                       <span>IOC</span>
                     </button>
                   </div>

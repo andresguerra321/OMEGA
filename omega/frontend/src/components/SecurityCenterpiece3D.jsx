@@ -5,7 +5,7 @@ import { formatCenterpieceStatus } from '../lib/centerpieceStatus';
 
 const SURFACE_COLORS = {
   clean: {
-    rim: 0x3b82f6,
+    rim: 0x2f6fed,
     bevel: 0x22c55e,
     bevelEmissive: 0x15803d,
     core: 0x4ade80,
@@ -13,7 +13,7 @@ const SURFACE_COLORS = {
     wire: 0x86efac,
   },
   alert: {
-    rim: 0x3b82f6,
+    rim: 0x2f6fed,
     bevel: 0xef4444,
     bevelEmissive: 0x991b1b,
     core: 0xf87171,
@@ -21,12 +21,12 @@ const SURFACE_COLORS = {
     wire: 0xfca5a5,
   },
   standby: {
-    rim: 0x3b82f6,
-    bevel: 0x1d4ed8,
-    bevelEmissive: 0x1d4ed8,
-    core: 0x3b82f6,
-    ring: 0x1d4ed8,
-    wire: 0x93c5fd,
+    rim: 0x2f6fed,
+    bevel: 0x2f6fed,
+    bevelEmissive: 0x1e3a8a,
+    core: 0x2f6fed,
+    ring: 0x2f6fed,
+    wire: 0xf2f2f4,
   },
 };
 
@@ -644,7 +644,7 @@ export function SecurityCenterpiece3D({
     royalRim.position.set(-4.4, 1.9, -2.6);
     scene.add(royalRim);
 
-    const fillFront = new THREE.DirectionalLight(0x93c5fd, 1.25);
+    const fillFront = new THREE.DirectionalLight(0xf2f2f4, 1.15);
     fillFront.position.set(0.4, 0.3, 4.8);
     scene.add(fillFront);
 
@@ -772,7 +772,7 @@ export function SecurityCenterpiece3D({
         scanStartTs = now;
       }
 
-      const lookY = viewport.width < 640 ? -1.18 : -0.3;
+      const lookY = viewport.width < 640 ? -0.12 : -0.06;
 
       if (reduceMotion) {
         scanUniforms.uScanEnabled.value = 0;

@@ -55,20 +55,20 @@ export function OmegaWebIntelCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-0.5 min-w-0">
           <div className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-[#3B82F6] shrink-0" />
-            <h3 className={`${compact ? 'text-[13.5px]' : 'text-[14px]'} font-semibold tracking-[-0.01em] text-[#F5F5F7]`}>
+            <Globe className="h-4 w-4 text-[#2F6FED] shrink-0" />
+            <h3 className={`${compact ? 'text-[13.5px]' : 'text-[14px]'} font-semibold tracking-[-0.01em] text-[#F2F2F4]`}>
               {title}
             </h3>
           </div>
           {subtitle && (
-            <p className="text-[12px] text-[#8E8E93] leading-relaxed">
+            <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
               {subtitle}
             </p>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-          <span className="font-tech rounded-full border border-[#1D4ED8]/35 bg-[#1D4ED8]/15 px-2.5 py-0.5 text-[10.5px] text-[#93C5FD]">
+          <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
             RAM · RNF4
           </span>
           {scanResult?.persisted_to_db && (
@@ -85,12 +85,12 @@ export function OmegaWebIntelCard({
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
           placeholder="https://citizenlab.ca/... o https://blog.google/threat-analysis-group/..."
-          className="font-tech flex-1 min-w-0 h-8 bg-transparent px-2 text-[12.5px] text-[#F5F5F7] placeholder-[#9097A5] focus:outline-none"
+          className="font-tech flex-1 min-w-0 h-8 bg-transparent px-2 text-[12.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
         />
         <button
           type="submit"
           disabled={loading || !urlInput.trim()}
-          className="h-8 w-full sm:w-auto justify-center rounded-[8px] bg-[#1D4ED8] hover:bg-[#3B82F6] disabled:bg-white/[0.07] disabled:text-[#9097A5] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          className="h-8 w-full sm:w-auto justify-center rounded-[8px] bg-[#2F6FED] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.3)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] px-3 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
         >
           {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           <span>{activeNet4Ips.length > 0 ? 'Cruzar IPv4' : 'Extraer en RAM'}</span>
@@ -105,10 +105,10 @@ export function OmegaWebIntelCard({
         <div className="animate-fade-up pt-2 border-t border-white/[0.06] space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 space-y-0.5">
-              <p className="text-[13px] font-medium text-[#F5F5F7] truncate">
+              <p className="text-[13px] font-medium text-[#F2F2F4] truncate">
                 {scanResult.title || scanResult.url}
               </p>
-              <p className="font-tech text-[11px] text-[#8E8E93] truncate">
+              <p className="font-tech text-[11px] text-[#9A9AA2] truncate">
                 {ipv4List.length} IPv4 · {domainsList.length} dominios · {cvesList.length} CVEs · {knownMatches.length} en catálogo
                 {scanResult.persisted_to_db
                   ? ` · +${scanResult.persisted_chunks_count ?? 0} frags RAG`
@@ -134,7 +134,7 @@ export function OmegaWebIntelCard({
                     .join('\n');
                   onAskInChat(prompt);
                 }}
-                className="shrink-0 rounded-[8px] border border-[#1D4ED8]/40 bg-[#1D4ED8]/15 px-2.5 py-1 text-[11.5px] font-medium text-[#93C5FD] hover:bg-[#1D4ED8]/24 active:scale-[0.97] transition-all cursor-pointer"
+                className="shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
               >
                 Investigar en Preguntar
               </button>
@@ -164,7 +164,7 @@ export function OmegaWebIntelCard({
 
           {cvesList.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[11px] font-medium text-[#8E8E93]">CVEs identificados</div>
+              <div className="text-[11px] font-medium text-[#9A9AA2]">CVEs identificados</div>
               <div className="flex flex-wrap gap-1.5">
                 {cvesList.map((cve) => (
                   <span
@@ -180,7 +180,7 @@ export function OmegaWebIntelCard({
 
           {ipv4List.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[11px] font-medium text-[#8E8E93]">IPv4 públicas (net4)</div>
+              <div className="text-[11px] font-medium text-[#9A9AA2]">IPv4 públicas (net4)</div>
               <div className="flex flex-wrap gap-1.5">
                 {ipv4List.slice(0, 24).map((ip) => {
                   const isLiveMatch = matchedLive.includes(ip);
@@ -193,14 +193,14 @@ export function OmegaWebIntelCard({
                       className={`font-tech inline-flex items-center gap-1 rounded-[6px] border px-2 py-0.5 text-[11px] cursor-pointer transition-colors ${
                         isLiveMatch
                           ? 'border-[#FF453A]/45 bg-[#FF453A]/15 text-[#FF6961]'
-                          : 'border-white/[0.08] bg-black/35 text-[#F5F5F7] hover:bg-white/[0.07]'
+                          : 'border-white/[0.08] bg-black/35 text-[#F2F2F4] hover:bg-white/[0.07]'
                       }`}
                     >
                       <span>{ip}</span>
                       {copiedToken === ip ? (
                         <Check className="h-2.5 w-2.5 text-[#30D158]" />
                       ) : (
-                        <Copy className="h-2.5 w-2.5 text-[#8E8E93]" />
+                        <Copy className="h-2.5 w-2.5 text-[#9A9AA2]" />
                       )}
                     </button>
                   );
@@ -212,14 +212,14 @@ export function OmegaWebIntelCard({
           {domainsList.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-[#8E8E93]">
+                <span className="text-[11px] font-medium text-[#9A9AA2]">
                   Dominios mencionados ({domainsList.length})
                 </span>
                 {domainsList.length > 12 && (
                   <button
                     type="button"
                     onClick={() => setShowAllDomains((prev) => !prev)}
-                    className="text-[11px] text-[#93C5FD] hover:underline cursor-pointer"
+                    className="text-[11px] text-[#F2F2F4] underline decoration-[#2F6FED]/70 hover:decoration-[#2F6FED] cursor-pointer"
                   >
                     {showAllDomains ? 'Ver menos' : 'Ver todos'}
                   </button>
@@ -229,7 +229,7 @@ export function OmegaWebIntelCard({
                 {visibleDomains.map((dom) => (
                   <span
                     key={dom}
-                    className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] text-[#D1D1D6]"
+                    className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] text-[#F2F2F4]/85"
                   >
                     {dom}
                   </span>
@@ -257,7 +257,7 @@ export function OmegaWebIntelCard({
           )}
 
           {scanResult.chunks_preview && (
-            <p className="rounded-[9px] border border-white/[0.06] bg-black/30 px-3 py-2 text-[11.5px] text-[#8E8E93] leading-relaxed">
+            <p className="rounded-[9px] border border-white/[0.06] bg-black/30 px-3 py-2 text-[11.5px] text-[#9A9AA2] leading-relaxed">
               {scanResult.chunks_preview}
               {scanResult.chunks_preview.length >= 400 ? '…' : ''}
             </p>
