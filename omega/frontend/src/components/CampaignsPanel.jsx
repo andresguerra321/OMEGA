@@ -22,6 +22,7 @@ import {
   fetchCampaignMvtScript,
 } from '../lib/api';
 import { useScrollReveal } from '../lib/useScrollReveal';
+import { sanitizeSearchInput } from '../lib/validators';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import {
   ActionConfirmationBanner,
@@ -163,7 +164,7 @@ export function CampaignsPanel({
       }
     } catch (err) {
       setDetail(null);
-      setDetailError(err?.message || 'No se pudo cargar el expediente de la amenaza.');
+      setDetailError(err?.message || 'No se pudo cargar el perfil de la amenaza.');
     } finally {
       setLoadingDetail(false);
     }
@@ -187,7 +188,7 @@ export function CampaignsPanel({
       .catch((err) => {
         if (cancelled) return;
         setDetail(null);
-        setDetailError(err?.message || 'No se pudo cargar el expediente de la amenaza.');
+        setDetailError(err?.message || 'No se pudo cargar el perfil de la amenaza.');
       })
       .finally(() => {
         if (!cancelled) setLoadingDetail(false);
@@ -299,7 +300,7 @@ export function CampaignsPanel({
     }
 
     triggerTextDownload(`omega_${buildCampaignSlug()}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
-    setActionNote(`Listo: expediente "${detail.name}" exportado a Markdown.`);
+    setActionNote(`Listo: ficha de amenaza "${detail.name}" exportada a Markdown.`);
   }
 
   async function handleExportYara() {
@@ -414,8 +415,9 @@ export function CampaignsPanel({
             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#9A9AA2]" />
             <input
               type="text"
+              maxLength={120}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(sanitizeSearchInput(e.target.value, 120))}
               placeholder="Buscar amenaza o CVE..."
               className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:shadow-[0_0_24px_rgba(47,111,237,0.2)] focus:outline-none transition-all"
             />
@@ -877,8 +879,9 @@ export function CampaignsPanel({
                           <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" />
                           <input
                             type="text"
+                            maxLength={120}
                             value={iocSearch}
-                            onChange={(e) => setIocSearch(e.target.value)}
+                            onChange={(e) => setIocSearch(sanitizeSearchInput(e.target.value, 120))}
                             placeholder="Filtrar indicador..."
                             className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none"
                           />

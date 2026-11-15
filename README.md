@@ -125,7 +125,17 @@ Estudio comparativo de ablación realizado mediante **RAGAS** sobre `13` casos (
 
 ---
 
-## 5. Puesta en Marcha Rápida (Docker Compose)
+## 5. Puesta en Marcha Rápida
+
+### Ejecución directa en Windows (`.exe`)
+Para usar la aplicación de escritorio directamente sin ejecutar Vite manualmente:
+1. Tener [Docker Desktop](https://www.docker.com/) iniciado (OMEGA orquesta automáticamente los contenedores la primera vez).
+2. Descargar desde **GitHub Releases (`v1.3.0`)** o ejecutar desde `omega/frontend/release/`:
+   * **Instalador Windows:** `OMEGA-Setup-1.0.0-x64.exe`
+   * **Portable Windows (sin instalación):** `OMEGA-Portable-1.0.0-x64.exe`
+3. En la pantalla de acceso puedes usar el botón de **Acceso Demo en 1 clic** o iniciar sesión con `admin@omega.local` / `OmegaDemo!2026`.
+
+### Docker Compose (modo servidor / desarrollo)
 
 ### Requisitos previos
 * [Docker Desktop](https://www.docker.com/) activo con soporte Linux containers / Compose v2.

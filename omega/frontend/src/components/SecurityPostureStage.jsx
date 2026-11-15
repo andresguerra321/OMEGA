@@ -18,6 +18,8 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
+import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
 import { OmegaLogo } from './OmegaLogo';
 import { ChatAtmosphere } from './ChatAtmosphere';
 import { SpatialNavPill } from './SpatialNavPill';
@@ -78,30 +80,14 @@ export function SecurityPostureStage({
   onLinkVerified,
   onLogActivity,
   authSession = null,
-  onOpenAuth,
 }) {
   const [surfaceMenuOpen, setSurfaceMenuOpen] = useState(false);
   const [spinNonce, setSpinNonce] = useState(0);
   const [quickUrl, setQuickUrl] = useState('');
   const [linkLoading, setLinkLoading] = useState(false);
   const [inlineLink, setInlineLink] = useState(null);
-  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
-    try {
-      return localStorage.getItem('omega_onboarding_dismissed') === '1';
-    } catch {
-      return false;
-    }
-  });
+  const guard = useSingleFlight();
   const menuRef = useRef(null);
-
-  function handleDismissOnboarding() {
-    setOnboardingDismissed(true);
-    try {
-      localStorage.setItem('omega_onboarding_dismissed', '1');
-    } catch {
-      // Storage restricted
-    }
-  }
 
   const pcInfo = useMemo(() => extractPcVerdictInfo(pcAudit), [pcAudit]);
   const pcHealthy =
@@ -172,7 +158,7 @@ export function SecurityPostureStage({
       },
       link: {
         id: 'link',
-        kicker: 'SANDBOX WEB · CERO CONEXIÓN HTTP',
+        kicker: 'AISLAMIENTO WEB · CERO CONEXIÓN HTTP',
         lead: 'Escudo de',
         accent: 'Enlaces',
         statusLabel: linkRisk === 'HIGH' ? 'Riesgo Alto' : lastLinkResult ? 'Revisado' : 'Pasivo',
@@ -246,24 +232,35 @@ export function SecurityPostureStage({
 
   async function handleQuickLinkSubmit(e) {
     e.preventDefault();
-    const cleaned = quickUrl.trim();
-    if (!cleaned || linkLoading) return;
-    setLinkLoading(true);
-    setInlineLink(null);
-    try {
-      const res = await verifySuspiciousLink(cleaned);
-      setInlineLink({ url: cleaned, ...res });
-      onLinkVerified?.(res);
-      onLogActivity?.(`Enlace analizado: ${res?.verdict || 'revisado'}`);
-    } catch (err) {
+    if (linkLoading) return;
+    const validation = validateUrlInput(quickUrl, { allowBareDomain: true });
+    if (!validation.valid) {
       setInlineLink({
-        url: cleaned,
+        url: String(quickUrl || '').trim(),
         verdict: 'error',
-        error: err?.message || 'Error verificando enlace',
+        error: validation.error,
       });
-    } finally {
-      setLinkLoading(false);
+      return;
     }
+    const cleaned = validation.value;
+    await guard(async () => {
+      setLinkLoading(true);
+      setInlineLink(null);
+      try {
+        const res = await verifySuspiciousLink(cleaned);
+        setInlineLink({ url: cleaned, ...res });
+        onLinkVerified?.(res);
+        onLogActivity?.(`Enlace analizado: ${res?.verdict || 'revisado'}`);
+      } catch (err) {
+        setInlineLink({
+          url: cleaned,
+          verdict: 'error',
+          error: err?.message || 'Error verificando enlace',
+        });
+      } finally {
+        setLinkLoading(false);
+      }
+    });
   }
 
   const badgeClass =
@@ -305,7 +302,7 @@ export function SecurityPostureStage({
       {/* Cabecera flotante superior — Nav pill flotante separada de los bordes */}
       <header
         aria-label="Barra principal OMEGA"
-        className={`relative z-30 shrink-0 px-4 sm:px-7 pt-2.5 sm:pt-3 pb-1.5 flex items-center justify-between gap-2 ${isDesktop
+        className={`relative z-30 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.05] flex items-center justify-between gap-2 select-none ${isDesktop
           ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
           : ''
           }`}
@@ -314,10 +311,10 @@ export function SecurityPostureStage({
         <button
           type="button"
           onClick={() => onSelectNav?.('inicio')}
-          className="relative z-10 inline-flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
+          className="relative z-10 inline-flex items-center gap-2 text-left rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer group shrink-0"
         >
-          <OmegaLogo size={23} isThinking={isLoadingChat} />
-          <span className="font-display text-[15px] font-semibold tracking-[0.06em] text-[#F2F2F4] group-hover:text-white transition-colors">
+          <OmegaLogo size={22} isThinking={isLoadingChat} />
+          <span className="font-display text-[14px] font-semibold tracking-[0.06em] text-[#F2F2F4] group-hover:text-white transition-colors">
             OMEGA
           </span>
         </button>
@@ -331,20 +328,44 @@ export function SecurityPostureStage({
             usbConnected={usbConnected}
             apiOnline={apiOnline}
             isLoadingChat={isLoadingChat}
+            authConnected={Boolean(authSession)}
           />
         </div>
 
-        {/* Utilidades derechas con reserva limpia para controles Electron - □ ✕ */}
+        {/* Utilidades derechas unificadas con reserva limpia para controles Electron - □ ✕ */}
         <div className={`relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
+          <div
+            role="group"
+            aria-label="Nivel de detalle"
+            className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
+          >
+            <button
+              type="button"
+              onClick={() => onToggleTechnicalMode?.(false)}
+              className={`kowalski-press px-2 py-1 rounded-[6px] text-[11px] font-medium cursor-pointer ${!technicalMode ? 'apple-segmented-active' : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                }`}
+            >
+              Simple
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleTechnicalMode?.(true)}
+              className={`kowalski-press px-2 py-1 rounded-[6px] text-[11px] font-medium cursor-pointer ${technicalMode ? 'apple-segmented-active' : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                }`}
+            >
+              Técnico
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => onOpenCopilot?.({})}
             aria-label="Abrir copiloto lateral"
-            title="Abrir copiloto lateral (Ctrl+J)"
-            className="omega-glass-chip relative h-8 xl:h-9 px-2 xl:px-3.5 rounded-[11px] inline-flex items-center gap-1.5 xl:gap-2 text-[12px] font-medium text-[#F2F2F4] cursor-pointer"
+            title="Copiloto (Ctrl+J)"
+            className="omega-glass-chip relative h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] cursor-pointer"
           >
             <Bell className="h-3.5 w-3.5 text-[#2F6FED]" />
-            <span className="hidden xl:inline">Copiloto</span>
+            <span className="hidden 2xl:inline">Copiloto</span>
             <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#2F6FED] text-white text-[10px] font-bold inline-flex items-center justify-center">
               {pcWarn ? pcInfo.findingsCount : reportsCount}
             </span>
@@ -355,69 +376,39 @@ export function SecurityPostureStage({
             onClick={onOpenCommandPalette}
             aria-label="Abrir búsqueda rápida (⌘K)"
             title="Buscar módulo o CVE (⌘K)"
-            className="omega-glass-chip h-8 xl:h-9 px-2 xl:px-2.5 rounded-[11px] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+            className="omega-glass-chip h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
           >
             <Search className="h-3.5 w-3.5" />
-            <span className="font-tech hidden xl:inline">⌘K</span>
+            <span className="font-tech hidden 2xl:inline">⌘K</span>
           </button>
 
           <button
             type="button"
-            onClick={() =>
-              onOpenAuth?.(
-                authSession
-                  ? 'Cambia de tenant o revisa los credenciales de tu sesión activa.'
-                  : 'Inicia sesión o crea un Sandbox Demo para habilitar expedientes privados, OSINT y auditoría forense.',
-              )
-            }
+            onClick={() => onNavigate?.('cuenta')}
             title={
               authSession
-                ? `Sesión activa: ${authSession.email} (${authSession.tenantSlug} · ${authSession.role})`
-                : 'Conectar o crear sesión Tenant JWT'
+                ? `Cuenta: ${authSession.email} (${authSession.role})`
+                : 'Iniciar sesión o crear cuenta OMEGA'
             }
-            className={`omega-glass-chip h-8 xl:h-9 px-2 xl:px-3 rounded-[11px] inline-flex items-center gap-1.5 text-[11.5px] font-medium cursor-pointer ${
-              authSession
-                ? 'text-[#F2F2F4] border-[#30D158]/35'
-                : 'text-[#F2F2F4] border-[#2F6FED]/45'
-            }`}
+            className={`omega-glass-chip h-8 px-2 xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] font-medium cursor-pointer ${authSession
+              ? 'text-[#F2F2F4] border-[#30D158]/35'
+              : 'text-[#F2F2F4] border-[#2F6FED]/45'
+              }`}
           >
             {authSession ? (
               <>
                 <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
-                <span className="hidden lg:inline max-w-[130px] truncate font-tech">
-                  {authSession.tenantSlug}
+                <span className="hidden lg:inline max-w-[88px] truncate font-tech">
+                  {authSession.email?.split('@')[0] || authSession.tenantSlug}
                 </span>
               </>
             ) : (
               <>
                 <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
-                <span className="hidden lg:inline">Conectar</span>
+                <span className="hidden lg:inline">Entrar</span>
               </>
             )}
           </button>
-
-          <div
-            role="group"
-            aria-label="Nivel de detalle"
-            className="apple-segmented hidden sm:inline-flex items-center rounded-[11px] p-0.5 h-8 xl:h-9"
-          >
-            <button
-              type="button"
-              onClick={() => onToggleTechnicalMode?.(false)}
-              className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${!technicalMode ? 'apple-segmented-active' : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-            >
-              Simple
-            </button>
-            <button
-              type="button"
-              onClick={() => onToggleTechnicalMode?.(true)}
-              className={`kowalski-press px-2 xl:px-2.5 py-1 rounded-[8px] text-[11px] xl:text-[11.5px] font-medium cursor-pointer ${technicalMode ? 'apple-segmented-active' : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-            >
-              Técnico
-            </button>
-          </div>
         </div>
       </header>
 
@@ -431,6 +422,7 @@ export function SecurityPostureStage({
           usbConnected={usbConnected}
           apiOnline={apiOnline}
           isLoadingChat={isLoadingChat}
+          authConnected={Boolean(authSession)}
         />
       </div>
 
@@ -460,18 +452,18 @@ export function SecurityPostureStage({
               </strong>
             </span>
             <span aria-hidden="true" className="hidden lg:inline text-white/15">|</span>
-            <span className="hidden lg:inline">
+            <span>
               STIX2:{' '}
               <strong className="font-medium text-[#F2F2F4]">
-                {iocsCount.toLocaleString('en-US')} FIRMAS · {reportsCount} REPORTES
+                {iocsCount.toLocaleString('en-US')} · {reportsCount} REPORTES
               </strong>
             </span>
           </div>
 
           <div className="flex items-center gap-2 text-[#9A9AA2]">
-            <span className="hidden sm:inline">MODO · {technicalMode ? 'TÉCNICO' : 'SIMPLE'}</span>
+            <span className="hidden sm:inline">{technicalMode ? 'TÉCNICO' : 'SIMPLE'}</span>
             <span aria-hidden="true" className="hidden sm:inline text-white/15">|</span>
-            <span className="text-[#F2F2F4]">VOLÁTIL · 0 B EN DISCO</span>
+            <span className="text-[#F2F2F4]">0 B EN DISCO</span>
           </div>
         </div>
 
@@ -689,7 +681,7 @@ export function SecurityPostureStage({
           <div className="space-y-2 shrink-0">
             {!apiOnline && (
               <PanelErrorBanner
-                message="Sin conexión con el backend OMEGA. Verifica Docker o el servidor Java antes de consultar el corpus o enlaces."
+                message="Backend OMEGA desconectado. Inicia Docker o el servidor Java."
               />
             )}
             {stageFeedback && (
@@ -718,67 +710,6 @@ export function SecurityPostureStage({
           </div>
         )}
 
-        {!onboardingDismissed && (
-          <div
-            role="region"
-            aria-label="Guía rápida inicial"
-            className="omega-glass-card shrink-0 rounded-[14px] px-4 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-2 py-0.5 text-[10px] tracking-[0.06em] uppercase text-[#F2F2F4]">
-                  Guía 10 s
-                </span>
-                <span className="text-[12.5px] font-medium text-[#F2F2F4]">
-                  Empieza por aquí según lo que quieras verificar hoy:
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleDismissOnboarding}
-                className="lg:hidden rounded-[8px] border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
-              >
-                Entendido
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onNavigate?.('equipo')}
-                className="inline-flex items-center gap-1.5 rounded-[10px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/45 px-2.5 py-1 text-[11.5px] text-[#F2F2F4] transition-colors cursor-pointer"
-              >
-                <span className="font-tech text-[#2F6FED]">1.</span>
-                <span>Equipos (PC o USB móvil)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate?.('enlace')}
-                className="inline-flex items-center gap-1.5 rounded-[10px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/45 px-2.5 py-1 text-[11.5px] text-[#F2F2F4] transition-colors cursor-pointer"
-              >
-                <span className="font-tech text-[#2F6FED]">2.</span>
-                <span>Enlaces sin abrir URLs</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate?.('preguntar')}
-                className="inline-flex items-center gap-1.5 rounded-[10px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/45 px-2.5 py-1 text-[11.5px] text-[#F2F2F4] transition-colors cursor-pointer"
-              >
-                <span className="font-tech text-[#2F6FED]">3.</span>
-                <span>Asistente con citas</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDismissOnboarding}
-                className="hidden lg:inline-flex items-center rounded-[8px] border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.1] px-2.5 py-1 text-[11px] font-medium text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer ml-1"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Panel 3 — Hallazgos recientes y acciones rápidas con separadores finos (Blur #4) */}
         <footer
           aria-label="Hallazgos recientes y acciones rápidas"
@@ -792,7 +723,7 @@ export function SecurityPostureStage({
                   Equipo Local
                 </h2>
                 <p className="text-[11.5px] text-[#9A9AA2]">
-                  {technicalMode ? 'WMI / Sockets RAM · Tiempo real' : 'Procesos RAM · Persistencia WMI'}
+                  {technicalMode ? 'WMI · Sockets RAM' : 'Procesos · WMI'}
                 </p>
               </div>
               <button
@@ -876,7 +807,7 @@ export function SecurityPostureStage({
                     Celulares USB
                   </h2>
                   <p className="text-[11.5px] text-[#9A9AA2]">
-                    {technicalMode ? 'ADB local · Lockdown iOS' : 'Android e iPhone por cable'}
+                    {technicalMode ? 'ADB · Lockdown iOS' : 'Android · iPhone'}
                   </p>
                 </div>
               </div>
@@ -938,10 +869,10 @@ export function SecurityPostureStage({
                 </span>
                 <div>
                   <h2 className="text-[14px] font-semibold text-[#F2F2F4] leading-tight">
-                    Escudo Web y STIX2
+                    Escudo Web
                   </h2>
                   <p className="text-[11.5px] text-[#9A9AA2]">
-                    {iocsCount.toLocaleString('en-US')} firmas · {reportsCount} reportes
+                    Verificación pasiva
                   </p>
                 </div>
               </div>
@@ -955,12 +886,17 @@ export function SecurityPostureStage({
               </button>
             </div>
 
-            <form onSubmit={handleQuickLinkSubmit} className="space-y-1.5">
+            <form noValidate onSubmit={handleQuickLinkSubmit} className="space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <input
-                  type="url"
+                  type="text"
+                  maxLength={2048}
                   value={quickUrl}
-                  onChange={(e) => setQuickUrl(e.target.value)}
+                  onChange={(e) => {
+                    setQuickUrl(stripUnsafeChars(e.target.value, 2048));
+                    if (inlineLink?.error) setInlineLink(null);
+                  }}
+                  aria-invalid={Boolean(inlineLink?.error)}
                   placeholder="Pega enlace sospechoso sin abrirlo..."
                   aria-label="Enlace sospechoso para verificar"
                   className="flex-1 min-w-0 h-8 rounded-full bg-[#0A0A0C]/75 border border-white/[0.08] px-3 text-[12px] text-[#F2F2F4] placeholder:text-[#9A9AA2] focus:outline-none focus:border-[#2F6FED] focus:shadow-[0_0_20px_rgba(47,111,237,0.22)] transition-all"
@@ -1003,13 +939,13 @@ export function SecurityPostureStage({
                 </div>
               ) : (
                 <div className="flex items-center justify-between text-[11px] text-[#9A9AA2] pt-0.5">
-                  <span className="font-tech">Memoria volátil · Cero HTTP</span>
+                  <span className="font-tech">Cero HTTP saliente</span>
                   <button
                     type="button"
                     onClick={() => onNavigate?.('amenazas')}
                     className="text-[#F2F2F4] hover:text-[#2F6FED] underline decoration-[#2F6FED]/55 cursor-pointer transition-colors"
                   >
-                    Ver amenazas →
+                    Amenazas →
                   </button>
                 </div>
               )}

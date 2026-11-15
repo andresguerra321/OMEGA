@@ -26,6 +26,8 @@ import {
   rotateWorkspaceId,
   verifyAuditChain,
 } from '../lib/api';
+import { stripUnsafeChars, validateTenantUserForm } from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import {
@@ -59,6 +61,12 @@ const TOPK_OPTIONS = [
     label: '10 fragmentos',
     caption: 'Auditoría exhaustiva',
     icon: Microscope,
+  },
+  {
+    value: 14,
+    label: '14 fragmentos',
+    caption: 'Cobertura integral',
+    icon: Layers,
   },
 ];
 
@@ -182,6 +190,7 @@ export function SettingsPanel({
   const [loadingGov, setLoadingGov] = useState(Boolean(authSession?.accessToken));
   const [govError, setGovError] = useState('');
   const [actionBanner, setActionBanner] = useState(null);
+  const guard = useSingleFlight();
 
   useEffect(() => {
     if (!authSession?.accessToken) {
@@ -248,51 +257,64 @@ export function SettingsPanel({
   }
 
   async function handleVerifyAuditChain() {
-    if (!authSession?.accessToken) return;
-    setVerifyingAudit(true);
-    setGovError('');
-    try {
-      const [verification, logs] = await Promise.all([
-        verifyAuditChain(),
-        fetchAuditLogs(10),
-      ]);
-      setAuditVerification(verification);
-      setAuditLogs(Array.isArray(logs) ? logs : []);
-      setActionBanner({
-        tone: verification?.valid ? 'clean' : 'danger',
-        message: verification?.valid
-          ? `Cadena de auditoría íntegra (${verification.verifiedCount} de ${verification.totalEntries} eventos verificados por SHA-256).`
-          : `Alerta de integridad: ${verification?.detail || 'Cadena inconsistente'}.`,
-      });
-    } catch (err) {
-      setActionBanner({
-        tone: 'danger',
-        message: err?.message || 'No se pudo verificar la cadena de auditoría.',
-      });
-    } finally {
-      setVerifyingAudit(false);
-    }
+    if (!authSession?.accessToken || verifyingAudit) return;
+    await guard(async () => {
+      setVerifyingAudit(true);
+      setGovError('');
+      try {
+        const [verification, logs] = await Promise.all([
+          verifyAuditChain(),
+          fetchAuditLogs(10),
+        ]);
+        setAuditVerification(verification);
+        setAuditLogs(Array.isArray(logs) ? logs : []);
+        setActionBanner({
+          tone: verification?.valid ? 'clean' : 'danger',
+          message: verification?.valid
+            ? `Cadena de auditoría íntegra (${verification.verifiedCount} de ${verification.totalEntries} eventos verificados por SHA-256).`
+            : `Alerta de integridad: ${verification?.detail || 'Cadena inconsistente'}.`,
+        });
+      } catch (err) {
+        setActionBanner({
+          tone: 'danger',
+          message: err?.message || 'No se pudo verificar la cadena de auditoría.',
+        });
+      } finally {
+        setVerifyingAudit(false);
+      }
+    });
   }
 
   async function handleInviteSubmit(e) {
     e.preventDefault();
-    setInvitingUser(true);
-    try {
-      const created = await createTenantUser(inviteForm);
-      setActionBanner({
-        tone: 'clean',
-        message: `Usuario ${created.email} creado con rol ${created.role} dentro del tenant ${authSession?.tenantSlug}.`,
-      });
-      setInviteForm({ fullName: '', email: '', password: '', role: 'ANALYST' });
-      setShowInviteForm(false);
-    } catch (err) {
+    if (invitingUser) return;
+    const validation = validateTenantUserForm(inviteForm);
+    if (!validation.valid) {
       setActionBanner({
         tone: 'danger',
-        message: err?.message || 'No se pudo crear el usuario en el tenant.',
+        message: validation.firstError,
       });
-    } finally {
-      setInvitingUser(false);
+      return;
     }
+    await guard(async () => {
+      setInvitingUser(true);
+      try {
+        const created = await createTenantUser(validation.sanitized);
+        setActionBanner({
+          tone: 'clean',
+          message: `Usuario ${created.email} creado con rol ${created.role} dentro del tenant ${authSession?.tenantSlug}.`,
+        });
+        setInviteForm({ fullName: '', email: '', password: '', role: 'ANALYST' });
+        setShowInviteForm(false);
+      } catch (err) {
+        setActionBanner({
+          tone: 'danger',
+          message: err?.message || 'No se pudo crear el usuario en el tenant.',
+        });
+      } finally {
+        setInvitingUser(false);
+      }
+    });
   }
 
   function scrollToSection(id) {
@@ -317,19 +339,21 @@ export function SettingsPanel({
   }
 
   async function handleRotateId() {
-    const nextId = rotateWorkspaceId();
-    setWorkspaceId(nextId);
-    setRotated(true);
-    try {
-      if (authSession?.accessToken) {
-        const refreshed = await fetchSystemGovernance();
-        if (refreshed) setGov(refreshed);
+    await guard(async () => {
+      const nextId = rotateWorkspaceId();
+      setWorkspaceId(nextId);
+      setRotated(true);
+      try {
+        if (authSession?.accessToken) {
+          const refreshed = await fetchSystemGovernance();
+          if (refreshed) setGov(refreshed);
+        }
+      } catch {
+        // Offline fallback keeps new workspaceId locally
+      } finally {
+        setTimeout(() => setRotated(false), 1600);
       }
-    } catch {
-      // Offline fallback keeps new workspaceId locally
-    } finally {
-      setTimeout(() => setRotated(false), 1600);
-    }
+    });
   }
 
   function handleSaveChanges() {
@@ -453,8 +477,8 @@ export function SettingsPanel({
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Cuenta y espacio de trabajo
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
-                  Sesión multi-tenant aislada mediante JWT y control de integridad SHA-256 sobre expedientes y volcados en RAM.
+                <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
+                  Sesión aislada JWT y trazabilidad SHA-256.
                 </p>
               </div>
 
@@ -473,14 +497,14 @@ export function SettingsPanel({
                           </span>
                         </div>
                         <div className="font-tech text-[12px] text-[#9A9AA2] break-all">
-                          {authSession.email} · Tenant ID: {authSession.tenantId}
+                          {authSession.email} · ID de espacio: {authSession.tenantId}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <button
                           type="button"
-                          onClick={() => onOpenAuth?.('Cambia a otro tenant o inicia sesión con otra cuenta.')}
+                          onClick={() => onOpenAuth?.('Cambia de cuenta o inicia sesión con otro correo.')}
                           className="inline-flex items-center gap-1.5 rounded-[8px] bg-white/[0.045] border border-white/[0.08] hover:bg-white/[0.09] px-3 py-1.5 text-[12px] text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
                         >
                           <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
@@ -500,7 +524,7 @@ export function SettingsPanel({
                     {tenantStats && (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-white/[0.06]">
                         <div className="rounded-[9px] bg-black/25 border border-white/[0.06] px-3 py-2">
-                          <div className="text-[11px] text-[#9A9AA2]">Expedientes</div>
+                          <div className="text-[11px] text-[#9A9AA2]">Espacios privados</div>
                           <div className="font-tech text-[15px] font-semibold text-[#F2F2F4]">
                             {Number(tenantStats.expedientes || 0)}
                           </div>
@@ -553,6 +577,7 @@ export function SettingsPanel({
 
                         {showInviteForm && (
                           <form
+                            noValidate
                             onSubmit={handleInviteSubmit}
                             className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-[10px] border border-white/[0.08] bg-black/25 p-3"
                           >
@@ -560,16 +585,30 @@ export function SettingsPanel({
                               type="text"
                               required
                               minLength={2}
+                              maxLength={120}
                               value={inviteForm.fullName}
-                              onChange={(e) => setInviteForm((f) => ({ ...f, fullName: e.target.value }))}
+                              onChange={(e) => {
+                                setInviteForm((f) => ({
+                                  ...f,
+                                  fullName: stripUnsafeChars(e.target.value, 120),
+                                }));
+                                if (actionBanner?.tone === 'danger') setActionBanner(null);
+                              }}
                               placeholder="Nombre completo"
                               className="h-8 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2]"
                             />
                             <input
                               type="email"
                               required
+                              maxLength={254}
                               value={inviteForm.email}
-                              onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                              onChange={(e) => {
+                                setInviteForm((f) => ({
+                                  ...f,
+                                  email: stripUnsafeChars(e.target.value, 254),
+                                }));
+                                if (actionBanner?.tone === 'danger') setActionBanner(null);
+                              }}
                               placeholder="usuario@organizacion.org"
                               className="h-8 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2]"
                             />
@@ -577,8 +616,15 @@ export function SettingsPanel({
                               type="password"
                               required
                               minLength={12}
+                              maxLength={128}
                               value={inviteForm.password}
-                              onChange={(e) => setInviteForm((f) => ({ ...f, password: e.target.value }))}
+                              onChange={(e) => {
+                                setInviteForm((f) => ({
+                                  ...f,
+                                  password: stripUnsafeChars(e.target.value, 128),
+                                }));
+                                if (actionBanner?.tone === 'danger') setActionBanner(null);
+                              }}
                               placeholder="Contraseña inicial (mín. 12 caracteres)"
                               className="h-8 rounded-[7px] border border-white/[0.1] bg-[#141418] px-2.5 text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2]"
                             />
@@ -646,19 +692,19 @@ export function SettingsPanel({
                     <div className="space-y-1">
                       <div className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[#F2F2F4]">
                         <Lock className="h-4 w-4 text-[#2F6FED]" />
-                        <span>Sin sesión tenant conectada</span>
+                        <span>Sin cuenta conectada</span>
                       </div>
                       <p className="text-[12px] text-[#9A9AA2]">
-                        Conecta tu cuenta JWT o crea un Sandbox Demo para habilitar expedientes Zero-Retention, OSINT y triaje forense.
+                        Inicia sesión o regístrate para habilitar PDFs privados Zero-Retention, monitoreo OSINT y triaje forense.
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => onOpenAuth?.('Inicia sesión o genera un tenant Sandbox Demo para sincronizar métricas en vivo.')}
+                      onClick={() => onOpenAuth?.('Inicia sesión o crea una cuenta para sincronizar tu biblioteca privada y OSINT.')}
                       className="tactile-key-primary inline-flex items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-medium cursor-pointer"
                     >
                       <KeyRound className="h-3.5 w-3.5" />
-                      <span>Conectar / Crear Tenant</span>
+                      <span>Iniciar sesión / Registrarse</span>
                     </button>
                   </div>
                 )}
@@ -718,7 +764,7 @@ export function SettingsPanel({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {TOPK_OPTIONS.map((opt) => {
                   const Icon = opt.icon;
                   const selected = topK === opt.value;
@@ -760,10 +806,10 @@ export function SettingsPanel({
             <section className="animate-on-scroll space-y-3" data-delay="90">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                  Fuentes documentales prioritarias
+                  Fuentes prioritarias
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
-                  Selecciona qué investigaciones públicas tienen prioridad por defecto en tus consultas.
+                <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
+                  Prioridad documental en tus consultas.
                 </p>
               </div>
 
@@ -807,40 +853,13 @@ export function SettingsPanel({
 
             {/* Bloque 4 — Permisos y Garantías Éticas */}
             <section ref={permisosRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="120">
-              <div>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                  Permisos y transparencia de datos
+                  Privacidad y permisos
                 </h2>
-                <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
-                  Qué permanece en tu equipo, qué se analiza únicamente en RAM y qué controles éticos aplica cada módulo.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="apple-group rounded-[12px] p-3.5 space-y-1">
-                  <div className="text-[12px] font-semibold text-[#F2F2F4]">
-                    Custodia local (Zero-Retention)
-                  </div>
-                  <p className="text-[11.5px] text-[#9A9AA2] leading-relaxed">
-                    Tus PDFs originales y respaldos completos nunca se retienen en el servidor; solo se conservan metadatos, hash SHA-256 y fragmentos de expediente autorizados.
-                  </p>
-                </div>
-                <div className="apple-group rounded-[12px] p-3.5 space-y-1">
-                  <div className="text-[12px] font-semibold text-[#F2F2F4]">
-                    Evidencia volátil en RAM
-                  </div>
-                  <p className="text-[11.5px] text-[#9A9AA2] leading-relaxed">
-                    Volcados MVT, backups iOS, YARA y auditorías de PC se procesan en memoria aislada sin red externa y se liberan al finalizar el análisis.
-                  </p>
-                </div>
-                <div className="apple-group rounded-[12px] p-3.5 space-y-1">
-                  <div className="text-[12px] font-semibold text-[#F2F2F4]">
-                    Aislamiento estricto de IA
-                  </div>
-                  <p className="text-[11.5px] text-[#9A9AA2] leading-relaxed">
-                    El proveedor externo de embeddings/LLM solo recibe corpus público CTI o fragmentos RAG autorizados; nunca recibe volcados forenses ni activos OSINT.
-                  </p>
-                </div>
+                <span className="font-tech text-[10.5px] uppercase tracking-[0.06em] text-[#9A9AA2]">
+                  Zero-Retention · RAM volátil · IA aislada
+                </span>
               </div>
 
               <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
@@ -848,14 +867,14 @@ export function SettingsPanel({
                   <div className="space-y-0.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[13.5px] font-medium text-[#F2F2F4]">
-                        Procesamiento forense volátil (<span className="font-tech">RNF4</span>)
+                        Procesamiento en RAM (<span className="font-tech">RNF4</span>)
                       </span>
                       <span className="rounded-full bg-[rgba(28,36,56,0.65)] border border-[#2F6FED]/45 px-2.5 py-0.5 text-[10.5px] font-medium text-[#F2F2F4]">
                         Obligatorio
                       </span>
                     </div>
-                    <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
-                      Analiza respaldos MVT y SQLite exclusivamente en RAM; descarta los buffers al finalizar sin escribir en disco.
+                    <p className="text-[12px] text-[#9A9AA2]">
+                      Analiza respaldos en memoria sin escribir en disco.
                     </p>
                   </div>
 
@@ -871,8 +890,8 @@ export function SettingsPanel({
                     <div className="text-[13.5px] font-medium text-[#F2F2F4]">
                       Inspección pasiva de enlaces (<span className="font-tech">RNF7</span>)
                     </div>
-                    <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
-                      Verifica URLs sospechosas contra IOCs y crt.sh sin emitir peticiones HTTP hacia el servidor destino.
+                    <p className="text-[12px] text-[#9A9AA2]">
+                      Verifica URLs sin conexión HTTP al destino.
                     </p>
                   </div>
 
@@ -886,10 +905,10 @@ export function SettingsPanel({
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="text-[13.5px] font-medium text-[#F2F2F4]">
-                      Consentimiento explícito OSINT (<span className="font-tech">RNF8</span>)
+                      Consentimiento OSINT (<span className="font-tech">RNF8</span>)
                     </div>
-                    <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
-                      Exige confirmación de titularidad antes de auditar dominios o correos institucionales.
+                    <p className="text-[12px] text-[#9A9AA2]">
+                      Exige autorización previa en auditorías de dominio o correo.
                     </p>
                   </div>
 
@@ -944,17 +963,17 @@ export function SettingsPanel({
                   <div className="px-4 py-4 flex items-center justify-between gap-3 text-[12px] text-[#9A9AA2]">
                     <span>
                       {authSession
-                        ? 'No se reportaron fuentes indexadas en PostgreSQL.'
-                        : 'Conecta una sesión JWT para listar los reportes públicos indexados y su modelo de embeddings.'}
+                        ? 'Sin fuentes indexadas en PostgreSQL.'
+                        : 'Inicia sesión para consultar las fuentes indexadas.'}
                     </span>
                     {!authSession && (
                       <button
                         type="button"
-                        onClick={() => onOpenAuth?.('Conecta tu sesión para consultar el corpus CTI indexado en PostgreSQL.')}
+                        onClick={() => onOpenAuth?.('Inicia sesión para consultar el corpus CTI.')}
                         className="inline-flex items-center gap-1 rounded-[7px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/75 px-2.5 py-1 text-[11.5px] text-[#F2F2F4] cursor-pointer"
                       >
                         <RefreshCw className="h-3 w-3" />
-                        <span>Conectar</span>
+                        <span>Entrar</span>
                       </button>
                     )}
                   </div>
@@ -963,8 +982,8 @@ export function SettingsPanel({
 
               <OmegaWebIntelCard
                 compact
-                title="Ingesta volátil de fuente web CTI (WebBaseLoader RNF4)"
-                subtitle="Analiza un reporte técnico externo directamente en memoria para extraer IPv4 (net4), dominios y CVEs y cruzarlos con el catálogo."
+                title="Ingesta web CTI (RAM)"
+                subtitle="Extrae IPs, dominios y CVEs de una URL técnica en memoria."
               />
             </section>
         </div>

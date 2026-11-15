@@ -1,17 +1,22 @@
 {
-  "name": "frontend",
+  "name": "omega-desktop",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "productName": "OMEGA",
+  "description": "OMEGA — Plataforma Defensiva de Cyber Threat Intelligence",
+  "author": "OMEGA",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test:desktop": "node --test electron/dockerOrchestrator.test.js",
+    "test:desktop": "node --test electron/dockerOrchestrator.test.js src/lib/validators.test.js",
     "preview": "vite preview",
     "desktop:dev": "concurrently -k \"vite --port 5174 --strictPort\" \"wait-on http://localhost:5174 && node electron/launch.js http://localhost:5174\"",
-    "desktop:start": "vite build && node electron/launch.js"
+    "desktop:start": "vite build && node electron/launch.js",
+    "desktop:pack": "vite build && electron-builder --dir",
+    "desktop:dist": "vite build && electron-builder --win nsis portable"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -35,5 +40,86 @@
     "oxlint": "^1.90.0",
     "vite": "^8.3.6",
     "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "com.omega.desktop",
+    "productName": "OMEGA",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!electron/**/*.test.js",
+      "!electron/**/*.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "build",
+        "filter": [
+          "icon.ico",
+          "icon.png"
+        ]
+      },
+      {
+        "from": "..",
+        "to": "omega",
+        "filter": [
+          "docker-compose.yml",
+          "docker-compose.prod.yml",
+          ".env.example",
+          "db/init.sql",
+          "corpus_mvp/iocs/**/*",
+          "api/**/*",
+          "backend-java/**/*",
+          "!**/.env",
+          "!**/.env.local",
+          "!**/.env.production",
+          "!**/.env.development",
+          "!.env",
+          "!**/.venv/**",
+          "!**/venv/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/target/**",
+          "!**/node_modules/**",
+          "!**/tests/**",
+          "!**/.git/**"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OMEGA",
+      "artifactName": "OMEGA-Setup-${version}-${arch}.exe"
+    },
+    "portable": {
+      "artifactName": "OMEGA-Portable-${version}-${arch}.exe"
+    }
   }
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Globe, Loader2, ShieldAlert, ShieldCheck, Check, Copy } from 'lucide-react';
 import { scanWebIntelUrl } from '../lib/api';
+import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
 
 export function OmegaWebIntelCard({
   activeNet4Ips = [],
@@ -15,22 +17,29 @@ export function OmegaWebIntelCard({
   const [scanResult, setScanResult] = useState(null);
   const [showAllDomains, setShowAllDomains] = useState(false);
   const [copiedToken, setCopiedToken] = useState('');
+  const guard = useSingleFlight();
 
   async function handleScan(e) {
     e.preventDefault();
-    const cleaned = urlInput.trim();
-    if (!cleaned || loading) return;
-    setLoading(true);
-    setError('');
-    setShowAllDomains(false);
-    try {
-      const data = await scanWebIntelUrl(cleaned, activeNet4Ips);
-      setScanResult(data);
-    } catch (err) {
-      setError(err?.message || 'No se pudo analizar la fuente CTI en RAM.');
-    } finally {
-      setLoading(false);
+    if (loading) return;
+    const validation = validateUrlInput(urlInput, { allowBareDomain: false });
+    if (!validation.valid) {
+      setError(validation.error);
+      return;
     }
+    await guard(async () => {
+      setLoading(true);
+      setError('');
+      setShowAllDomains(false);
+      try {
+        const data = await scanWebIntelUrl(validation.value, activeNet4Ips);
+        setScanResult(data);
+      } catch (err) {
+        setError(err?.message || 'No se pudo analizar la fuente CTI en RAM.');
+      } finally {
+        setLoading(false);
+      }
+    });
   }
 
   async function handleCopy(val) {
@@ -82,8 +91,13 @@ export function OmegaWebIntelCard({
       <form onSubmit={handleScan} className="apple-well rounded-[11px] p-1.5 flex flex-col sm:flex-row sm:items-center gap-2">
         <input
           type="text"
+          maxLength={2048}
           value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
+          onChange={(e) => {
+            setUrlInput(stripUnsafeChars(e.target.value, 2048));
+            if (error) setError('');
+          }}
+          aria-invalid={Boolean(error)}
           placeholder="https://citizenlab.ca/... o https://blog.google/threat-analysis-group/..."
           className="font-tech flex-1 min-w-0 h-8 bg-transparent px-2 text-[12.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
         />

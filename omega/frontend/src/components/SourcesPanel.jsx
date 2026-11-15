@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, ExternalLink, ShieldCheck, Search } from 'lucide-react';
+import { sanitizeSearchInput } from '../lib/validators';
 
 import {
   PanelSkeleton,
@@ -69,8 +70,9 @@ export function SourcesPanel({
               <Search className="absolute left-3 h-3.5 w-3.5 text-[#9A9AA2] pointer-events-none" />
               <input
                 type="text"
+                maxLength={120}
                 value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+                onChange={(e) => setFilter(sanitizeSearchInput(e.target.value, 120))}
                 placeholder="Filtrar por término u organización..."
                 className="apple-well w-full rounded-[9px] py-1.5 pl-8 pr-3 text-[13px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none transition-colors duration-150"
               />

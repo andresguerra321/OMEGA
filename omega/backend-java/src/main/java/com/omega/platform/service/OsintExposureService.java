@@ -9,6 +9,7 @@ import com.omega.platform.domain.OsintMonitoredAssetEntity;
 import com.omega.platform.ingest.InvalidDocumentException;
 import com.omega.platform.repository.OsintAssetRepository;
 import com.omega.platform.security.OmegaPrincipal;
+import com.omega.platform.web.ValidationPatterns;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,9 +51,11 @@ public class OsintExposureService {
 
     private static final Logger log = LoggerFactory.getLogger(OsintExposureService.class);
     private static final Pattern DOMAIN_PATTERN =
-            Pattern.compile("^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,24}$");
+            Pattern.compile(ValidationPatterns.STRICT_DOMAIN_LOWER_REGEX);
     private static final Pattern EMAIL_PATTERN =
-            Pattern.compile("^[^@\\s]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,24}$");
+            Pattern.compile(ValidationPatterns.STRICT_EMAIL_LOWER_REGEX);
+    private static final Pattern ORG_PATTERN =
+            Pattern.compile(ValidationPatterns.ORGANIZATION_NAME_REGEX);
     private static final int MAX_CT_BYTES = 512 * 1024;
 
     private final OsintAssetRepository assetRepository;
@@ -219,8 +222,8 @@ public class OsintExposureService {
                 }
             }
             case "organization" -> {
-                if (value.length() < 2) {
-                    throw new InvalidDocumentException("El nombre de organización es demasiado corto.");
+                if (!ORG_PATTERN.matcher(value).matches()) {
+                    throw new InvalidDocumentException("Ingresa un nombre de organización válido (al menos 2 letras, sin símbolos especiales).");
                 }
             }
             default -> throw new InvalidDocumentException(

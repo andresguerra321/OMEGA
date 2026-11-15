@@ -1,7 +1,7 @@
 package com.omega.platform.web.dto;
 
 import com.omega.platform.security.Role;
-import jakarta.validation.constraints.Email;
+import com.omega.platform.web.ValidationPatterns;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -15,28 +15,76 @@ public final class AuthDtos {
     }
 
     public record RegisterTenantRequest(
-            @NotBlank
-            @Pattern(regexp = "^[a-z0-9-]{3,80}$", message = "Slug inválido: solo minúsculas, dígitos y guiones")
+            @NotBlank(message = "El identificador de organización es obligatorio")
+            @Pattern(regexp = ValidationPatterns.TENANT_SLUG_REGEX, message = "Slug inválido: solo minúsculas, dígitos y guiones (3 a 80 caracteres)")
             String tenantSlug,
-            @NotBlank @Size(min = 2, max = 200) String tenantName,
-            @NotBlank @Email @Size(max = 255) String adminEmail,
-            @NotBlank @Size(min = 12, max = 128) String adminPassword,
-            @NotBlank @Size(min = 2, max = 200) String adminFullName
+            @NotBlank(message = "El nombre de la organización es obligatorio")
+            @Size(min = 2, max = 200, message = "La organización debe tener entre 2 y 200 caracteres")
+            @Pattern(regexp = ValidationPatterns.ORGANIZATION_NAME_REGEX, message = "Ingresa un nombre de organización válido (al menos 2 letras, sin símbolos especiales)")
+            String tenantName,
+            @NotBlank(message = "El correo electrónico es obligatorio")
+            @Size(max = 255, message = "El correo no puede superar 255 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido (ej. nombre@organizacion.org)")
+            String adminEmail,
+            @NotBlank(message = "La contraseña es obligatoria")
+            @Size(min = 12, max = 128, message = "La contraseña debe tener entre 12 y 128 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRONG_PASSWORD_REGEX, message = "La contraseña debe incluir letras y números o símbolos, sin espacios al inicio ni al final")
+            String adminPassword,
+            @NotBlank(message = "El nombre completo es obligatorio")
+            @Size(min = 2, max = 200, message = "El nombre debe tener entre 2 y 200 caracteres")
+            @Pattern(regexp = ValidationPatterns.PERSON_NAME_REGEX, message = "Ingresa un nombre completo válido (solo letras, espacios, apóstrofo o guion; sin números ni símbolos)")
+            String adminFullName
+    ) {
+    }
+
+    public record RegisterAccountRequest(
+            @NotBlank(message = "El nombre completo es obligatorio")
+            @Size(min = 2, max = 200, message = "El nombre debe tener entre 2 y 200 caracteres")
+            @Pattern(regexp = ValidationPatterns.PERSON_NAME_REGEX, message = "Ingresa un nombre completo válido (solo letras, espacios, apóstrofo o guion; sin números ni símbolos)")
+            String fullName,
+            @NotBlank(message = "El correo electrónico es obligatorio")
+            @Size(max = 255, message = "El correo no puede superar 255 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido (ej. nombre@organizacion.org)")
+            String email,
+            @NotBlank(message = "La contraseña es obligatoria")
+            @Size(min = 12, max = 128, message = "La contraseña debe tener entre 12 y 128 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRONG_PASSWORD_REGEX, message = "La contraseña debe incluir letras y números o símbolos, sin espacios al inicio ni al final")
+            String password,
+            @Size(max = 200, message = "La organización no puede superar 200 caracteres")
+            @Pattern(regexp = ValidationPatterns.OPTIONAL_ORGANIZATION_NAME_REGEX, message = "Ingresa un nombre de organización válido (al menos 2 letras, sin símbolos especiales)")
+            String organizationName
     ) {
     }
 
     public record LoginRequest(
-            @NotBlank @Size(min = 3, max = 80) String tenantSlug,
-            @NotBlank @Email @Size(max = 255) String email,
-            @NotBlank @Size(min = 1, max = 128) String password
+            @Size(max = 80, message = "El identificador de organización no puede superar 80 caracteres")
+            @Pattern(regexp = ValidationPatterns.OPTIONAL_TENANT_SLUG_REGEX, message = "Identificador de organización inválido: solo minúsculas, dígitos y guiones")
+            String tenantSlug,
+            @NotBlank(message = "El correo electrónico es obligatorio")
+            @Size(max = 255, message = "El correo no puede superar 255 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido (ej. nombre@organizacion.org)")
+            String email,
+            @NotBlank(message = "La contraseña es obligatoria")
+            @Size(min = 1, max = 128, message = "La contraseña debe tener entre 1 y 128 caracteres")
+            String password
     ) {
     }
 
     public record CreateTenantUserRequest(
-            @NotBlank @Email @Size(max = 255) String email,
-            @NotBlank @Size(min = 12, max = 128) String password,
-            @NotBlank @Size(min = 2, max = 200) String fullName,
-            @NotNull Role role
+            @NotBlank(message = "El correo electrónico es obligatorio")
+            @Size(max = 255, message = "El correo no puede superar 255 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido (ej. usuario@organizacion.org)")
+            String email,
+            @NotBlank(message = "La contraseña es obligatoria")
+            @Size(min = 12, max = 128, message = "La contraseña debe tener entre 12 y 128 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRONG_PASSWORD_REGEX, message = "La contraseña debe incluir letras y números o símbolos, sin espacios al inicio ni al final")
+            String password,
+            @NotBlank(message = "El nombre completo es obligatorio")
+            @Size(min = 2, max = 200, message = "El nombre debe tener entre 2 y 200 caracteres")
+            @Pattern(regexp = ValidationPatterns.PERSON_NAME_REGEX, message = "Ingresa un nombre completo válido (solo letras, espacios, apóstrofo o guion; sin números ni símbolos)")
+            String fullName,
+            @NotNull(message = "El rol del usuario es obligatorio")
+            Role role
     ) {
     }
 

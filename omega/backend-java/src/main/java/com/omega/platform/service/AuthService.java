@@ -1,8 +1,11 @@
 package com.omega.platform.service;
 
 import com.omega.platform.config.OmegaProperties;
+import com.omega.platform.domain.ClassificationLevel;
+import com.omega.platform.domain.ExpedienteEntity;
 import com.omega.platform.domain.TenantEntity;
 import com.omega.platform.domain.UserEntity;
+import com.omega.platform.repository.ExpedienteRepository;
 import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.repository.UserRepository;
 import com.omega.platform.security.JwtService;
@@ -11,10 +14,13 @@ import com.omega.platform.security.Role;
 import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
 import com.omega.platform.web.dto.AuthDtos.CreateTenantUserRequest;
 import com.omega.platform.web.dto.AuthDtos.LoginRequest;
+import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.security.access.AccessDeniedException;
@@ -28,6 +34,7 @@ public class AuthService {
 
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
+    private final ExpedienteRepository expedienteRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final OmegaProperties properties;
@@ -35,15 +42,51 @@ public class AuthService {
     public AuthService(
             TenantRepository tenantRepository,
             UserRepository userRepository,
+            ExpedienteRepository expedienteRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             OmegaProperties properties
     ) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
+        this.expedienteRepository = expedienteRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.properties = properties;
+    }
+
+    @Transactional
+    public AuthTokenResponse registerAccount(RegisterAccountRequest request, String bootstrapHeader) {
+        verifyTenantRegistrationAllowed(bootstrapHeader);
+
+        String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsAnyByEmailIgnoreCase(normalizedEmail)) {
+            throw new ConflictException("Ya existe una cuenta registrada con este correo electrónico");
+        }
+
+        String orgSource = request.organizationName() != null && !request.organizationName().isBlank()
+                ? request.organizationName().trim()
+                : request.fullName().trim();
+        String orgName = orgSource.length() > 200 ? orgSource.substring(0, 200) : orgSource;
+        String uniqueSlug = allocateUniqueTenantSlug(orgSource);
+
+        TenantEntity tenant = tenantRepository.save(new TenantEntity(uniqueSlug, orgName));
+        UserEntity adminUser = userRepository.save(new UserEntity(
+                tenant.getId(),
+                normalizedEmail,
+                passwordEncoder.encode(request.password()),
+                request.fullName().trim(),
+                Role.ADMIN
+        ));
+
+        expedienteRepository.save(new ExpedienteEntity(
+                tenant.getId(),
+                adminUser.getId(),
+                "Espacio personal",
+                ClassificationLevel.CONFIDENTIAL
+        ));
+
+        return issueTokenResponse(adminUser, tenant.getSlug());
     }
 
     @Transactional
@@ -70,21 +113,63 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthTokenResponse login(LoginRequest request) {
-        String normalizedSlug = request.tenantSlug().trim().toLowerCase(Locale.ROOT);
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        String rawSlug = request.tenantSlug() == null ? "" : request.tenantSlug().trim().toLowerCase(Locale.ROOT);
 
-        TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(normalizedSlug)
-                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+        if (!rawSlug.isBlank()) {
+            TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(rawSlug)
+                    .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
-        UserEntity user = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), normalizedEmail)
-                .filter(UserEntity::isActive)
-                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+            UserEntity user = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), normalizedEmail)
+                    .filter(UserEntity::isActive)
+                    .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BadCredentialsException("Credenciales inválidas");
+            if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+                throw new BadCredentialsException("Credenciales inválidas");
+            }
+
+            return issueTokenResponse(user, tenant.getSlug());
         }
 
+        List<UserEntity> matches = userRepository.findAllActiveByEmailIgnoreCase(normalizedEmail).stream()
+                .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
+                .toList();
+
+        if (matches.isEmpty()) {
+            throw new BadCredentialsException("Credenciales inválidas");
+        }
+        if (matches.size() > 1) {
+            throw new ConflictException("Tu correo pertenece a más de una organización; especifica el identificador de organización");
+        }
+
+        UserEntity user = matches.get(0);
+        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
+                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+
         return issueTokenResponse(user, tenant.getSlug());
+    }
+
+    private String allocateUniqueTenantSlug(String rawName) {
+        String decomposed = Normalizer.normalize(rawName == null ? "" : rawName, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        String base = decomposed.length() >= 3 ? decomposed : "omega-user";
+        if (base.length() > 64) {
+            base = base.substring(0, 64).replaceAll("-+$", "");
+        }
+        if (!tenantRepository.existsBySlug(base)) {
+            return base;
+        }
+        for (int attempt = 0; attempt < 8; attempt++) {
+            String suffix = "-" + UUID.randomUUID().toString().substring(0, 6);
+            String candidate = (base.length() + suffix.length() > 80 ? base.substring(0, 80 - suffix.length()) : base) + suffix;
+            if (!tenantRepository.existsBySlug(candidate)) {
+                return candidate;
+            }
+        }
+        return "omega-" + UUID.randomUUID().toString().substring(0, 12);
     }
 
     @Transactional
