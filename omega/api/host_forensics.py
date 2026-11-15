@@ -16,7 +16,12 @@ import json
 import logging
 from typing import Any
 
-from cti_db import lookup_iocs_detailed
+from cti_db import get_catalog_freshness, lookup_iocs_detailed
+from forensic_scope import (
+    OS_SCOPE_LIMITATION_NOTICE,
+    format_clean_verdict_texts,
+    get_platform_mitigations,
+)
 from yara_engine import scan_artifacts_with_yara
 
 logger = logging.getLogger(__name__)
@@ -483,14 +488,20 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
         ]
     else:
         verdict_code = "CLEAN"
-        verdict_label = "Sin Indicadores de Spyware en esta Computadora"
+        freshness = get_catalog_freshness()
+        verdict_label, clean_rationale = format_clean_verdict_texts(freshness.get("catalog_cutoff_date"))
         rationale = (
             f"Se auditaron {len(live_sockets)} conexiones públicas salientes, procesos activos, tareas programadas y "
-            "suscripciones WMI sin detectar persistencia oculta, firmas YARA ni coincidencias CTI conocidas."
+            f"suscripciones WMI sin detectar persistencia oculta. {clean_rationale}"
         )
         recommended_actions = [
-            "Mantén actualizados Windows Update / macOS y el navegador principal para cerrar vulnerabilidades de día cero.",
+            "Mantener actualizados Windows Update / macOS y navegadores (ninguna app en espacio de usuario detiene 0-clicks de kernel).",
+            "Asegurar cifrado de disco completo (BitLocker / FileVault / LUKS) y rotación de cuentas si existiera exposición física.",
         ]
+
+    # Reutilizar metadata de frescura para todos los veredictos
+    catalog_freshness = get_catalog_freshness()
+    mitigations = get_platform_mitigations(platform_name)
 
     # Ordena sockets poniendo los de red activa / match primero
     sorted_sockets = sorted(live_sockets, key=lambda s: (not s["cti_match"], s["remote_ip"]))
@@ -511,6 +522,9 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
         "yara_hits": yara_hits,
         "timeline": [],
         "timeline_summary": {"events_total": 0, "crashes_detected": 0, "chains_detected": 0},
+        "catalog_freshness": catalog_freshness,
+        "os_scope_notice": OS_SCOPE_LIMITATION_NOTICE,
+        "platform_mitigations": mitigations,
         "triage": {
             "total_files": 4,
             "total_indicators_analyzed": len(external_ips) + len(proc_names) + len(sha256_candidates) + len(wmi_subscriptions),
@@ -518,6 +532,9 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
             "behavioral_anomalies": behavioral_anomalies,
             "yara_hits": yara_hits,
             "timeline": [],
+            "catalog_freshness": catalog_freshness,
+            "os_scope_notice": OS_SCOPE_LIMITATION_NOTICE,
+            "platform_mitigations": mitigations,
             "diagnosis": {
                 "verdict_code": verdict_code,
                 "verdict_label": verdict_label,

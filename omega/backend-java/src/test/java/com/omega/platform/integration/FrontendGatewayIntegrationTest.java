@@ -278,7 +278,9 @@ class FrontendGatewayIntegrationTest {
                 mockMvc.perform(get("/api/v1/auth/config"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.tenantSelfRegistrationEnabled").value(true))
-                                .andExpect(jsonPath("$.bootstrapSecretRequired").value(false));
+                                .andExpect(jsonPath("$.bootstrapSecretRequired").value(false))
+                                .andExpect(jsonPath("$.cookieAuthEnabled").value(true))
+                                .andExpect(jsonPath("$.passkeysSupported").value(false));
 
                 mockMvc.perform(options("/api/v1/auth/config")
                                 .header(HttpHeaders.ORIGIN, "http://localhost:5173")
@@ -657,5 +659,50 @@ class FrontendGatewayIntegrationTest {
                                                 """))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.accessToken").isString());
+        }
+
+        @Test
+        void httpOnlyCookieAuthenticatesWithoutLocalStorageAndLogoutClearsCookieAndGovernanceExposesFreshness()
+                        throws Exception {
+                MvcResult loginReg = mockMvc.perform(post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "fullName": "Mateo Cookie",
+                                                  "email": "mateo.cookie@redaccion.org",
+                                                  "password": "OmegaPassword!2026",
+                                                  "organizationName": "Cookie Lab"
+                                                }
+                                                """))
+                                .andExpect(status().isCreated())
+                                .andExpect(header().string(HttpHeaders.SET_COOKIE,
+                                                org.hamcrest.Matchers.allOf(
+                                                                org.hamcrest.Matchers.containsString("omega_session="),
+                                                                org.hamcrest.Matchers.containsString("HttpOnly"),
+                                                                org.hamcrest.Matchers.containsString("SameSite=Strict"))))
+                                .andReturn();
+
+                String token = objectMapper.readTree(loginReg.getResponse().getContentAsString())
+                                .get("accessToken").asText();
+
+                mockMvc.perform(get("/api/v1/auth/me")
+                                .cookie(new jakarta.servlet.http.Cookie("omega_session", token)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.email").value("mateo.cookie@redaccion.org"))
+                                .andExpect(jsonPath("$.tenantSlug").isString());
+
+                mockMvc.perform(get("/api/v1/system/governance")
+                                .cookie(new jakarta.servlet.http.Cookie("omega_session", token)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.catalog_freshness.catalog_cutoff_date").isString())
+                                .andExpect(jsonPath("$.os_scope_notice").value(
+                                                org.hamcrest.Matchers.containsString("kernel")));
+
+                mockMvc.perform(post("/api/v1/auth/logout")
+                                .cookie(new jakarta.servlet.http.Cookie("omega_session", token)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.loggedOut").value(true))
+                                .andExpect(header().string(HttpHeaders.SET_COOKIE,
+                                                org.hamcrest.Matchers.containsString("Max-Age=0")));
         }
 }

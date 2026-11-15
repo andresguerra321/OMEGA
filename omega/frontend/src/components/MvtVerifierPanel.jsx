@@ -93,6 +93,9 @@ function dedupeMatches(rawMatches) {
   return list;
 }
 
+const DEFAULT_OS_SCOPE_NOTICE =
+  'Sin coincidencias en espacio de usuario contra el catálogo CTI vigente NO garantiza ausencia de exploits zero-click en kernel/BlastDoor/CoreGraphics. Mantén parches del SO, Lockdown Mode (iOS/macOS) y cifrado de disco completo activos (RNF9).';
+
 function normalizeParallelResult(res, files = [], customSourceLabel = '') {
   const allMatches = [];
   for (const sub of res.subagents || []) {
@@ -113,8 +116,12 @@ function normalizeParallelResult(res, files = [], customSourceLabel = '') {
     timeline: res.timeline || [],
     timelineSummary: res.timeline_summary || null,
     verdictCode: res.diagnosis?.verdict_code || (findings.length > 0 ? 'DETECTED' : 'CLEAN'),
+    verdictLabel: res.diagnosis?.verdict_label || '',
     rationale: res.diagnosis?.rationale || '',
     recommendedActions: res.diagnosis?.recommended_actions || [],
+    catalogFreshness: res.catalog_freshness || null,
+    osScopeNotice: res.os_scope_notice || '',
+    platformMitigations: Array.isArray(res.platform_mitigations) ? res.platform_mitigations : [],
     findings,
   };
 }
@@ -128,7 +135,11 @@ function normalizeManualResult(res) {
     behavioralAnomalies: [],
     yaraHits: [],
     verdictCode: findings.length > 0 ? 'DETECTED' : 'CLEAN',
+    verdictLabel: '',
     rationale: '',
+    catalogFreshness: res.catalog_freshness || null,
+    osScopeNotice: res.os_scope_notice || '',
+    platformMitigations: Array.isArray(res.platform_mitigations) ? res.platform_mitigations : [],
     recommendedActions:
       findings.length > 0
         ? [
@@ -146,6 +157,14 @@ function buildForensicMarkdownReport(result, hardeningReport) {
   const checks = hardeningReport?.hardening_checks || [];
   const alerts = hardeningReport?.abuse_alerts || [];
   const sockets = hardeningReport?.live_sockets || [];
+  const cutoffDate =
+    result.catalogFreshness?.catalog_cutoff_date ||
+    hardeningReport?.catalog_freshness?.catalog_cutoff_date ||
+    '2024-12-16';
+  const scopeNotice =
+    result.osScopeNotice ||
+    hardeningReport?.os_scope_notice ||
+    DEFAULT_OS_SCOPE_NOTICE;
 
   const lines = [
     '# OMEGA · Verificación de Integridad del Dispositivo',
@@ -153,6 +172,7 @@ function buildForensicMarkdownReport(result, hardeningReport) {
     `- **Artefactos evaluados:** ${result.filesAnalyzed || 1}`,
     `- **Indicadores evaluados:** ${result.analyzedCount}`,
     `- **Coincidencias CTI:** ${result.matchesCount}`,
+    `- **Corte del catálogo CTI:** ${cutoffDate} (PR review + SHA-256)`,
     `- **Firmas YARA detectadas:** ${yaraHits.length}`,
     `- **Anomalías conductuales / Manifest.db:** ${anomalies.length}`,
     `- **Almacenamiento:** 0 bytes guardados en disco`,
@@ -195,7 +215,9 @@ function buildForensicMarkdownReport(result, hardeningReport) {
   }
 
   if (result.findings.length === 0 && anomalies.length === 0 && yaraHits.length === 0) {
-    lines.push('## Resultado\nSin indicadores de compromiso detectados frente al corpus CTI público ni anomalías conductuales.');
+    lines.push(
+      `## Resultado\n0 coincidencias detectadas en los artefactos analizados frente al catálogo CTI con corte ${cutoffDate}.`,
+    );
   } else {
     if (result.findings.length > 0) {
       lines.push('## Coincidencias CTI Detectadas');
@@ -212,6 +234,12 @@ function buildForensicMarkdownReport(result, hardeningReport) {
     }
   }
 
+  lines.push('');
+  lines.push('## Alcance y límites del sistema operativo (RNF9)');
+  lines.push(scopeNotice);
+  lines.push('- Activar Modo Aislamiento (Lockdown Mode) en iOS/macOS en perfiles de riesgo.');
+  lines.push('- Mantener actualizaciones del SO al día y cifrado de disco completo (BitLocker / FileVault / LUKS).');
+
   return lines.join('\n');
 }
 
@@ -225,8 +253,6 @@ function isInspectableNetworkIndicator(val) {
     /^(\d{1,3}\.){3}\d{1,3}(?:[:/].*)?$/.test(s)
   );
 }
-
-const ADB_PATH_STORAGE_KEY = 'omega_custom_adb_path';
 
 export function MvtVerifierPanel({
   onAskInChat,
@@ -247,13 +273,7 @@ export function MvtVerifierPanel({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
-  const [customAdbPath, setCustomAdbPath] = useState(() => {
-    try {
-      return localStorage.getItem(ADB_PATH_STORAGE_KEY) || '';
-    } catch {
-      return '';
-    }
-  });
+  const [customAdbPath, setCustomAdbPath] = useState('');
   const [selectedSerial, setSelectedSerial] = useState('');
   const [usbDevice, setUsbDevice] = useState(null);
   const [iosStatus, setIosStatus] = useState(null);
@@ -326,6 +346,20 @@ export function MvtVerifierPanel({
     },
     [customAdbPath],
   );
+
+  useEffect(() => {
+    const handlePanicPurge = () => {
+      setManualText('');
+      setResult(null);
+      setHardeningReport(null);
+      setCustomAdbPath('');
+      setBackupPassword('');
+      setEncryptedBackupPrompt(false);
+      setErrorMsg('');
+    };
+    window.addEventListener('omega:panic-purge', handlePanicPurge);
+    return () => window.removeEventListener('omega:panic-purge', handlePanicPurge);
+  }, []);
 
   useEffect(() => {
     if (!window.omegaDesktop?.checkAdbStatus || deviceTab === 'pc') return undefined;
@@ -409,11 +443,6 @@ export function MvtVerifierPanel({
         return;
       }
       setCustomAdbPath(pick.adb_path);
-      try {
-        localStorage.setItem(ADB_PATH_STORAGE_KEY, pick.adb_path);
-      } catch {
-        // Ignore storage errors
-      }
       await fetchUsbStatuses(pick.adb_path, false);
     } catch (err) {
       setErrorMsg(err?.message || 'No se pudo verificar la ruta de ADB.');
@@ -475,11 +504,6 @@ export function MvtVerifierPanel({
           return;
         }
         setCustomAdbPath(res.adbPath);
-        try {
-          window.localStorage?.setItem('omega_custom_adb_path', res.adbPath);
-        } catch {
-          // Ignore storage restrictions
-        }
         await fetchUsbStatuses(res.adbPath, false, true);
       } catch (err) {
         setErrorMsg(err?.message || 'Error instalando conector ADB automático.');
@@ -853,8 +877,16 @@ export function MvtVerifierPanel({
     }
 
     const isPcPlatform = hardeningReport?.device_summary?.platform === 'pc';
+    const cutoffDate =
+      result.catalogFreshness?.catalog_cutoff_date ||
+      hardeningReport?.catalog_freshness?.catalog_cutoff_date ||
+      '2024-12-16';
+    const scopeNotice =
+      result.osScopeNotice ||
+      hardeningReport?.os_scope_notice ||
+      DEFAULT_OS_SCOPE_NOTICE;
 
-    let verdictTitle = 'Sin indicadores de spyware detectados';
+    let verdictTitle = result.verdictLabel || `0 coincidencias vs catálogo CTI (corte ${cutoffDate})`;
     const signalParts = [];
     if (hasMatches) signalParts.push(`${result.matchesCount} coincidencia${result.matchesCount === 1 ? '' : 's'} CTI`);
     if (hasYara) signalParts.push(`${yaraHits.length} firma${yaraHits.length === 1 ? '' : 's'} YARA`);
@@ -864,19 +896,19 @@ export function MvtVerifierPanel({
     }
     if (signalParts.length > 0) {
       if (isPcPlatform && !hasMatches && !hasYara && !hasBehavioral) {
-        verdictTitle = `Sin spyware conocido · ${signalParts.join(' · ')}`;
+        verdictTitle = `0 coincidencias vs catálogo (${cutoffDate}) · ${signalParts.join(' · ')}`;
       } else {
         verdictTitle = `Detectado: ${signalParts.join(' · ')}`;
       }
     } else if (isPcPlatform && hasCriticalAlert) {
-      verdictTitle = 'Sin spyware conocido · Protecciones apagadas';
+      verdictTitle = `0 coincidencias CTI (${cutoffDate}) · Protecciones apagadas`;
     }
 
     const hasAnyThreatSignal = hasMatches || hasBehavioral || hasYara || abuseAlerts.length > 0 || hasCriticalAlert;
     const isCriticalOverall = hasMatches || hasCriticalBehavioral || hasYara || hasCriticalAlert;
 
     let verdictBody =
-      'Ninguno de los artefactos analizados coincide con dominios, procesos, firmas YARA ni hashes públicos asociados a spyware comercial conocidos por OMEGA.';
+      `Ninguno de los artefactos analizados coincide con dominios, procesos, firmas YARA ni hashes públicos del catálogo con corte ${cutoffDate}. Esto indica ausencia de rastros en el análisis realizado, NO inmunidad del kernel ni ante exploits zero-click.`;
     if ((isPcPlatform || hasBehavioral || hasYara) && result.rationale) {
       verdictBody = result.rationale;
     } else if (hasMatches) {
@@ -972,6 +1004,14 @@ export function MvtVerifierPanel({
             <p className="text-[13.5px] text-[#F2F2F4]/85 leading-relaxed">
               {verdictBody}
             </p>
+
+            <div className="rounded-[11px] border border-[#2F6FED]/30 bg-[#1C2438]/40 px-3.5 py-2.5 text-[12px] text-[#D7DEEE] space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 font-tech text-[10.5px] uppercase tracking-[0.05em] text-[#9FB8F5]">
+                <span>Alcance real (SO / Kernel · RNF9)</span>
+                <span>Corte CTI: {cutoffDate}</span>
+              </div>
+              <p className="leading-snug text-[#F2F2F4]/85">{scopeNotice}</p>
+            </div>
 
             {result.recommendedActions?.length > 0 && (
               <div className="rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-4 py-3 space-y-2">

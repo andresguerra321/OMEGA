@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
 import com.omega.platform.web.dto.AuthDtos.CreateTenantUserRequest;
 import com.omega.platform.web.dto.AuthDtos.LoginRequest;
+import com.omega.platform.web.dto.AuthDtos.PrincipalMeResponse;
 import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
@@ -53,8 +54,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             OmegaProperties properties,
-            LoginRateLimiter loginRateLimiter
-    ) {
+            LoginRateLimiter loginRateLimiter) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
         this.expedienteRepository = expedienteRepository;
@@ -135,8 +135,7 @@ public class AuthService {
                     "Login bloqueado por rate limit: ip={} email={} retryAfterSeconds={}",
                     sanitizeForLog(resolvedIp),
                     maskEmail(normalizedEmail),
-                    ex.getRetryAfterSeconds()
-            );
+                    ex.getRetryAfterSeconds());
             throw ex;
         }
 
@@ -152,8 +151,7 @@ public class AuthService {
                     maskEmail(normalizedEmail),
                     status.accountFailures(),
                     status.ipFailures(),
-                    status.locked()
-            );
+                    status.locked());
             throw ex;
         }
     }
@@ -269,6 +267,30 @@ public class AuthService {
         if (!properties.security().allowTenantSelfRegistration()) {
             throw new AccessDeniedException("El auto-registro de tenants está deshabilitado");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public PrincipalMeResponse resolveCurrentPrincipal(OmegaPrincipal principal) {
+        String tenantSlug = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                .map(TenantEntity::getSlug)
+                .orElse(null);
+        return new PrincipalMeResponse(
+                principal.userId(),
+                principal.tenantId(),
+                tenantSlug,
+                principal.email(),
+                principal.role());
+    }
+
+    public void recordLogout(OmegaPrincipal principal) {
+        if (principal == null) {
+            return;
+        }
+        log.info(
+                "AUTH_LOGOUT: tenantId={} userId={} email={}",
+                principal.tenantId(),
+                principal.userId(),
+                maskEmail(principal.email().trim().toLowerCase(Locale.ROOT)));
     }
 
     private AuthTokenResponse issueTokenResponse(UserEntity user, String tenantSlug) {

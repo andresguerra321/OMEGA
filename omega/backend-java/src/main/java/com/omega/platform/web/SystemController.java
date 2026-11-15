@@ -3,11 +3,13 @@ package com.omega.platform.web;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.cti.PublicSchemaSupport;
+import com.omega.platform.cti.StixCatalogService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -24,10 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/system")
 public class SystemController {
 
+    private static final String OS_SCOPE_NOTICE =
+            "OMEGA opera en espacio de usuario analizando artefactos post-compromiso y no sustituye parches del sistema operativo ni el Modo Aislamiento (Lockdown Mode) frente a exploits zero-click en kernel.";
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final PublicSchemaSupport publicSchemaSupport;
     private final AuditLogService auditLogService;
     private final OmegaProperties properties;
+    private final StixCatalogService stixCatalogService;
 
     public SystemController(
             NamedParameterJdbcTemplate jdbcTemplate,
@@ -35,10 +41,22 @@ public class SystemController {
             AuditLogService auditLogService,
             OmegaProperties properties
     ) {
+        this(jdbcTemplate, publicSchemaSupport, auditLogService, properties, null);
+    }
+
+    @Autowired
+    public SystemController(
+            NamedParameterJdbcTemplate jdbcTemplate,
+            PublicSchemaSupport publicSchemaSupport,
+            AuditLogService auditLogService,
+            OmegaProperties properties,
+            StixCatalogService stixCatalogService
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.publicSchemaSupport = publicSchemaSupport;
         this.auditLogService = auditLogService;
         this.properties = properties;
+        this.stixCatalogService = stixCatalogService;
     }
 
     @GetMapping("/governance")
@@ -107,6 +125,9 @@ public class SystemController {
                 : 0L;
 
         boolean auditChainValid = auditLogService.verifyTenantChain(tenantId).valid();
+        StixCatalogService.CatalogFreshnessDto catalogFreshness = stixCatalogService != null
+                ? stixCatalogService.getCatalogFreshness()
+                : new StixCatalogService.CatalogFreshnessDto("2024-12-16", "2024-12-16", 0, "pr_reviewed_only", false);
 
         return new GovernanceResponse(
                 tenantId.toString(),
@@ -129,8 +150,12 @@ public class SystemController {
                 Map.of(
                         "pdf_retention", "zero-retention",
                         "forensic_worker", "ram-only-isolated",
-                        "public_corpus_scope", "global-read-only"
-                )
+                        "public_corpus_scope", "global-read-only",
+                        "client_persistence", "volatile-ram-only",
+                        "cti_supply_chain", "sha256-manifest-pr-reviewed"
+                ),
+                catalogFreshness,
+                OS_SCOPE_NOTICE
         );
     }
 
@@ -172,7 +197,20 @@ public class SystemController {
             @JsonProperty("corpus_stats") CorpusStats corpusStats,
             @JsonProperty("tenant_stats") TenantStats tenantStats,
             @JsonProperty("indexed_sources") List<IndexedSourceItem> indexedSources,
-            Map<String, String> guarantees
+            Map<String, String> guarantees,
+            @JsonProperty("catalog_freshness") StixCatalogService.CatalogFreshnessDto catalogFreshness,
+            @JsonProperty("os_scope_notice") String osScopeNotice
     ) {
+        public GovernanceResponse(
+                String workspaceId,
+                String embeddingModel,
+                boolean auditChainValid,
+                CorpusStats corpusStats,
+                TenantStats tenantStats,
+                List<IndexedSourceItem> indexedSources,
+                Map<String, String> guarantees
+        ) {
+            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, null, OS_SCOPE_NOTICE);
+        }
     }
 }

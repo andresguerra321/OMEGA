@@ -293,10 +293,19 @@ def _correlate_with_cti_db(tokens: dict[str, dict]) -> list[dict]:
     return matches
 
 
+from cti_db import get_catalog_freshness
+from forensic_scope import (
+    OS_SCOPE_LIMITATION_NOTICE,
+    format_clean_verdict_texts,
+    get_platform_mitigations,
+)
+
+
 def _diagnose_verdict(
     agent_reports: list[dict],
     crash_anomalies: list[str],
     host_signals: list[str] | None = None,
+    catalog_freshness: dict | None = None,
 ) -> dict:
     """Evalúa patrones multi-vectoriales para distinguir falsos positivos de infecciones reales."""
     active_agents_with_hits = [ag for ag in agent_reports if len(ag["matches"]) > 0]
@@ -308,15 +317,17 @@ def _diagnose_verdict(
 
     # Caso 1: Sin coincidencias CTI ni anomalías críticas en host/logs
     if not all_matches and not all_host_anomalies:
+        cutoff_date = (catalog_freshness or {}).get("catalog_cutoff_date")
+        clean_label, clean_rationale = format_clean_verdict_texts(cutoff_date)
         return {
             "verdict_code": "CLEAN",
-            "verdict_label": "Sin Indicadores de Compromiso Conocidos",
+            "verdict_label": clean_label,
             "confidence": "Alta",
             "is_likely_false_positive": False,
-            "rationale": "Ninguno de los tres subagentes detectó indicadores asociados a campañas documentadas de spyware comercial ni anomalías de crash zero-click.",
+            "rationale": clean_rationale,
             "recommended_actions": [
-                "Mantener el sistema operativo y aplicaciones de mensajería actualizados.",
-                "Activar el Modo de Aislamiento (Lockdown Mode) si el titular pertenece a un perfil de alto riesgo.",
+                "Mantener el sistema operativo y aplicaciones de mensajería actualizados (las defensas en espacio de usuario no bloquean 0-clicks de SO/kernel).",
+                "Activar el Modo de Aislamiento (Lockdown Mode) en iOS/macOS y aislar/rotar cuentas ante sospecha fundada.",
             ],
         }
 
@@ -500,7 +511,13 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
             + [f"[POSTURE CRITICAL] {c.get('control')}: {c.get('value')}" for c in hardening_checks if c.get("status") == "CRITICAL"]
         )
 
-        diagnosis = _diagnose_verdict(agent_summaries, crash_anomalies, host_signals=host_signals)
+        freshness = get_catalog_freshness()
+        diagnosis = _diagnose_verdict(
+            agent_summaries,
+            crash_anomalies,
+            host_signals=host_signals,
+            catalog_freshness=freshness,
+        )
         critical_behavioral = [a for a in behavioral_anomalies if a.get("severity") == "CRITICAL"]
         total_cti_matches = sum(a["matches_count"] for a in agent_summaries)
 
@@ -545,6 +562,8 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
         artifacts.clear()
         gc.collect()
 
+    device_summary_out = kernel_posture.get("device_summary", {}) or {}
+    platform_hint = device_summary_out.get("platform")
     return {
         "pipeline_mode": "Unified In-RAM Triage (CTI + Behavioral + Kernel/Manifest.db + YARA)",
         "total_files": total_files,
@@ -554,7 +573,7 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
         "behavioral_anomalies": behavioral_anomalies,
         "manifest_findings": manifest_findings,
         "yara_hits": yara_hits,
-        "device_summary": kernel_posture.get("device_summary", {}),
+        "device_summary": device_summary_out,
         "hardening_checks": hardening_checks,
         "abuse_alerts": abuse_alerts,
         "live_sockets": live_sockets[:40],
@@ -566,6 +585,9 @@ async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
         "yara_engine": get_yara_engine_status(),
         "diagnosis": diagnosis,
         "subagents": agent_summaries,
+        "catalog_freshness": freshness,
+        "os_scope_notice": OS_SCOPE_LIMITATION_NOTICE,
+        "platform_mitigations": get_platform_mitigations(platform_hint),
         "ephemeral_notice": "Triage paralelo, análisis conductual/kernel, Manifest.db y caza YARA ejecutados 100% en memoria volátil (RAM) sin persistencia en disco (RNF4).",
     }
 

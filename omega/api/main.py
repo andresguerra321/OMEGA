@@ -245,6 +245,9 @@ async def live_device_triage(payload: LiveDeviceSnapshot):
         "timeline": triage_report.get("timeline", []),
         "timeline_summary": triage_report.get("timeline_summary", {}),
         "yara_engine": triage_report.get("yara_engine", {}),
+        "catalog_freshness": triage_report.get("catalog_freshness"),
+        "os_scope_notice": triage_report.get("os_scope_notice", ""),
+        "platform_mitigations": triage_report.get("platform_mitigations", []),
         "decrypted_artifacts_count": decrypted_count,
         "triage": triage_report,
     }

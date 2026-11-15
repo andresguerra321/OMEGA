@@ -33,16 +33,23 @@ def compute_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
+def _import_integrity():
+    try:
+        from corpus_integrity import ManifestIntegrityError, load_pdf_manifest, verify_pdf_corpus
+    except ImportError:
+        from rag_engine.corpus_integrity import ManifestIntegrityError, load_pdf_manifest, verify_pdf_corpus
+    return ManifestIntegrityError, load_pdf_manifest, verify_pdf_corpus
+
+
 def load_manifest_index() -> dict:
-    if not MANIFEST_PATH.exists():
-        return {}
-    data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    items = data if isinstance(data, list) else data.get("reports", [])
-    return {item["local_filename"]: item for item in items if "local_filename" in item}
+    _, load_pdf_manifest, _ = _import_integrity()
+    return load_pdf_manifest(MANIFEST_PATH)
 
 
 def ingest_pdfs(reindex: bool = False):
+    _, _, verify_pdf_corpus = _import_integrity()
     manifest = load_manifest_index()
+    verify_pdf_corpus(PDFS_DIR, MANIFEST_PATH)
     pdf_files = sorted(PDFS_DIR.glob("*.pdf"))
 
     if not pdf_files:

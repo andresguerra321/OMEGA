@@ -1,5 +1,6 @@
 package com.omega.platform.cti;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omega.platform.config.OmegaProperties;
@@ -10,13 +11,18 @@ import com.omega.platform.repository.IocIndicatorRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -111,16 +117,76 @@ public class StixCatalogService {
             throw new IllegalStateException("Error listando bundles STIX 2.1 en " + corpusDir, ex);
         }
 
+        Map<String, ManifestBundleMeta> verifiedMeta = verifyManifestAndBundles(corpusDir, files);
+
         int parsedTotal = 0;
         long beforeCount = indicatorRepository.count();
 
         for (Path file : files) {
-            parsedTotal += ingestBundleFile(file);
+            ManifestBundleMeta meta = verifiedMeta.get(file.getFileName().toString());
+            parsedTotal += ingestBundleFile(file, meta);
         }
 
         long afterCount = indicatorRepository.count();
         long insertedNet = Math.max(0, afterCount - beforeCount);
-        return new StixSyncSummary(files.size(), parsedTotal, insertedNet, afterCount, "Sincronización STIX 2.1 completada");
+        return new StixSyncSummary(files.size(), parsedTotal, insertedNet, afterCount, "Sincronización STIX 2.1 verificada y completada");
+    }
+
+    @Transactional(readOnly = true)
+    public CatalogFreshnessDto getCatalogFreshness() {
+        String cutoffDate = "2024-12-16";
+        String updatePolicy = "pr_reviewed_only";
+        int verifiedCount = 0;
+        boolean manifestVerified = false;
+
+        Path dir = resolveCorpusDirectory();
+        if (dir != null) {
+            Path manifestPath = dir.resolve("stix_manifest.json");
+            if (Files.isRegularFile(manifestPath)) {
+                try {
+                    JsonNode root = objectMapper.readTree(manifestPath.toFile());
+                    String manifestCutoff = root.path("catalog_cutoff_date").asText("");
+                    if (!manifestCutoff.isBlank()) {
+                        cutoffDate = manifestCutoff;
+                    }
+                    String policy = root.path("update_policy").asText("");
+                    if (!policy.isBlank()) {
+                        updatePolicy = policy;
+                    }
+                    JsonNode bundles = root.path("bundles");
+                    if (bundles.isArray()) {
+                        verifiedCount = bundles.size();
+                    }
+                    manifestVerified = true;
+                } catch (IOException ex) {
+                    log.warn("No se pudo leer stix_manifest.json para frescura CTI: {}", ex.getMessage());
+                }
+            }
+        }
+
+        String latestCampaignDate = cutoffDate;
+        try {
+            String dbMaxDate = jdbcTemplate.queryForObject(
+                    "SELECT TO_CHAR(MAX(COALESCE(first_seen_at::date, created_at::date)), 'YYYY-MM-DD') FROM omega_rag.campaigns",
+                    String.class
+            );
+            if (dbMaxDate != null && !dbMaxDate.isBlank() && dbMaxDate.compareTo(latestCampaignDate) > 0) {
+                latestCampaignDate = dbMaxDate;
+            }
+        } catch (Exception ex) {
+            log.debug("Consulta de fecha máxima en omega_rag.campaigns omitida: {}", ex.getMessage());
+        }
+
+        if (cutoffDate == null || cutoffDate.isBlank()) {
+            cutoffDate = latestCampaignDate;
+        }
+        return new CatalogFreshnessDto(
+                cutoffDate,
+                latestCampaignDate,
+                verifiedCount,
+                updatePolicy,
+                manifestVerified
+        );
     }
 
     @Transactional(readOnly = true)
@@ -136,7 +202,7 @@ public class StixCatalogService {
         return indicatorRepository.findAllByNormalizedValue(value.trim().toLowerCase(Locale.ROOT));
     }
 
-    private int ingestBundleFile(Path stixFile) {
+    private int ingestBundleFile(Path stixFile, ManifestBundleMeta manifestMeta) {
         JsonNode root;
         try {
             root = objectMapper.readTree(stixFile.toFile());
@@ -150,6 +216,12 @@ public class StixCatalogService {
         }
 
         String filename = stixFile.getFileName().toString();
+        String sourceOrg = (manifestMeta != null && manifestMeta.organization() != null && !manifestMeta.organization().isBlank())
+                ? manifestMeta.organization()
+                : "Amnesty Tech / OMEGA CTI";
+        String sourceUrl = (manifestMeta != null && manifestMeta.sourceUrl() != null && !manifestMeta.sourceUrl().isBlank())
+                ? manifestMeta.sourceUrl()
+                : "https://github.com/AmnestyTech/investigations";
         Map<String, UUID> malwareToCampaignId = new HashMap<>();
         Map<String, String> indicatorToMalwareRef = new HashMap<>();
         List<JsonNode> indicatorNodes = new ArrayList<>();
@@ -193,8 +265,8 @@ public class StixCatalogService {
                     pattern,
                     desc,
                     filename,
-                    "Amnesty Tech / OMEGA CTI",
-                    "https://github.com/AmnestyTech/investigations"
+                    sourceOrg,
+                    sourceUrl
             ));
         }
 
@@ -353,6 +425,95 @@ public class StixCatalogService {
             }
         }
         return null;
+    }
+
+    private Map<String, ManifestBundleMeta> verifyManifestAndBundles(Path corpusDir, List<Path> stixFiles) {
+        Path manifestPath = corpusDir.resolve("stix_manifest.json");
+        if (!Files.isRegularFile(manifestPath)) {
+            if (stixFiles.isEmpty()) {
+                return Map.of();
+            }
+            throw new IllegalStateException("Falta stix_manifest.json para verificar integridad STIX fail-closed en " + corpusDir);
+        }
+
+        JsonNode manifest;
+        try {
+            manifest = objectMapper.readTree(manifestPath.toFile());
+        } catch (IOException ex) {
+            throw new IllegalStateException("Manifiesto stix_manifest.json ilegible", ex);
+        }
+
+        Set<String> trustedOrgs = new HashSet<>();
+        for (JsonNode orgNode : manifest.path("trusted_organizations")) {
+            String val = orgNode.asText("").trim();
+            if (!val.isBlank()) {
+                trustedOrgs.add(val);
+            }
+        }
+        if (trustedOrgs.isEmpty()) {
+            throw new IllegalStateException("stix_manifest.json debe definir trusted_organizations no vacía");
+        }
+
+        Map<String, ManifestBundleMeta> byFilename = new HashMap<>();
+        for (JsonNode entry : manifest.path("bundles")) {
+            String filename = entry.path("filename").asText("").trim();
+            String expectedSha = entry.path("expected_sha256").asText("").trim().toLowerCase(Locale.ROOT);
+            String organization = entry.path("organization").asText("").trim();
+            String sourceUrl = entry.path("source_url").asText("").trim();
+            String publishedDate = entry.path("published_date").asText("").trim();
+
+            if (filename.isBlank() || expectedSha.length() != 64) {
+                throw new IllegalStateException("Entrada inválida o sin expected_sha256 en stix_manifest.json: " + filename);
+            }
+            if (!trustedOrgs.contains(organization)) {
+                throw new IllegalStateException("Organización no confiable en stix_manifest.json para " + filename + ": " + organization);
+            }
+            if (!sourceUrl.startsWith("https://")) {
+                throw new IllegalStateException("URL de origen STIX debe usar HTTPS en " + filename);
+            }
+            byFilename.put(filename, new ManifestBundleMeta(filename, expectedSha, organization, sourceUrl, publishedDate));
+        }
+
+        for (Path file : stixFiles) {
+            String filename = file.getFileName().toString();
+            ManifestBundleMeta meta = byFilename.get(filename);
+            if (meta == null) {
+                throw new IllegalStateException("Bundle STIX no autorizado ni listado en stix_manifest.json (fail-closed): " + filename);
+            }
+            String actualSha = computeSha256Hex(file);
+            if (!meta.expectedSha256().equals(actualSha)) {
+                throw new IllegalStateException("Digest SHA-256 adulterado o inconsistente para bundle STIX (fail-closed): " + filename);
+            }
+        }
+        return byFilename;
+    }
+
+    private static String computeSha256Hex(Path file) {
+        try {
+            byte[] content = Files.readAllBytes(file);
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(content);
+            return HexFormat.of().formatHex(digest);
+        } catch (IOException | NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("No se pudo calcular SHA-256 para " + file.getFileName(), ex);
+        }
+    }
+
+    record ManifestBundleMeta(
+            String filename,
+            String expectedSha256,
+            String organization,
+            String sourceUrl,
+            String publishedDate
+    ) {
+    }
+
+    public record CatalogFreshnessDto(
+            @JsonProperty("catalog_cutoff_date") String catalogCutoffDate,
+            @JsonProperty("latest_campaign_date") String latestCampaignDate,
+            @JsonProperty("verified_bundles_count") int verifiedBundlesCount,
+            @JsonProperty("update_policy") String updatePolicy,
+            @JsonProperty("manifest_verified") boolean manifestVerified
+    ) {
     }
 
     record ParsedPattern(String iocType, String iocValue, String normalizedValue) {

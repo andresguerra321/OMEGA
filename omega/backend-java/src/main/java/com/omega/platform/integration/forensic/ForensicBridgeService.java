@@ -1,5 +1,6 @@
 package com.omega.platform.integration.forensic;
 
+import com.omega.platform.cti.StixCatalogService;
 import com.omega.platform.ingest.InvalidDocumentException;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.LinkCheckRequest;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.LinkVerifyResponse;
@@ -15,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
@@ -38,10 +40,14 @@ public class ForensicBridgeService {
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
 
+    private static final String DEFAULT_OS_SCOPE_NOTICE =
+            "OMEGA analiza artefactos en espacio de usuario contra el catálogo CTI vigente; \"0 coincidencias\" no certifica ausencia de exploits zero-click en kernel/BlastDoor/CoreGraphics.";
+
     private final RestClient forensicWorkerRestClient;
     private final ArchiveSecurityValidator archiveSecurityValidator;
     private final ExpedienteAuthorizationService authorizationService;
     private final AuditLogService auditLogService;
+    private final StixCatalogService stixCatalogService;
 
     public ForensicBridgeService(
             @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
@@ -49,10 +55,22 @@ public class ForensicBridgeService {
             ExpedienteAuthorizationService authorizationService,
             AuditLogService auditLogService
     ) {
+        this(forensicWorkerRestClient, archiveSecurityValidator, authorizationService, auditLogService, null);
+    }
+
+    @Autowired
+    public ForensicBridgeService(
+            @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
+            ArchiveSecurityValidator archiveSecurityValidator,
+            ExpedienteAuthorizationService authorizationService,
+            AuditLogService auditLogService,
+            StixCatalogService stixCatalogService
+    ) {
         this.forensicWorkerRestClient = forensicWorkerRestClient;
         this.archiveSecurityValidator = archiveSecurityValidator;
         this.authorizationService = authorizationService;
         this.auditLogService = auditLogService;
+        this.stixCatalogService = stixCatalogService;
     }
 
     @Transactional
@@ -67,12 +85,13 @@ public class ForensicBridgeService {
         archiveSecurityValidator.validateUploads(files);
 
         MultiValueMap<String, Object> body = buildMultipartBody("files", files);
-        ParallelTriageResponse response = postMultipartToWorker(
+        ParallelTriageResponse rawResponse = postMultipartToWorker(
                 "/api/triage/parallel",
                 body,
                 ParallelTriageResponse.class,
                 "triage paralelo"
         );
+        ParallelTriageResponse response = enrichParallelTriageResponse(rawResponse);
 
         Map<String, Object> meta = new LinkedHashMap<>();
         if (expedienteId != null) {
@@ -411,7 +430,7 @@ public class ForensicBridgeService {
             if (response == null) {
                 throw new ForensicWorkerException("Respuesta vacía del worker forense en " + operationName, null);
             }
-            return response;
+            return enrichOperationalBoundaryMetadata(response);
         } catch (RestClientException ex) {
             throw translateWorkerException(ex, operationName, treatUnauthorizedAsBadBackupPassword);
         }
@@ -455,7 +474,7 @@ public class ForensicBridgeService {
             if (response == null) {
                 throw new ForensicWorkerException("Respuesta vacía del worker forense en " + operationName, null);
             }
-            return response;
+            return enrichOperationalBoundaryMetadata(response);
         } catch (RestClientException ex) {
             throw translateWorkerException(ex, operationName, treatUnauthorizedAsBadBackupPassword);
         }
@@ -554,6 +573,58 @@ public class ForensicBridgeService {
         } catch (IOException ex) {
             throw new ForensicWorkerException("No se pudieron leer bytes en RAM del artefacto " + safeFilename, ex);
         }
+    }
+
+    private ParallelTriageResponse enrichParallelTriageResponse(ParallelTriageResponse r) {
+        Map<String, Object> freshness = r.catalogFreshness() != null ? r.catalogFreshness() : buildFreshnessMap();
+        String scope = (r.osScopeNotice() != null && !r.osScopeNotice().isBlank()) ? r.osScopeNotice() : DEFAULT_OS_SCOPE_NOTICE;
+        List<Map<String, Object>> mitigations = r.platformMitigations() != null ? r.platformMitigations() : List.of();
+        return new ParallelTriageResponse(
+                r.pipelineMode(),
+                r.totalFiles(),
+                r.totalIndicatorsAnalyzed(),
+                r.totalMatches(),
+                r.crashAnomalies(),
+                r.behavioralAnomalies(),
+                r.manifestFindings(),
+                r.yaraHits(),
+                r.deviceSummary(),
+                r.hardeningChecks(),
+                r.abuseAlerts(),
+                r.liveSockets(),
+                r.liveSocketsTotal(),
+                r.cachedDnsCount(),
+                r.cachedDnsSample(),
+                r.timeline(),
+                r.timelineSummary(),
+                r.yaraEngine(),
+                r.diagnosis(),
+                r.subagents(),
+                r.ephemeralNotice(),
+                freshness,
+                scope,
+                mitigations
+        );
+    }
+
+    private Map<String, Object> enrichOperationalBoundaryMetadata(Map<String, Object> rawResponse) {
+        Map<String, Object> enriched = new LinkedHashMap<>(rawResponse);
+        enriched.putIfAbsent("os_scope_notice", DEFAULT_OS_SCOPE_NOTICE);
+        enriched.putIfAbsent("catalog_freshness", buildFreshnessMap());
+        return enriched;
+    }
+
+    private Map<String, Object> buildFreshnessMap() {
+        StixCatalogService.CatalogFreshnessDto dto = stixCatalogService != null
+                ? stixCatalogService.getCatalogFreshness()
+                : new StixCatalogService.CatalogFreshnessDto("2024-12-16", "2024-12-16", 0, "pr_reviewed_only", false);
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("catalog_cutoff_date", dto.catalogCutoffDate());
+        map.put("latest_campaign_date", dto.latestCampaignDate());
+        map.put("verified_bundles_count", dto.verifiedBundlesCount());
+        map.put("update_policy", dto.updatePolicy());
+        map.put("manifest_verified", dto.manifestVerified());
+        return map;
     }
 
     private static String sanitizePartFilename(String raw) {

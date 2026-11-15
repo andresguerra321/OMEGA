@@ -7,6 +7,7 @@ manteniendo compatibilidad de lectura con el corpus heredado (`public.iocs`) si 
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,8 @@ import psycopg
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+DEFAULT_STIX_MANIFEST_PATH = Path(__file__).resolve().parent.parent / "corpus_mvp" / "iocs" / "stix_manifest.json"
+STIX_MANIFEST_PATH = Path(os.getenv("OMEGA_STIX_MANIFEST_PATH", str(DEFAULT_STIX_MANIFEST_PATH)))
 
 
 def get_db_dsn() -> str:
@@ -323,3 +326,79 @@ def fetch_campaign_detection_bundle(
                     )
 
     return None, [], [], []
+
+
+def _read_manifest_freshness() -> dict[str, Any]:
+    try:
+        candidate = STIX_MANIFEST_PATH
+        if not candidate.exists() and candidate == DEFAULT_STIX_MANIFEST_PATH:
+            container_path = Path("/app/corpus_mvp/iocs/stix_manifest.json")
+            if container_path.exists():
+                candidate = container_path
+        if not candidate.exists():
+            return {}
+        data = json.loads(candidate.read_text(encoding="utf-8"))
+        bundles = data.get("bundles") if isinstance(data, dict) else {}
+        return {
+            "manifest_cutoff_date": str(data.get("catalog_cutoff_date") or ""),
+            "verified_bundles_count": len(bundles) if isinstance(bundles, dict) else 0,
+            "update_policy": str(data.get("update_policy") or "pr_reviewed_only"),
+        }
+    except Exception:
+        return {}
+
+
+def get_catalog_freshness() -> dict[str, Any]:
+    """Retorna fecha de corte y estado de frescura del catálogo STIX 2.1 / reportes públicos."""
+    manifest_meta = _read_manifest_freshness()
+    manifest_cutoff = manifest_meta.get("manifest_cutoff_date") or ""
+    last_report_pub = ""
+    last_report_ingested = ""
+    last_stix_sync = ""
+    total_indicators = 0
+    db_available = False
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                db_available = True
+                if _has_relation(cur, "omega_rag.ioc_indicators"):
+                    cur.execute("SELECT COUNT(*), MAX(created_at) FROM omega_rag.ioc_indicators;")
+                    row = cur.fetchone()
+                    if row:
+                        total_indicators += int(row[0] or 0)
+                        if row[1] is not None:
+                            last_stix_sync = row[1].isoformat()
+                if _has_relation(cur, "public.reports"):
+                    cur.execute("SELECT MAX(publication_date), MAX(ingested_at) FROM public.reports;")
+                    row = cur.fetchone()
+                    if row:
+                        if row[0] is not None:
+                            last_report_pub = str(row[0])
+                        if row[1] is not None:
+                            last_report_ingested = row[1].isoformat()
+                if _has_relation(cur, "public.iocs"):
+                    cur.execute("SELECT COUNT(*) FROM public.iocs;")
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        total_indicators = max(total_indicators, int(row[0] or 0))
+    except Exception:
+        db_available = False
+
+    date_candidates = [
+        d for d in (manifest_cutoff, last_report_pub, last_stix_sync[:10] if last_stix_sync else "")
+        if d and len(d) >= 10
+    ]
+    effective_cutoff = manifest_cutoff or (max(date_candidates) if date_candidates else "2024-12-16")
+
+    return {
+        "catalog_cutoff_date": effective_cutoff,
+        "manifest_cutoff_date": manifest_cutoff or effective_cutoff,
+        "last_report_publication_date": last_report_pub or None,
+        "last_report_ingested_at": last_report_ingested or None,
+        "last_stix_sync_at": last_stix_sync or None,
+        "verified_bundles_count": manifest_meta.get("verified_bundles_count", 0),
+        "total_indicators": total_indicators,
+        "update_policy": manifest_meta.get("update_policy", "pr_reviewed_only"),
+        "db_online": db_available,
+    }

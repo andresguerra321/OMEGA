@@ -1,6 +1,36 @@
-const AUTH_STORAGE_KEY = 'omega_auth_session_v1';
-const SANDBOX_CREDS_KEY = 'omega_sandbox_creds_v1';
-const WORKSPACE_STORAGE_KEY = 'omega_workspace_id';
+const LEGACY_CLIENT_STORAGE_KEYS = [
+  'omega_auth_session_v1',
+  'omega_sandbox_creds_v1',
+  'omega_workspace_id',
+  'omega_research_sessions_v2',
+  'omega_custom_adb_path',
+];
+
+// Estado estrictamente volátil en RAM para tokens/credenciales (cero persistencia en disco del cliente)
+let inMemoryAuthSession = null;
+let inMemoryWorkspaceId = null;
+
+function scrubLegacyDiskStorage() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      LEGACY_CLIENT_STORAGE_KEYS.forEach((k) => {
+        try {
+          localStorage.removeItem(k);
+        } catch {
+          // ignore
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+scrubLegacyDiskStorage();
+
+function shouldIncludeCredentials() {
+  return typeof window !== 'undefined' && window.location?.protocol !== 'file:';
+}
 
 function resolveApiOrigin() {
   const envOrigin = import.meta?.env?.VITE_API_ORIGIN;
@@ -48,32 +78,29 @@ function parseJwtPayload(token) {
 }
 
 export function getAuthSession() {
-  try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.accessToken || !parseJwtPayload(parsed.accessToken)) {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      return null;
-    }
-    if (parsed.expiresAtMs && Date.now() >= parsed.expiresAtMs - 15_000) {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      return null;
-    }
-    return parsed;
-  } catch {
+  const session = inMemoryAuthSession;
+  if (!session) return null;
+  if (session.accessToken && !parseJwtPayload(session.accessToken)) {
+    inMemoryAuthSession = null;
     return null;
   }
+  if (session.expiresAtMs && Date.now() >= session.expiresAtMs - 15_000) {
+    inMemoryAuthSession = null;
+    return null;
+  }
+  return session;
 }
 
 export function isAuthenticated() {
-  return Boolean(getAuthSession()?.accessToken);
+  const s = getAuthSession();
+  return Boolean(s && (s.accessToken || s.cookieBacked));
 }
 
 export function saveAuthSession(tokenResponse) {
   const expiresInSec = Number(tokenResponse?.expiresInSeconds || 3600);
   const session = {
-    accessToken: tokenResponse.accessToken,
+    accessToken: tokenResponse.accessToken || '',
+    cookieBacked: Boolean(tokenResponse.cookieBacked),
     tokenType: tokenResponse.tokenType || 'Bearer',
     expiresAtMs: Date.now() + expiresInSec * 1000,
     userId: tokenResponse.userId,
@@ -82,21 +109,34 @@ export function saveAuthSession(tokenResponse) {
     email: tokenResponse.email,
     role: tokenResponse.role,
   };
-  try {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
-  } catch {
-    // ignore storage errors
-  }
+  inMemoryAuthSession = session;
+  scrubLegacyDiskStorage();
+  emitAuthChanged(session);
+  return session;
+}
+
+export function restoreCookieAuthSession(principalMe) {
+  if (!principalMe?.userId || !principalMe?.tenantId) return null;
+  const existing = getAuthSession();
+  const session = {
+    accessToken: existing?.accessToken || '',
+    cookieBacked: true,
+    tokenType: 'Cookie',
+    expiresAtMs: existing?.expiresAtMs || Date.now() + 3600 * 1000,
+    userId: principalMe.userId,
+    tenantId: principalMe.tenantId,
+    tenantSlug: principalMe.tenantSlug || existing?.tenantSlug || '',
+    email: principalMe.email,
+    role: principalMe.role,
+  };
+  inMemoryAuthSession = session;
   emitAuthChanged(session);
   return session;
 }
 
 export function clearAuthSession() {
-  try {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-  } catch {
-    // ignore
-  }
+  inMemoryAuthSession = null;
+  scrubLegacyDiskStorage();
   emitAuthChanged(null);
 }
 
@@ -116,26 +156,15 @@ export function getWorkspaceId() {
   if (session?.tenantId) {
     return session.tenantId;
   }
-  try {
-    let wsId = localStorage.getItem(WORKSPACE_STORAGE_KEY);
-    if (!wsId) {
-      wsId = generateLocalUuid();
-      localStorage.setItem(WORKSPACE_STORAGE_KEY, wsId);
-    }
-    return wsId;
-  } catch {
-    return generateLocalUuid();
+  if (!inMemoryWorkspaceId) {
+    inMemoryWorkspaceId = generateLocalUuid();
   }
+  return inMemoryWorkspaceId;
 }
 
 export function rotateWorkspaceId() {
-  const nextId = generateLocalUuid();
-  try {
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, nextId);
-  } catch {
-    // ignore
-  }
-  return nextId;
+  inMemoryWorkspaceId = generateLocalUuid();
+  return inMemoryWorkspaceId;
 }
 
 function buildFriendlyError(status, payload, fallbackMessage) {
@@ -183,6 +212,7 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
     method,
     headers: reqHeaders,
     body: finalBody,
+    credentials: shouldIncludeCredentials() ? 'include' : 'same-origin',
   });
 
   let parsed = null;
@@ -357,22 +387,6 @@ export async function registerTenant({
 }
 
 export async function loginOrCreateSandboxDemo() {
-  try {
-    const saved = localStorage.getItem(SANDBOX_CREDS_KEY);
-    if (saved) {
-      const creds = JSON.parse(saved);
-      if (creds?.tenantSlug && creds?.email && creds?.password) {
-        try {
-          return await loginWithPassword(creds);
-        } catch {
-          localStorage.removeItem(SANDBOX_CREDS_KEY);
-        }
-      }
-    }
-  } catch {
-    // ignore corrupted sandbox cache
-  }
-
   const suffix = Math.random().toString(36).slice(2, 8);
   const creds = {
     tenantSlug: `omega-lab-${suffix}`,
@@ -382,20 +396,41 @@ export async function loginOrCreateSandboxDemo() {
     adminFullName: 'Analista Sandbox Local',
   };
 
-  const session = await registerTenant(creds);
+  return registerTenant(creds);
+}
+
+export async function logoutSession() {
   try {
-    localStorage.setItem(
-      SANDBOX_CREDS_KEY,
-      JSON.stringify({
-        tenantSlug: creds.tenantSlug,
-        email: creds.adminEmail,
-        password: creds.adminPassword,
-      }),
-    );
+    await apiFetch('/auth/logout', { method: 'POST', skipAuth: true });
   } catch {
-    // ignore storage failure
+    // Asegurar limpieza local incluso si el servidor está offline o el token ya caducó
+  } finally {
+    clearAuthSession();
   }
-  return session;
+}
+
+export async function panicPurgeClient() {
+  await logoutSession();
+  rotateWorkspaceId();
+  scrubLegacyDiskStorage();
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    if (typeof window !== 'undefined' && 'caches' in window && window.caches?.keys) {
+      const names = await window.caches.keys();
+      await Promise.all(names.map((n) => window.caches.delete(n)));
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('omega:panic-purge'));
+  }
 }
 
 export async function createTenantUser({ email, password, fullName, role }) {

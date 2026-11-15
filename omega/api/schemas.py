@@ -23,6 +23,8 @@ class IocVerifyResponse(BaseModel):
     total_matches: int
     breakdown: dict[str, int]
     ephemeral_notice: str
+    os_scope_notice: str = ""
+    catalog_freshness: dict[str, Any] | None = None
     matches: list[IocMatchItem]
 
 

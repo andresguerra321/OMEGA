@@ -86,7 +86,10 @@ public final class ForensicWorkerContracts {
             @JsonProperty("yara_engine") Map<String, Object> yaraEngine,
             TriageDiagnosis diagnosis,
             List<Map<String, Object>> subagents,
-            @JsonProperty("ephemeral_notice") String ephemeralNotice
+            @JsonProperty("ephemeral_notice") String ephemeralNotice,
+            @JsonProperty("catalog_freshness") Map<String, Object> catalogFreshness,
+            @JsonProperty("os_scope_notice") String osScopeNotice,
+            @JsonProperty("platform_mitigations") List<Map<String, Object>> platformMitigations
     ) {
     }
 

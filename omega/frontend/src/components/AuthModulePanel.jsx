@@ -648,6 +648,15 @@ export function AuthAccessForm({
           </button>
         </form>
       )}
+
+      <div className="rounded-[10px] border border-white/[0.08] bg-[#0A0A0C]/65 px-3 py-2.5 space-y-1 text-[11px] leading-snug text-[#9FA6B8]">
+        <p className="text-[#D2D6E2]">
+          OMEGA nunca te pedirá desactivar Defender, Firewall ni SmartScreen. Desconfía de clones y verifica el SHA-256 de los instaladores de escritorio.
+        </p>
+        <p className="font-tech text-[10px] text-[#8E96AB]">
+          Sesión volátil sin persistencia en localStorage (cookie HttpOnly en web · RAM en desktop). WebAuthn / Passkeys planificados en hoja de ruta.
+        </p>
+      </div>
     </div>
   );
 }

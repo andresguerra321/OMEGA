@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -25,13 +26,24 @@ public class CtiDossierService {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final PublicSchemaSupport publicSchemaSupport;
+    private final StixCatalogService stixCatalogService;
 
     public CtiDossierService(
             NamedParameterJdbcTemplate jdbcTemplate,
             PublicSchemaSupport publicSchemaSupport
     ) {
+        this(jdbcTemplate, publicSchemaSupport, null);
+    }
+
+    @Autowired
+    public CtiDossierService(
+            NamedParameterJdbcTemplate jdbcTemplate,
+            PublicSchemaSupport publicSchemaSupport,
+            StixCatalogService stixCatalogService
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.publicSchemaSupport = publicSchemaSupport;
+        this.stixCatalogService = stixCatalogService;
     }
 
     @Transactional(readOnly = true)
@@ -128,7 +140,10 @@ public class CtiDossierService {
         }
 
         List<CampaignSummaryDto> items = new ArrayList<>(byId.values());
-        return new CampaignListResponse(items, items.size());
+        StixCatalogService.CatalogFreshnessDto freshness = stixCatalogService != null
+                ? stixCatalogService.getCatalogFreshness()
+                : new StixCatalogService.CatalogFreshnessDto("2024-12-16", "2024-12-16", 0, "pr_reviewed_only", false);
+        return new CampaignListResponse(items, items.size(), freshness);
     }
 
     @Transactional(readOnly = true)
@@ -342,7 +357,14 @@ public class CtiDossierService {
         return date != null ? date.toString() : null;
     }
 
-    public record CampaignListResponse(List<CampaignSummaryDto> campaigns, int total) {
+    public record CampaignListResponse(
+            List<CampaignSummaryDto> campaigns,
+            int total,
+            @JsonProperty("catalog_freshness") StixCatalogService.CatalogFreshnessDto catalogFreshness
+    ) {
+        public CampaignListResponse(List<CampaignSummaryDto> campaigns, int total) {
+            this(campaigns, total, null);
+        }
     }
 
     public record CampaignSummaryDto(

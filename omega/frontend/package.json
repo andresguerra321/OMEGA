@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test:desktop": "node --test electron/dockerOrchestrator.test.js src/lib/validators.test.js",
+    "test:desktop": "node --test electron/dockerOrchestrator.test.js src/lib/validators.test.js src/lib/api.test.js",
     "preview": "vite preview",
     "desktop:dev": "concurrently -k \"vite --port 5174 --strictPort\" \"wait-on http://localhost:5174 && node electron/launch.js http://localhost:5174\"",
     "desktop:start": "vite build && node electron/launch.js",
@@ -37,6 +37,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.7",
     "electron": "^45.3.1",
+    "electron-builder": "^26.18.0",
     "oxlint": "^1.90.0",
     "vite": "^8.3.6",
     "wait-on": "^9.5.1"

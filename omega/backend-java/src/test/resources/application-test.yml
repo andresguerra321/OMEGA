@@ -23,6 +23,8 @@ omega:
     allow-tenant-self-registration: true
     bootstrap-secret: ""
     internal-service-token: omega-test-internal-service-token
+    session-cookie-name: omega_session
+    session-cookie-secure: false
   ingest:
     temp-dir: ${java.io.tmpdir}/omega_ingest_test
     max-pdf-bytes: 26214400

@@ -1,0 +1,35 @@
+name: CTI Feed PR Integrity Review
+
+on:
+  pull_request:
+    paths:
+      - 'omega/corpus_mvp/**'
+      - 'omega/rag_engine/corpus_integrity.py'
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pr-only-cti-manifests:
+    name: Fail-Closed Verification of PDF & STIX2 Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify Corpus SHA-256, Trusted Organizations & Update Policy
+        run: |
+          python omega/rag_engine/corpus_integrity.py
+          python -c "
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('omega/corpus_mvp/iocs/stix_manifest.json').read_text(encoding='utf-8'))
+          assert manifest.get('update_policy') == 'pr_reviewed_only', 'CTI updates must remain PR-reviewed only'
+          print('PR-reviewed CTI policy verified. Cutoff:', manifest.get('catalog_cutoff_date'))
+          "

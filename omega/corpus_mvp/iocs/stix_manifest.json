@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "catalog_cutoff_date": "2024-12-16",
+  "update_policy": "pr_reviewed_only",
+  "trusted_organizations": [
+    "Amnesty Tech",
+    "Amnesty International Security Lab",
+    "Citizen Lab",
+    "Google TAG",
+    "Google Threat Analysis Group",
+    "Google Threat Analysis Group (TAG)"
+  ],
+  "bundles": {
+    "2021-07-18_nso_pegasus.stix2": {
+      "expected_sha256": "df1bcaa78abc7b85781b1ebc2daa3cc225371e2024d9ef96e84f80f927256586",
+      "organization": "Amnesty Tech",
+      "published_date": "2021-07-18",
+      "source_url": "https://github.com/AmnestyTech/investigations/tree/master/2021-07-18_nso"
+    },
+    "2021-12-16_cytrox_cytrox.stix2": {
+      "expected_sha256": "6fe92193d9e17c21a16eb7abe93a418a2e40c0176dcb56fb30539f84136391bb",
+      "organization": "Citizen Lab",
+      "published_date": "2021-12-16",
+      "source_url": "https://github.com/citizenlab/malware-indicators"
+    },
+    "2023-03-29_android_campaign_malware.stix2": {
+      "expected_sha256": "28da50042006281d56c17dff08f06bba3ba310bc18cc23040780850131b2efdb",
+      "organization": "Amnesty Tech",
+      "published_date": "2023-03-29",
+      "source_url": "https://github.com/AmnestyTech/investigations/tree/master/2023-03-29_android_campaign"
+    },
+    "2024-05-02_wintego_helios_wintego_helios.stix2": {
+      "expected_sha256": "d0d546c388207e8a162eb3901259ee20c0ddd03efeff145d3cc9b3a0a02a5419",
+      "organization": "Amnesty Tech",
+      "published_date": "2024-05-02",
+      "source_url": "https://github.com/AmnestyTech/investigations/tree/master/2024-05-02_wintego_helios"
+    },
+    "2024-12-16_serbia_novispy_novispy.stix2": {
+      "expected_sha256": "02bfceea5a2c32b159f11569736448398e35e7f0fc7d137385b943ec60697360",
+      "organization": "Amnesty Tech",
+      "published_date": "2024-12-16",
+      "source_url": "https://github.com/AmnestyTech/investigations/tree/master/2024-12-16_serbia_novispy"
+    },
+    "pegasus.stix2": {
+      "expected_sha256": "df1bcaa78abc7b85781b1ebc2daa3cc225371e2024d9ef96e84f80f927256586",
+      "organization": "Amnesty Tech",
+      "published_date": "2021-07-18",
+      "source_url": "https://github.com/AmnestyTech/investigations/tree/master/2021-07-18_nso"
+    },
+    "predator.stix2": {
+      "expected_sha256": "99938ba179216f73e54513c4c537e3951ae860bcc6eaa5a93055f4afbb689879",
+      "organization": "Amnesty Tech",
+      "published_date": "2023-10-09",
+      "source_url": "https://github.com/AmnestyTech/investigations/tree/master/2023-10-09_predator_files"
+    }
+  }
+}
