@@ -14,22 +14,25 @@ import {
   BookOpen,
   Gauge,
   Sparkles,
+  UserCheck,
+  Bell,
   KeyRound,
 } from 'lucide-react';
 import {
   fetchApiHealth,
   fetchSystemGovernance,
+  fetchCurrentPrincipal,
   sendChatQuery,
   analyzePcLiveSnapshot,
   syncStixFeeds,
   getAuthSession,
   clearAuthSession,
-  listExpedientes,
-  createExpediente,
+  ensurePersonalWorkspace,
   listExpedienteDocuments,
   uploadExpedientePdf,
 } from './lib/api';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
+import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaLogo } from './components/OmegaLogo';
 import { SpatialNavPill } from './components/SpatialNavPill';
 import { SecurityPostureStage } from './components/SecurityPostureStage';
@@ -39,17 +42,20 @@ import { CampaignsPanel } from './components/CampaignsPanel';
 import { MvtVerifierPanel } from './components/MvtVerifierPanel';
 import { OsintPanel } from './components/OsintPanel';
 import { LinkVerifierPanel } from './components/LinkVerifierPanel';
+import { AuthModulePanel } from './components/AuthModulePanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AuthModal } from './components/AuthModal';
+import { sanitizeSearchInput, validateChatMessage, validateUploadFile } from './lib/validators';
 
 const NAV_ITEMS = [
-  { id: 'inicio', label: 'Centro de Protección', subtitle: 'Estado en vivo y escudos', icon: Gauge },
-  { id: 'equipo', label: 'Revisar mi equipo', subtitle: 'PC Windows, Android e iPhone', icon: Laptop },
-  { id: 'enlace', label: 'Verificar enlace', subtitle: 'Antes de abrirlo', icon: Link2 },
+  { id: 'inicio', label: 'Inicio', subtitle: 'Estado en vivo y escudos', icon: Gauge },
+  { id: 'equipo', label: 'Equipos', subtitle: 'PC Windows, Android e iPhone', icon: Laptop },
+  { id: 'enlace', label: 'Enlaces', subtitle: 'Verificar antes de abrir', icon: Link2 },
   { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
-  { id: 'exposicion', label: 'Mi exposición', subtitle: 'Qué hay público sobre mí', icon: Radar },
-  { id: 'preguntar', label: 'Preguntar', subtitle: 'Consultas con citas', icon: MessageSquare },
-  { id: 'ajustes', label: 'Ajustes', subtitle: 'Cuenta y permisos', icon: Settings },
+  { id: 'exposicion', label: 'Exposición', subtitle: 'Huella pública y OSINT', icon: Radar },
+  { id: 'preguntar', label: 'Asistente', subtitle: 'Consultas con citas', icon: MessageSquare },
+  { id: 'cuenta', label: 'Cuenta', subtitle: 'Registro, sesión y PDFs privados', icon: UserCheck },
+  { id: 'ajustes', label: 'Ajustes', subtitle: 'Motor RAG, cuenta y permisos', icon: Settings },
 ];
 
 const SESSIONS_STORAGE_KEY = 'omega_research_sessions_v2';
@@ -210,10 +216,12 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
+  const [verifyingSession, setVerifyingSession] = useState(() => Boolean(getAuthSession()?.accessToken));
+  const [authGateReason, setAuthGateReason] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
-  const [expedientes, setExpedientes] = useState([]);
   const [activeExpedienteId, setActiveExpedienteId] = useState('');
+  const [usePrivateDocs, setUsePrivateDocs] = useState(false);
   const [expedienteDocs, setExpedienteDocs] = useState([]);
   const [loadingExpedientes, setLoadingExpedientes] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
@@ -221,6 +229,7 @@ export default function App() {
   const [expedienteError, setExpedienteError] = useState('');
 
   const textareaRef = useRef(null);
+  const sendLockRef = useRef(false);
 
   const openAuthModal = useCallback((reason = '') => {
     setAuthModalReason(reason || '');
@@ -230,8 +239,23 @@ export default function App() {
   const handleLogout = useCallback(() => {
     clearAuthSession();
     setAuthSession(null);
-    setExpedientes([]);
+    setVerifyingSession(false);
+    setAuthGateReason('');
+    setActiveNav('inicio');
+    setIsCopilotOpen(false);
+    setCommandOpen(false);
+    setSessionsMenuOpen(false);
+    setAuthModalOpen(false);
+    setSelectedCitation(null);
+    setIsSourcesPanelOpen(false);
+    setCurrentSessionId(null);
+    setDraftContext(null);
+    setPcAudit(null);
+    setPcScannedAt('');
+    setLastLinkResult(null);
+    setStageFeedback(null);
     setActiveExpedienteId('');
+    setUsePrivateDocs(false);
     setExpedienteDocs([]);
     setGovStats(null);
     setExpedienteNotice('');
@@ -253,22 +277,22 @@ export default function App() {
     }
   }, []);
 
-  const refreshExpedientes = useCallback(async () => {
+  const refreshPrivateWorkspace = useCallback(async () => {
     if (!getAuthSession()?.accessToken) {
-      setExpedientes([]);
+      setActiveExpedienteId('');
+      setUsePrivateDocs(false);
       setExpedienteDocs([]);
-      return;
+      return null;
     }
     setLoadingExpedientes(true);
     try {
-      const list = await listExpedientes();
-      const safeList = Array.isArray(list) ? list : [];
-      setExpedientes(safeList);
-      setActiveExpedienteId((prev) =>
-        prev && safeList.some((e) => e.id === prev) ? prev : '',
-      );
+      const workspace = await ensurePersonalWorkspace();
+      const workspaceId = workspace?.id || '';
+      setActiveExpedienteId(workspaceId);
+      return workspaceId;
     } catch (err) {
-      setExpedienteError(err?.message || 'No se pudieron cargar los expedientes.');
+      setExpedienteError(err?.message || 'No se pudo sincronizar tu biblioteca privada.');
+      return null;
     } finally {
       setLoadingExpedientes(false);
     }
@@ -291,19 +315,54 @@ export default function App() {
   }, [activeExpedienteId]);
 
   useEffect(() => {
+    if (!verifyingSession) return undefined;
+    let cancelled = false;
+    fetchCurrentPrincipal()
+      .then((me) => {
+        if (cancelled) return;
+        if (me?.role || me?.tenantId) {
+          setAuthSession((prev) => (prev ? { ...prev, role: me.role || prev.role, tenantId: me.tenantId || prev.tenantId } : prev));
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
+          clearAuthSession();
+          setAuthSession(null);
+          setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setVerifyingSession(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [verifyingSession]);
+
+  useEffect(() => {
     const onAuthChanged = (e) => {
       const next = e?.detail ?? getAuthSession();
       setAuthSession(next);
-      if (!next) {
-        setExpedientes([]);
+      if (next?.accessToken) {
+        setAuthGateReason('');
+      } else {
+        setIsCopilotOpen(false);
+        setCommandOpen(false);
+        setAuthModalOpen(false);
         setActiveExpedienteId('');
+        setUsePrivateDocs(false);
         setExpedienteDocs([]);
         setGovStats(null);
       }
     };
     const onAuthRequired = () => {
-      setAuthModalReason('Este módulo requiere una sesión JWT activa en tu tenant OMEGA.');
-      setAuthModalOpen(true);
+      const reason = 'Tu sesión expiró. Inicia sesión para continuar.';
+      setAuthGateReason(reason);
+      setAuthModalReason(reason);
+      if (!getAuthSession()?.accessToken) {
+        setAuthModalOpen(false);
+      }
     };
     window.addEventListener('omega:auth-changed', onAuthChanged);
     window.addEventListener('omega:auth-required', onAuthRequired);
@@ -317,11 +376,11 @@ export default function App() {
     const timer = setTimeout(() => {
       void refreshSystemTelemetry();
       if (authSession?.accessToken) {
-        void refreshExpedientes();
+        void refreshPrivateWorkspace();
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [authSession?.accessToken, refreshSystemTelemetry, refreshExpedientes]);
+  }, [authSession?.accessToken, refreshSystemTelemetry, refreshPrivateWorkspace]);
 
   useEffect(() => {
     if (!activeExpedienteId || !authSession?.accessToken) return undefined;
@@ -350,29 +409,33 @@ export default function App() {
     return () => clearInterval(timer);
   }, [expedienteDocs, activeExpedienteId, authSession?.accessToken, refreshSystemTelemetry]);
 
-  async function handleCreateExpediente({ title, classification }) {
-    setExpedienteError('');
-    setExpedienteNotice('');
-    try {
-      const created = await createExpediente({ title, classification });
-      await refreshExpedientes();
-      setActiveExpedienteId(created.id);
-      setExpedienteNotice(`Expediente "${created.title}" creado (${created.classification}).`);
-      return created;
-    } catch (err) {
-      setExpedienteError(err?.message || 'No se pudo crear el expediente.');
-      return null;
-    }
-  }
-
   async function handleUploadExpedientePdf(file) {
-    if (!activeExpedienteId || !file) return;
+    if (!file || uploadingPdf) return;
+    const fileCheck = validateUploadFile(file, {
+      extensions: ['.pdf'],
+      maxBytes: 25 * 1024 * 1024,
+      label: 'PDF',
+    });
+    if (!fileCheck.valid) {
+      setExpedienteNotice('');
+      setExpedienteError(fileCheck.error);
+      return;
+    }
     setUploadingPdf(true);
     setExpedienteError('');
     setExpedienteNotice('');
     try {
-      const meta = await uploadExpedientePdf(activeExpedienteId, file);
-      await refreshActiveExpedienteDocs(activeExpedienteId);
+      let targetId = activeExpedienteId;
+      if (!targetId) {
+        targetId = await refreshPrivateWorkspace();
+      }
+      if (!targetId) {
+        setExpedienteError('Inicia sesión para habilitar tu biblioteca privada de PDFs.');
+        return;
+      }
+      const meta = await uploadExpedientePdf(targetId, file);
+      await refreshActiveExpedienteDocs(targetId);
+      setUsePrivateDocs(true);
       setExpedienteNotice(
         `PDF "${meta.originalFilename}" recibido (SHA-256 ${String(meta.sha256Hash || '').slice(0, 12)}…) · Custodia Zero-Retention en curso.`,
       );
@@ -399,7 +462,7 @@ export default function App() {
 
   useEffect(() => {
     const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
-    if (!bridge?.isDesktop) return undefined;
+    if (!bridge?.isDesktop || !authSession?.accessToken) return undefined;
     let cancelled = false;
 
     const pollUsb = async () => {
@@ -430,7 +493,7 @@ export default function App() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [authSession?.accessToken]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.omegaDesktop?.setTitleBarTheme) {
@@ -447,6 +510,7 @@ export default function App() {
   }, [sessions]);
 
   useEffect(() => {
+    if (!authSession?.accessToken) return undefined;
     function onKeyDown(e) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -464,7 +528,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [authSession?.accessToken]);
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === currentSessionId) || null,
@@ -534,8 +598,17 @@ export default function App() {
   }
 
   async function handleSend(rawPrompt, requestedScope = sourceScope, options = {}) {
-    const query = (rawPrompt || '').trim();
-    if (!query || loadingChat) return;
+    if (!getAuthSession()?.accessToken) {
+      setAuthSession(null);
+      return;
+    }
+    const chatCheck = validateChatMessage(rawPrompt || '');
+    const query = chatCheck.value;
+    if (!chatCheck.valid || loadingChat || sendLockRef.current) return;
+    sendLockRef.current = true;
+    setTimeout(() => {
+      sendLockRef.current = false;
+    }, 600);
 
     const { forceNewSession = false } = options;
     const effectiveScope = requestedScope || 'Todas las fuentes';
@@ -593,7 +666,7 @@ export default function App() {
         topK,
         effectiveScope,
         pinnedContextPayload,
-        { expedienteId: activeExpedienteId || null },
+        { expedienteId: usePrivateDocs && activeExpedienteId ? activeExpedienteId : null },
       );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
@@ -698,6 +771,10 @@ export default function App() {
   }
 
   function handleNavigate(navId, opts = {}) {
+    if (!getAuthSession()?.accessToken) {
+      setAuthSession(null);
+      return;
+    }
     if (opts?.tab) {
       setDeviceInitialTab(opts.tab);
       setDeviceNavKey((k) => k + 1);
@@ -830,6 +907,7 @@ export default function App() {
   }
 
   const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
+  const isSignedIn = Boolean(authSession?.accessToken);
   const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
   const reportsCount = Number(govStats?.corpus_stats?.reports ?? 26);
   const usbConnected = Boolean(usbStatus?.android?.connected || usbStatus?.ios?.connected);
@@ -838,6 +916,56 @@ export default function App() {
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
   const drawerFailedPrompt = lastMsg?.isError ? lastMsg.retryQuery : '';
   const isHome = activeNav === 'inicio';
+
+  if (verifyingSession) {
+    return (
+      <div className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-[#0A0A0C] text-[#F2F2F4] select-none">
+        <OmegaAuthBackdrop />
+        <div className="relative z-10 flex flex-col items-center gap-3 motion-safe:animate-scale-in">
+          <OmegaLogo size={54} isThinking framed />
+          <span className="font-tech text-[11px] uppercase tracking-[0.12em] text-[#9A9AA2] motion-safe:animate-pulse">
+            Verificando sesión...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4]">
+        <OmegaAuthBackdrop />
+        {isDesktop && (
+          <header
+            aria-label="Barra superior de acceso OMEGA"
+            className="titlebar-drag motion-safe:animate-fade-in absolute top-0 left-0 right-0 z-20 h-[48px] px-4 flex items-center justify-between select-none [&_button]:[-webkit-app-region:no-drag]"
+          >
+            <div className="inline-flex items-center gap-2">
+              <OmegaLogo size={20} />
+              <span className="font-display text-[13px] font-semibold tracking-[0.06em] text-[#F2F2F4]">
+                OMEGA
+              </span>
+            </div>
+            <div className="sm:mr-36" />
+          </header>
+        )}
+        <AuthModulePanel
+          gateMode
+          authSession={null}
+          apiOnline={apiOnline}
+          reasonMessage={authGateReason}
+          onAuthenticated={(session) => {
+            setAuthGateReason('');
+            setVerifyingSession(false);
+            setAuthSession(session);
+            setActiveNav('inicio');
+            void refreshSystemTelemetry();
+            void refreshPrivateWorkspace();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none">
@@ -872,14 +1000,13 @@ export default function App() {
             onNavigate={handleNavigate}
             onLinkVerified={handleLinkVerified}
             authSession={authSession}
-            onOpenAuth={openAuthModal}
           />
         ) : (
           <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]">
             <ChatAtmosphere
-              variant="workspace"
-              showWaves={activeNav !== 'preguntar'}
-              dimmed={activeNav !== 'preguntar' || messages.length > 0}
+              variant={activeNav === 'preguntar' && messages.length === 0 ? 'stage' : 'workspace'}
+              showWaves={activeNav !== 'preguntar' || messages.length === 0}
+              dimmed={activeNav === 'preguntar' && messages.length > 0}
             />
 
             {/* Barra Principal Unificada — Pill de navegación flotante separada (sin doble blur debajo) */}
@@ -904,8 +1031,8 @@ export default function App() {
                   </span>
                 </button>
 
-                <span className="hidden sm:inline text-white/20 text-[12px]">/</span>
-                <span className="text-[13px] font-medium text-[#F2F2F4] truncate max-w-[115px] lg:max-w-[165px]">
+                <span className="hidden lg:inline text-white/20 text-[12px]">/</span>
+                <span className="hidden lg:inline text-[13px] font-medium text-[#F2F2F4] truncate max-w-[115px] xl:max-w-[145px]">
                   {activeNavItem.label}
                 </span>
               </div>
@@ -919,46 +1046,12 @@ export default function App() {
                   usbConnected={usbConnected}
                   apiOnline={apiOnline}
                   isLoadingChat={loadingChat}
+                  authConnected={Boolean(authSession)}
                 />
               </div>
 
-              {/* Controles globales derechos uniformes en todas las vistas */}
+              {/* Controles globales derechos unificados en todas las vistas */}
               <div className={`titlebar-no-drag relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    openAuthModal(
-                      authSession
-                        ? 'Cambia de tenant o administra tus credenciales JWT activas.'
-                        : 'Inicia sesión o genera un Sandbox Demo para habilitar expedientes privados, OSINT y triaje.',
-                    )
-                  }
-                  title={
-                    authSession
-                      ? `Sesión activa: ${authSession.email} (${authSession.tenantSlug} · ${authSession.role})`
-                      : 'Conectar o crear sesión Tenant JWT'
-                  }
-                  className={`h-8 px-2 xl:px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
-                    authSession
-                      ? 'border-[#30D158]/35 bg-[#30D158]/10 text-[#F2F2F4] hover:bg-[#30D158]/18'
-                      : 'border-[#2F6FED]/45 bg-[#2F6FED]/14 text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)]'
-                  }`}
-                >
-                  {authSession ? (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
-                      <span className="hidden lg:inline max-w-[110px] truncate font-tech">
-                        {authSession.tenantSlug}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
-                      <span className="hidden lg:inline">Conectar</span>
-                    </>
-                  )}
-                </button>
-
                 <div
                   role="group"
                   aria-label="Nivel de detalle"
@@ -967,7 +1060,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setTechnicalMode(false)}
-                    className={`px-2 py-1 rounded-[6px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
+                    className={`px-2 py-1 rounded-[6px] text-[11px] font-medium transition-all cursor-pointer ${
                       !technicalMode
                         ? 'apple-segmented-active'
                         : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
@@ -978,7 +1071,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setTechnicalMode(true)}
-                    className={`px-2 py-1 rounded-[6px] text-[11px] xl:text-[11.5px] font-medium transition-all cursor-pointer ${
+                    className={`px-2 py-1 rounded-[6px] text-[11px] font-medium transition-all cursor-pointer ${
                       technicalMode
                         ? 'apple-segmented-active'
                         : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
@@ -992,15 +1085,18 @@ export default function App() {
                   type="button"
                   onClick={() => setIsCopilotOpen((v) => !v)}
                   aria-label="Abrir o cerrar copiloto lateral"
-                  title="Copiloto deslizable (Ctrl+J)"
-                  className={`h-8 px-2 xl:px-2.5 rounded-[8px] border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                  title="Copiloto (Ctrl+J)"
+                  className={`omega-glass-chip h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
                     isCopilotOpen
                       ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.22)]'
-                      : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4]'
+                      : 'text-[#F2F2F4]'
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-[#2F6FED]" />
-                  <span className="hidden xl:inline">Copiloto</span>
+                  <Bell className="h-3.5 w-3.5 text-[#2F6FED]" />
+                  <span className="hidden 2xl:inline">Copiloto</span>
+                  <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#2F6FED] text-white text-[10px] font-bold inline-flex items-center justify-center">
+                    {reportsCount}
+                  </span>
                 </button>
 
                 <button
@@ -1011,16 +1107,45 @@ export default function App() {
                   }}
                   aria-label="Abrir búsqueda rápida (⌘K)"
                   title="Saltar a módulo o acción (⌘K)"
-                  className="h-8 px-2 xl:px-2.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  className="omega-glass-chip h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                 >
                   <Search className="h-3.5 w-3.5" />
-                  <span className="font-tech hidden xl:inline">⌘K</span>
+                  <span className="font-tech hidden 2xl:inline">⌘K</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavigate('cuenta')}
+                  title={
+                    authSession
+                      ? `Cuenta: ${authSession.email} (${authSession.role})`
+                      : 'Iniciar sesión o crear cuenta OMEGA'
+                  }
+                  className={`omega-glass-chip h-8 px-2 xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
+                    authSession
+                      ? 'border-[#30D158]/35 text-[#F2F2F4]'
+                      : 'border-[#2F6FED]/45 text-[#F2F2F4]'
+                  }`}
+                >
+                  {authSession ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
+                      <span className="hidden lg:inline max-w-[88px] truncate font-tech">
+                        {authSession.email?.split('@')[0] || authSession.tenantSlug}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                      <span className="hidden lg:inline">Entrar</span>
+                    </>
+                  )}
                 </button>
               </div>
             </header>
 
-            {/* Sub-barra contextual de conversación exclusivamente en Asistente */}
-            {activeNav === 'preguntar' && (
+            {/* Sub-barra contextual de conversación cuando existen mensajes o historial */}
+            {activeNav === 'preguntar' && (messages.length > 0 || sessions.length > 0) && (
               <header
                 aria-label="Controles de sesión de chat"
                 className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-white/[0.07] bg-[#0A0A0C]/65 flex items-center justify-between gap-2 select-none"
@@ -1141,6 +1266,7 @@ export default function App() {
                   usbConnected={usbConnected}
                   apiOnline={apiOnline}
                   isLoadingChat={loadingChat}
+                  authConnected={Boolean(authSession)}
                 />
               </div>
 
@@ -1150,6 +1276,8 @@ export default function App() {
                   <ChatWorkspace
                     messages={messages}
                     loading={loadingChat}
+                    topK={topK}
+                    onChangeTopK={setTopK}
                     sourceScope={sourceScope}
                     onChangeSourceScope={setSourceScope}
                     onSendMessage={handleSend}
@@ -1174,24 +1302,49 @@ export default function App() {
                     textareaRef={textareaRef}
                     authSession={authSession}
                     onOpenAuth={openAuthModal}
-                    expedientes={expedientes}
-                    activeExpedienteId={activeExpedienteId}
-                    onSelectExpediente={(nextId) => {
-                      setActiveExpedienteId(nextId);
-                      if (!nextId) setExpedienteDocs([]);
-                    }}
-                    expedienteDocs={expedienteDocs}
-                    loadingExpedientes={loadingExpedientes}
+                    usePrivateDocs={usePrivateDocs}
+                    onTogglePrivateDocs={(nextVal) => setUsePrivateDocs(Boolean(nextVal))}
+                    privateDocs={expedienteDocs}
+                    loadingDocs={loadingExpedientes}
                     uploadingPdf={uploadingPdf}
-                    expedienteNotice={expedienteNotice}
-                    expedienteError={expedienteError}
-                    onDismissExpedienteBanner={() => {
+                    docNotice={expedienteNotice}
+                    docError={expedienteError}
+                    onDismissDocBanner={() => {
                       setExpedienteNotice('');
                       setExpedienteError('');
                     }}
-                    onCreateExpediente={handleCreateExpediente}
-                    onUploadExpedientePdf={handleUploadExpedientePdf}
-                    onRefreshExpedienteDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                    onUploadPdf={handleUploadExpedientePdf}
+                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                  />
+                ) : activeNav === 'cuenta' ? (
+                  <AuthModulePanel
+                    authSession={authSession}
+                    onAuthenticated={(session) => {
+                      setAuthSession(session);
+                      void refreshSystemTelemetry();
+                      void refreshPrivateWorkspace();
+                    }}
+                    onLogout={handleLogout}
+                    govStats={govStats}
+                    privateDocs={expedienteDocs}
+                    loadingDocs={loadingExpedientes}
+                    uploadingPdf={uploadingPdf}
+                    docNotice={expedienteNotice}
+                    docError={expedienteError}
+                    onDismissDocBanner={() => {
+                      setExpedienteNotice('');
+                      setExpedienteError('');
+                    }}
+                    onUploadPdf={handleUploadExpedientePdf}
+                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                    onOpenChat={(preferPrivate) => {
+                      if (preferPrivate && activeExpedienteId) {
+                        setUsePrivateDocs(true);
+                      }
+                      handleNavigate('preguntar');
+                    }}
+                    onOpenSettings={() => handleNavigate('ajustes')}
+                    onOpenAuth={openAuthModal}
                   />
                 ) : activeNav === 'amenazas' ? (
                   <CampaignsPanel
@@ -1298,7 +1451,8 @@ export default function App() {
                 type="text"
                 autoFocus
                 value={commandQuery}
-                onChange={(e) => setCommandQuery(e.target.value)}
+                onChange={(e) => setCommandQuery(sanitizeSearchInput(e.target.value))}
+                maxLength={120}
                 placeholder="Ir a módulo, herramienta o conversación reciente..."
                 className="flex-1 bg-transparent text-[14.5px] tracking-[-0.01em] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
               />
@@ -1415,9 +1569,10 @@ export default function App() {
           setAuthModalOpen(false);
           setAuthModalReason('');
           void refreshSystemTelemetry();
-          void refreshExpedientes();
+          void refreshPrivateWorkspace();
         }}
         reasonMessage={authModalReason}
+        onOpenCuenta={() => handleNavigate('cuenta')}
       />
     </div>
   );

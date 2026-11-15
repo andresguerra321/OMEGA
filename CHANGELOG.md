@@ -2,6 +2,20 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [1.3.0] - 2026-11-14
+
+### Compuerta de Autenticación Obligatoria & Escena Orbital
+- **Bloqueo integral sin sesión activa (`AuthModulePanel.jsx`, `OmegaAuthBackdrop.jsx`, `AuthService.java`, `AuthController.java`):** Toda la plataforma requiere inicio de sesión previo; soporte de autenticación solo con correo y contraseña cuando la cuenta es única sin exigir `tenantSlug` manual, recuperación de contraseña asistida, animaciones Tailwind y acceso demo en 1 clic (`admin@omega.local` / `OmegaDemo!2026`).
+
+### Empaquetado Nativo Windows (`.exe` Setup + Portable)
+- **Instalador NSIS y ejecutable portable (`omega/frontend/release/`):** Generación de `OMEGA-Setup-1.0.0-x64.exe` y `OMEGA-Portable-1.0.0-x64.exe` con orquestación automática de Docker Compose e íconos nativos (`omega/frontend/build/icon.ico`, `icon.png`).
+
+### Blindaje Integral Anti-Falla y Anti-Clic Compulsivo
+- **Validación estricta sincronizada (`validators.js`, `useSingleFlight.js`, `ValidationPatterns.java`, `OsintExposureService.java`, `link_verifier.py`):** Rechazo consistente en frontend, gateway Java y worker Python contra entradas basura (como `akjriuqw2iu3i3123.2.q..qw..wqe.r.34`), límites `maxLength`, sanitización en tiempo real y bloqueo `useSingleFlight` frente a envíos o clics duplicados en formularios, chat, OSINT, enlaces y verificador MVT.
+
+### Simplificación Editorial & Chatbot Glassmorphism
+- **Interfaz enfocada (`ChatWorkspace.jsx`, `CopilotDrawer.jsx`):** Reducción de texto innecesario distribuido entre módulos y superficie conversacional en vidrio esmerilado oscuro.
+
 ## [1.2.0] - 2026-11-14
 
 ### Integración Gateway Frontend–Backend & Seguridad Operativa

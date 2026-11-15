@@ -16,6 +16,23 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
 
     boolean existsByTenantIdAndEmailIgnoreCase(UUID tenantId, String email);
 
+    @Query("""
+            SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END
+            FROM UserEntity u
+            WHERE LOWER(u.email) = LOWER(:email)
+            """)
+    boolean existsAnyByEmailIgnoreCase(@Param("email") String email);
+
+    @Query("""
+            SELECT u FROM UserEntity u
+            JOIN TenantEntity t ON t.id = u.tenantId
+            WHERE LOWER(u.email) = LOWER(:email)
+              AND u.active = true
+              AND t.active = true
+            ORDER BY u.createdAt DESC
+            """)
+    List<UserEntity> findAllActiveByEmailIgnoreCase(@Param("email") String email);
+
     List<UserEntity> findAllByTenantIdOrderByCreatedAtAsc(UUID tenantId);
 
     @Query("""

@@ -5,7 +5,12 @@ services:
     container_name: omega_postgres
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-omega_cti}
     expose:
       - "5432"
     volumes:
@@ -23,17 +28,26 @@ services:
 
   # 2. Microservicio Forense Stateless (In-RAM Only, sin puertos públicos y protegido por X-Internal-Service-Token)
   forensic-worker:
+    image: omega-forensic-worker:latest
     build:
       context: ./api
       dockerfile: Dockerfile
     container_name: omega_forensic_worker
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-omega_cti}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
     expose:
       - "8000"
     networks:
@@ -57,13 +71,15 @@ services:
 
   # 3. Core Transaccional, Seguridad Multi-Tenant, OCR Zero-Retention y Motor RAG Híbrido (Java 21 / Spring Boot)
   backend-java:
+    image: omega-backend-java:latest
     build:
       context: ./backend-java
       dockerfile: Dockerfile
     container_name: omega_backend_java
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-omega_cti}?currentSchema=omega_rag,public
       POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
@@ -76,6 +92,10 @@ services:
       OMEGA_EMBEDDING_MODEL: ${OMEGA_EMBEDDING_MODEL:-text-embedding-3-small}
       OMEGA_STIX_CORPUS_DIR: /app/corpus_mvp/iocs
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      OMEGA_BOOTSTRAP_SECRET: ${OMEGA_BOOTSTRAP_SECRET:-}
     ports:
       - "${JAVA_BACKEND_PORT:-8080}:8080"
     # Directorio temporal volátil estrictamente en RAM sin ejecución (Zero-Retention; uid=10001 = usuario no-root omega)

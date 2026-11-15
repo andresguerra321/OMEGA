@@ -6,19 +6,21 @@ import {
   MessageSquare,
   Radar,
   Settings,
+  UserCheck,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', ariaLabel: 'Inicio', icon: Home },
-  { id: 'equipo', label: 'Equipos', ariaLabel: 'Revisar mi equipo', icon: Laptop },
-  { id: 'enlace', label: 'Enlaces', ariaLabel: 'Verificar enlace', icon: Link2 },
-  { id: 'amenazas', label: 'Amenazas', ariaLabel: 'Amenazas', icon: Layers },
-  { id: 'exposicion', label: 'Exposición', ariaLabel: 'Mi exposición', icon: Radar },
-  { id: 'preguntar', label: 'Asistente', ariaLabel: 'Preguntar', icon: MessageSquare, dividerBefore: true },
+  { id: 'equipo', label: 'Equipos', ariaLabel: 'Equipos — revisar mi dispositivo', icon: Laptop },
+  { id: 'enlace', label: 'Enlaces', ariaLabel: 'Enlaces — verificar antes de abrir', icon: Link2 },
+  { id: 'amenazas', label: 'Amenazas', ariaLabel: 'Amenazas — campañas y CVEs', icon: Layers },
+  { id: 'exposicion', label: 'Exposición', ariaLabel: 'Exposición — huella pública OSINT', icon: Radar },
+  { id: 'preguntar', label: 'Asistente', ariaLabel: 'Asistente — consultas con citas', icon: MessageSquare, dividerBefore: true },
+  { id: 'cuenta', label: 'Cuenta', ariaLabel: 'Cuenta — acceso y PDFs privados', icon: UserCheck },
   { id: 'ajustes', label: 'Ajustes', ariaLabel: 'Ajustes', icon: Settings },
 ];
 
-function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat }) {
+function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat, authConnected }) {
   if (id === 'inicio') {
     if (!apiOnline) return 'bg-[#2F6FED]';
     if (pcVerdict === 'alert' || pcVerdict === 'suspicious' || pcVerdict === 'high') {
@@ -33,6 +35,9 @@ function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat }) 
   if (id === 'preguntar' && isLoadingChat) {
     return 'bg-[#2F6FED] omega-core-pulse';
   }
+  if (id === 'cuenta' && authConnected) {
+    return 'bg-[#30D158]';
+  }
   return null;
 }
 
@@ -43,6 +48,7 @@ export function SpatialNavPill({
   usbConnected = false,
   apiOnline = true,
   isLoadingChat = false,
+  authConnected = false,
   compact = false,
 }) {
   return (
@@ -60,6 +66,7 @@ export function SpatialNavPill({
           usbConnected,
           apiOnline,
           isLoadingChat,
+          authConnected,
         });
 
         return (

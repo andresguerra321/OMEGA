@@ -32,6 +32,12 @@ import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVis
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import {
+  stripUnsafeChars,
+  validateIocList,
+  validateUploadFile,
+} from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
+import {
   ActionConfirmationBanner,
   PanelEmptyState,
   PanelErrorBanner,
@@ -127,7 +133,7 @@ function normalizeManualResult(res) {
       findings.length > 0
         ? [
             'Preservar el respaldo completo y evitar restaurar el equipo antes de la revisión forense.',
-            'Correlacionar el indicador detectado con los reportes técnicos desde Preguntar.',
+            'Correlacionar el indicador detectado con los reportes técnicos desde el Asistente.',
           ]
         : [],
     findings,
@@ -271,6 +277,7 @@ export function MvtVerifierPanel({
   const [stixSyncNote, setStixSyncNote] = useState('');
   const [exportNote, setExportNote] = useState('');
   const [dismissedResultKey, setDismissedResultKey] = useState('');
+  const guard = useSingleFlight();
 
   const hasDesktopBridge =
     typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
@@ -415,84 +422,92 @@ export function MvtVerifierPanel({
 
   async function handleLiveUsbScan() {
     if (!window.omegaDesktop?.collectDeviceSnapshot || scanningUsb || isAnalyzing) return;
-    setScanningUsb(true);
-    setErrorMsg('');
-    setConfirmingDns(false);
-    setDnsAppliedNote('');
-    try {
-      const snapshot = await window.omegaDesktop.collectDeviceSnapshot({
-        customPath: customAdbPath,
-        serial: selectedSerial || usbDevice?.serial || '',
-      });
-      const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
-      applyLiveDeviceResult(liveRes, 'Dispositivo Android');
-    } catch (err) {
-      setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
-    } finally {
-      setScanningUsb(false);
-    }
+    await guard(async () => {
+      setScanningUsb(true);
+      setErrorMsg('');
+      setConfirmingDns(false);
+      setDnsAppliedNote('');
+      try {
+        const snapshot = await window.omegaDesktop.collectDeviceSnapshot({
+          customPath: customAdbPath,
+          serial: selectedSerial || usbDevice?.serial || '',
+        });
+        const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
+        applyLiveDeviceResult(liveRes, 'Dispositivo Android');
+      } catch (err) {
+        setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
+      } finally {
+        setScanningUsb(false);
+      }
+    });
   }
 
   async function handleLiveIosScan() {
     if (!window.omegaDesktop?.collectIosSnapshot || scanningIos || isAnalyzing) return;
-    setScanningIos(true);
-    setErrorMsg('');
-    setConfirmingDns(false);
-    setDnsAppliedNote('');
-    try {
-      const snapshot = await window.omegaDesktop.collectIosSnapshot({
-        udid: iosStatus?.device?.udid || '',
-      });
-      const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
-      applyLiveDeviceResult(liveRes, 'iPhone / iPad (USB Lockdown)');
-    } catch (err) {
-      setErrorMsg(err?.message || 'Error auditando el dispositivo iOS por USB.');
-    } finally {
-      setScanningIos(false);
-    }
+    await guard(async () => {
+      setScanningIos(true);
+      setErrorMsg('');
+      setConfirmingDns(false);
+      setDnsAppliedNote('');
+      try {
+        const snapshot = await window.omegaDesktop.collectIosSnapshot({
+          udid: iosStatus?.device?.udid || '',
+        });
+        const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
+        applyLiveDeviceResult(liveRes, 'iPhone / iPad (USB Lockdown)');
+      } catch (err) {
+        setErrorMsg(err?.message || 'Error auditando el dispositivo iOS por USB.');
+      } finally {
+        setScanningIos(false);
+      }
+    });
   }
 
   async function handleInstallPortableAdb() {
     if (!window.omegaDesktop?.installPortableAdb || installingAdb) return;
-    setInstallingAdb(true);
-    setErrorMsg('');
-    try {
-      const res = await window.omegaDesktop.installPortableAdb();
-      if (!res?.ok || !res.adbPath) {
-        setErrorMsg(res?.error || 'No se pudo instalar el conector USB de Google.');
-        return;
-      }
-      setCustomAdbPath(res.adbPath);
+    await guard(async () => {
+      setInstallingAdb(true);
+      setErrorMsg('');
       try {
-        window.localStorage?.setItem('omega_custom_adb_path', res.adbPath);
-      } catch {
-        // Ignore storage restrictions
+        const res = await window.omegaDesktop.installPortableAdb();
+        if (!res?.ok || !res.adbPath) {
+          setErrorMsg(res?.error || 'No se pudo instalar el conector USB de Google.');
+          return;
+        }
+        setCustomAdbPath(res.adbPath);
+        try {
+          window.localStorage?.setItem('omega_custom_adb_path', res.adbPath);
+        } catch {
+          // Ignore storage restrictions
+        }
+        await fetchUsbStatuses(res.adbPath, false, true);
+      } catch (err) {
+        setErrorMsg(err?.message || 'Error instalando conector ADB automático.');
+      } finally {
+        setInstallingAdb(false);
       }
-      await fetchUsbStatuses(res.adbPath, false, true);
-    } catch (err) {
-      setErrorMsg(err?.message || 'Error instalando conector ADB automático.');
-    } finally {
-      setInstallingAdb(false);
-    }
+    });
   }
 
   async function handlePcLiveAudit() {
     if (!window.omegaDesktop?.collectPcAuditSnapshot || scanningPc || isAnalyzing) return;
-    setScanningPc(true);
-    setErrorMsg('');
-    try {
-      const col = await window.omegaDesktop.collectPcAuditSnapshot();
-      if (!col?.ok || !col.snapshot) {
-        setErrorMsg(col?.error || 'No se pudo leer el estado de seguridad de esta computadora.');
-        return;
+    await guard(async () => {
+      setScanningPc(true);
+      setErrorMsg('');
+      try {
+        const col = await window.omegaDesktop.collectPcAuditSnapshot();
+        if (!col?.ok || !col.snapshot) {
+          setErrorMsg(col?.error || 'No se pudo leer el estado de seguridad de esta computadora.');
+          return;
+        }
+        const pcRes = await analyzePcLiveSnapshot(col.snapshot);
+        applyLiveDeviceResult(pcRes, 'Auditoría Local PC (en RAM)');
+      } catch (err) {
+        setErrorMsg(err?.message || 'No se pudo completar la auditoría de esta computadora.');
+      } finally {
+        setScanningPc(false);
       }
-      const pcRes = await analyzePcLiveSnapshot(col.snapshot);
-      applyLiveDeviceResult(pcRes, 'Auditoría Local PC (en RAM)');
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo completar la auditoría de esta computadora.');
-    } finally {
-      setScanningPc(false);
-    }
+    });
   }
 
   async function analyzeIosBackupDirectory(backupPath, fallbackMeta = null) {
@@ -549,127 +564,171 @@ export function MvtVerifierPanel({
   async function handleUnlockEncryptedBackup(e) {
     e?.preventDefault?.();
     if (!encryptedBackupPrompt || !backupPassword || unlockingBackup) return;
-    setUnlockingBackup(true);
-    setBackupUnlockError('');
-    const pwd = backupPassword;
-    try {
-      const targetPlan = await resolveEncryptedIosManifestTargets(
-        encryptedBackupPrompt.manifestPlistB64,
-        encryptedBackupPrompt.manifestB64,
-        pwd,
-      );
-      setBackupPassword('');
-      const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
-        backupPath: encryptedBackupPrompt.backupPath,
-        targets: targetPlan.targets || [],
-        encrypted: true,
-      });
-      const liveRes = await analyzeLiveDeviceSnapshot({
-        ...backupPayload,
-        ios_unlock_token: targetPlan.unlock_token || '',
-      });
-      setEncryptedBackupPrompt(null);
-      applyLiveDeviceResult(liveRes, 'Respaldo iOS Encriptado (en RAM)');
-    } catch (err) {
-      setBackupUnlockError(
-        err?.message || 'No se pudo abrir la copia encriptada. Revisa tu contraseña de respaldo.',
-      );
-    } finally {
-      setBackupPassword('');
-      setUnlockingBackup(false);
-    }
+    await guard(async () => {
+      setUnlockingBackup(true);
+      setBackupUnlockError('');
+      const pwd = backupPassword;
+      try {
+        const targetPlan = await resolveEncryptedIosManifestTargets(
+          encryptedBackupPrompt.manifestPlistB64,
+          encryptedBackupPrompt.manifestB64,
+          pwd,
+        );
+        setBackupPassword('');
+        const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
+          backupPath: encryptedBackupPrompt.backupPath,
+          targets: targetPlan.targets || [],
+          encrypted: true,
+        });
+        const liveRes = await analyzeLiveDeviceSnapshot({
+          ...backupPayload,
+          ios_unlock_token: targetPlan.unlock_token || '',
+        });
+        setEncryptedBackupPrompt(null);
+        applyLiveDeviceResult(liveRes, 'Respaldo iOS Encriptado (en RAM)');
+      } catch (err) {
+        setBackupUnlockError(
+          err?.message || 'No se pudo abrir la copia encriptada. Revisa tu contraseña de respaldo.',
+        );
+      } finally {
+        setBackupPassword('');
+        setUnlockingBackup(false);
+      }
+    });
   }
 
   async function handlePickIosBackupDir() {
     if (!window.omegaDesktop?.pickIosBackupDir || scanningIos || isAnalyzing) return;
-    setErrorMsg('');
-    try {
-      const pick = await window.omegaDesktop.pickIosBackupDir();
-      if (pick?.canceled) return;
-      if (!pick?.valid || !pick.backup?.path) {
-        setErrorMsg(pick?.error || 'La carpeta seleccionada no es un respaldo iOS válido.');
-        return;
+    await guard(async () => {
+      setErrorMsg('');
+      try {
+        const pick = await window.omegaDesktop.pickIosBackupDir();
+        if (pick?.canceled) return;
+        if (!pick?.valid || !pick.backup?.path) {
+          setErrorMsg(pick?.error || 'La carpeta seleccionada no es un respaldo iOS válido.');
+          return;
+        }
+        await analyzeIosBackupDirectory(pick.backup.path);
+      } catch (err) {
+        setErrorMsg(err?.message || 'No se pudo inspeccionar la carpeta seleccionada.');
       }
-      await analyzeIosBackupDirectory(pick.backup.path);
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo inspeccionar la carpeta seleccionada.');
-    }
+    });
   }
 
   async function handleConfirmHardenDns() {
     if (!window.omegaDesktop?.hardenPrivateDns || hardeningDns) return;
-    setHardeningDns(true);
-    setErrorMsg('');
-    try {
-      const res = await window.omegaDesktop.hardenPrivateDns({
-        customPath: customAdbPath,
-        serial: selectedSerial || usbDevice?.serial || '',
-      });
-      setConfirmingDns(false);
-      if (res?.applied) {
-        setDnsAppliedNote('DNS Privado cifrado (dns.quad9.net) aplicado en el dispositivo.');
-        setHardeningReport((prev) => {
-          if (!prev?.hardening_checks) return prev;
-          return {
-            ...prev,
-            hardening_checks: prev.hardening_checks.map((chk) =>
-              chk.control.includes('DNS Privado')
-                ? {
-                    ...chk,
-                    status: 'OK',
-                    value: 'dns.quad9.net',
-                    detail: 'Resoluciones DNS cifradas mediante dns.quad9.net (DoT aplicado).',
-                  }
-                : chk,
-            ),
-          };
+    await guard(async () => {
+      setHardeningDns(true);
+      setErrorMsg('');
+      try {
+        const res = await window.omegaDesktop.hardenPrivateDns({
+          customPath: customAdbPath,
+          serial: selectedSerial || usbDevice?.serial || '',
         });
+        setConfirmingDns(false);
+        if (res?.applied) {
+          setDnsAppliedNote('DNS Privado cifrado (dns.quad9.net) aplicado en el dispositivo.');
+          setHardeningReport((prev) => {
+            if (!prev?.hardening_checks) return prev;
+            return {
+              ...prev,
+              hardening_checks: prev.hardening_checks.map((chk) =>
+                chk.control.includes('DNS Privado')
+                  ? {
+                      ...chk,
+                      status: 'OK',
+                      value: 'dns.quad9.net',
+                      detail: 'Resoluciones DNS cifradas mediante dns.quad9.net (DoT aplicado).',
+                    }
+                  : chk,
+              ),
+            };
+          });
+        }
+      } catch (err) {
+        setErrorMsg(err?.message || 'No se pudo configurar el DNS Privado en el dispositivo.');
+      } finally {
+        setHardeningDns(false);
       }
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo configurar el DNS Privado en el dispositivo.');
-    } finally {
-      setHardeningDns(false);
-    }
+    });
   }
 
   async function handleSyncStix() {
     if (syncingStix) return;
-    setSyncingStix(true);
-    setErrorMsg('');
-    try {
-      const res = await syncStixFeeds();
-      const inserted = res.iocs_inserted ?? 0;
-      const total = res.total_db_iocs ?? res.iocs_parsed ?? 0;
-      setStixSyncNote(
-        inserted > 0
-          ? `+${inserted} IOCs nuevos · ${total} activos (${res.files_scanned} feeds STIX2)`
-          : `${total} IOCs STIX2 activos`,
-      );
-    } catch (err) {
-      setErrorMsg(err?.message || 'Error sincronizando feeds STIX 2.1.');
-    } finally {
-      setSyncingStix(false);
-    }
+    await guard(async () => {
+      setSyncingStix(true);
+      setErrorMsg('');
+      try {
+        const res = await syncStixFeeds();
+        const inserted = res.iocs_inserted ?? 0;
+        const total = res.total_db_iocs ?? res.iocs_parsed ?? 0;
+        setStixSyncNote(
+          inserted > 0
+            ? `+${inserted} IOCs nuevos · ${total} activos (${res.files_scanned} feeds STIX2)`
+            : `${total} IOCs STIX2 activos`,
+        );
+      } catch (err) {
+        setErrorMsg(err?.message || 'Error sincronizando feeds STIX 2.1.');
+      } finally {
+        setSyncingStix(false);
+      }
+    });
   }
 
   async function analyzeFiles(fileList) {
     const files = Array.from(fileList || []);
-    if (!files.length) return;
-    setIsAnalyzing(true);
-    setErrorMsg('');
-    setHardeningReport(null);
-    setConfirmingDns(false);
-    setDnsAppliedNote('');
-    try {
-      const apiRes = await runParallelTriage(files);
-      setHardeningReport(apiRes);
-      setResult(normalizeParallelResult(apiRes, files));
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo analizar el archivo en memoria.');
-    } finally {
-      setIsAnalyzing(false);
+    if (!files.length || isAnalyzing) return;
+    if (files.length > 12) {
+      setErrorMsg('Máximo 12 archivos por lote de triaje.');
       if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
     }
+    const allowedExts = [
+      '.json',
+      '.db',
+      '.sqlite',
+      '.sqlite3',
+      '.txt',
+      '.log',
+      '.ips',
+      '.crash',
+      '.tar.gz',
+      '.tgz',
+      '.tar',
+      '.zip',
+      '.pkpass',
+      '.pdf',
+      '.gif',
+    ];
+    for (const file of files) {
+      const check = validateUploadFile(file, {
+        extensions: allowedExts,
+        maxBytes: 64 * 1024 * 1024,
+        label: 'archivo forense',
+      });
+      if (!check.valid) {
+        setErrorMsg(`${file.name ? `${file.name}: ` : ''}${check.error}`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+    await guard(async () => {
+      setIsAnalyzing(true);
+      setErrorMsg('');
+      setHardeningReport(null);
+      setConfirmingDns(false);
+      setDnsAppliedNote('');
+      try {
+        const apiRes = await runParallelTriage(files);
+        setHardeningReport(apiRes);
+        setResult(normalizeParallelResult(apiRes, files));
+      } catch (err) {
+        setErrorMsg(err?.message || 'No se pudo analizar el archivo en memoria.');
+      } finally {
+        setIsAnalyzing(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    });
   }
 
   async function handleRunSample(e) {
@@ -682,21 +741,27 @@ export function MvtVerifierPanel({
 
   async function handleAnalyzeText(e) {
     e.preventDefault();
-    const trimmed = manualText.trim();
-    if (!trimmed) return;
-    setIsAnalyzing(true);
-    setErrorMsg('');
-    setHardeningReport(null);
-    try {
-      const apiRes = await verifyMvtText(trimmed);
-      setResult(normalizeManualResult(apiRes));
-      setExportNote('');
-      setDismissedResultKey('');
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudieron evaluar los indicadores en memoria.');
-    } finally {
-      setIsAnalyzing(false);
+    if (isAnalyzing) return;
+    const validation = validateIocList(manualText, { maxLines: 200 });
+    if (!validation.valid) {
+      setErrorMsg(validation.error);
+      return;
     }
+    await guard(async () => {
+      setIsAnalyzing(true);
+      setErrorMsg('');
+      setHardeningReport(null);
+      try {
+        const apiRes = await verifyMvtText(validation.accepted.join('\n'));
+        setResult(normalizeManualResult(apiRes));
+        setExportNote('');
+        setDismissedResultKey('');
+      } catch (err) {
+        setErrorMsg(err?.message || 'No se pudieron evaluar los indicadores en memoria.');
+      } finally {
+        setIsAnalyzing(false);
+      }
+    });
   }
 
   function handleReset() {
@@ -1076,7 +1141,7 @@ export function MvtVerifierPanel({
                   onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
                   className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  Investigar en Preguntar
+                  Consultar con Copiloto
                 </button>
               </div>
             ))}
@@ -1120,7 +1185,7 @@ export function MvtVerifierPanel({
                     onClick={() => handleInvestigateAnomaly(anom)}
                     className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
-                    Investigar en Preguntar
+                    Consultar con Copiloto
                   </button>
                 </div>
               );
@@ -1273,7 +1338,7 @@ export function MvtVerifierPanel({
                   onClick={() => handleInvestigateYara(hit)}
                   className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  Investigar en Preguntar
+                  Consultar con Copiloto
                 </button>
               </div>
             ))}
@@ -1326,7 +1391,7 @@ export function MvtVerifierPanel({
                     onClick={() => handleInvestigateFinding(finding)}
                     className="rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                   >
-                    Investigar en Preguntar
+                    Consultar con Copiloto
                   </button>
                 </div>
               </div>
@@ -1351,8 +1416,8 @@ export function MvtVerifierPanel({
           <h1 className="text-[23px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
             Verificar integridad del dispositivo
           </h1>
-          <p className="mt-1.5 text-[13px] sm:text-[13.5px] text-[#9A9AA2] leading-[1.5] max-w-[540px] mx-auto">
-            Revisa tu celular por cable USB o con una copia guardada. Todo se analiza de forma temporal, sin guardar tus fotos ni archivos en esta computadora.
+          <p className="mt-1.5 text-[13px] text-[#9A9AA2] max-w-[460px] mx-auto">
+            Audita PC, Android o iPhone en RAM sin guardar archivos personales.
           </p>
         </header>
 
@@ -1514,7 +1579,7 @@ export function MvtVerifierPanel({
                           )}
                         </div>
                         <p className="text-[12px] text-[#9A9AA2]">
-                          Teléfono listo. OMEGA revisará conexiones activas, permisos especiales y protección del sistema sin borrar ni cambiar nada.
+                          Teléfono listo. Análisis pasivo en RAM sin modificar el equipo.
                         </p>
                       </div>
 
@@ -1533,8 +1598,8 @@ export function MvtVerifierPanel({
                       <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
                         <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed flex-1 min-w-[220px]">
                           {hasDesktopBridge
-                            ? usbDevice?.reason || 'Buscando conector USB de Android en tu computadora...'
-                            : 'Para revisar un Android por cable USB necesitas la app de escritorio OMEGA. En navegador web, puedes subir una copia abajo.'}
+                            ? usbDevice?.reason || 'Buscando Android por USB...'
+                            : 'El análisis por USB requiere OMEGA Desktop. En web puedes subir una copia abajo.'}
                         </p>
 
                         <button
@@ -1696,7 +1761,7 @@ export function MvtVerifierPanel({
                           </span>
                         </div>
                         <p className="text-[12px] text-[#9A9AA2]">
-                          iPhone conectado por cable. Revisaremos reportes internos recientes y registro de fallos en memoria temporal sin tocar tus fotos ni mensajes.
+                          iPhone listo. Inspección en RAM sin tocar fotos ni mensajes.
                         </p>
                       </div>
 
@@ -1714,8 +1779,8 @@ export function MvtVerifierPanel({
                     <div className="rounded-[12px] border border-white/[0.06] bg-black/30 p-3 space-y-3">
                       <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed">
                         {hasDesktopBridge
-                          ? iosStatus?.reason || 'Apple bloquea el análisis directo sin permisos especiales. Sigue estas 3 imágenes para revisar tu iPhone sin riesgo:'
-                          : 'Por seguridad de Apple, el navegador web no puede leer un iPhone por cable. Sigue estos 3 pasos fáciles en tu iPhone y sube el archivo abajo:'}
+                          ? iosStatus?.reason || 'Sigue estos 3 pasos para analizar tu iPhone sin riesgo:'
+                          : 'Sigue estos 3 pasos en tu iPhone y sube el archivo abajo:'}
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
@@ -1726,7 +1791,7 @@ export function MvtVerifierPanel({
                               1. Genera el archivo en iPhone
                             </div>
                             <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                              Ve a <span className="text-[#F2F2F4]/85">Ajustes → Privacidad y seguridad → Análisis y mejoras → Datos de análisis</span>, o pulsa <span className="text-[#F2F2F4]/85">Vol+ · Vol- + Lateral</span> 1 segundo.
+                              <span className="text-[#F2F2F4]/85">Ajustes → Privacidad → Análisis y mejoras → Datos</span>, o <span className="text-[#F2F2F4]/85">Vol+ · Vol- + Lateral</span>.
                             </p>
                           </div>
                         </div>
@@ -1738,7 +1803,7 @@ export function MvtVerifierPanel({
                               2. O usa una copia en PC
                             </div>
                             <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                              Si conectas tu iPhone por cable para hacer una copia en esta PC, desbloquéalo y toca <span className="text-[#F2F2F4]/85">Confiar</span> con tu código PIN.
+                              Desbloquea el iPhone conectado y toca <span className="text-[#F2F2F4]/85">Confiar</span> con tu PIN.
                             </p>
                           </div>
                         </div>
@@ -1747,10 +1812,10 @@ export function MvtVerifierPanel({
                           <IosStepVisual step={3} />
                           <div>
                             <div className="text-[12px] font-medium text-[#F2F2F4]">
-                              3. Súbelo sin guardar nada
+                              3. Súbelo en RAM
                             </div>
                             <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                              Envía el archivo de diagnóstico a tu PC o elige la carpeta de respaldo. Se revisa al instante y no se guarda nada privado.
+                              Envía el diagnóstico o abre la carpeta de respaldo. Cero retención.
                             </p>
                           </div>
                         </div>
@@ -1869,7 +1934,7 @@ export function MvtVerifierPanel({
                             </span>
                           </div>
                           <p className="text-[11px] text-[#9A9AA2]">
-                            Solo se usa en memoria temporal (RAM) para revisar SMS, Safari, DataUsage y perfiles. Nunca se guarda ni sale de tu computadora.
+                            Solo en memoria RAM para revisar SMS, Safari, DataUsage y perfiles. Nunca se guarda.
                           </p>
                         </div>
                       </div>
@@ -1878,8 +1943,9 @@ export function MvtVerifierPanel({
                         <input
                           type="password"
                           autoFocus
+                          maxLength={128}
                           value={backupPassword}
-                          onChange={(e) => setBackupPassword(e.target.value)}
+                          onChange={(e) => setBackupPassword(stripUnsafeChars(e.target.value, 128))}
                           placeholder="Contraseña de respaldo iTunes / Finder"
                           className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED] focus:outline-none"
                         />
@@ -1914,7 +1980,7 @@ export function MvtVerifierPanel({
               ) : (
                 <div className="space-y-3">
                   <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
-                    Revisa si esta computadora Windows o macOS tiene programas ocultos sin firma digital, persistencia silenciosa en WMI (técnica asociada a <span className="text-[#F2F2F4]/85">Candiru / Predator</span>) o conexiones externas sospechosas — sin leer tus archivos personales.
+                    Audita procesos sin firma, persistencia WMI (<span className="text-[#F2F2F4]/85">Candiru / Predator</span>) y conexiones externas en solo lectura.
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1924,7 +1990,7 @@ export function MvtVerifierPanel({
                         1. Conexiones externas
                       </div>
                       <p className="text-[11px] text-[#9A9AA2] leading-snug">
-                        Cruza direcciones IP abiertas por tus aplicaciones contra campañas conocidas y reglas YARA.
+                        Cruza IPs activas contra campañas CTI y reglas YARA.
                       </p>
                     </div>
                     <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
@@ -1933,7 +1999,7 @@ export function MvtVerifierPanel({
                         2. Persistencia oculta
                       </div>
                       <p className="text-[11px] text-[#9A9AA2] leading-snug">
-                        Inspecciona eventos WMI, tareas programadas y ejecutables sin firma en carpetas temporales.
+                        Revisa tareas programadas, WMI y temporales sin firma.
                       </p>
                     </div>
                     <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
@@ -1942,7 +2008,7 @@ export function MvtVerifierPanel({
                         3. Escudos del sistema
                       </div>
                       <p className="text-[11px] text-[#9A9AA2] leading-snug">
-                        Verifica que Defender, Firewall, UAC y SmartScreen (o Gatekeeper/SIP) sigan activos.
+                        Comprueba Defender, Firewall, UAC y Gatekeeper.
                       </p>
                     </div>
                   </div>
@@ -1950,7 +2016,7 @@ export function MvtVerifierPanel({
                   {hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                       <span className="text-[11.5px] text-[#9A9AA2]">
-                        Análisis instantáneo en RAM · Tarda ~2 segundos · 0 modificaciones en tu equipo.
+                        Solo lectura en RAM · ~2 segundos · Sin cambios en tu equipo.
                       </span>
                       <button
                         type="button"
@@ -1964,7 +2030,7 @@ export function MvtVerifierPanel({
                     </div>
                   ) : (
                     <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-[11.5px] text-[#9A9AA2]">
-                      La revisión directa de procesos y WMI locales está disponible en la aplicación de escritorio <span className="text-[#F2F2F4]/85">OMEGA Desktop</span>.
+                      Auditoría local disponible en <span className="text-[#F2F2F4]/85">OMEGA Desktop</span>.
                     </div>
                   )}
                 </div>
@@ -2067,13 +2133,13 @@ export function MvtVerifierPanel({
 
               <p className="text-[13.5px] font-medium text-[#F2F2F4]">
                 {isAnalyzing
-                  ? 'Revisando archivos en memoria temporal...'
-                  : 'Arrastra aquí el archivo de diagnóstico o copia de tu celular'}
+                  ? 'Analizando en memoria temporal...'
+                  : 'Arrastra aquí el archivo o respaldo de tu celular'}
               </p>
 
               {!isAnalyzing && (
                 <p className="mt-1 text-[11.5px] text-[#9A9AA2]">
-                  Acepta reportes de iPhone (.tar.gz, .ips), respaldos (.db, .zip) o archivos de análisis (.json)
+                  Soporta .tar.gz, .ips, .db, .zip y .json
                 </p>
               )}
 
@@ -2091,8 +2157,12 @@ export function MvtVerifierPanel({
               <div className="apple-well rounded-[11px] p-3">
                 <textarea
                   rows={4}
+                  maxLength={50000}
                   value={manualText}
-                  onChange={(e) => setManualText(e.target.value)}
+                  onChange={(e) => {
+                    setManualText(stripUnsafeChars(e.target.value, 50000));
+                    if (errorMsg) setErrorMsg('');
+                  }}
                   placeholder={'https://enlace-sospechoso.com\n185.220.101.44\nPega un dominio, dirección IP o texto extraño por línea'}
                   className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
                 />

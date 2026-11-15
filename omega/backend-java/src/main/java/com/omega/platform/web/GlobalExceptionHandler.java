@@ -87,12 +87,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
-        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Payload de entrada inválido");
+        var fieldErrors = new java.util.LinkedHashMap<String, String>();
+        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.putIfAbsent(
+                    fe.getField(),
+                    fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Valor inválido"
+            );
+        }
+        String summary = fieldErrors.isEmpty()
+                ? "Los datos ingresados no son válidos."
+                : String.join(" · ", fieldErrors.values().stream().distinct().toList());
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, summary);
         pd.setTitle("Error de validación");
-        pd.setProperty("fields", ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getField)
-                .distinct()
-                .toList());
+        pd.setProperty("fields", new java.util.ArrayList<>(fieldErrors.keySet()));
+        pd.setProperty("fieldErrors", fieldErrors);
         return pd;
     }
 }

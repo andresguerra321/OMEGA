@@ -22,13 +22,51 @@ URL_SHORTENERS = {
 
 SUSPICIOUS_TLDS = {".tk", ".ml", ".ga", ".cf", ".gq", ".xyz", ".top", ".click", ".link", ".icu"}
 IPV4_HOST_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+DOMAIN_HOST_RE = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$")
+UNSAFE_SCHEME_RE = re.compile(r"^(?:javascript|data|vbscript|file|ftp|mailto|about):", flags=re.IGNORECASE)
+HOST_SAME_LETTER_RE = re.compile(r"([a-z])\1{3}")
+HOST_CONSONANT_RUN_RE = re.compile(r"[bcdfghjklmnpqrstvwxz]{6}")
+HOST_INTERLEAVED_SMASH_RE = re.compile(r"(?<![a-z0-9])(?=[a-z0-9]{9,})[a-z0-9]*[a-z]+\d+[a-z]+\d+")
+
+
+def _is_valid_ipv4(host: str) -> bool:
+    if not IPV4_HOST_RE.match(host):
+        return False
+    return all(0 <= int(part) <= 255 for part in host.split("."))
+
+
+def _is_valid_domain_host(host: str) -> bool:
+    if not DOMAIN_HOST_RE.match(host):
+        return False
+    labels = host.split(".")
+    if len(labels) < 2 or len(labels) > 5:
+        return False
+    if sum(1 for lbl in labels if len(lbl) == 1) >= 2:
+        return False
+    if any("--" in lbl and not lbl.startswith("xn--") for lbl in labels):
+        return False
+    if (
+        HOST_SAME_LETTER_RE.search(host)
+        or HOST_CONSONANT_RUN_RE.search(host)
+        or HOST_INTERLEAVED_SMASH_RE.search(host)
+    ):
+        return False
+    return True
 
 
 def _refang_url(raw_url: str) -> str:
     cleaned = raw_url.strip()
+    if not cleaned:
+        raise ValueError("Ingresa un enlace, dominio o dirección IPv4 para verificar.")
+    if any(ch.isspace() for ch in cleaned):
+        raise ValueError("El enlace no puede contener espacios ni saltos de línea.")
+    if UNSAFE_SCHEME_RE.match(cleaned):
+        raise ValueError("Solo se permiten enlaces HTTP/HTTPS o dominios válidos.")
     cleaned = re.sub(r"^hxxps://", "https://", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"^hxxp://", "http://", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\[\.\]|\(\.\)|\{\.\}", ".", cleaned)
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", cleaned) and not re.match(r"^https?://", cleaned, flags=re.IGNORECASE):
+        raise ValueError("Solo se permiten enlaces con esquema http:// o https://.")
     if not re.match(r"^https?://", cleaned, flags=re.IGNORECASE):
         cleaned = f"http://{cleaned}"
     return cleaned
@@ -62,8 +100,8 @@ def inspect_suspicious_link(raw_url: str) -> dict:
     parsed = urlparse(normalized_url)
     host = (parsed.hostname or "").lower().rstrip(".")
 
-    if not host:
-        raise ValueError("No se pudo extraer un dominio o dirección válida del enlace proporcionado.")
+    if not host or (not _is_valid_domain_host(host) and not _is_valid_ipv4(host)):
+        raise ValueError("Ingresa una URL, dominio con extensión (ej. ejemplo.org) o IPv4 válida.")
 
     root_domain = _get_root_domain(host)
     heuristics = []

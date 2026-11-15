@@ -28,12 +28,34 @@ function emitAuthRequired(path) {
   }
 }
 
+function parseJwtPayload(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const json = atob(padded);
+    const payload = JSON.parse(json);
+    if (!payload || typeof payload !== 'object') return null;
+    if (!payload.sub || !payload.tid || !payload.email) return null;
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now() + 15_000) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 export function getAuthSession() {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed?.accessToken) return null;
+    if (!parsed?.accessToken || !parseJwtPayload(parsed.accessToken)) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
     if (parsed.expiresAtMs && Date.now() >= parsed.expiresAtMs - 15_000) {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       return null;
@@ -224,7 +246,7 @@ function normalizeRagResponse(data, expedienteId = null) {
       index: idx + 1,
       report_id: c.documentId,
       title: c.originalFilename || 'Documento indexado',
-      organization: c.sectionTitle || (expedienteId ? 'Expediente Privado' : 'Corpus Público CTI'),
+      organization: c.sectionTitle || (expedienteId ? 'Documentos privados' : 'Corpus Público CTI'),
       page: c.pageNumber || 1,
       section: c.sectionTitle || `Pág. ${c.pageNumber || 1}`,
       citationLabel: c.citationLabel,
@@ -265,13 +287,40 @@ export async function getAuthConfig() {
 }
 
 export async function loginWithPassword({ tenantSlug, email, password }) {
+  const normalizedSlug = String(tenantSlug || '').trim().toLowerCase();
   const tokenRes = await apiFetch('/auth/login', {
     method: 'POST',
     skipAuth: true,
     body: {
-      tenantSlug: String(tenantSlug || '').trim().toLowerCase(),
+      ...(normalizedSlug ? { tenantSlug: normalizedSlug } : {}),
       email: String(email || '').trim().toLowerCase(),
       password,
+    },
+  });
+  return saveAuthSession(tokenRes);
+}
+
+export async function registerAccount({
+  fullName,
+  email,
+  password,
+  organizationName,
+  bootstrapSecret,
+}) {
+  const headers = {};
+  if (bootstrapSecret && String(bootstrapSecret).trim()) {
+    headers['X-Omega-Bootstrap-Secret'] = String(bootstrapSecret).trim();
+  }
+  const normalizedOrg = String(organizationName || '').trim();
+  const tokenRes = await apiFetch('/auth/register', {
+    method: 'POST',
+    skipAuth: true,
+    headers,
+    body: {
+      fullName: String(fullName || '').trim(),
+      email: String(email || '').trim().toLowerCase(),
+      password,
+      ...(normalizedOrg ? { organizationName: normalizedOrg } : {}),
     },
   });
   return saveAuthSession(tokenRes);
@@ -361,6 +410,29 @@ export async function fetchCurrentPrincipal() {
 
 export async function listExpedientes() {
   return apiFetch('/expedientes');
+}
+
+/**
+ * Garantiza silenciosamente el espacio privado por defecto para almacenar PDFs
+ * con Zero-Retention sin exponer el concepto interno de "expediente" en la UI.
+ */
+export async function ensurePersonalWorkspace() {
+  const list = await listExpedientes();
+  const existing = Array.isArray(list) ? list : [];
+  if (existing.length > 0) {
+    return existing[0];
+  }
+  try {
+    return await createExpediente({
+      title: 'Espacio personal',
+      classification: 'CONFIDENTIAL',
+    });
+  } catch (err) {
+    if (err?.status === 403) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function createExpediente({ title, classification = 'CONFIDENTIAL' }) {

@@ -639,11 +639,11 @@ ipcMain.handle('omega:ios-collect', async (_event, opts = {}) => {
   try {
     if (tools.kind === 'libimobiledevice' && tools.hasCrash) {
       const args = udid ? ['-u', udid, '-e', tmpDir] : ['-e', tmpDir];
-      await execFileAsync('idevicecrashreport', args, { timeout: 15000 }).catch(() => {});
+      await execFileAsync('idevicecrashreport', args, { timeout: 15000 }).catch(() => { });
     } else if (tools.kind === 'pymobiledevice3') {
       const args = [...tools.prefix, 'crash', 'pull', tmpDir];
       if (udid) args.push('--udid', udid);
-      await execFileAsync(tools.cmd, args, { timeout: 15000 }).catch(() => {});
+      await execFileAsync(tools.cmd, args, { timeout: 15000 }).catch(() => { });
     }
 
     const walkLogs = (dir) => {
@@ -964,8 +964,8 @@ ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
     };
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
-    await ses.clearStorageData().catch(() => {});
-    await ses.clearCache().catch(() => {});
+    await ses.clearStorageData().catch(() => { });
+    await ses.clearCache().catch(() => { });
     if (!sandboxWin.isDestroyed()) sandboxWin.destroy();
   }
 });
@@ -1270,8 +1270,8 @@ ipcMain.handle('omega:set-titlebar-theme', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && typeof win.setTitleBarOverlay === 'function') {
       win.setTitleBarOverlay({
-        color: '#050912',
-        symbolColor: '#CBD5E1',
+        color: '#0A0A0C',
+        symbolColor: '#F2F2F4',
         height: 40,
       });
     }
@@ -1286,6 +1286,38 @@ let dockerOrchestrator = null;
 let appTransitionedToMain = false;
 let isQuitting = false;
 let shutdownInProgress = false;
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.omega.desktop');
+}
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+  });
+}
+
+function resolveAppIconPath() {
+  const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'build', 'icon.ico') : null,
+    path.join(__dirname, '../build/icon.ico'),
+    process.resourcesPath ? path.join(process.resourcesPath, 'build', 'icon.png') : null,
+    path.join(__dirname, '../build/icon.png'),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
 
 function getDockerOrchestrator() {
   if (!dockerOrchestrator) {
@@ -1316,13 +1348,9 @@ async function loadMainRenderer(win) {
 async function bootDockerAndOpenApp(opts = {}) {
   console.info('[OMEGA Desktop] Iniciando verificación/arranque de servicios Docker...');
   const result = await getDockerOrchestrator().start(opts);
-  const state = getDockerOrchestrator().getState();
   console.info(
-    `[OMEGA Desktop] Arranque finalizado: ok=${Boolean(result?.ok)}, startedByElectron=${getDockerOrchestrator().shouldStopOnQuit()}, phase=${state.phase}, errorCode=${state.errorCode || 'none'}`,
+    `[OMEGA Desktop] Arranque finalizado: ok=${Boolean(result?.ok)}, startedByElectron=${getDockerOrchestrator().shouldStopOnQuit()}, phase=${getDockerOrchestrator().getState().phase}`,
   );
-  if (!result?.ok && state.detail) {
-    console.warn(`[OMEGA Desktop] Detalle de arranque: ${state.detail}`);
-  }
   if (
     result?.ok &&
     mainWindow &&
@@ -1361,17 +1389,19 @@ ipcMain.handle('omega:backend-skip', async () => {
 });
 
 async function createMainWindow() {
+  const appIcon = resolveAppIconPath();
   const win = new BrowserWindow({
     width: 1380,
     height: 860,
     minWidth: 960,
     minHeight: 680,
-    backgroundColor: '#04070E',
+    backgroundColor: '#0A0A0C',
     title: 'OMEGA — Cyber Threat Intelligence',
+    ...(appIcon ? { icon: appIcon } : {}),
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#050912',
-      symbolColor: '#CBD5E1',
+      color: '#0A0A0C',
+      symbolColor: '#F2F2F4',
       height: 40,
     },
     webPreferences: {
@@ -1413,7 +1443,7 @@ async function createMainWindow() {
       app.quit();
     };
     Promise.race([
-      win.loadFile(path.join(__dirname, 'splash.html'), { query: { mode: 'closing' } }).catch(() => {}),
+      win.loadFile(path.join(__dirname, 'splash.html'), { query: { mode: 'closing' } }).catch(() => { }),
       new Promise((resolve) => setTimeout(resolve, 250)),
     ]).finally(() => {
       console.info('[OMEGA Desktop] Ejecutando docker compose down...');
@@ -1437,6 +1467,7 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return;
   void createMainWindow();
 });
 

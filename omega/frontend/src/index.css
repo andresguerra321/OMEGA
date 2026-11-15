@@ -19,6 +19,14 @@
   --animate-slide-right: twSlideRight 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
   --animate-float-slow: twFloatSlow 6s ease-in-out infinite;
   --animate-glow-pulse: twGlowPulse 2.8s ease-in-out infinite;
+  --animate-card-enter: twCardEnter 0.56s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-panel-switch: twPanelSwitch 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-eclipse-breathe: twEclipseBreathe 7.5s ease-in-out infinite;
+  --animate-orbit-drift: twOrbitDrift 72s linear infinite;
+  --animate-satellite-drift: twSatelliteDrift 10s ease-in-out infinite;
+  --animate-star-twinkle: twStarTwinkle 5.6s ease-in-out infinite;
+  --animate-shake-subtle: twShakeSubtle 0.36s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  --animate-sheen-sweep: twSheenSweep 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @layer base {
@@ -176,6 +184,39 @@ h2 {
     background-color 180ms var(--ease-kowalski),
     border-color 180ms ease,
     box-shadow 220ms var(--ease-kowalski);
+}
+
+/* Tarjeta translúcida única para pantalla de acceso sobre escena orbital OMEGA */
+.omega-login-glass {
+  position: relative;
+  background: linear-gradient(
+    145deg,
+    rgba(22, 24, 34, 0.54) 0%,
+    rgba(16, 17, 23, 0.44) 48%,
+    rgba(11, 12, 17, 0.62) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.22);
+  border-right-color: rgba(47, 111, 237, 0.28);
+  border-bottom-color: rgba(0, 0, 0, 0.52);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset -20px 20px 44px rgba(47, 111, 237, 0.08),
+    0 24px 64px rgba(0, 0, 0, 0.68);
+  -webkit-backdrop-filter: blur(24px) saturate(135%);
+  backdrop-filter: blur(24px) saturate(135%);
+  transition:
+    background-color 180ms var(--ease-kowalski),
+    border-color 220ms ease,
+    box-shadow 260ms var(--ease-kowalski);
+}
+
+.omega-login-glass:focus-within {
+  border-right-color: rgba(110, 160, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset -20px 20px 44px rgba(47, 111, 237, 0.12),
+    0 28px 72px rgba(0, 0, 0, 0.72);
 }
 
 /* Superficies vidrio esmerilado y cavidades empotradas */
@@ -686,6 +727,7 @@ h2 {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .omega-glass-panel,
   .omega-glass-panel-strong,
+  .omega-login-glass,
   .omega-capsule,
   .roam-pill-nav,
   .apple-vibrancy,
@@ -697,6 +739,7 @@ h2 {
 @media (prefers-reduced-transparency: reduce) {
   .omega-glass-panel,
   .omega-glass-panel-strong,
+  .omega-login-glass,
   .omega-capsule,
   .roam-pill-nav,
   .apple-vibrancy,
@@ -730,8 +773,10 @@ h2 {
     animation: none !important;
   }
 
-  .animate-kowalski-in {
+  .animate-kowalski-in,
+  [class*="animate-"] {
     animation: none !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -838,5 +883,117 @@ h2 {
   50% {
     opacity: 1;
     transform: scale(1.06);
+  }
+}
+
+@keyframes twCardEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes twPanelSwitch {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes twEclipseBreathe {
+
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.985);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+}
+
+@keyframes twOrbitDrift {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes twSatelliteDrift {
+
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(3px, -6px, 0);
+  }
+}
+
+@keyframes twStarTwinkle {
+
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes twShakeSubtle {
+
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  20% {
+    transform: translate3d(-5px, 0, 0);
+  }
+
+  40% {
+    transform: translate3d(5px, 0, 0);
+  }
+
+  60% {
+    transform: translate3d(-3px, 0, 0);
+  }
+
+  80% {
+    transform: translate3d(3px, 0, 0);
+  }
+}
+
+@keyframes twSheenSweep {
+  from {
+    opacity: 0.55;
+    transform: translate3d(-110%, -25%, 0) rotate(-18deg);
+  }
+
+  45% {
+    opacity: 0.28;
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(135%, 35%, 0) rotate(-18deg);
   }
 }

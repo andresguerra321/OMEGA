@@ -11,10 +11,11 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
+import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import {
   ActionConfirmationBanner,
-  PanelEmptyState,
   PanelErrorBanner,
 } from './PanelStatePrimitives';
 
@@ -58,6 +59,7 @@ export function LinkVerifierPanel({
   const [traceError, setTraceError] = useState('');
   const [finalCheckResult, setFinalCheckResult] = useState(null);
   const [dismissedConfirmKey, setDismissedConfirmKey] = useState('');
+  const guard = useSingleFlight();
   const lastCheckKeyRef = useRef(0);
   const resultContainerRef = useRef(null);
 
@@ -108,46 +110,54 @@ export function LinkVerifierPanel({
 
   async function handleCheck(e) {
     e.preventDefault();
-    const cleaned = urlInput.trim();
-    if (!cleaned || loading) return;
-    setLoading(true);
-    setError('');
-    setDismissedConfirmKey('');
-    setTraceResult(null);
-    setTraceError('');
-    setFinalCheckResult(null);
-    try {
-      const data = await verifySuspiciousLink(cleaned);
-      setResult(data);
-      onLinkVerified?.(data);
-    } catch (err) {
-      setError(err?.message || 'No se pudo inspeccionar el enlace.');
-    } finally {
-      setLoading(false);
+    if (loading) return;
+    const validation = validateUrlInput(urlInput, { allowBareDomain: true });
+    if (!validation.valid) {
+      setError(validation.error);
+      return;
     }
+    await guard(async () => {
+      setLoading(true);
+      setError('');
+      setDismissedConfirmKey('');
+      setTraceResult(null);
+      setTraceError('');
+      setFinalCheckResult(null);
+      try {
+        const data = await verifySuspiciousLink(validation.value);
+        setResult(data);
+        onLinkVerified?.(data);
+      } catch (err) {
+        setError(err?.message || 'No se pudo inspeccionar el enlace.');
+      } finally {
+        setLoading(false);
+      }
+    });
   }
 
   async function handleTraceEphemeral() {
     if (!canTraceInRam || !result?.normalized_url || traceLoading) return;
-    setTraceLoading(true);
-    setTraceError('');
-    setFinalCheckResult(null);
-    try {
-      const trace = await window.omegaDesktop.inspectLinkEphemeral(result.normalized_url);
-      setTraceResult(trace);
-      if (trace?.final_url && trace.final_url !== result.normalized_url) {
-        try {
-          const destCheck = await verifySuspiciousLink(trace.final_url);
-          setFinalCheckResult(destCheck);
-        } catch {
-          // Ignore passive re-check error while keeping redirect trace visible
+    await guard(async () => {
+      setTraceLoading(true);
+      setTraceError('');
+      setFinalCheckResult(null);
+      try {
+        const trace = await window.omegaDesktop.inspectLinkEphemeral(result.normalized_url);
+        setTraceResult(trace);
+        if (trace?.final_url && trace.final_url !== result.normalized_url) {
+          try {
+            const destCheck = await verifySuspiciousLink(trace.final_url);
+            setFinalCheckResult(destCheck);
+          } catch {
+            // Ignore passive re-check error while keeping redirect trace visible
+          }
         }
+      } catch (err) {
+        setTraceError(err?.message || 'No se pudo trazar el enlace en la sesión aislada en RAM.');
+      } finally {
+        setTraceLoading(false);
       }
-    } catch (err) {
-      setTraceError(err?.message || 'No se pudo trazar el enlace en el sandbox volátil.');
-    } finally {
-      setTraceLoading(false);
-    }
+    });
   }
 
   // --- ESTADO 2: RESULTADO ---
@@ -231,7 +241,7 @@ export function LinkVerifierPanel({
                       `Evalúa este enlace inspeccionado pasivamente en OMEGA:`,
                       `- URL / Host: ${result.normalized_url} (host: ${result.host})`,
                       traceResult?.final_url && traceResult.final_url !== result.normalized_url
-                        ? `- Destino tras redirecciones (Sandbox sin JS): ${traceResult.final_url}`
+                        ? `- Destino tras redirecciones (Aislado sin JS): ${traceResult.final_url}`
                         : '',
                       `- Nivel de riesgo: ${result.risk_level} — ${result.verdict}`,
                       `- Coincidencias CTI: ${ctiMatches.length}`,
@@ -243,7 +253,7 @@ export function LinkVerifierPanel({
                   }}
                   className="shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  Investigar en Preguntar
+                  Consultar con Copiloto
                 </button>
               )}
 
@@ -333,7 +343,7 @@ export function LinkVerifierPanel({
           />
         )}
 
-        {/* Trazado Sandboxed en RAM (Electron sin JS ni imágenes) */}
+        {/* Trazado Aislado en RAM (Electron sin JS ni imágenes) */}
         {traceResult && (
           <section
             className="animate-on-scroll apple-group rounded-[13px] overflow-hidden"
@@ -341,7 +351,7 @@ export function LinkVerifierPanel({
           >
             <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
               <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                Trazado efímero en RAM (Sandbox sin JS)
+                Trazado efímero en RAM (Sin JavaScript)
               </span>
               <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
                 0 JS · 0 Imágenes{traceResult.status_code ? ` · HTTP ${traceResult.status_code}` : ''}
@@ -352,7 +362,7 @@ export function LinkVerifierPanel({
               {traceResult.blocked_attempt && (
                 <div className="rounded-[9px] border border-[#FF453A]/40 bg-[#FF453A]/12 px-3 py-2 flex items-center gap-2 text-[12px] text-[#FF6961]">
                   <ShieldAlert className="h-4 w-4 shrink-0" />
-                  <span>Redirección peligrosa interceptada en sandbox: {traceResult.blocked_attempt}</span>
+                  <span>Redirección peligrosa interceptada en sesión aislada: {traceResult.blocked_attempt}</span>
                 </div>
               )}
 
@@ -484,22 +494,28 @@ export function LinkVerifierPanel({
       <div className="w-full max-w-[620px]">
         <header className="text-center mb-6 sm:mb-7">
           <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
-            Verifica un enlace antes de abrirlo
+            Verificar enlace
           </h1>
-          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#9A9AA2] leading-[1.55] max-w-[500px] mx-auto">
-            Detecta dominios vinculados a campañas 1-click o URLs ofuscadas sin realizar peticiones HTTP al servidor destino.
+          <p className="mt-2 text-[13.5px] text-[#9A9AA2] max-w-[440px] mx-auto">
+            Análisis pasivo sin peticiones HTTP al destino.
           </p>
         </header>
 
         <form
+          noValidate
           onSubmit={handleCheck}
           style={{ animationDelay: '60ms' }}
           className="animate-scale-in omega-capsule rounded-[15px] p-2 sm:p-2.5 flex items-center gap-2 sm:gap-2.5"
         >
           <input
             type="text"
+            maxLength={2048}
             value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
+            onChange={(e) => {
+              setUrlInput(stripUnsafeChars(e.target.value, 2048));
+              if (error) setError('');
+            }}
+            aria-invalid={Boolean(error)}
             placeholder="https://enlace-sospechoso.ejemplo/ruta"
             className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 sm:px-2.5 text-[13.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
           />
@@ -522,19 +538,16 @@ export function LinkVerifierPanel({
           />
         )}
 
-        {!loading && !error && (
-          <PanelEmptyState
-            icon={ShieldCheck}
-            title="Aún no has verificado ningún enlace"
-            description="Pega arriba cualquier URL sospechosa (SMS, correo o chat). OMEGA evalúa estructura homográfica, shorteners y el catálogo CTI sin visitar el destino."
-            actionLabel={!urlInput.trim() ? 'Cargar enlace de ejemplo' : undefined}
-            onAction={
-              !urlInput.trim()
-                ? () => setUrlInput('https://verify-icloud-session.example/auth')
-                : undefined
-            }
-            className="mt-5"
-          />
+        {!loading && !error && !urlInput.trim() && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setUrlInput('https://verify-icloud-session.example/auth')}
+              className="text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] underline decoration-[#2F6FED]/55 cursor-pointer transition-colors"
+            >
+              Probar enlace de ejemplo →
+            </button>
+          </div>
         )}
       </div>
     </div>
