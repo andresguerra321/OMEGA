@@ -9,6 +9,8 @@ import {
   loadOrCreateDesktopSecrets,
   parseComposePsOutput,
   parseDotEnvContent,
+  readDotEnv,
+  resolveComposeEnvFilePath,
   sanitizeLogLine,
 } from './dockerOrchestrator.js';
 
@@ -220,4 +222,33 @@ test('sanitizeLogLine redacta secretos antes de mostrar logs en la UI', () => {
   const clean = sanitizeLogLine('Error token super_secret_token_12345 failed', ['super_secret_token_12345']);
   assert.equal(clean.includes('super_secret_token_12345'), false);
   assert.equal(clean.includes('***'), true);
+});
+
+test('readDotEnv y resolveComposeEnvFilePath soportan .env opcional en userData para app empaquetada', () => {
+  const composeDir = createTempComposeDir({ withProd: false, envContent: null });
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-userdata-env-'));
+  try {
+    assert.equal(resolveComposeEnvFilePath(composeDir, userDataDir), null);
+
+    const userEnvPath = path.join(userDataDir, '.env');
+    fs.writeFileSync(userEnvPath, 'GROQ_API_KEY=gsk_test_value_12345\nJAVA_BACKEND_PORT=8091\n');
+
+    const loaded = readDotEnv(composeDir, userDataDir);
+    assert.equal(loaded.GROQ_API_KEY, 'gsk_test_value_12345');
+    assert.equal(loaded.JAVA_BACKEND_PORT, '8091');
+
+    const resolvedEnv = resolveComposeEnvFilePath(composeDir, userDataDir);
+    assert.equal(resolvedEnv, userEnvPath);
+
+    const args = buildComposeArgs(composeDir, {
+      envFilePath: resolvedEnv,
+      subArgs: ['up', '-d'],
+    });
+    const envFlagIdx = args.indexOf('--env-file');
+    assert.ok(envFlagIdx >= 0);
+    assert.equal(args[envFlagIdx + 1], userEnvPath);
+  } finally {
+    fs.rmSync(composeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
 });

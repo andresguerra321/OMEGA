@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Check,
   Copy,
-  Globe,
   Link2,
   Loader2,
   RefreshCw,
@@ -17,10 +16,11 @@ import {
   fetchOsintAssets,
   scanOsintAsset,
 } from '../lib/api';
+import { stripUnsafeChars, validateDomain, validateEmail } from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import {
   ActionConfirmationBanner,
-  PanelEmptyState,
   PanelErrorBanner,
   PanelSkeleton,
 } from './PanelStatePrimitives';
@@ -52,6 +52,7 @@ export function OsintPanel({
   const [errorMsg, setErrorMsg] = useState('');
   const [confirmationNote, setConfirmationNote] = useState(null);
   const [copiedSubdomain, setCopiedSubdomain] = useState(null);
+  const guard = useSingleFlight();
   const lastJumpKeyRef = useRef(0);
   const reportContainerRef = useRef(null);
 
@@ -124,7 +125,7 @@ export function OsintPanel({
     return () => window.removeEventListener('omega:auth-changed', onAuthChanged);
   }, []);
 
-  async function executeScan(asset) {
+  async function runScan(asset) {
     setIsScanning(true);
     setErrorMsg('');
     setConfirmationNote(null);
@@ -149,48 +150,64 @@ export function OsintPanel({
     }
   }
 
+  function executeScan(asset) {
+    if (isScanning) return;
+    guard(() => runScan(asset));
+  }
+
   async function handleSubmitAudit(e) {
     e.preventDefault();
-    const cleaned = assetValue.trim();
-    if (!cleaned || !consentChecked || isScanning) return;
-
-    setIsScanning(true);
-    setErrorMsg('');
-    setConfirmationNote(null);
-    try {
-      const created = await createOsintAsset({
-        asset_type: assetType,
-        asset_value: cleaned,
-        explicit_consent: true,
-      });
-      setAssets((prev) => [created, ...prev.filter((a) => a.id !== created.id)]);
-      setLoadAssetsError('');
-      setAssetValue('');
-      setConsentChecked(false);
-      await executeScan(created);
-    } catch (err) {
-      setErrorMsg(err?.message || 'Error registrando el activo autorizado.');
-      setIsScanning(false);
+    if (!consentChecked || isScanning) return;
+    const validation =
+      assetType === 'institutional_email'
+        ? validateEmail(assetValue)
+        : validateDomain(assetValue);
+    if (!validation.valid) {
+      setErrorMsg(validation.error);
+      return;
     }
+
+    await guard(async () => {
+      setIsScanning(true);
+      setErrorMsg('');
+      setConfirmationNote(null);
+      try {
+        const created = await createOsintAsset({
+          asset_type: assetType,
+          asset_value: validation.value,
+          explicit_consent: true,
+        });
+        setAssets((prev) => [created, ...prev.filter((a) => a.id !== created.id)]);
+        setLoadAssetsError('');
+        setAssetValue('');
+        setConsentChecked(false);
+        await runScan(created);
+      } catch (err) {
+        setErrorMsg(err?.message || 'Error registrando el activo autorizado.');
+        setIsScanning(false);
+      }
+    });
   }
 
   async function handleRevokeAsset(e, asset) {
     e.stopPropagation();
-    setErrorMsg('');
-    try {
-      await deleteOsintAsset(asset.id);
-      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
-      if (activeAsset?.id === asset.id) {
-        setActiveAsset(null);
-        setReport(null);
+    await guard(async () => {
+      setErrorMsg('');
+      try {
+        await deleteOsintAsset(asset.id);
+        setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+        if (activeAsset?.id === asset.id) {
+          setActiveAsset(null);
+          setReport(null);
+        }
+        setConfirmationNote({
+          tone: 'info',
+          message: `Listo: se eliminó ${asset.asset_value} de esta sesión.`,
+        });
+      } catch (err) {
+        setErrorMsg(err?.message || 'No se pudo eliminar el activo.');
       }
-      setConfirmationNote({
-        tone: 'info',
-        message: `Listo: se eliminó ${asset.asset_value} de esta sesión.`,
-      });
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo eliminar el activo.');
-    }
+    });
   }
 
   async function handleCopySubdomain(sub) {
@@ -254,7 +271,7 @@ export function OsintPanel({
                 }}
                 className="inline-flex items-center rounded-[9px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
               >
-                Investigar en Preguntar
+                Consultar con Copiloto
               </button>
             )}
             {activeAsset && (
@@ -508,15 +525,16 @@ export function OsintPanel({
       <div className="w-full max-w-[620px]">
         <header className="text-center mb-6 sm:mb-7">
           <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
-            Auditar mi exposición pública
+            Exposición pública
           </h1>
-          <p className="mt-2.5 text-[13.5px] sm:text-[14px] text-[#9A9AA2] leading-[1.55] max-w-[500px] mx-auto">
-            Revisa qué información pública existe sobre tu correo institucional o dominio propio sin interactuar con terceros.
+          <p className="mt-2 text-[13.5px] text-[#9A9AA2] max-w-[440px] mx-auto">
+            Consulta filtraciones y registros DNS autorizados.
           </p>
         </header>
 
         {/* Barra de Consulta Spotlight */}
         <form
+          noValidate
           onSubmit={handleSubmitAudit}
           style={{ animationDelay: '60ms' }}
           className="animate-scale-in omega-capsule rounded-[16px] p-3"
@@ -525,7 +543,10 @@ export function OsintPanel({
             <div className="apple-segmented inline-flex self-start sm:self-auto rounded-[9px] p-0.5 shrink-0">
               <button
                 type="button"
-                onClick={() => setAssetType('institutional_email')}
+                onClick={() => {
+                  setAssetType('institutional_email');
+                  setErrorMsg('');
+                }}
                 className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150 cursor-pointer ${
                   assetType === 'institutional_email'
                     ? 'apple-segmented-active'
@@ -536,7 +557,10 @@ export function OsintPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setAssetType('domain')}
+                onClick={() => {
+                  setAssetType('domain');
+                  setErrorMsg('');
+                }}
                 className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150 cursor-pointer ${
                   assetType === 'domain'
                     ? 'apple-segmented-active'
@@ -550,8 +574,13 @@ export function OsintPanel({
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <input
                 type="text"
+                maxLength={254}
                 value={assetValue}
-                onChange={(e) => setAssetValue(e.target.value)}
+                onChange={(e) => {
+                  setAssetValue(stripUnsafeChars(e.target.value, 254));
+                  if (errorMsg) setErrorMsg('');
+                }}
+                aria-invalid={Boolean(errorMsg)}
                 placeholder={
                   assetType === 'institutional_email'
                     ? 'prensa@organizacion.org'
@@ -579,7 +608,7 @@ export function OsintPanel({
                 onChange={(e) => setConsentChecked(e.target.checked)}
                 className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#2F6FED] cursor-pointer shrink-0"
               />
-              <span>Confirmo que soy titular de este activo o tengo autorización explícita.</span>
+              <span>Confirmo titularidad o autorización explícita.</span>
             </label>
           </div>
         </form>
@@ -614,12 +643,9 @@ export function OsintPanel({
             className="mt-5"
           />
         ) : assets.length === 0 ? (
-          <PanelEmptyState
-            icon={Globe}
-            title="Aún no has auditado ningún dominio ni correo"
-            description="Escribe tu activo institucional arriba, confirma tu autorización y pulsa Auditar para iniciar."
-            className="mt-5"
-          />
+          <p className="mt-4 text-center text-[12px] text-[#9A9AA2]">
+            Ingresa un correo o dominio autorizado para auditar.
+          </p>
         ) : (
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             {assets.map((asset, idx) => (

@@ -454,4 +454,115 @@ class FrontendGatewayIntegrationTest {
 
         assertThat(auditLogService.verifyTenantChain(tenantAId).valid()).isTrue();
     }
+
+    @Test
+    void standardAccountRegistrationAndEmailOnlyLoginWorkCleanly() throws Exception {
+        MvcResult reg = mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Camila Vega",
+                                  "email": "camila@redaccion.org",
+                                  "password": "OmegaPassword!2026",
+                                  "organizationName": "Redacción Segura"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.email").value("camila@redaccion.org"))
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andReturn();
+
+        String regToken = objectMapper.readTree(reg.getResponse().getContentAsString()).get("accessToken").asText();
+
+        mockMvc.perform(get("/api/v1/expedientes")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + regToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Espacio personal"));
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Camila Duplicada",
+                                  "email": "camila@redaccion.org",
+                                  "password": "OmegaPassword!2026"
+                                }
+                                """))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "camila@redaccion.org",
+                                  "password": "OmegaPassword!2026"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.email").value("camila@redaccion.org"));
+    }
+
+    @Test
+    void invalidRegistrationPayloadsAreRejectedWithFieldErrors() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Juan123!",
+                                  "email": "barrabasadas@localhost",
+                                  "password": "            ",
+                                  "organizationName": "@@@@"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Error de validación"))
+                .andExpect(jsonPath("$.fieldErrors.fullName").isString())
+                .andExpect(jsonPath("$.fieldErrors.email").isString())
+                .andExpect(jsonPath("$.fieldErrors.password").isString())
+                .andExpect(jsonPath("$.fieldErrors.organizationName").isString());
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "akjriuqw2iu3i3123.2.q..qw..wqe.r.34",
+                                  "email": "akjriuqw2iu3i3123.2.q.qw.wqe.r.34@gmail.com",
+                                  "password": "OmegaPassword!2026",
+                                  "organizationName": "akjriuqw2iu3i3123.2.q..qw..wqe.r.34"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.fullName").isString())
+                .andExpect(jsonPath("$.fieldErrors.email").isString())
+                .andExpect(jsonPath("$.fieldErrors.organizationName").isString());
+
+        JsonNode tenant = registerTenant("gibberish-osint");
+        String token = tenant.get("accessToken").asText();
+
+        mockMvc.perform(post("/api/v1/osint/assets")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "asset_type": "domain",
+                                  "asset_value": "akjriuqw2iu3i3123.2.q.qw.wqe.r.com",
+                                  "explicit_consent": true
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/v1/osint/assets")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "asset_type": "organization",
+                                  "asset_value": "akjriuqw2iu3i3123.2.q..qw..wqe.r.34",
+                                  "explicit_consent": true
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
 }

@@ -39,15 +39,33 @@ function rawLineSplit(text) {
   return text.split(/\r?\n/);
 }
 
-export function readDotEnv(composeRoot) {
-  if (!composeRoot) return {};
-  const envPath = path.join(composeRoot, '.env');
+function readDotEnvFile(envPath) {
+  if (!envPath) return {};
   try {
     if (!fs.existsSync(envPath)) return {};
     return parseDotEnvContent(fs.readFileSync(envPath, 'utf8'));
   } catch {
     return {};
   }
+}
+
+export function readDotEnv(composeRoot, userDataDir = null) {
+  const baseEnv = composeRoot ? readDotEnvFile(path.join(composeRoot, '.env')) : {};
+  const userEnv = userDataDir ? readDotEnvFile(path.join(userDataDir, '.env')) : {};
+  return { ...baseEnv, ...userEnv };
+}
+
+export function resolveComposeEnvFilePath(composeRoot, userDataDir = null) {
+  if (composeRoot && fs.existsSync(path.join(composeRoot, '.env'))) {
+    return null;
+  }
+  if (userDataDir) {
+    const userEnvPath = path.join(userDataDir, '.env');
+    if (fs.existsSync(userEnvPath)) {
+      return userEnvPath;
+    }
+  }
+  return null;
 }
 
 export function findComposeRoot(electronDir, processEnv = process.env, resourcesPath = process.resourcesPath) {
@@ -165,10 +183,17 @@ export function parseComposePsOutput(stdout) {
   return services;
 }
 
-export function buildComposeArgs(composeRoot, { prodMode = false, subArgs = [] } = {}) {
+export function buildComposeArgs(
+  composeRoot,
+  { prodMode = false, envFilePath = null, subArgs = [] } = {},
+) {
   const baseFile = path.join(composeRoot, 'docker-compose.yml');
   const prodFile = path.join(composeRoot, 'docker-compose.prod.yml');
-  const args = ['compose', '--project-directory', composeRoot, '-f', baseFile];
+  const args = ['compose', '--project-directory', composeRoot];
+  if (envFilePath && fs.existsSync(envFilePath)) {
+    args.push('--env-file', envFilePath);
+  }
+  args.push('-f', baseFile);
   if (prodMode && fs.existsSync(prodFile)) {
     args.push('-f', prodFile);
   }
@@ -352,6 +377,7 @@ export class DockerOrchestrator {
 
     this.startedByElectron = false;
     this.activeComposeRoot = null;
+    this.activeEnvFilePath = null;
     this.activeChildEnv = null;
     this.prodMode = process.env.OMEGA_DESKTOP_PROD === '1';
     this.aborted = false;
@@ -411,6 +437,7 @@ export class DockerOrchestrator {
     try {
       const args = buildComposeArgs(composeRoot, {
         prodMode,
+        envFilePath: this.activeEnvFilePath,
         subArgs: ['ps', '--format', 'json', ...BACKEND_SERVICES],
       });
       const res = await this.runCommandFn(args, {
@@ -431,6 +458,7 @@ export class DockerOrchestrator {
     try {
       const args = buildComposeArgs(composeRoot, {
         prodMode,
+        envFilePath: this.activeEnvFilePath,
         subArgs: ['logs', '--no-color', '--tail=10', serviceName],
       });
       const res = await this.runCommandFn(args, {
@@ -461,7 +489,8 @@ export class DockerOrchestrator {
 
   async #executeStart() {
     const composeRoot = this.findComposeRootFn(this.electronDir);
-    const dotEnv = readDotEnv(composeRoot);
+    const dotEnv = readDotEnv(composeRoot, this.userDataDir);
+    const envFilePath = resolveComposeEnvFilePath(composeRoot, this.userDataDir);
     const javaPort = Number(process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080);
 
     this.#updateState({
@@ -545,15 +574,18 @@ export class DockerOrchestrator {
       dotEnv.POSTGRES_PASSWORD,
       dotEnv.INTERNAL_SERVICE_TOKEN,
       dotEnv.OMEGA_JWT_SECRET,
+      dotEnv.OMEGA_BOOTSTRAP_SECRET,
       dotEnv.GROQ_API_KEY,
       dotEnv.OPENAI_API_KEY,
     ].filter(Boolean);
 
     const childEnv = {
+      ...dotEnv,
       ...process.env,
       ...secretsResult.envOverrides,
     };
     this.activeComposeRoot = composeRoot;
+    this.activeEnvFilePath = envFilePath;
     this.activeChildEnv = childEnv;
 
     // Determinar si alguno de los servicios backend ya estaba corriendo antes de invocar up -d
@@ -574,6 +606,7 @@ export class DockerOrchestrator {
 
     const upArgs = buildComposeArgs(composeRoot, {
       prodMode: this.prodMode,
+      envFilePath,
       subArgs: ['up', '-d', ...BACKEND_SERVICES],
     });
 
@@ -696,12 +729,14 @@ export class DockerOrchestrator {
     }
 
     const composeRoot = this.activeComposeRoot;
+    const envFilePath = this.activeEnvFilePath;
     const childEnv = this.activeChildEnv || process.env;
     const prodMode = this.prodMode;
 
     this.shutdownPromise = (async () => {
       const args = buildComposeArgs(composeRoot, {
         prodMode,
+        envFilePath,
         subArgs: ['down'],
       });
       try {

@@ -59,7 +59,7 @@ omega:
     allow-tenant-self-registration: ${OMEGA_ALLOW_TENANT_SELF_REGISTRATION:true}
     bootstrap-secret: ${OMEGA_BOOTSTRAP_SECRET:}
     internal-service-token: ${INTERNAL_SERVICE_TOKEN:omega-dev-internal-service-token-change-in-prod}
-    cors-allowed-origins: ${OMEGA_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,null}
+    cors-allowed-origins: ${OMEGA_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,null}
   ingest:
     temp-dir: ${OMEGA_INGEST_TMP_DIR:/tmp/omega_ingest}
     max-pdf-bytes: ${OMEGA_MAX_PDF_BYTES:26214400}

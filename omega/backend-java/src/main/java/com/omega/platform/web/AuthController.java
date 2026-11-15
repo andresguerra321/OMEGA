@@ -7,6 +7,7 @@ import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
 import com.omega.platform.web.dto.AuthDtos.CreateTenantUserRequest;
 import com.omega.platform.web.dto.AuthDtos.LoginRequest;
 import com.omega.platform.web.dto.AuthDtos.PrincipalMeResponse;
+import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
 import jakarta.validation.Valid;
@@ -41,6 +42,15 @@ public class AuthController {
     }
 
     public record AuthConfigResponse(boolean tenantSelfRegistrationEnabled, boolean bootstrapSecretRequired) {
+    }
+
+    @PostMapping("/register")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AuthTokenResponse registerAccount(
+            @Valid @RequestBody RegisterAccountRequest request,
+            @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret
+    ) {
+        return authService.registerAccount(request, bootstrapSecret);
     }
 
     @PostMapping("/tenants/register")

@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { StructuredResponse } from './StructuredResponse';
 import { OmegaShaderOrb } from './OmegaShaderOrb';
+import { stripUnsafeChars, validateChatMessage } from '../lib/validators';
+import { useSingleFlight } from '../lib/useSingleFlight';
 
 const DRAWER_STARTERS = [
   '¿Qué señales visibles indican posible infección con Pegasus?',
@@ -31,6 +33,8 @@ export function CopilotDrawer({
   reportsCount = 26,
 }) {
   const [draft, setDraft] = useState('');
+  const [composerError, setComposerError] = useState('');
+  const guard = useSingleFlight();
   const scrollEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -64,15 +68,23 @@ export function CopilotDrawer({
 
   function handleSubmit(e) {
     e?.preventDefault();
-    const text = draft.trim();
-    if (!text || isLoading) return;
-    setDraft('');
-    onSendPrompt?.(text);
+    if (isLoading) return;
+    const check = validateChatMessage(draft, { maxLength: 2000 });
+    if (!check.valid) {
+      setComposerError(check.error);
+      return;
+    }
+    guard(async () => {
+      setComposerError('');
+      setDraft('');
+      await onSendPrompt?.(check.value);
+    });
   }
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (e.repeat) return;
       handleSubmit();
     }
   }
@@ -164,7 +176,7 @@ export function CopilotDrawer({
                   <OmegaShaderOrb size={48} isThinking={isLoading} />
                 </div>
                 <p className="text-[13px] leading-relaxed text-[#F2F2F4]">
-                  Puedes consultar cualquier hallazgo, dominio o síntoma técnico mientras mantienes tu escaneo o revisión abierta detrás.
+                  Consulta hallazgos o CVEs sin salir de tu vista actual.
                 </p>
               </div>
 
@@ -224,7 +236,7 @@ export function CopilotDrawer({
               <span>No se pudo completar la consulta anterior.</span>
               <button
                 type="button"
-                onClick={onRetryFailedTurn}
+                onClick={() => guard(async () => onRetryFailedTurn?.())}
                 className="inline-flex items-center gap-1 rounded-[7px] bg-white/[0.08] px-2.5 py-1 text-white cursor-pointer"
               >
                 <RotateCcw className="h-3 w-3" />
@@ -241,13 +253,23 @@ export function CopilotDrawer({
           onSubmit={handleSubmit}
           className="shrink-0 border-t border-white/[0.08] bg-[#0A0A0C]/80 p-3.5"
         >
+          {composerError && (
+            <p role="alert" className="mb-2 text-[11.5px] text-[#FFB4AE] px-1">
+              {composerError}
+            </p>
+          )}
           <div className="apple-well rounded-[13px] p-2 flex items-end gap-2 focus-within:border-[#2F6FED] focus-within:shadow-[0_0_24px_rgba(47,111,237,0.25)] transition-all">
             <textarea
               ref={inputRef}
               rows={2}
+              maxLength={2000}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(stripUnsafeChars(e.target.value, 2000));
+                if (composerError) setComposerError('');
+              }}
               onKeyDown={handleKeyDown}
+              aria-invalid={Boolean(composerError)}
               placeholder="Escribe tu duda técnica o pega un indicador..."
               aria-label="Mensaje para el copiloto"
               className="flex-1 resize-none bg-transparent px-2 py-1 text-[13px] text-[#F2F2F4] placeholder:text-[#9A9AA2] focus:outline-none"
