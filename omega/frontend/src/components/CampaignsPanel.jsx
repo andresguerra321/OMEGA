@@ -39,6 +39,7 @@ export function CampaignsPanel({
   initialSearchKey = 0,
 }) {
   const [campaigns, setCampaigns] = useState([]);
+  const [catalogFreshness, setCatalogFreshness] = useState(null);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState('');
   const [searchQuery, setSearchQuery] = useState(initialSearch || '');
@@ -95,6 +96,7 @@ export function CampaignsPanel({
       const data = await fetchCampaigns();
       const list = Array.isArray(data?.campaigns) ? data.campaigns : [];
       setCampaigns(list);
+      setCatalogFreshness(data?.catalog_freshness || null);
       setSelectedId((prev) => {
         const nextId = prev && list.some((c) => c.id === prev) ? prev : list[0]?.id ?? null;
         if (nextId && nextId !== prev) {
@@ -119,6 +121,7 @@ export function CampaignsPanel({
         const list = Array.isArray(data?.campaigns) ? data.campaigns : [];
         setListError('');
         setCampaigns(list);
+        setCatalogFreshness(data?.catalog_freshness || null);
         const firstId = list[0]?.id ?? null;
         if (firstId) {
           setLoadingDetail(true);
@@ -141,7 +144,7 @@ export function CampaignsPanel({
 
   useEffect(() => {
     const onAuthChanged = (e) => {
-      if (e?.detail?.accessToken) {
+      if (e?.detail) {
         void loadCampaigns();
       }
     };
@@ -444,6 +447,11 @@ export function CampaignsPanel({
               })}
             </div>
           )}
+
+          <div className="font-tech flex items-center justify-between gap-2 text-[10.5px] text-[#9A9AA2] pt-0.5">
+            <span>Corte CTI: {catalogFreshness?.catalog_cutoff_date || '2024-12-16'}</span>
+            <span>Revisión PR</span>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-1">

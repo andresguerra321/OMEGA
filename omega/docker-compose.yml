@@ -48,6 +48,9 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OMEGA_STIX_MANIFEST_PATH: /app/corpus_mvp/iocs/stix_manifest.json
+    volumes:
+      - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
     expose:
       - "8000"
     networks:
@@ -85,6 +88,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
       OMEGA_JWT_SECRET: ${OMEGA_JWT_SECRET:-omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}
+      OMEGA_COOKIE_SECURE: ${OMEGA_COOKIE_SECURE:-false}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}
       OMEGA_INGEST_TMP_DIR: /tmp/omega_ingest
       TESSDATA_PREFIX: /usr/share/tesseract-ocr/4.00/tessdata

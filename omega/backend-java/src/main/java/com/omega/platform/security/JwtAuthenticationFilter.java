@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,8 +19,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Extrae el JWT Bearer, valida firma e integridad del usuario/tenant activos
- * e inyecta un TenantScope inmutable en ThreadLocal (limpiado siempre en finally).
+ * Extrae el JWT Bearer o la cookie HttpOnly de sesión, valida firma e integridad
+ * del usuario/tenant activos e inyecta un TenantScope inmutable en ThreadLocal
+ * (limpiado siempre en finally).
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -29,15 +31,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final JsonSecurityHandlers securityHandlers;
+    private final SessionCookieHelper sessionCookieHelper;
 
     public JwtAuthenticationFilter(
             JwtService jwtService,
             UserRepository userRepository,
             JsonSecurityHandlers securityHandlers
     ) {
+        this(jwtService, userRepository, securityHandlers, null);
+    }
+
+    @Autowired
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            UserRepository userRepository,
+            JsonSecurityHandlers securityHandlers,
+            SessionCookieHelper sessionCookieHelper
+    ) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.securityHandlers = securityHandlers;
+        this.sessionCookieHelper = sessionCookieHelper;
     }
 
     @Override
@@ -46,15 +60,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        boolean isLogoutEndpoint = "/api/v1/auth/logout".equals(request.getRequestURI());
         try {
-            String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-            if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-
-            String token = authHeader.substring(BEARER_PREFIX.length()).trim();
-            if (token.isEmpty()) {
+            String token = resolveJwtToken(request);
+            if (token == null || token.isEmpty()) {
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -67,6 +76,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (activeUser.isEmpty()) {
                 SecurityContextHolder.clearContext();
+                if (isLogoutEndpoint) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 securityHandlers.commence(
                         request,
                         response,
@@ -94,6 +107,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (JwtException ex) {
             SecurityContextHolder.clearContext();
+            if (isLogoutEndpoint) {
+                filterChain.doFilter(request, response);
+                return;
+            }
             securityHandlers.commence(
                     request,
                     response,
@@ -102,5 +119,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    private String resolveJwtToken(HttpServletRequest request) {
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
+            String bearer = authHeader.substring(BEARER_PREFIX.length()).trim();
+            if (!bearer.isEmpty()) {
+                return bearer;
+            }
+        }
+        return sessionCookieHelper == null ? null : sessionCookieHelper.extractSessionToken(request);
     }
 }

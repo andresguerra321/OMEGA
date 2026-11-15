@@ -5,7 +5,8 @@
     "publication_date": "2021-09-13",
     "spyware_family": "Pegasus",
     "source_url": "https://citizenlab.ca/2021/09/forcedentry-nso-group-imessage-zero-click-exploit-captured-in-the-wild/",
-    "local_filename": "citizenlab_2021_forcedentry.pdf"
+    "local_filename": "citizenlab_2021_forcedentry.pdf",
+    "expected_sha256": "118bb2ed6ea81f6625b851548609c2d5ed702aec22d4c99e3f86b4d1b2791b10"
   },
   {
     "title": "Hooking Candiru: Another Mercenary Spyware Vendor Comes into Focus",
@@ -13,7 +14,8 @@
     "publication_date": "2021-07-15",
     "spyware_family": "Candiru",
     "source_url": "https://citizenlab.ca/2021/07/hooking-candiru-another-mercenary-spyware-vendor-comes-into-focus/",
-    "local_filename": "citizenlab_2021_hooking_candiru.pdf"
+    "local_filename": "citizenlab_2021_hooking_candiru.pdf",
+    "expected_sha256": "6f8eb95ba8d6dabcb6c7756e3cca0da768a7bf93335c69c291d243e6722dac10"
   },
   {
     "title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
@@ -21,7 +23,8 @@
     "publication_date": "2021-07-18",
     "spyware_family": "Pegasus",
     "source_url": "https://www.amnesty.org/en/latest/research/2021/07/forensic-methodology-report-how-to-catch-nso-groups-pegasus/",
-    "local_filename": "amnesty_2021_pegasus_forensic_methodology.pdf"
+    "local_filename": "amnesty_2021_pegasus_forensic_methodology.pdf",
+    "expected_sha256": "1f88c6adbcf68d29ac527980191dbd178faadbf6cb09fac81a92531d87b635f7"
   },
   {
     "report_id": "AMNESTY_2023_PREDATOR_FILES",
@@ -56,7 +59,8 @@
     "publication_date": "2024-02-06",
     "spyware_family": "Pegasus / Predator / Candiru",
     "source_url": "https://blog.google/threat-analysis-group/buying-spying-insights-into-commercial-surveillance-vendors/",
-    "local_filename": "google_tag_2024_buying_spying.pdf"
+    "local_filename": "google_tag_2024_buying_spying.pdf",
+    "expected_sha256": "6c1bc2133a6f5bee8212fe7ae8a66ffb46832ea8f60513b6f08f77cb7da9f791"
   },
   {
     "report_id": "GOOGLE_TAG_2022_PREDATOR_ANDROID",
@@ -100,7 +104,8 @@
     "publication_date": "2022-04-18",
     "spyware_family": "Pegasus / Candiru",
     "source_url": "https://citizenlab.ca/2022/04/catalangate-extensive-mercenary-spyware-operation-against-catalans-using-pegasus-candiru/",
-    "local_filename": "citizenlab_2022_catalangate.pdf"
+    "local_filename": "citizenlab_2022_catalangate.pdf",
+    "expected_sha256": "7b35e7c0c832d2b3cd6c36cdb11eb930deb2de0b168224d79efb1e143d20884f"
   },
   {
     "title": "Sweet QuaDreams: A First Look at Spyware Vendor QuaDream’s Exploits, Victims, and Customers",
@@ -108,7 +113,8 @@
     "publication_date": "2023-04-11",
     "spyware_family": "QuaDream Reign",
     "source_url": "https://citizenlab.ca/2023/04/spyware-vendor-quadream-exploits-victims-customers/",
-    "local_filename": "citizenlab_2023_quadream_endofdays.pdf"
+    "local_filename": "citizenlab_2023_quadream_endofdays.pdf",
+    "expected_sha256": "3c68437c202fbba1796a0273f84ab74c5cf28fa2d67735a611cc9d40361a6520"
   },
   {
     "title": "BLASTPASS: NSO Group iPhone Zero-Click, Zero-Day Exploit Captured in the Wild",
@@ -116,7 +122,8 @@
     "publication_date": "2023-09-07",
     "spyware_family": "Pegasus",
     "source_url": "https://citizenlab.ca/2023/09/blastpass-nso-group-iphone-zero-click-zero-day-exploit-captured-in-the-wild/",
-    "local_filename": "citizenlab_2023_blastpass.pdf"
+    "local_filename": "citizenlab_2023_blastpass.pdf",
+    "expected_sha256": "280a5ee7c6a703807c274f4fbcd6391aeecc7c531da51821ecc280a27207a980"
   },
   {
     "title": "Forensic Methodology Report: How to Catch NSO Group's Pegasus",
@@ -132,7 +139,8 @@
     "publication_date": "2023-10-09",
     "spyware_family": "Predator",
     "source_url": "https://securitylab.amnesty.org/latest/2023/10/technical-deep-dive-into-intellexa-alliance-surveillance-products/",
-    "local_filename": "amnesty_2023_predator_files.pdf"
+    "local_filename": "amnesty_2023_predator_files.pdf",
+    "expected_sha256": "0b853ee7329511f2cf214bf4d25de4955af27ae5f98cbd0e305d359ce21628c2"
   },
   {
     "title": "Protecting Android Users from 0-Day Attacks (Intellexa Predator & Cytrox)",
@@ -140,6 +148,7 @@
     "publication_date": "2022-05-19",
     "spyware_family": "Predator",
     "source_url": "https://blog.google/threat-analysis-group/protecting-android-users-from-0-day-attacks/",
-    "local_filename": "google_tag_2022_android_predator_0day.pdf"
+    "local_filename": "google_tag_2022_android_predator_0day.pdf",
+    "expected_sha256": "5126637d6394918b655a66f6473250fa3c6dcc5f5572cc9df9765e0fc69082b0"
   }
 ]

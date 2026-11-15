@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  Trash2,
 } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
 import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
@@ -79,6 +80,7 @@ export function SecurityPostureStage({
   onNavigate,
   onLinkVerified,
   onLogActivity,
+  onPanicPurge,
   authSession = null,
 }) {
   const [surfaceMenuOpen, setSurfaceMenuOpen] = useState(false);
@@ -99,6 +101,7 @@ export function SecurityPostureStage({
   const reportsCount = Number(govStats?.corpus_stats?.reports ?? 16);
   const iocsCount = Number(govStats?.corpus_stats?.iocs ?? 4896);
   const campaignsCount = Number(govStats?.corpus_stats?.campaigns ?? 19);
+  const catalogCutoffDate = govStats?.catalog_freshness?.catalog_cutoff_date || '2024-12-16';
 
   const androidOk = Boolean(usbStatus?.android?.connected);
   const iosOk = Boolean(usbStatus?.ios?.connected);
@@ -132,7 +135,7 @@ export function SecurityPostureStage({
         statusLabel: pcWarn
           ? `Revisar (${pcInfo.findingsCount})`
           : pcHealthy
-            ? 'Verificado · 100%'
+            ? '0 coincidencias (RAM)'
             : 'Listo en RAM',
         tone: pcWarn ? 'alert' : pcHealthy ? 'clean' : 'royal',
         icon: Laptop,
@@ -288,7 +291,7 @@ export function SecurityPostureStage({
   const postureLabel = pcWarn
     ? `${pcInfo.findingsCount} ALERTAS`
     : pcHealthy
-      ? 'VERIFICADO 100%'
+      ? '0 COINCIDENCIAS (RAM)'
       : 'EN ESPERA';
 
   return (
@@ -409,6 +412,19 @@ export function SecurityPostureStage({
               </>
             )}
           </button>
+
+          {authSession && (
+            <button
+              type="button"
+              onClick={() => void onPanicPurge?.()}
+              title="Purga rápida: destruye tokens, memoria volátil y caché local"
+              aria-label="Purga rápida"
+              className="omega-glass-chip h-8 px-2 rounded-[9px] border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 text-[#FFDAD6] inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+            >
+              <Trash2 className="h-3 w-3 shrink-0" />
+              <span className="hidden xl:inline">Purga</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -461,6 +477,8 @@ export function SecurityPostureStage({
           </div>
 
           <div className="flex items-center gap-2 text-[#9A9AA2]">
+            <span className="hidden md:inline">CORTE CTI: {catalogCutoffDate}</span>
+            <span aria-hidden="true" className="hidden md:inline text-white/15">|</span>
             <span className="hidden sm:inline">{technicalMode ? 'TÉCNICO' : 'SIMPLE'}</span>
             <span aria-hidden="true" className="hidden sm:inline text-white/15">|</span>
             <span className="text-[#F2F2F4]">0 B EN DISCO</span>
@@ -742,7 +760,7 @@ export function SecurityPostureStage({
                   {pcWarn
                     ? `${pcInfo.findingsCount} alertas`
                     : pcHealthy
-                      ? 'Limpio 100%'
+                      ? '0 coincidencias'
                       : 'Listo RAM'}
                 </div>
 

@@ -113,7 +113,7 @@ export function OsintPanel({
 
   useEffect(() => {
     const onAuthChanged = (e) => {
-      if (e?.detail?.accessToken) {
+      if (e?.detail) {
         void loadSessionAssets();
       } else {
         setAssets([]);

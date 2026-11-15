@@ -65,8 +65,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register",
-                                "/api/v1/auth/tenants/register")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout",
+                                "/api/v1/auth/register", "/api/v1/auth/tenants/register")
                         .permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
@@ -81,7 +81,8 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Omega-Bootstrap-Secret"));
         config.setExposedHeaders(List.of("Retry-After"));
-        config.setAllowCredentials(false);
+        boolean hasWildcardOrigin = corsAllowedOrigins.contains("*");
+        config.setAllowCredentials(!hasWildcardOrigin);
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

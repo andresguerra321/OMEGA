@@ -1,6 +1,7 @@
 package com.omega.platform.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,6 +21,8 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
@@ -180,9 +183,7 @@ class StixAndForensicBridgeTest {
     void ingestsStix2BundlesIdempotentlyAndEnforcesArchiveSafetyAndInternalServiceToken() throws Exception {
         // 1. Ingesta idempotente STIX 2.1 (incluye normalización de IP dentro de domain-name:value)
         Path tempStixDir = Files.createTempDirectory("omega-stix-test-");
-        Files.writeString(
-                tempStixDir.resolve("novispy-sample.stix2"),
-                """
+        String stixPayload = """
                 {
                   "type": "bundle",
                   "id": "bundle--test-001",
@@ -220,7 +221,28 @@ class StixAndForensicBridgeTest {
                     }
                   ]
                 }
-                """,
+                """;
+        byte[] stixBytes = stixPayload.getBytes(StandardCharsets.UTF_8);
+        Files.write(tempStixDir.resolve("novispy-sample.stix2"), stixBytes);
+        String sha256 = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(stixBytes));
+        Files.writeString(
+                tempStixDir.resolve("stix_manifest.json"),
+                """
+                {
+                  "catalog_cutoff_date": "2024-12-16",
+                  "update_policy": "pr_reviewed_only",
+                  "trusted_organizations": ["Amnesty International Security Lab"],
+                  "bundles": [
+                    {
+                      "filename": "novispy-sample.stix2",
+                      "expected_sha256": "%s",
+                      "organization": "Amnesty International Security Lab",
+                      "published_date": "2024-12-16",
+                      "source_url": "https://github.com/AmnestyTech/investigations"
+                    }
+                  ]
+                }
+                """.formatted(sha256),
                 StandardCharsets.UTF_8
         );
 
@@ -230,6 +252,13 @@ class StixAndForensicBridgeTest {
         assertThat(secondSync.netIndicatorsInserted()).isZero();
         assertThat(stixCatalogService.lookupIndicator("176.223.111.131"))
                 .anySatisfy(ind -> assertThat(ind.getIocType()).isEqualTo("ip"));
+
+        // 1b. Fail-closed ante bundle STIX adulterado o no listado en stix_manifest.json
+        Files.writeString(tempStixDir.resolve("unlisted-evil.stix2"), "{\"type\":\"bundle\",\"objects\":[]}", StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> stixCatalogService.syncDirectory(tempStixDir))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("fail-closed");
+        Files.deleteIfExists(tempStixDir.resolve("unlisted-evil.stix2"));
 
         // 2. Autenticar Tenant para pruebas del puente forense
         String suffix = UUID.randomUUID().toString().substring(0, 8);

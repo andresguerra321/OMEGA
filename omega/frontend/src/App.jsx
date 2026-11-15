@@ -27,6 +27,10 @@ import {
   syncStixFeeds,
   getAuthSession,
   clearAuthSession,
+  isAuthenticated,
+  logoutSession,
+  panicPurgeClient,
+  restoreCookieAuthSession,
   ensurePersonalWorkspace,
   listExpedienteDocuments,
   uploadExpedientePdf,
@@ -57,8 +61,6 @@ const NAV_ITEMS = [
   { id: 'cuenta', label: 'Cuenta', subtitle: 'Registro, sesión y PDFs privados', icon: UserCheck },
   { id: 'ajustes', label: 'Ajustes', subtitle: 'Motor RAG, cuenta y permisos', icon: Settings },
 ];
-
-const SESSIONS_STORAGE_KEY = 'omega_research_sessions_v2';
 
 function buildInitialDemoSessions() {
   const now = Date.now();
@@ -198,14 +200,7 @@ export default function App() {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [pinnedCopilotContext, setPinnedCopilotContext] = useState('');
   const [sessionsMenuOpen, setSessionsMenuOpen] = useState(false);
-  const [sessions, setSessions] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(SESSIONS_STORAGE_KEY));
-      return Array.isArray(saved) && saved.length > 0 ? saved : buildInitialDemoSessions();
-    } catch {
-      return buildInitialDemoSessions();
-    }
-  });
+  const [sessions, setSessions] = useState(() => buildInitialDemoSessions());
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
   const [loadingChat, setLoadingChat] = useState(false);
@@ -216,7 +211,10 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
-  const [verifyingSession, setVerifyingSession] = useState(() => Boolean(getAuthSession()?.accessToken));
+  const [verifyingSession, setVerifyingSession] = useState(() => {
+    const isHttpOrigin = typeof window !== 'undefined' && window.location?.protocol !== 'file:';
+    return Boolean(isAuthenticated() || isHttpOrigin);
+  });
   const [authGateReason, setAuthGateReason] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
@@ -237,7 +235,7 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
-    clearAuthSession();
+    void logoutSession();
     setAuthSession(null);
     setVerifyingSession(false);
     setAuthGateReason('');
@@ -262,9 +260,36 @@ export default function App() {
     setExpedienteError('');
   }, []);
 
+  const handlePanicPurge = useCallback(async () => {
+    await panicPurgeClient();
+    setSessions([]);
+    setCurrentSessionId(null);
+    setAuthSession(null);
+    setVerifyingSession(false);
+    setAuthGateReason('Purga rápida ejecutada: credenciales, historial en RAM y caché local destruidos.');
+    setActiveNav('inicio');
+    setIsCopilotOpen(false);
+    setCommandOpen(false);
+    setSessionsMenuOpen(false);
+    setAuthModalOpen(false);
+    setSelectedCitation(null);
+    setIsSourcesPanelOpen(false);
+    setDraftContext(null);
+    setPcAudit(null);
+    setPcScannedAt('');
+    setLastLinkResult(null);
+    setStageFeedback(null);
+    setActiveExpedienteId('');
+    setUsePrivateDocs(false);
+    setExpedienteDocs([]);
+    setGovStats(null);
+    setExpedienteNotice('');
+    setExpedienteError('');
+  }, []);
+
   const refreshSystemTelemetry = useCallback(async () => {
     try {
-      const hasSession = Boolean(getAuthSession()?.accessToken);
+      const hasSession = isAuthenticated();
       const [health, gov] = await Promise.all([
         fetchApiHealth(),
         hasSession ? fetchSystemGovernance().catch(() => null) : Promise.resolve(null),
@@ -278,7 +303,7 @@ export default function App() {
   }, []);
 
   const refreshPrivateWorkspace = useCallback(async () => {
-    if (!getAuthSession()?.accessToken) {
+    if (!isAuthenticated()) {
       setActiveExpedienteId('');
       setUsePrivateDocs(false);
       setExpedienteDocs([]);
@@ -299,7 +324,7 @@ export default function App() {
   }, []);
 
   const refreshActiveExpedienteDocs = useCallback(async (targetId = activeExpedienteId) => {
-    if (!targetId || !getAuthSession()?.accessToken) {
+    if (!targetId || !isAuthenticated()) {
       setExpedienteDocs([]);
       return;
     }
@@ -317,11 +342,15 @@ export default function App() {
   useEffect(() => {
     if (!verifyingSession) return undefined;
     let cancelled = false;
+    const hadInMemorySession = isAuthenticated();
     fetchCurrentPrincipal()
       .then((me) => {
         if (cancelled) return;
-        if (me?.role || me?.tenantId) {
-          setAuthSession((prev) => (prev ? { ...prev, role: me.role || prev.role, tenantId: me.tenantId || prev.tenantId } : prev));
+        if (me?.userId && me?.tenantId) {
+          const restored = restoreCookieAuthSession(me);
+          if (restored) {
+            setAuthSession(restored);
+          }
         }
       })
       .catch((err) => {
@@ -329,7 +358,9 @@ export default function App() {
         if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
           clearAuthSession();
           setAuthSession(null);
-          setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
+          if (hadInMemorySession) {
+            setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
+          }
         }
       })
       .finally(() => {
@@ -344,7 +375,7 @@ export default function App() {
     const onAuthChanged = (e) => {
       const next = e?.detail ?? getAuthSession();
       setAuthSession(next);
-      if (next?.accessToken) {
+      if (next && (next.accessToken || next.cookieBacked)) {
         setAuthGateReason('');
       } else {
         setIsCopilotOpen(false);
@@ -360,7 +391,7 @@ export default function App() {
       const reason = 'Tu sesión expiró. Inicia sesión para continuar.';
       setAuthGateReason(reason);
       setAuthModalReason(reason);
-      if (!getAuthSession()?.accessToken) {
+      if (!isAuthenticated()) {
         setAuthModalOpen(false);
       }
     };
@@ -375,26 +406,26 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       void refreshSystemTelemetry();
-      if (authSession?.accessToken) {
+      if (authSession) {
         void refreshPrivateWorkspace();
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [authSession?.accessToken, refreshSystemTelemetry, refreshPrivateWorkspace]);
+  }, [authSession, refreshSystemTelemetry, refreshPrivateWorkspace]);
 
   useEffect(() => {
-    if (!activeExpedienteId || !authSession?.accessToken) return undefined;
+    if (!activeExpedienteId || !authSession) return undefined;
     const timer = setTimeout(() => {
       void refreshActiveExpedienteDocs(activeExpedienteId);
     }, 0);
     return () => clearTimeout(timer);
-  }, [activeExpedienteId, authSession?.accessToken, refreshActiveExpedienteDocs]);
+  }, [activeExpedienteId, authSession, refreshActiveExpedienteDocs]);
 
   useEffect(() => {
     const hasPending = expedienteDocs.some(
       (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
     );
-    if (!hasPending || !activeExpedienteId || !authSession?.accessToken) return undefined;
+    if (!hasPending || !activeExpedienteId || !authSession) return undefined;
     const timer = setInterval(() => {
       void listExpedienteDocuments(activeExpedienteId)
         .then((docs) => {
@@ -407,7 +438,7 @@ export default function App() {
         .catch(() => {});
     }, 2500);
     return () => clearInterval(timer);
-  }, [expedienteDocs, activeExpedienteId, authSession?.accessToken, refreshSystemTelemetry]);
+  }, [expedienteDocs, activeExpedienteId, authSession, refreshSystemTelemetry]);
 
   async function handleUploadExpedientePdf(file) {
     if (!file || uploadingPdf) return;
@@ -462,19 +493,13 @@ export default function App() {
 
   useEffect(() => {
     const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
-    if (!bridge?.isDesktop || !authSession?.accessToken) return undefined;
+    if (!bridge?.isDesktop || !authSession) return undefined;
     let cancelled = false;
 
     const pollUsb = async () => {
       try {
-        let customPath = '';
-        try {
-          customPath = localStorage.getItem('omega_custom_adb_path') || '';
-        } catch {
-          customPath = '';
-        }
         const [adb, ios] = await Promise.all([
-          bridge.checkAdbStatus ? bridge.checkAdbStatus(customPath).catch(() => null) : null,
+          bridge.checkAdbStatus ? bridge.checkAdbStatus('').catch(() => null) : null,
           bridge.checkIosStatus ? bridge.checkIosStatus().catch(() => null) : null,
         ]);
         if (cancelled) return;
@@ -493,7 +518,7 @@ export default function App() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [authSession?.accessToken]);
+  }, [authSession]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.omegaDesktop?.setTitleBarTheme) {
@@ -502,15 +527,7 @@ export default function App() {
   }, [activeNav]);
 
   useEffect(() => {
-    const persistable = sessions.map((s) => ({
-      ...s,
-      messages: (s.messages || []).map(({ animateTyping: _animate, ...rest }) => rest),
-    }));
-    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(persistable));
-  }, [sessions]);
-
-  useEffect(() => {
-    if (!authSession?.accessToken) return undefined;
+    if (!authSession) return undefined;
     function onKeyDown(e) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -528,7 +545,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [authSession?.accessToken]);
+  }, [authSession]);
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === currentSessionId) || null,
@@ -598,7 +615,7 @@ export default function App() {
   }
 
   async function handleSend(rawPrompt, requestedScope = sourceScope, options = {}) {
-    if (!getAuthSession()?.accessToken) {
+    if (!isAuthenticated()) {
       setAuthSession(null);
       return;
     }
@@ -771,7 +788,7 @@ export default function App() {
   }
 
   function handleNavigate(navId, opts = {}) {
-    if (!getAuthSession()?.accessToken) {
+    if (!isAuthenticated()) {
       setAuthSession(null);
       return;
     }
@@ -907,7 +924,7 @@ export default function App() {
   }
 
   const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
-  const isSignedIn = Boolean(authSession?.accessToken);
+  const isSignedIn = Boolean(authSession);
   const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
   const reportsCount = Number(govStats?.corpus_stats?.reports ?? 26);
   const usbConnected = Boolean(usbStatus?.android?.connected || usbStatus?.ios?.connected);
@@ -999,6 +1016,7 @@ export default function App() {
             }}
             onNavigate={handleNavigate}
             onLinkVerified={handleLinkVerified}
+            onPanicPurge={handlePanicPurge}
             authSession={authSession}
           />
         ) : (
@@ -1141,6 +1159,19 @@ export default function App() {
                     </>
                   )}
                 </button>
+
+                {authSession && (
+                  <button
+                    type="button"
+                    onClick={() => void handlePanicPurge()}
+                    title="Purga rápida de emergencia: borra tokens, memoria volátil y caché local"
+                    aria-label="Purga rápida de emergencia"
+                    className="omega-glass-chip h-8 px-2 rounded-[9px] border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 text-[#FFDAD6] inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3 shrink-0" />
+                    <span className="hidden xl:inline">Purga</span>
+                  </button>
+                )}
               </div>
             </header>
 
@@ -1400,6 +1431,7 @@ export default function App() {
                     authSession={authSession}
                     onOpenAuth={openAuthModal}
                     onLogout={handleLogout}
+                    onPanicPurge={handlePanicPurge}
                   />
                 )}
               </div>

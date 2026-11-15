@@ -114,8 +114,12 @@ public final class AuthDtos {
     public record PrincipalMeResponse(
             UUID userId,
             UUID tenantId,
+            String tenantSlug,
             String email,
             Role role
     ) {
+        public PrincipalMeResponse(UUID userId, UUID tenantId, String email, Role role) {
+            this(userId, tenantId, null, email, role);
+        }
     }
 }

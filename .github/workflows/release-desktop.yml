@@ -1,0 +1,83 @@
+name: Release Desktop Installers (Signed Provenance)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Versión de etiqueta o paquete'
+        required: false
+        default: 'v1.3.1-local-ci'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-windows-desktop:
+    name: Build & Attest OMEGA Desktop (.exe)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: omega/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: omega/frontend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify CTI & PDF Corpus SHA-256 Manifests
+        working-directory: .
+        run: python omega/rag_engine/corpus_integrity.py
+
+      - name: Install Dependencies & Run Checks
+        run: |
+          npm ci --ignore-scripts
+          npm run lint
+          npm run test:desktop
+          node node_modules/electron/install.js
+
+      - name: Build Windows NSIS & Portable Installers
+        env:
+          # Opcional: configurar certificados Authenticode OV/EV o Azure Trusted Signing como GitHub Secrets
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WIN_CSC_LINK != '' }}
+        run: npm run desktop:dist
+
+      - name: Generate Verifiable SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path release -Filter *.exe | Sort-Object Name
+          $lines = foreach ($f in $files) {
+            $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($f.Name)"
+          }
+          $lines | Out-File -FilePath release\SHA256SUMS.txt -Encoding ascii
+          Get-Content release\SHA256SUMS.txt
+
+      - name: Attest Build Provenance (Sigstore / SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            omega/frontend/release/*.exe
+            omega/frontend/release/SHA256SUMS.txt
+
+      - name: Upload Signed Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omega-desktop-windows
+          path: |
+            omega/frontend/release/*.exe
+            omega/frontend/release/SHA256SUMS.txt
+          retention-days: 90

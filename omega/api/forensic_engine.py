@@ -3,7 +3,8 @@ import logging
 import re
 from urllib.parse import urlparse
 
-from cti_db import lookup_iocs_detailed
+from cti_db import get_catalog_freshness, lookup_iocs_detailed
+from forensic_scope import OS_SCOPE_LIMITATION_NOTICE
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +256,7 @@ def analyze_forensic_payload(raw_text: str, filename: str | None = None) -> dict
             breakdown["processes_or_urls"] += 1
 
     candidate_values = list(registry.keys())
+    freshness = get_catalog_freshness()
     if not candidate_values:
         return {
             "detected_format": detected_format,
@@ -262,6 +264,8 @@ def analyze_forensic_payload(raw_text: str, filename: str | None = None) -> dict
             "total_matches": 0,
             "breakdown": breakdown,
             "ephemeral_notice": "Análisis volátil completado en RAM. Ningún dato del dispositivo fue almacenado (RNF4).",
+            "os_scope_notice": OS_SCOPE_LIMITATION_NOTICE,
+            "catalog_freshness": freshness,
             "matches": [],
         }
 
@@ -286,6 +290,8 @@ def analyze_forensic_payload(raw_text: str, filename: str | None = None) -> dict
         "total_matches": len(matches),
         "breakdown": breakdown,
         "ephemeral_notice": "Análisis volátil completado en RAM. Ningún dato del dispositivo fue almacenado (RNF4).",
+        "os_scope_notice": OS_SCOPE_LIMITATION_NOTICE,
+        "catalog_freshness": freshness,
         "matches": matches,
     }
 

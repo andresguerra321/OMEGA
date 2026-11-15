@@ -72,11 +72,24 @@ def parse_stix_or_json(file_path: Path) -> list[dict]:
     return extracted
 
 
+def _verify_stix_fail_closed():
+    try:
+        from corpus_integrity import verify_stix_corpus
+    except ImportError:
+        from rag_engine.corpus_integrity import verify_stix_corpus
+    return verify_stix_corpus(IOCS_DIR)
+
+
 def ingest_ioc_files():
-    files = sorted(list(IOCS_DIR.glob("*.stix2")) + list(IOCS_DIR.glob("*.json")))
+    stix_meta = _verify_stix_fail_closed()
+    files = sorted(
+        f for f in (list(IOCS_DIR.glob("*.stix2")) + list(IOCS_DIR.glob("*.json")))
+        if f.name != "stix_manifest.json"
+    )
     if not files:
         print(f"No se encontraron archivos .stix2 o .json en {IOCS_DIR}")
         return
+    print(f"[STIX Fail-Closed] Manifiesto SHA-256 verificado (corte {stix_meta.get('catalog_cutoff_date')}).")
 
     with psycopg.connect(DB_DSN) as conn:
         with conn.cursor() as cur:

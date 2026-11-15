@@ -151,6 +151,7 @@ export function SettingsPanel({
   authSession = null,
   onOpenAuth,
   onLogout,
+  onPanicPurge,
 }) {
   const [activeSection, setActiveSection] = useState('cuenta');
   const [gov, setGov] = useState(null);
@@ -187,13 +188,13 @@ export function SettingsPanel({
 
   useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
-  const [loadingGov, setLoadingGov] = useState(Boolean(authSession?.accessToken));
+  const [loadingGov, setLoadingGov] = useState(Boolean(authSession));
   const [govError, setGovError] = useState('');
   const [actionBanner, setActionBanner] = useState(null);
   const guard = useSingleFlight();
 
   useEffect(() => {
-    if (!authSession?.accessToken) {
+    if (!authSession) {
       return undefined;
     }
 
@@ -227,10 +228,10 @@ export function SettingsPanel({
       cancelled = true;
       clearTimeout(initTimer);
     };
-  }, [authSession?.accessToken]);
+  }, [authSession]);
 
   function handleRetryGovernance() {
-    if (!authSession?.accessToken) {
+    if (!authSession) {
       onOpenAuth?.('Conecta una sesión tenant para consultar el estado y trazabilidad en vivo.');
       return;
     }
@@ -257,7 +258,7 @@ export function SettingsPanel({
   }
 
   async function handleVerifyAuditChain() {
-    if (!authSession?.accessToken || verifyingAudit) return;
+    if (!authSession || verifyingAudit) return;
     await guard(async () => {
       setVerifyingAudit(true);
       setGovError('');
@@ -344,7 +345,7 @@ export function SettingsPanel({
       setWorkspaceId(nextId);
       setRotated(true);
       try {
-        if (authSession?.accessToken) {
+        if (authSession) {
           const refreshed = await fetchSystemGovernance();
           if (refreshed) setGov(refreshed);
         }
@@ -381,7 +382,7 @@ export function SettingsPanel({
     });
   }
 
-  const effectiveGov = authSession?.accessToken ? (gov || EMPTY_GOVERNANCE) : EMPTY_GOVERNANCE;
+  const effectiveGov = authSession ? (gov || EMPTY_GOVERNANCE) : EMPTY_GOVERNANCE;
   const displayWorkspaceId = authSession?.tenantId || workspaceId;
   const stats = effectiveGov.corpus_stats;
   const tenantStats = effectiveGov.tenant_stats || null;
@@ -456,7 +457,7 @@ export function SettingsPanel({
             />
           )}
 
-          {Boolean(authSession?.accessToken) && loadingGov && (
+          {Boolean(authSession) && loadingGov && (
             <PanelSkeleton
               label="Cargando estado del sistema y trazabilidad..."
               lines={3}
@@ -513,10 +514,18 @@ export function SettingsPanel({
                         <button
                           type="button"
                           onClick={() => onLogout?.()}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 px-3 py-1.5 text-[12px] text-[#FFDAD6] active:scale-[0.97] transition-all cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.1] px-3 py-1.5 text-[12px] text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
                         >
                           <LogOut className="h-3.5 w-3.5" />
                           <span>Cerrar sesión</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onPanicPurge?.()}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 px-3 py-1.5 text-[12px] text-[#FFDAD6] active:scale-[0.97] transition-all cursor-pointer"
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          <span>Purga rápida</span>
                         </button>
                       </div>
                     </div>
@@ -918,6 +927,21 @@ export function SettingsPanel({
                     label="Consentimiento explícito OSINT"
                   />
                 </div>
+
+                <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="text-[13.5px] font-medium text-[#F2F2F4]">
+                      Prerrequisito de cifrado en el equipo (<span className="font-tech">BitLocker / FileVault / LUKS</span>)
+                    </div>
+                    <p className="text-[12px] text-[#9A9AA2]">
+                      OMEGA no persiste credenciales ni chats en localStorage; activa cifrado de disco completo para proteger paginación del SO e hibernación frente a coerción física.
+                    </p>
+                  </div>
+
+                  <span className="font-tech shrink-0 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 text-[10.5px] text-[#30D158]">
+                    0 B CLIENTE
+                  </span>
+                </div>
               </div>
             </section>
 
@@ -933,7 +957,7 @@ export function SettingsPanel({
 
                 <span className="font-tech rounded-full bg-[rgba(28,36,56,0.65)] border border-[#2F6FED]/45 px-3 py-1 text-[11px] text-[#F2F2F4]">
                   {stats
-                    ? `${stats.reports} Reportes · ${stats.chunks} Fragmentos · ${Number(stats.iocs || 0).toLocaleString('en-US')} IOCs`
+                    ? `${stats.reports} Reportes · ${stats.chunks} Fragmentos · ${Number(stats.iocs || 0).toLocaleString('en-US')} IOCs · Corte ${effectiveGov.catalog_freshness?.catalog_cutoff_date || '2024-12-16'}`
                     : 'Sesión requerida para métricas en vivo'}
                 </span>
               </div>

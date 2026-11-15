@@ -346,6 +346,12 @@ export function StructuredResponse({
         />
       </div>
 
+      {!isTyping && (
+        <div className="font-tech text-[10.5px] text-[#8A8E99] border-t border-white/[0.05] pt-2">
+          Alcance documental CTI · Responde sobre fuentes indexadas y no sustituye inspección forense del dispositivo ni parches del SO (RNF9).
+        </div>
+      )}
+
       {/* Citas compactas al pie */}
       {citations.length > 0 && !isTyping && (
         <div className="omega-fade-up flex flex-wrap gap-1.5 pt-1">
