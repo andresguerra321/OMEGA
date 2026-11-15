@@ -4,10 +4,13 @@ import com.omega.platform.ingest.InvalidDocumentException;
 import com.omega.platform.ingest.UnsafeDocumentException;
 import com.omega.platform.integration.forensic.ForensicWorkerException;
 import com.omega.platform.rag.EmbeddingException;
+import com.omega.platform.security.TooManyLoginAttemptsException;
 import com.omega.platform.service.ConflictException;
 import com.omega.platform.service.ResourceNotFoundException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -24,6 +27,16 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
         pd.setTitle("Autenticación fallida");
         return pd;
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyLoginAttempts(TooManyLoginAttemptsException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        pd.setTitle("Demasiados intentos de autenticación");
+        pd.setProperty("retryAfterSeconds", ex.getRetryAfterSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(pd);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -65,8 +78,7 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleMaxUpload(MaxUploadSizeExceededException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.PAYLOAD_TOO_LARGE,
-                "El tamaño del archivo enviado excede el límite configurado del servidor."
-        );
+                "El tamaño del archivo enviado excede el límite configurado del servidor.");
         pd.setTitle("Archivo demasiado grande");
         return pd;
     }
@@ -91,8 +103,7 @@ public class GlobalExceptionHandler {
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(
                     fe.getField(),
-                    fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Valor inválido"
-            );
+                    fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Valor inválido");
         }
         String summary = fieldErrors.isEmpty()
                 ? "Los datos ingresados no son válidos."

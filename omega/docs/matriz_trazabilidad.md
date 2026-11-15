@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](../../img/banner.png)
+
 # Matriz de Trazabilidad de Requerimientos — Proyecto Omega
 
 Esta matriz vincula cada requerimiento funcional (**RF1–RF8**) y no funcional (**RNF1–RNF8**) definido en los objetivos específicos del proyecto con su implementación técnica en la arquitectura de Omega y su respectivo método de verificación.

@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](img/banner.png)
+
 # OMEGA — Plataforma Defensiva de Cyber Threat Intelligence sobre Spyware Comercial
 
 Plataforma defensiva de inteligencia de amenazas cibernéticas (CTI) asistida por RAG híbrido, trazabilidad verificable, verificación forense de indicadores (MVT / YARA / respaldos móviles) en memoria volátil y auditoría pasiva de exposición (OSINT), con aislamiento multi-tenant y política de **Zero-Retention** sobre archivos originales.
@@ -99,7 +101,7 @@ OMEGA opera mediante **3 contenedores endurecidos** segregados en dos redes (`om
 | **RF8** | OSINT pasivo con consentimiento | `crt.sh` + Cloudflare DNS DoH (`SPF`/`DMARC`) condicionado por BD | ✅ Cumplido |
 | **RNF1** | Precisión sin alucinación | Temperatura 0.0 + regla estricta de abstención + benchmark RAGAS | ✅ Cumplido |
 | **RNF2** | Divulgación progresiva | Cabina clara + detalles técnicos expandibles + `CitationDrawer` / `CopilotDrawer` | ✅ Cumplido |
-| **RNF3** | Latencia interactiva | Latencia media neta de **1.394s** (máx. 1.878s) en el benchmark comparativo | ✅ Cumplido |
+| **RNF3** | Latencia interactiva | Latencia media neta de **1.22s** (máx. 1.646s) en el benchmark comparativo | ✅ Cumplido |
 | **RNF4** | Privacidad y Zero-Retention | Análisis volátil en RAM (`del raw_bytes`, SQLite `:memory:`) y `tmpfs` `/tmp/omega_ingest` en `backend-java` | ✅ Cumplido |
 | **RNF6** | Arquitectura modular desacoplada | 3 servicios aislados en redes `omega-public` + `omega-private` (`postgres`, `forensic-worker`, `backend-java`) | ✅ Cumplido |
 | **RNF7** | Enfoque 100% defensivo | Ausencia total de exploits, payloads o capacidades ofensivas | ✅ Cumplido |
@@ -109,19 +111,19 @@ OMEGA opera mediante **3 contenedores endurecidos** segregados en dos redes (`om
 
 ## 4. Resultados de Evaluación Cuantitativa (Objetivo 6)
 
-Estudio comparativo de ablación realizado mediante **RAGAS** sobre `13` casos (`10` consultas in-domain CTI muestreadas estratificadamente + `3` preguntas trampa de abstención RNF1), utilizando `openai/gpt-oss-120b` (`temperature=0.0`, `top_k=5`) como generador y `openai/gpt-oss-20b` como juez sobre fragmentos completos (`10/10` muestras válidas; detalle en [eval_report.md](omega/rag_engine/eval/eval_report.md) y [ablation_report_v1.md](omega/rag_engine/eval/ablation_report_v1.md)):
+Estudio comparativo de ablación realizado mediante **RAGAS** sobre `10` casos (`7` consultas in-domain CTI muestreadas estratificadamente + `3` preguntas trampa de abstención RNF1), utilizando `openai/gpt-oss-120b` (`temperature=0.0`, `top_k=3`) como generador y `openai/gpt-oss-20b` (`max_tokens=2048`) como juez sobre páginas reconstruidas completas sin truncar (detalle en [eval_report.md](omega/rag_engine/eval/eval_report.md) y [ablation_report_v1.md](omega/rag_engine/eval/ablation_report_v1.md)):
 
 | Dimensión | Métrica | Baseline MVP | Omega V1.0 (Híbrido RRF) | Requerimiento |
 | :--- | :--- | :---: | :---: | :--- |
-| **Fidelidad Documental** | RAGAS Faithfulness (0–1, 10/10) | 0.5375 | **0.6** (+0.0625) | RNF1, Objetivo 3 |
-| **Relevancia de Respuesta** | RAGAS Answer Relevancy (0–1, 10/10) | 0.6095 | **0.5131** (-0.0964) | RF4, Objetivo 6 |
-| **Precisión de Contexto** | RAGAS Context Precision (0–1, 10/10) | 0.4333 | **0.5575** (+0.1242) | RF3, Objetivo 2 |
-| **Recuperación Top-K** | Hit@3 / Hit@5 / MRR@5 | 50.0% / 70.0% / 0.44 | **70.0% / 70.0% / 0.5333** | RF3, Objetivo 2 |
-| **Trazabilidad Estricta** | Formato de citas inline `[#]` | 30.0% (3/10) | **20.0%** (2/10) | RNF1 |
+| **Fidelidad Documental** | RAGAS Faithfulness (0–1) | 0.2036 (7/7) | **0.6** (5/7 válidas, +0.3964) | RNF1, Objetivo 3 |
+| **Relevancia de Respuesta** | RAGAS Answer Relevancy (0–1) | 0.2356 (7/7) | **0.6082** (7/7 válidas, +0.3726) | RF4, Objetivo 6 |
+| **Precisión de Contexto** | RAGAS Context Precision (0–1) | 0.2143 (7/7) | **0.7** (5/7 válidas, +0.4857) | RF3, Objetivo 2 |
+| **Recuperación Top-K** | Hit@3 / Hit@5 / MRR@5 | 28.6% / 28.6% / 0.2143 | **85.7% / 85.7% / 0.7857** | RF3, Objetivo 2 |
+| **Trazabilidad Estricta** | Formato de citas inline `[#]` | 28.6% (2/7) | **85.7%** (6/7) | RNF1 |
 | **Control Anti-Alucinación** | Tasa de abstención fuera de corpus | 100.0% (3/3) | **100.0%** (3/3) | RNF1 |
-| **Rendimiento Interactivo (Neto)** | Latencia media sin backoff 429 | 1.466s | **1.394s** (máx. 1.878s) | RNF3 |
+| **Rendimiento Interactivo (Neto)** | Latencia media sin backoff 429 | 1.188s | **1.22s** (máx. 1.646s) | RNF3 |
 
-> **Nota sobre abstención conservadora:** Con `top_k=5` y el prompt estricto `RNF1` (`temperature=0.0`), el generador prioriza abstenerse cuando la evidencia queda repartida o parcial frente a la consulta exacta; esto garantiza `100.0%` de abstención ante preguntas trampa y cero alucinaciones inventadas, a costa de reducir el porcentaje de respuestas con cita inline en preguntas complejas.
+> **Nota metodológica:** Tras reconstruir cada página PDF completa en `(report_id, page_number)`, normalizar citas Unicode `【#】 -> [#]` y expandir `to_tsquery` bilingüe con frases CVE exactas, se eliminó el bug histórico de `Faithfulness = 0.0` (causado por sub-chunks aislados, prefijos `-YYYY` en `pg_catalog.simple` y truncamiento en el arnés). En los lotes `6–7` de `Omega V1.0`, el juez gratuito `openai/gpt-oss-20b` alcanzó su límite diario de `200,000` TPD en Groq, dejando `5/7` muestras válidas para Faithfulness/Context Precision y `7/7` en Answer Relevancy.
 
 ---
 
@@ -130,7 +132,7 @@ Estudio comparativo de ablación realizado mediante **RAGAS** sobre `13` casos (
 ### Ejecución directa en Windows (`.exe`)
 Para usar la aplicación de escritorio directamente sin ejecutar Vite manualmente:
 1. Tener [Docker Desktop](https://www.docker.com/) iniciado (OMEGA orquesta automáticamente los contenedores la primera vez).
-2. Descargar desde **GitHub Releases (`v1.3.0`)** o ejecutar desde `omega/frontend/release/`:
+2. Descargar desde **GitHub Releases (`v1.3.1`)** o ejecutar desde `omega/frontend/release/`:
    * **Instalador Windows:** `OMEGA-Setup-1.0.0-x64.exe`
    * **Portable Windows (sin instalación):** `OMEGA-Portable-1.0.0-x64.exe`
 3. En la pantalla de acceso puedes usar el botón de **Acceso Demo en 1 clic** o iniciar sesión con `admin@omega.local` / `OmegaDemo!2026`.

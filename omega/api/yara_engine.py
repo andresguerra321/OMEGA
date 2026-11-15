@@ -7,11 +7,14 @@ vivos de PostgreSQL directamente en memoria volátil sin escribir artefactos en 
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any
 
 from cti_db import fetch_yara_iocs
+
+logger = logging.getLogger(__name__)
 
 try:
     import yara  # type: ignore
@@ -280,7 +283,8 @@ def _fetch_db_yara_iocs() -> list[tuple[str, str, str]]:
                 continue
             cleaned.append((s, str(ioc_type), str(family)))
         return cleaned
-    except Exception:
+    except Exception as exc:
+        logger.debug("Error cargando IOCs YARA desde BD: %s", exc)
         return []
 
 
@@ -335,8 +339,9 @@ def compile_omega_yara_rules(force_refresh: bool = False) -> tuple[Any, dict[str
     full_source = CORE_YARA_SOURCE + "\n\n" + "\n".join(dynamic_lines)
     try:
         compiled = yara.compile(source=full_source)
-    except Exception:
+    except Exception as exc:
         # Si un IOC en BD contiene sintaxis exótica, compila al menos las reglas base sin fallar
+        logger.debug("Compilación YARA con IOCs dinámicos fallida, usando reglas base: %s", exc)
         compiled = yara.compile(source=CORE_YARA_SOURCE)
         db_lookup = {}
         rule_count = len(BUILTIN_YARA_RULES_META)
@@ -369,7 +374,8 @@ def _extract_matched_terms_yara4(match_obj: Any, db_lookup: dict[str, dict[str, 
                 raw_bytes = getattr(instances[0], "matched_data", b"")
                 try:
                     sample = raw_bytes.decode("utf-8", errors="ignore").strip()
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Error decodificando coincidencia YARA '%s': %s", ident, exc)
                     sample = ident
             terms.append(sample if sample and sample.isprintable() else ident)
     # Deduplica manteniendo orden
@@ -462,7 +468,8 @@ def scan_artifacts_with_yara(artifacts: list[dict[str, Any]], force_refresh: boo
         if compiled is not None:
             try:
                 matches = compiled.match(data=scan_slice, timeout=5)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Error ejecutando YARA sobre '%s': %s", filename, exc)
                 matches = []
             for m in matches:
                 rule_name = m.rule

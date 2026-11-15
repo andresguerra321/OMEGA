@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](img/banner.png)
+
 # Product
 
 <!-- impeccable:product-schema 1 -->

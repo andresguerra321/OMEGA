@@ -5,6 +5,8 @@ package com.omega.platform.ingest;
  */
 public class UnsafeDocumentException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     public UnsafeDocumentException(String message) {
         super(message);
     }

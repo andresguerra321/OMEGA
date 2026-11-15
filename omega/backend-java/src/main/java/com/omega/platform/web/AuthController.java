@@ -10,6 +10,7 @@ import com.omega.platform.web.dto.AuthDtos.PrincipalMeResponse;
 import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -48,8 +49,7 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public AuthTokenResponse registerAccount(
             @Valid @RequestBody RegisterAccountRequest request,
-            @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret
-    ) {
+            @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret) {
         return authService.registerAccount(request, bootstrapSecret);
     }
 
@@ -57,14 +57,15 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public AuthTokenResponse registerTenant(
             @Valid @RequestBody RegisterTenantRequest request,
-            @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret
-    ) {
+            @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret) {
         return authService.registerTenant(request, bootstrapSecret);
     }
 
     @PostMapping("/login")
-    public AuthTokenResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
+    public AuthTokenResponse login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpServletRequest) {
+        return authService.login(request, httpServletRequest.getRemoteAddr());
     }
 
     @PostMapping("/users")
@@ -72,8 +73,7 @@ public class AuthController {
     @PreAuthorize("hasRole('ADMIN')")
     public UserSummaryResponse createUserInTenant(
             @AuthenticationPrincipal OmegaPrincipal principal,
-            @Valid @RequestBody CreateTenantUserRequest request
-    ) {
+            @Valid @RequestBody CreateTenantUserRequest request) {
         return authService.createUserInCurrentTenant(principal, request);
     }
 
@@ -83,7 +83,6 @@ public class AuthController {
                 principal.userId(),
                 principal.tenantId(),
                 principal.email(),
-                principal.role()
-        );
+                principal.role());
     }
 }

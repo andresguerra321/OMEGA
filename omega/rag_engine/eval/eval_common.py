@@ -32,11 +32,16 @@ REGLAS DE TRAZABILIDAD (RNF1):
 4. Responde en español técnico, directo y conciso."""
 
 NUMERIC_CITATION_RE = re.compile(r"\[\d+(?:\s*,\s*\d+)*\]")
+UNICODE_CIT_RE = re.compile(r"【(\d+)(?:†[^】]*)?】")
 CANONICAL_CITATION_RE = re.compile(
     r"\[Documento:\s*[^|\]]+\|\s*P[aá]g\.?\s*\d+|\[.+?,\s*P[aá]g(?:ina)?\.?\s*\d+\]",
     re.IGNORECASE,
 )
 CVE_CAPTURE_RE = re.compile(r"\bCVE[-\u2010-\u2014\u2212](\d{4})[-\u2010-\u2014\u2212](\d{4,7})\b", re.IGNORECASE)
+ISO_DATE_RE = re.compile(r"\b(20\d{2})[-/](\d{2})[-/](\d{2})\b")
+TIME_HMS_RE = re.compile(r"\b(\d{2}):(\d{2}):(\d{2})\b")
+ALNUM_CODE_RE = re.compile(r"\b(?=[a-z0-9]*[a-z])(?=[a-z0-9]*\d)[a-z0-9]{4,20}\b", re.IGNORECASE)
+PROPER_BIGRAM_RE = re.compile(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})\b")
 
 LIGATURE_MAP = str.maketrans({
     "\ufb00": "ff",
@@ -98,8 +103,34 @@ def strip_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
+def normalize_answer_citations(text: str) -> str:
+    """Convierte corchetes Unicode 【1】 o 【1†fuente】 en corchetes ASCII [1]."""
+    cleaned = UNICODE_CIT_RE.sub(r"[\1]", text or "")
+    return cleaned.replace("【", "[").replace("】", "]").strip()
+
+
+def _merge_page_chunks(raw_chunks: list[str]) -> str:
+    """Reconstruye el texto completo de una página eliminando el solapamiento entre sub-chunks."""
+    merged = ""
+    for raw in raw_chunks:
+        piece = (raw or "").replace("\x00", "").strip()
+        if not piece:
+            continue
+        if not merged:
+            merged = piece
+            continue
+        probe = piece[:45]
+        idx = merged.rfind(probe, max(0, len(merged) - 400))
+        if idx != -1:
+            merged = merged[:idx] + piece
+        else:
+            merged = merged + " " + piece
+    return clean_text(merged)
+
+
 def has_valid_citation(answer: str) -> bool:
-    return bool(NUMERIC_CITATION_RE.search(answer) or CANONICAL_CITATION_RE.search(answer))
+    norm = normalize_answer_citations(answer)
+    return bool(NUMERIC_CITATION_RE.search(norm) or CANONICAL_CITATION_RE.search(norm))
 
 
 def is_abstention(answer: str) -> bool:
@@ -121,15 +152,44 @@ def groq_extra_params(model_name: str) -> dict:
 
 
 def prepare_bilingual_tsquery(question: str) -> tuple[str, list[str]]:
-    norm = strip_accents(clean_text(question).lower())
-    cve_phrases: list[str] = []
-    cve_drop: set[str] = set()
+    cleaned = clean_text(question)
+    norm = strip_accents(cleaned.lower())
+    exact_phrases: list[str] = []
+    drop_tokens: set[str] = set()
+
     for match in CVE_CAPTURE_RE.finditer(norm):
         year, number = match.group(1), match.group(2)
-        phrase = f"(cve <-> {year} <-> {number})"
-        if phrase not in cve_phrases:
-            cve_phrases.append(phrase)
-        cve_drop.update({"cve", year, number})
+        phrase = f"((cve <-> -{year} <-> -{number}) | (cve <-> {year} <-> {number}))"
+        if phrase not in exact_phrases:
+            exact_phrases.append(phrase)
+        drop_tokens.update({"cve", year, number})
+
+    for match in ISO_DATE_RE.finditer(norm):
+        year, month, day = match.group(1), match.group(2), match.group(3)
+        phrase = f"(({year} <-> -{month} <-> -{day}) | ({year} <-> {month} <-> {day}))"
+        if phrase not in exact_phrases:
+            exact_phrases.append(phrase)
+        drop_tokens.update({year, month, day})
+
+    for match in TIME_HMS_RE.finditer(norm):
+        hour, minute, second = match.group(1), match.group(2), match.group(3)
+        phrase = f"({hour} <-> {minute} <-> {second})"
+        if phrase not in exact_phrases:
+            exact_phrases.append(phrase)
+        drop_tokens.update({hour, minute, second})
+
+    for match in ALNUM_CODE_RE.finditer(norm):
+        tok = match.group(0).lower()
+        if tok != "cve" and tok not in exact_phrases:
+            exact_phrases.append(tok)
+
+    for match in PROPER_BIGRAM_RE.finditer(cleaned):
+        w1 = strip_accents(match.group(1).lower())
+        w2 = strip_accents(match.group(2).lower())
+        if w1 not in STOPWORDS and w2 not in STOPWORDS:
+            phrase = f"({w1} <-> {w2})"
+            if phrase not in exact_phrases:
+                exact_phrases.append(phrase)
 
     en_tokens: list[str] = []
     for triggers, eng in BILINGUAL_TECHNICAL_EXPANSIONS:
@@ -143,11 +203,17 @@ def prepare_bilingual_tsquery(question: str) -> tuple[str, list[str]]:
         # Excluir años/números aislados (ej. "2020") que saturan ts_rank_cd en tablas cronológicas forenses.
         if tok.isdigit():
             continue
-        if tok not in STOPWORDS and tok not in cve_drop and tok not in en_tokens and tok not in native_tokens:
+        if (
+            tok not in STOPWORDS
+            and tok not in drop_tokens
+            and tok not in exact_phrases
+            and tok not in en_tokens
+            and tok not in native_tokens
+        ):
             native_tokens.append(tok)
 
-    merged = cve_phrases + native_tokens[:12] + en_tokens[:8]
-    return (" | ".join(merged) if merged else "omega_noop"), cve_phrases
+    merged = exact_phrases + native_tokens[:12] + en_tokens[:8]
+    return (" | ".join(merged) if merged else "omega_noop"), exact_phrases
 
 
 class CorpusDbClient:
@@ -223,10 +289,10 @@ def call_groq_chat(
                 **extra,
             )
             net_s = time.perf_counter() - t0
-            return (completion.choices[0].message.content or "").strip(), net_s, backoff_total, retries
+            return normalize_answer_citations(completion.choices[0].message.content or ""), net_s, backoff_total, retries
         except Exception as err:
             msg = str(err).lower()
-            if ("rate_limit" in msg or "429" in msg or "timeout" in msg) and attempt < 5:
+            if any(k in msg for k in ("rate_limit", "429", "timeout", "timed out", "connection", "502", "503", "504")) and attempt < 5:
                 retries += 1
                 wait_match = re.search(r"try again in\s+(\d+(?:\.\d+)?)s", msg)
                 wait_s = (float(wait_match.group(1)) + 1.5) if wait_match else (8.0 * (attempt + 1))
@@ -346,39 +412,47 @@ def run_hybrid_rrf_v1(
 ) -> dict:
     t0 = time.perf_counter()
     q_vec = vector_literal(embedder.encode([question], normalize_embeddings=True)[0].tolist())
-    ts_expr, cve_phrases = prepare_bilingual_tsquery(question)
+    ts_expr, exact_phrases = prepare_bilingual_tsquery(question)
     ts_escaped = _sql_escape(ts_expr)
-    cve_boost_sql = (
-        f"(CASE WHEN dc.search_vector @@ to_tsquery('pg_catalog.simple', '{_sql_escape(' | '.join(cve_phrases))}') THEN 1.0 ELSE 0.0 END) + "
-        if cve_phrases
-        else ""
-    )
+    exact_sum_terms = [
+        f"(CASE WHEN dc.search_vector @@ to_tsquery('pg_catalog.simple', '{_sql_escape(p)}') THEN 1.0 ELSE 0.0 END)"
+        for p in exact_phrases
+    ]
+    exact_hits_expr = " + ".join(exact_sum_terms) if exact_sum_terms else "0.0"
     rows = db.query_json(
         f"""
         WITH semantic AS (
             SELECT
                 dc.id,
+                dc.report_id,
+                dc.page_number,
                 ROW_NUMBER() OVER (ORDER BY dc.embedding <=> '{q_vec}'::vector) AS vec_rank,
                 (1.0 - (dc.embedding <=> '{q_vec}'::vector)) AS cos_sim
             FROM public.document_chunks dc
             ORDER BY dc.embedding <=> '{q_vec}'::vector
-            LIMIT 25
+            LIMIT 60
         ),
         keyword AS (
             SELECT
                 dc.id,
+                dc.report_id,
+                dc.page_number,
+                ({exact_hits_expr}) AS exact_hits,
                 ROW_NUMBER() OVER (
-                    ORDER BY ({cve_boost_sql}ts_rank_cd(dc.search_vector, to_tsquery('pg_catalog.simple', '{ts_escaped}'), 32)) DESC
+                    ORDER BY (({exact_hits_expr}) * 2.0 + ts_rank_cd(dc.search_vector, to_tsquery('pg_catalog.simple', '{ts_escaped}'), 32)) DESC
                 ) AS fts_rank
             FROM public.document_chunks dc
             WHERE dc.search_vector @@ to_tsquery('pg_catalog.simple', '{ts_escaped}')
-            LIMIT 25
+            LIMIT 60
         ),
-        fused AS (
+        fused_chunks AS (
             SELECT
                 COALESCE(s.id, k.id) AS chunk_id,
+                COALESCE(s.report_id, k.report_id) AS report_id,
+                COALESCE(s.page_number, k.page_number) AS page_number,
                 COALESCE(1.0 / ({int(rrf_k)} + s.vec_rank), 0.0)
-                    + COALESCE(1.0 / ({int(rrf_k)} + k.fts_rank), 0.0) AS rrf_score,
+                    + COALESCE(1.0 / ({int(rrf_k)} + k.fts_rank), 0.0)
+                    + COALESCE(k.exact_hits, 0.0) * 0.015 AS rrf_score,
                 COALESCE(s.cos_sim, 0.0) AS cos_sim,
                 CASE
                     WHEN s.id IS NOT NULL AND k.id IS NOT NULL THEN 'Híbrido (Vector + Léxico)'
@@ -387,30 +461,44 @@ def run_hybrid_rrf_v1(
                 END AS method
             FROM semantic s
             FULL OUTER JOIN keyword k ON s.id = k.id
+        ),
+        fused_pages AS (
+            SELECT
+                report_id,
+                page_number,
+                MAX(rrf_score) AS page_rrf,
+                MAX(cos_sim) AS max_sim,
+                (ARRAY_AGG(method ORDER BY rrf_score DESC))[1] AS method
+            FROM fused_chunks
+            GROUP BY report_id, page_number
+            ORDER BY page_rrf DESC, max_sim DESC
+            LIMIT {int(top_k)}
         )
         SELECT
             r.id::text AS report_id,
             r.title,
             r.organization,
-            dc.page_number,
-            dc.content,
-            round(f.cos_sim::numeric, 4) AS similarity,
-            round(f.rrf_score::numeric, 5) AS rrf_score,
-            f.method
-        FROM fused f
-        JOIN public.document_chunks dc ON dc.id = f.chunk_id
-        JOIN public.reports r ON dc.report_id = r.id
-        ORDER BY f.rrf_score DESC, f.cos_sim DESC
-        LIMIT {int(top_k * 3)}
+            fp.page_number,
+            (
+                SELECT json_agg(dc2.content ORDER BY dc2.ctid)
+                FROM public.document_chunks dc2
+                WHERE dc2.report_id = fp.report_id
+                  AND dc2.page_number = fp.page_number
+            ) AS page_chunks,
+            round(fp.max_sim::numeric, 4) AS similarity,
+            round(fp.page_rrf::numeric, 5) AS rrf_score,
+            fp.method
+        FROM fused_pages fp
+        JOIN public.reports r ON fp.report_id = r.id
+        ORDER BY fp.page_rrf DESC, fp.max_sim DESC
         """
     )
-    selected = _rerank_diverse(rows, top_k=top_k)
     retrieval_s = time.perf_counter() - t0
 
     citations = []
     blocks = []
-    for idx, row in enumerate(selected, start=1):
-        snippet = clean_text(row["content"])
+    for idx, row in enumerate(rows, start=1):
+        snippet = _merge_page_chunks(row.get("page_chunks") or [])
         citations.append(
             {
                 "index": idx,
@@ -493,7 +581,10 @@ def evaluate_pipeline_suite(
 
         answer = res["answer"]
         # NUNCA truncar ni recortar retrieved_contexts: pasar el 100% de los fragmentos que vio el generador
-        full_contexts = [c["snippet"] for c in res["citations"]]
+        full_contexts = [
+            f"[{c['index']}] Fuente: {c['title']} ({c['organization']}) | Página: {c['page']}\n{c['snippet']}"
+            for c in res["citations"]
+        ]
 
         if item.get("is_trap"):
             trap_total += 1
@@ -538,11 +629,18 @@ def evaluate_pipeline_suite(
         if idx < len(cases) and inter_query_sleep_s > 0:
             time.sleep(inter_query_sleep_s)
 
-    print(f"\nEvaluando RAGAS con juez '{judge_model}' sobre los {len(samples)} casos in-domain sin truncar...")
+    print(f"\nEvaluando RAGAS con juez '{judge_model}' sobre los {len(samples)} casos in-domain sin truncar...", flush=True)
     judge_kwargs = groq_extra_params(judge_model)
-    judge_max_tokens = 900 if "qwen" in judge_model.lower() else 2048
+    judge_max_tokens = 1600 if "qwen" in judge_model.lower() else 2048
     eval_llm = LangchainLLMWrapper(
-        ChatGroq(model=judge_model, temperature=0, max_tokens=judge_max_tokens, max_retries=10, **judge_kwargs)
+        ChatGroq(
+            model=judge_model,
+            temperature=0,
+            max_tokens=judge_max_tokens,
+            timeout=60,
+            max_retries=8,
+            **judge_kwargs,
+        )
     )
     eval_emb = LangchainEmbeddingsWrapper(
         HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
@@ -551,25 +649,33 @@ def evaluate_pipeline_suite(
     all_faith: list[float] = []
     all_rel: list[float] = []
     all_prec: list[float] = []
+    inter_metric_sleep_s = min(6.0, max(2.0, ragas_batch_sleep_s / 3.0)) if ragas_batch_sleep_s > 0 else 0.0
 
     for start in range(0, len(samples), ragas_batch_size):
         batch = samples[start : start + ragas_batch_size]
         relevancy_metric = ResponseRelevancy(strictness=1, embeddings=eval_emb)
-        ragas_res = evaluate(
-            dataset=EvaluationDataset(samples=batch),
-            metrics=[Faithfulness(), relevancy_metric, LLMContextPrecisionWithReference()],
-            llm=eval_llm,
-            embeddings=eval_emb,
-            run_config=RunConfig(max_workers=1, max_retries=10, max_wait=65, timeout=120),
-            show_progress=False,
-        )
-        df = ragas_res.to_pandas()
-        all_faith.extend(float(v) for v in df["faithfulness"].dropna().tolist())
-        all_rel.extend(float(v) for v in df["answer_relevancy"].dropna().tolist())
-        all_prec.extend(float(v) for v in df["llm_context_precision_with_reference"].dropna().tolist())
+        metric_specs = [
+            ("faithfulness", Faithfulness(), all_faith),
+            ("answer_relevancy", relevancy_metric, all_rel),
+            ("llm_context_precision_with_reference", LLMContextPrecisionWithReference(), all_prec),
+        ]
+        for m_idx, (col_name, metric_obj, bucket) in enumerate(metric_specs):
+            ragas_res = evaluate(
+                dataset=EvaluationDataset(samples=batch),
+                metrics=[metric_obj],
+                llm=eval_llm,
+                embeddings=eval_emb,
+                run_config=RunConfig(max_workers=1, max_retries=10, max_wait=75, timeout=300),
+                show_progress=False,
+            )
+            df = ragas_res.to_pandas()
+            bucket.extend(float(v) for v in df[col_name].dropna().tolist())
+            if m_idx < len(metric_specs) - 1 and inter_metric_sleep_s > 0:
+                time.sleep(inter_metric_sleep_s)
         print(
             f"  [RAGAS lote {start // ragas_batch_size + 1}/{(len(samples) + ragas_batch_size - 1) // ragas_batch_size}] "
-            f"faith={len(all_faith)}/{start + len(batch)}, rel={len(all_rel)}, prec={len(all_prec)}"
+            f"faith={len(all_faith)}/{start + len(batch)}, rel={len(all_rel)}, prec={len(all_prec)}",
+            flush=True,
         )
         if start + ragas_batch_size < len(samples) and ragas_batch_sleep_s > 0:
             time.sleep(ragas_batch_sleep_s)

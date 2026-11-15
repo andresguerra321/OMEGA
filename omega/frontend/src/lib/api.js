@@ -155,6 +155,9 @@ function buildFriendlyError(status, payload, fallbackMessage) {
   if (status === 422) {
     return detail || 'Contenido bloqueado por las reglas de seguridad de OMEGA.';
   }
+  if (status === 429) {
+    return detail || 'Demasiados intentos fallidos. Espera unos minutos antes de volver a intentarlo.';
+  }
   return detail || payload?.title || fallbackMessage || `Error HTTP ${status}`;
 }
 

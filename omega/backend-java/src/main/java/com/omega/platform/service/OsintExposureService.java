@@ -309,7 +309,9 @@ public class OsintExposureService {
             HttpResponse<InputStream> res = httpClient.send(req, HttpResponse.BodyHandlers.ofInputStream());
             if (res.statusCode() < 200 || res.statusCode() >= 300) {
                 try (InputStream body = res.body()) {
-                    body.close();
+                    if (body != null && body.available() > 0) {
+                        log.debug("crt.sh respondió HTTP {} ({} bytes en buffer)", res.statusCode(), body.available());
+                    }
                 }
                 return List.of();
             }

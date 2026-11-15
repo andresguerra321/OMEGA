@@ -9,6 +9,7 @@ en disco ni persistir contraseñas.
 from __future__ import annotations
 
 import base64
+import logging
 import plistlib
 import re
 import secrets
@@ -17,6 +18,8 @@ import struct
 import threading
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from iphone_backup_decrypt import utils as _ibd_utils  # type: ignore
@@ -162,8 +165,8 @@ def inspect_manifest_profiles_and_paths(conn: sqlite3.Connection) -> tuple[int, 
                         bytes(fp.encryption_key),
                         int(fp.filesize or 0),
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Error leyendo FilePlist de '%s': %s", path_str, exc)
 
     return total_files, anomalies[:25], targets, file_meta
 
@@ -328,7 +331,8 @@ def decrypt_binary_artifacts_in_ram(
             if raw_bytes is None and b64:
                 try:
                     raw_bytes = base64.b64decode(b64)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Base64 inválido en artefacto iOS '%s': %s", fname, exc)
                     raw_bytes = b""
 
             if raw_bytes is None or not raw_bytes:
@@ -367,7 +371,8 @@ def decrypt_binary_artifacts_in_ram(
                         "decrypted_in_ram": True,
                     }
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("No se pudo descifrar artefacto iOS '%s' en RAM: %s", fname, exc)
                 result_artifacts.append(art)
     finally:
         # Limpieza explícita de material criptográfico en RAM

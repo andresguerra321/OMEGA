@@ -9,10 +9,13 @@ import base64
 from datetime import datetime
 import ipaddress
 import json
+import logging
 import re
 import sqlite3
 from typing import Any
 from cti_db import fetch_yara_iocs, lookup_ioc_families
+
+logger = logging.getLogger(__name__)
 
 # Firmas YARA / Patrones binarios defensivos de cadenas de explotación conocidas
 BUILTIN_DETECTION_SIGNATURES: list[dict[str, Any]] = [
@@ -206,7 +209,8 @@ def annotate_sockets_with_cti(sockets: list[dict]) -> list[dict]:
 
     try:
         matched_map = lookup_ioc_families(remote_ips, ("ip", "domain"))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Fallo consultando familias CTI para sockets: %s", exc)
         return sockets
 
     for sock in sockets:
@@ -332,7 +336,8 @@ def inspect_ios_manifest_db(filename: str, raw_bytes: bytes) -> list[dict[str, A
                         ),
                     }
                 )
-    except (sqlite3.Error, ValueError):
+    except (sqlite3.Error, ValueError) as exc:
+        logger.debug("Error leyendo Manifest.db en RAM (%s): %s", filename, exc)
         return []
     finally:
         if conn is not None:
@@ -415,6 +420,7 @@ def extract_ios_manifest_targets(raw_bytes: bytes, limit: int = 35) -> dict[str,
                 }
             )
     except (sqlite3.Error, ValueError) as exc:
+        logger.debug("No se pudo abrir Manifest.db en RAM para targets: %s", exc)
         return {
             "encrypted": True,
             "total_files": 0,
@@ -441,8 +447,8 @@ def _load_db_yara_iocs() -> list[tuple[bytes, str, str, str]]:
             clean_val = str(val).strip().lower()
             if clean_val:
                 records.append((clean_val.encode("utf-8", errors="ignore"), str(ioc_type), str(fam), "Catálogo CTI OMEGA"))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("No se pudieron cargar IOCs YARA dinámicos desde BD: %s", exc)
     return records
 
 
@@ -789,8 +795,8 @@ def run_kernel_and_posture_forensics(expanded_artifacts: list[dict]) -> dict[str
                 parsed = json.loads(text)
                 if isinstance(parsed, dict):
                     device_summary = parsed
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as exc:
+                logger.debug("Posture JSON inválido en '%s': %s", fname, exc)
         elif "device_policy" in fname or "device_admins" in fname:
             device_admins_raw = f"{device_admins_raw}\n{text}".strip()
         elif "proc_net" in fname or "net_tcp" in fname or "tcp_sockets" in fname:

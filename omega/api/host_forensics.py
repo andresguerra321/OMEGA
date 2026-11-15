@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 from typing import Any
 
 from cti_db import lookup_iocs_detailed
 from yara_engine import scan_artifacts_with_yara
+
+logger = logging.getLogger(__name__)
 
 IMPERSONATED_WIN_BINARIES = {
     "svchost.exe",
@@ -218,7 +221,8 @@ def _lookup_host_cti_matches(
             }
             for row in rows
         ]
-    except Exception:
+    except Exception as exc:
+        logger.debug("Error consultando IOCs de host en PostgreSQL: %s", exc)
         return []
 
 
