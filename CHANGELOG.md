@@ -1,6 +1,24 @@
+![OMEGA — Visualización de Marca](img/banner.png)
+
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [1.3.1] - 2026-11-15
+
+### Seguridad en Profundidad (`backend-java` & `omega/api`)
+- **Protección contra fuerza bruta en `/api/v1/auth/login` (`LoginRateLimiter.java`, `AuthService.java`, `GlobalExceptionHandler.java`):** Bloqueo progresivo tras `5` intentos fallidos por combinación IP + usuario y techo de `25` fallos por IP dentro de una ventana de `15` minutos, devolviendo HTTP `429 Too Many Requests` con cabecera `Retry-After` sin filtrar datos sensibles en bitácora.
+- **Mitigación de DNS Rebinding en extractor web CTI (`WebIntelExtractorService.java`):** Conexión TCP/TLS anclada directamente a la IP pública ya validada mediante socket factory fijado conservando cabecera `Host` y SNI original en cada salto de redirección (sin re-resolución DNS tardía).
+- **Blindaje SQLite y trazabilidad de errores en worker forense (`triage_orchestrator.py`, `behavioral_forensics.py`, `temporal_correlator.py`, `deep_forensics.py`, `ios_backup_crypto.py`):** Validación estricta de identificadores de tabla mediante lista blanca (`safe_identifier`) contra nombres maliciosos en respaldos SQLite no confiables y reemplazo de seis `except Exception: pass` silenciosos por registro explícito `logger.debug`.
+
+### Correcciones Críticas de Ingesta, Pruebas & Build
+- **Corrección de conteo de fragmentos en ingesta Zero-Retention (`AsyncDocumentProcessor.java`):** Solucionado fallo donde `Boolean.TRUE.equals(transactionTemplate.execute(...))` comparaba `Boolean` contra el `Integer` retornado por la transacción, registrando siempre `persistedChunks = 0` en auditoría.
+- **Limpieza estática Java & Maven (`pom.xml`, `OsintExposureService.java`, excepciones, suite de integración):** Declarado `<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>`, añadidos `serialVersionUID` en excepciones de dominio, corregido cierre de stream no-2xx en `crt.sh`, eliminados avisos de fugas en contenedores Testcontainers y reparado el helper `FrontendGatewayIntegrationTest`.
+- **Optimización de fuentes web (`omega/frontend/src/main.jsx`):** Eliminados subconjuntos muertos (cirílico, griego, vietnamita), conservando únicamente `latin` y `latin-ext` (32 archivos tipográficos).
+
+### Evaluación RAGAS Corregida & Identidad Visual
+- **Corrección de arnés RAGAS (`eval_common.py`, `run_ablation_benchmark.py`):** Reconstrucción completa de página (`(report_id, page_number)`), frases CVE exactas + expansión bilingüe para `pg_catalog.simple`, normalización `【#】 -> [#]` y evaluación sin truncamiento; eliminando el `Faithfulness = 0.0` previo (`0.2036` Baseline -> **`0.6`** Omega V1.0 en 5/7 válidas, `Hit@3/Hit@5 = 85.7%`, citas inline `85.7%`, `RNF1 = 100.0%`).
+- **Identidad de marca (`img/banner.png`) y Releases Windows:** Incorporación del banner visual oficial en toda la documentación y notas de lanzamiento junto con los ejecutables `OMEGA-Setup-1.0.0-x64.exe` y `OMEGA-Portable-1.0.0-x64.exe`.
 
 ## [1.3.0] - 2026-11-14
 

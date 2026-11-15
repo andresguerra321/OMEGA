@@ -1,8 +1,11 @@
 import json
+import logging
 import re
 from urllib.parse import urlparse
 
 from cti_db import lookup_iocs_detailed
+
+logger = logging.getLogger(__name__)
 
 DEFANG_RULES = [
     (re.compile(r"hxxps://", re.IGNORECASE), "https://"),
@@ -219,8 +222,8 @@ def analyze_forensic_payload(raw_text: str, filename: str | None = None) -> dict
         try:
             parsed = json.loads(stripped)
             detected_format, registry = _parse_mvt_structured(parsed, filename)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            logger.debug("Entrada '%s' no es JSON MVT válido, usando fallback de texto plano: %s", filename or "Entrada", exc)
 
     if not registry:
         for line_num, line in enumerate(raw_text.splitlines(), start=1):

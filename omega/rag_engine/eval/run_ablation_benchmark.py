@@ -28,6 +28,8 @@ def fmt_delta(v1_val: float, mvp_val: float, suffix: str = "") -> str:
 
 def write_eval_report(v1_metrics: dict, cases_count: int, gen_model: str, judge_model: str) -> None:
     lines = [
+        "![OMEGA — Visualización de Marca](../../../img/banner.png)",
+        "",
         "# Reporte de Evaluación Cuantitativa — Sistema RAG Omega V1.0 (Objetivo 6)",
         "",
         f"- **Dataset evaluado:** {cases_count} casos (`{v1_metrics['in_domain_total']}` dominio CTI + `{v1_metrics['trap_total']}` abstención RNF1)",
@@ -82,7 +84,7 @@ def main() -> None:
     parser.add_argument("--stratified", action="store_true", help="Distribuir uniformemente la muestra entre reportes")
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--gen-model", default=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"))
-    parser.add_argument("--judge-model", default=os.getenv("RAGAS_JUDGE_MODEL", "openai/gpt-oss-20b"))
+    parser.add_argument("--judge-model", default=os.getenv("RAGAS_JUDGE_MODEL", "qwen/qwen3.8-27b"))
     parser.add_argument("--inter-query-sleep", type=float, default=12.0)
     parser.add_argument("--ragas-batch-size", type=int, default=1)
     parser.add_argument("--ragas-batch-sleep", type=float, default=18.0)
@@ -143,8 +145,10 @@ def main() -> None:
         ragas_batch_sleep_s=args.ragas_batch_sleep,
     )
 
-    judge_max_tokens = 900 if "qwen" in args.judge_model.lower() else 2048
+    judge_max_tokens = 1600 if "qwen" in args.judge_model.lower() else 2048
     report_md = [
+        "![OMEGA — Visualización de Marca](../../../img/banner.png)",
+        "",
         "# Estudio Comparativo de Ablación — MVP vs. Omega V1.0 (Objetivo 6)",
         "",
         f"- **Corpus evaluado:** {len(cases)} casos ({len(in_domain)} dominio CTI + {len(traps)} abstención RNF1)",
@@ -152,12 +156,12 @@ def main() -> None:
         f"- **Juez RAGAS:** `{args.judge_model}` (`max_tokens={judge_max_tokens}`, fragmentos completos sin truncar)",
         "- **Embeddings de recuperación:** `paraphrase-multilingual-mpnet-base-v2` (768d) sobre `public.document_chunks`",
         "",
-        "## Nota Metodológica (Corrección del Arnés de Evaluación)",
+        "## Nota Metodológica (Corrección del Arnés y Recuperación)",
         "",
-        "La versión inicial del estudio presentó `Faithfulness = 0.0`, `Context Precision = 0.0` y latencia inflada debido a cuatro defectos aislados y corregidos:",
-        "1. **Amputación de contexto:** El arnés truncaba `snippet[:500]` y descartaba citas `#4–#6` (`[:3]`), ocultando a RAGAS la evidencia usada por el generador.",
-        "2. **Componente léxico roto (`websearch_to_tsquery`):** Al exigir intersección `AND` de preguntas en español contra PDFs en inglés producía **0/5** coincidencias léxicas; se reemplazó por `to_tsquery` con disyunción bilingüe `OR` + frase exacta `(cve <-> YYYY <-> NNNN)`.",
-        "3. **Submuestreo y truncamiento del juez:** Se eliminó el recorte `samples[:4]` y se calibró `max_tokens` según cuota OTPM del juez para evitar truncamientos JSON o errores `429`.",
+        "La versión inicial del estudio presentó `Faithfulness = 0.0` y falsas abstenciones por defectos combinados de arnés y recuperación, ya aislados y corregidos:",
+        "1. **Reconstrucción completa de página (`(report_id, page_number)`):** Cada página PDF se divide en 2–5 chunks solapados; recuperar sub-chunks aislados privaba al generador de evidencia contigua presente en la misma página y provocaba abstenciones innecesarias.",
+        "2. **Componentización léxica compatible con `pg_catalog.simple` (`to_tsquery`):** Los identificadores con guiones (`CVE-YYYY-NNNN` y fechas `YYYY-MM-DD`) son tokenizados por PostgreSQL con prefijo negativo (`-2021`, `-1048`); se añadieron disyunciones firmadas exactas además de expansión técnica bilingüe español→inglés.",
+        "3. **Normalización de citas Unicode y sin truncamiento al juez:** Se convirtieron corchetes fullwidth (`【1】 -> [1]`) en post-procesamiento, se pasó el 100% de los fragmentos reconstruidos a RAGAS sin recortar (`[:500]`) y se evaluó secuencialmente por métrica para respetar cuotas OTPM/TPM.",
         "4. **Medición limpia de latencia:** La latencia neta separa los `time.sleep` de backoff por cuota gratuita (8,000 TPM en Groq) del tiempo real de recuperación e inferencia.",
         "",
         "## Resultados Comparativos",

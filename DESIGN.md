@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](img/banner.png)
+
 # OMEGA Desktop Design System (`DESIGN.md`)
 
 ## 1. Visual World & Product Character

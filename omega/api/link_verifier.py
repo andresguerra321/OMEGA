@@ -1,10 +1,13 @@
 import json
+import logging
 import re
 import urllib.parse
 import urllib.request
 from urllib.parse import urlparse
 
 from cti_db import lookup_iocs_detailed
+
+logger = logging.getLogger(__name__)
 
 URL_SHORTENERS = {
     "bit.ly",
@@ -90,7 +93,8 @@ def _passive_cert_count(domain: str) -> int | None:
         with urllib.request.urlopen(req, timeout=2) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
             return len(data) if isinstance(data, list) else 0
-    except Exception:
+    except Exception as exc:
+        logger.debug("Consulta pasiva crt.sh fallida para '%s': %s", domain, exc)
         return None
 
 

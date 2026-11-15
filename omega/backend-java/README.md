@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](../../img/banner.png)
+
 # OMEGA Core Backend (`omega/backend-java`)
 
 Núcleo transaccional, seguridad multi-tenant, ingesta **Zero-Retention** con OCR asíncrono, trazabilidad probatoria inmutable con encadenamiento SHA-256, ingestor nativo STIX 2.1, puente forense autenticado y motor RAG híbrido de OMEGA, construido con **Java 21** y **Spring Boot 3.3.5**.

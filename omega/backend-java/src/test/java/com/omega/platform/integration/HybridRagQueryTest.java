@@ -66,13 +66,15 @@ class HybridRagQueryTest {
             return;
         }
         if (pgContainer == null) {
-            pgContainer = new PostgreSQLContainer<>(
+            @SuppressWarnings("resource") // Container Testcontainers singleton gestionado por Ryuk al terminar la JVM.
+            PostgreSQLContainer<?> container = new PostgreSQLContainer<>(
                     DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres")
             )
                     .withDatabaseName("omega_rag_test")
                     .withUsername("omega_test")
                     .withPassword("omega_test_secret");
-            pgContainer.start();
+            container.start();
+            pgContainer = container;
         }
         String baseUrl = pgContainer.getJdbcUrl();
         String sep = baseUrl.contains("?") ? "&" : "?";

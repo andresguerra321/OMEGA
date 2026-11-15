@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](../../img/banner.png)
+
 # OMEGA Frontend (`omega/frontend`)
 
 Interfaz web y aplicación de escritorio Electron para **OMEGA**, construida con **React 19.3**, **Vite 8**, **Tailwind CSS v4**, **Three.js 0.187**, **Lucide React** y fuentes autoalojadas (`@fontsource/sora`, `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono`).

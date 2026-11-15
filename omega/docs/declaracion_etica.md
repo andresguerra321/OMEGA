@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](../../img/banner.png)
+
 # Declaración de Alcance Técnico y Salvaguardas Éticas — Proyecto Omega
 
 ## 1. Naturaleza Exclusivamente Defensiva (RNF7)
