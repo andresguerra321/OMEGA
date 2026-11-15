@@ -255,7 +255,7 @@ public class HybridRagSearchRepository {
         while (cveMatcher.find() && clauses.size() < 8) {
             String year = cveMatcher.group(1);
             String number = cveMatcher.group(2);
-            clauses.add("(cve <-> " + year + " <-> " + number + ")");
+            clauses.add("((cve <-> -" + year + " <-> -" + number + ") | (cve <-> " + year + " <-> " + number + "))");
             cveSubTokensToSkip.add("cve");
             cveSubTokensToSkip.add(year);
             cveSubTokensToSkip.add(number);

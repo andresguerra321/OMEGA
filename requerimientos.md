@@ -1,3 +1,5 @@
+![OMEGA — Visualización de Marca](img/banner.png)
+
 # Omega — Visión Comercial y Hoja de Ruta de Producto
 
 > **Nota de Trazabilidad (Fuente Única de Verdad):** Este documento recoge la visión de negocio, mercado y ruta de comercialización de Omega. La especificación técnica vigente de requerimientos funcionales y no funcionales (**RF1–RF8** / **RNF1–RNF8**) mapeada al código implementado reside únicamente en [`omega/docs/matriz_trazabilidad.md`](omega/docs/matriz_trazabilidad.md), respaldada por [`omega/docs/declaracion_etica.md`](omega/docs/declaracion_etica.md) y [`omega/backend-java/README.md`](omega/backend-java/README.md).

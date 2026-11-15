@@ -1,12 +1,16 @@
 import asyncio
 import gc
 import json
+import logging
 import os
 import re
 import sqlite3
 from urllib.parse import urlparse
 
 from behavioral_forensics import run_behavioral_forensics, unpack_forensic_archives_in_ram
+from sqlite_safety import safe_identifier
+
+logger = logging.getLogger(__name__)
 from cti_db import lookup_iocs_detailed
 from deep_forensics import (
     inspect_ios_manifest_db,
@@ -134,13 +138,19 @@ def _worker_a_messaging_sqlite(artifacts: list[dict]) -> dict:
 
                 extracted_rows = 0
                 for tbl in tables:
-                    if tbl.startswith("sqlite_"):
+                    if str(tbl).startswith("sqlite_"):
                         continue
-                    cur.execute(f'SELECT * FROM "{tbl}" LIMIT 1500;')
+                    try:
+                        safe_tbl = safe_identifier(tbl)
+                    except ValueError as exc:
+                        logger.warning("Tabla SQLite descartada en '%s': %s", art["filename"], exc)
+                        notes.append(f"Tabla SQLite descartada en '{art['filename']}': {exc}")
+                        continue
+                    cur.execute(f'SELECT * FROM "{safe_tbl}" LIMIT 1500;')
                     for row in cur.fetchall():
                         row_str = " ".join(str(col) for col in row if isinstance(col, str) and len(col) > 4)
                         if row_str:
-                            _collect_tokens(row_str, f"SQLite [{art['filename']}:{tbl}]", tokens)
+                            _collect_tokens(row_str, f"SQLite [{art['filename']}:{safe_tbl}]", tokens)
                             extracted_rows += 1
                 mem_conn.close()
                 notes.append(f"SQLite '{art['filename']}' deserializado en RAM ({len(tables)} tablas, {extracted_rows} registros).")

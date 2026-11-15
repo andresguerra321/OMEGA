@@ -14,7 +14,9 @@ class HybridRagSearchRepositoryTest {
 
         assertThat(tsQuery)
                 .contains("(cve <-> 2021 <-> 1048)")
+                .contains("(cve <-> -2021 <-> -1048)")
                 .contains("(cve <-> 2021 <-> 30860)")
+                .contains("(cve <-> -2021 <-> -30860)")
                 .contains("vulnerabilidades")
                 .contains("kernels")
                 .contains("android")

@@ -107,8 +107,10 @@ test('bloquea cadenas aleatorias como akjriuqw2iu3i3123.2.q..qw..wqe.r.34 manten
   const smash = 'akjriuqw2iu3i3123.2.q..qw..wqe.r.34';
   assert.equal(validateFullName(smash).valid, false);
   assert.equal(validateFullName('xkcdqwrtplm').valid, false);
+  assert.equal(validateFullName('Neil Armstrong').valid, true);
   assert.equal(validateOrganizationName(smash, { required: true }).valid, false);
   assert.equal(validateOrganizationName('Redacción Sur, S.A., Bogotá').valid, true);
+  assert.equal(validateOrganizationName('Fundación Schwarzschild', { required: true }).valid, true);
 
   assert.equal(validateEmail(smash).valid, false);
   assert.equal(validateEmail('akjriuqw2iu3i3123.2.q.qw.wqe.r.34@gmail.com').valid, false);

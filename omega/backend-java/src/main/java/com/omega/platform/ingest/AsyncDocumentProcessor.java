@@ -92,7 +92,7 @@ public class AsyncDocumentProcessor {
             final int pagesCount = totalPages;
             final boolean usedOcr = ocrApplied;
 
-            persistedChunks = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            Integer savedChunks = transactionTemplate.execute(status -> {
                 DocumentEntity doc = documentRepository.findByIdAndTenantId(cmd.documentId(), cmd.tenantId())
                         .orElseThrow(() -> new IllegalStateException("Documento no encontrado en transacción async"));
 
@@ -125,7 +125,8 @@ public class AsyncDocumentProcessor {
                 doc.setStatus(DocumentStatus.INDEXED);
                 documentRepository.saveAndFlush(doc);
                 return entities.size();
-            })) ? chunks.size() : 0;
+            });
+            persistedChunks = savedChunks != null ? savedChunks : 0;
 
             finalStatus = DocumentStatus.INDEXED;
         } catch (Exception ex) {
@@ -171,7 +172,7 @@ public class AsyncDocumentProcessor {
         }
     }
 
-    private Instant forceDeleteTempFile(Path tempPath) {
+    private static Instant forceDeleteTempFile(Path tempPath) {
         try {
             Files.deleteIfExists(tempPath);
         } catch (Exception ex) {

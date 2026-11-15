@@ -35,9 +35,7 @@ public class SecurityConfig {
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             JsonSecurityHandlers jsonSecurityHandlers,
-            @Value("${omega.security.cors-allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,null}")
-            String corsAllowedOriginsRaw
-    ) {
+            @Value("${omega.security.cors-allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,null}") String corsAllowedOriginsRaw) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jsonSecurityHandlers = jsonSecurityHandlers;
         this.corsAllowedOrigins = Arrays.stream(corsAllowedOriginsRaw.split(","))
@@ -56,21 +54,22 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(jsonSecurityHandlers)
-                        .accessDeniedHandler(jsonSecurityHandlers)
-                )
+                        .accessDeniedHandler(jsonSecurityHandlers))
                 .headers(headers -> headers
-                        .contentTypeOptions(opt -> { })
+                        .contentTypeOptions(opt -> {
+                        })
                         .frameOptions(frame -> frame.deny())
                         .referrerPolicy(ref -> ref.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
-                        .cacheControl(cache -> { })
-                )
+                        .cacheControl(cache -> {
+                        }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/tenants/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register",
+                                "/api/v1/auth/tenants/register")
+                        .permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().denyAll()
-                )
+                        .anyRequest().denyAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -81,6 +80,7 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(corsAllowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Omega-Bootstrap-Secret"));
+        config.setExposedHeaders(List.of("Retry-After"));
         config.setAllowCredentials(false);
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

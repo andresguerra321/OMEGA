@@ -11,10 +11,15 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timezone
 import json
+import logging
 import plistlib
 import re
 import sqlite3
 from typing import Any
+
+from sqlite_safety import safe_identifier
+
+logger = logging.getLogger(__name__)
 
 COCOA_EPOCH_OFFSET = 978307200.0
 MIN_VALID_EPOCH = 1420070400.0  # 2015-01-01
@@ -134,8 +139,8 @@ def _extract_sqlite_timeline(raw_bytes: bytes, filename: str) -> list[dict[str, 
 
         # 1. DataUsage / NetUsage (ZLIVEUSAGE + ZPROCESS)
         if "zprocess" in tables and "zliveusage" in tables:
-            zp = tables["zprocess"]
-            zl = tables["zliveusage"]
+            zp = safe_identifier(tables["zprocess"])
+            zl = safe_identifier(tables["zliveusage"])
             zcols = {r[1].lower() for r in conn.execute(f'PRAGMA table_info("{zl}")').fetchall()}
             ts_col = "l.ZTIMESTAMP" if "ztimestamp" in zcols else "p.ZTIMESTAMP" if "ztimestamp" in {
                 r[1].lower() for r in conn.execute(f'PRAGMA table_info("{zp}")').fetchall()
@@ -229,8 +234,8 @@ def _extract_sqlite_timeline(raw_bytes: bytes, filename: str) -> list[dict[str, 
                                 "suspicious": True,
                             }
                         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Error extrayendo timeline SQLite en '%s': %s", filename, exc)
     finally:
         conn.close()
 
@@ -322,8 +327,8 @@ def _extract_text_json_timeline(text: str, filename: str) -> list[dict[str, Any]
                                 "suspicious": "sms" in fname_low or any(x in url_v.lower() for x in (".top/", ".xyz/", "bit.ly/", "/payload")),
                             }
                         )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("JSON timeline no estructurado en '%s': %s", filename, exc)
 
     # 2. Apple crashlog texto plano (.ips multi-JSON o .crash clásico)
     if not events and (".ips" in fname_low or ".crash" in fname_low or "exc_bad_access" in text.lower() or "sigsegv" in text.lower()):
@@ -384,7 +389,8 @@ def correlate_temporal_chains(artifacts: list[dict[str, Any]]) -> dict[str, Any]
         if raw_bytes is None and art.get("content_b64"):
             try:
                 raw_bytes = base64.b64decode(str(art["content_b64"]))
-            except Exception:
+            except Exception as exc:
+                logger.debug("Base64 inválido en artefacto '%s': %s", filename, exc)
                 raw_bytes = None
 
         if raw_bytes and raw_bytes[:16] == SQLITE_MAGIC:

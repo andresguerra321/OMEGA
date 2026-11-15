@@ -8,12 +8,17 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import posixpath
 import re
 import sqlite3
 import tarfile
 import zipfile
 from typing import Any
+
+from sqlite_safety import safe_identifier
+
+logger = logging.getLogger(__name__)
 
 # Rutas de ejecución anómalas usadas frecuentemente por implantes móviles (iOS / Android)
 SUSPICIOUS_EXEC_PREFIXES: tuple[str, ...] = (
@@ -161,7 +166,8 @@ def _extract_tar_in_ram(
                         "bytes": data,
                     }
                 )
-    except (tarfile.TarError, EOFError, OSError):
+    except (tarfile.TarError, EOFError, OSError) as exc:
+        logger.debug("Error extrayendo tar en RAM '%s': %s", archive_name, exc)
         return []
     return extracted
 
@@ -192,7 +198,8 @@ def _extract_zip_in_ram(
                         "bytes": data,
                     }
                 )
-    except (zipfile.BadZipFile, RuntimeError, EOFError, OSError):
+    except (zipfile.BadZipFile, RuntimeError, EOFError, OSError) as exc:
+        logger.debug("Error extrayendo zip en RAM '%s': %s", archive_name, exc)
         return []
     return extracted
 
@@ -229,7 +236,8 @@ def _get_table_map(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
-    rows = conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+    safe_tbl = safe_identifier(table_name)
+    rows = conn.execute(f'PRAGMA table_info("{safe_tbl}")').fetchall()
     return {str(r[1]).lower() for r in rows if len(r) > 1 and r[1]}
 
 
@@ -240,8 +248,8 @@ def _inspect_datausage_sqlite(
     if "zprocess" not in tables or "zliveusage" not in tables:
         return anomalies
 
-    zproc_tbl = tables["zprocess"]
-    zlive_tbl = tables["zliveusage"]
+    zproc_tbl = safe_identifier(tables["zprocess"])
+    zlive_tbl = safe_identifier(tables["zliveusage"])
     p_cols = _get_columns(conn, zproc_tbl)
     l_cols = _get_columns(conn, zlive_tbl)
 
@@ -316,7 +324,7 @@ def _inspect_tcc_sqlite(
     if "access" not in tables:
         return anomalies
 
-    acc_tbl = tables["access"]
+    acc_tbl = safe_identifier(tables["access"])
     cols = _get_columns(conn, acc_tbl)
     if "service" not in cols or "client" not in cols:
         return anomalies
@@ -391,7 +399,8 @@ def _inspect_sqlite_behavioral(filename: str, raw_bytes: bytes) -> list[dict[str
         findings.extend(_inspect_datausage_sqlite(conn, tables, filename))
         findings.extend(_inspect_tcc_sqlite(conn, tables, filename))
         return findings
-    except (sqlite3.Error, ValueError):
+    except (sqlite3.Error, ValueError) as exc:
+        logger.debug("Error inspeccionando SQLite conductual '%s': %s", filename, exc)
         return []
     finally:
         conn.close()
@@ -464,7 +473,8 @@ def _inspect_process_json(filename: str, text: str) -> list[dict[str, Any]]:
         return []
     try:
         parsed = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.debug("JSON de procesos inválido en '%s': %s", filename, exc)
         return []
 
     records: list[dict[str, str]] = []
