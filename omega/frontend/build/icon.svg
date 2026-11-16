@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Cuerpo de la esfera: mÃ¡s claro arriba-izquierda, casi negro abajo-derecha -->
+    <radialGradient id="body" cx="38%" cy="28%" r="85%">
+      <stop offset="0%" stop-color="#3A4766"/>
+      <stop offset="38%" stop-color="#1B2236"/>
+      <stop offset="78%" stop-color="#0D111C"/>
+      <stop offset="100%" stop-color="#07090F"/>
+    </radialGradient>
+    <!-- Luz azul de rebote en el borde inferior -->
+    <radialGradient id="bounce" cx="50%" cy="100%" r="62%">
+      <stop offset="0%" stop-color="#2F6FED" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#2F6FED" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Borde de cristal -->
+    <linearGradient id="rim" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#9DB8F5" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#2F6FED" stop-opacity="0.75"/>
+    </linearGradient>
+    <!-- Brillo especular curvo -->
+    <linearGradient id="spec" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Glifo: azul claro arriba, azul principal abajo -->
+    <linearGradient id="glyph" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9CC0FF"/>
+      <stop offset="50%" stop-color="#4F8BFF"/>
+      <stop offset="100%" stop-color="#2F6FED"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.4"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.35"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-200%" width="160%" height="500%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <clipPath id="sphere"><circle cx="512" cy="500" r="400"/></clipPath>
+    <path id="omega" d="M34.2 54.2H23.6V47.2H29.4C26.1 43.9 24.2 39.4 24.2 34.3C24.2 25.1 31.1 18.2 40 18.2C48.9 18.2 55.8 25.1 55.8 34.3C55.8 39.4 53.9 43.9 50.6 47.2H56.4V54.2H45.8V46.8C48.7 44.1 50.3 39.9 50.3 34.7C50.3 28 45.8 23.2 40 23.2C34.2 23.2 29.7 28 29.7 34.7C29.7 39.9 31.3 44.1 34.2 46.8V54.2Z"/>
+  </defs>
+
+  <!-- Sombra de contacto -->
+  <ellipse cx="512" cy="928" rx="300" ry="34" fill="#2F6FED" opacity="0.42" filter="url(#shadow)"/>
+
+  <!-- Esfera -->
+  <circle cx="512" cy="500" r="400" fill="url(#body)"/>
+  <g clip-path="url(#sphere)">
+    <rect x="112" y="100" width="800" height="800" fill="url(#bounce)"/>
+  </g>
+  <circle cx="512" cy="500" r="398" fill="none" stroke="url(#rim)" stroke-width="5"/>
+
+  <!-- Brillo especular -->
+  <ellipse cx="410" cy="268" rx="230" ry="110" fill="url(#spec)" transform="rotate(-18 410 268)" opacity="0.8"/>
+
+  <!-- Resplandor del glifo -->
+  <g transform="translate(512 500) scale(10.4) translate(-40 -36.2)" fill="#2F6FED" filter="url(#glow)" opacity="0.85">
+    <use href="#omega"/>
+  </g>
+
+  <!-- Sombra de relieve + glifo relleno -->
+  <g transform="translate(512 508) scale(10.4) translate(-40 -36.2)" fill="#05070C" opacity="0.7" filter="url(#soft)">
+    <use href="#omega"/>
+  </g>
+  <g transform="translate(512 500) scale(10.4) translate(-40 -36.2)">
+    <use href="#omega" fill="url(#glyph)" stroke="#CFE0FF" stroke-opacity="0.75" stroke-width="0.35"/>
+  </g>
+</svg>
+
+

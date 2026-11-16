@@ -1,3 +1,6 @@
+import { useId } from 'react';
+import { motion } from 'framer-motion';
+import { SPRING_SNAPPY } from '../lib/motion';
 import {
   Home,
   Laptop,
@@ -51,12 +54,12 @@ export function SpatialNavPill({
   authConnected = false,
   compact = false,
 }) {
+  const pillId = useId();
   return (
     <nav
       aria-label="Navegación espacial OMEGA"
-      className={`roam-pill-nav inline-flex items-center rounded-[14px] p-1 select-none ${
-        compact ? 'gap-0.5' : 'gap-1'
-      }`}
+      className={`roam-pill-nav inline-flex items-center rounded-[14px] p-1 select-none ${compact ? 'gap-0.5' : 'gap-1'
+        }`}
     >
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
@@ -84,25 +87,25 @@ export function SpatialNavPill({
               aria-label={item.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
               title={item.ariaLabel}
-              className={`group relative flex flex-col items-center justify-center rounded-[10px] transition-[transform,background-color,color,width,box-shadow] duration-150 ease-kowalski cursor-pointer active:scale-[0.95] ${
-                compact
+              className={`group relative flex flex-col items-center justify-center rounded-[10px] transition-[transform,background-color,color,width,box-shadow] duration-150 ease-kowalski cursor-pointer active:scale-[0.95] ${compact
                   ? isActive
                     ? 'h-8 w-12'
                     : 'h-8 w-8'
                   : isActive
                     ? 'h-8 w-12 xl:h-9 xl:w-16'
                     : 'h-8 w-8 xl:h-9 xl:w-10'
-              } ${
-                isActive
+                } ${isActive
                   ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] border border-[#2F6FED]/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_24px_rgba(47,111,237,0.25)]'
                   : 'bg-transparent text-[#9A9AA2] border border-transparent hover:bg-white/[0.06] hover:text-[#F2F2F4]'
-              }`}
+                }`}
             >
               <Icon className="h-[15px] w-[15px]" strokeWidth={isActive ? 2.1 : 1.75} />
 
               {/* Subrayado discreto de estado activo en único azul principal */}
               {isActive && (
-                <span
+                <motion.span
+                  layoutId={`${pillId}-underline`}
+                  transition={SPRING_SNAPPY}
                   aria-hidden="true"
                   className="mt-1 h-[2px] w-4 rounded-full bg-[#2F6FED] shadow-[0_0_8px_rgba(47,111,237,0.7)]"
                 />

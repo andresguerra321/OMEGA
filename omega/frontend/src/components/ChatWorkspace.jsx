@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { messageVariants, staggerContainer, fadeUpItem, hoverLift, tapPress } from '../lib/motion';
 import {
   ArrowRight,
   Fingerprint,
@@ -742,18 +744,24 @@ export function ChatWorkspace({
               </div>
 
               {/* Tarjetas de Inicio Rápido en flujo (sin flotantes ni truncamiento) */}
-              <div
+              <motion.div
                 aria-label="Consultas guiadas sugeridas"
-                className="animate-fade-up w-full mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+                className="w-full mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5"
               >
                 {QUICK_BRIEFS.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <button
+                    <motion.button
                       key={item.tag}
                       type="button"
+                      variants={fadeUpItem}
+                      whileHover={hoverLift}
+                      whileTap={tapPress}
                       onClick={() => submitQuery(item.prompt)}
-                      className="omega-glass-card group rounded-[14px] px-3.5 py-3 text-left flex flex-col justify-between gap-1.5 hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.62)] active:scale-[0.985] cursor-pointer"
+                      className="omega-glass-card group rounded-[14px] px-3.5 py-3 text-left flex flex-col justify-between gap-1.5 hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.62)] cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="text-[12.5px] font-semibold text-[#F2F2F4] leading-snug">
@@ -764,10 +772,10 @@ export function ChatWorkspace({
                       <div className="text-[11.5px] text-[#9A9AA2] leading-snug">
                         {item.summary}
                       </div>
-                    </button>
+                    </motion.button>
                   );
                 })}
-              </div>
+              </motion.div>
             </div>
 
             <div className="flex-1 min-h-[10px] max-h-[56px]" />
@@ -815,7 +823,7 @@ export function ChatWorkspace({
               <div className="mx-auto max-w-[780px] space-y-6 sm:space-y-7">
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
-                    <div key={idx} className="animate-fade-up flex justify-end">
+                    <motion.div key={idx} variants={messageVariants} initial="initial" animate="animate" className="flex justify-end">
                       <div className="max-w-[90%] sm:max-w-[80%] rounded-[16px] rounded-br-[6px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3.5 sm:px-4 py-3 space-y-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                         {msg.sourceScope && msg.sourceScope !== 'Todas las fuentes' && (
                           <span className="inline-block rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/20 px-2 py-0.5 text-[11px] font-medium text-[#F2F2F4]">
@@ -826,11 +834,14 @@ export function ChatWorkspace({
                           {msg.content}
                         </p>
                       </div>
-                    </div>
+                    </motion.div>
                   ) : msg.isError ? (
-                    <div
+                    <motion.div
                       key={idx}
-                      className="animate-fade-up rounded-[12px] border border-[#FF453A]/30 bg-[#FF453A]/10 px-4 py-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4"
+                      variants={messageVariants}
+                      initial="initial"
+                      animate="animate"
+                      className="rounded-[12px] border border-[#FF453A]/30 bg-[#FF453A]/10 px-4 py-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4"
                     >
                       <div className="space-y-0.5 text-[14px] min-w-0">
                         <p className="font-medium text-[#FFDAD6]">Error al consultar el motor</p>
@@ -845,9 +856,9 @@ export function ChatWorkspace({
                           Reintentar
                         </button>
                       )}
-                    </div>
+                    </motion.div>
                   ) : (
-                    <div key={idx} className="animate-fade-up space-y-2">
+                    <motion.div key={idx} variants={messageVariants} initial="initial" animate="animate" className="space-y-2">
                       {Array.isArray(msg.warnings) && msg.warnings.length > 0 && (
                         <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[9px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/10 px-2.5 py-1 text-[11px] text-[#FFD591]">
                           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -862,7 +873,7 @@ export function ChatWorkspace({
                         isSourcesOpen={isSourcesOpen}
                         onTypingStep={keepBottomAligned}
                       />
-                    </div>
+                    </motion.div>
                   )
                 )}
 

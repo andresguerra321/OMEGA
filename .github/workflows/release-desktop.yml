@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Versión de etiqueta o paquete'
         required: false
-        default: 'v1.3.1-local-ci'
+        default: 'v1.4.0-local-ci'
 
 permissions:
   contents: write
@@ -81,3 +81,14 @@ jobs:
             omega/frontend/release/*.exe
             omega/frontend/release/SHA256SUMS.txt
           retention-days: 90
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $notes = "Instaladores de escritorio de OMEGA para Windows. Verifica la integridad con SHA256SUMS.txt. Los instaladores no estan firmados con certificado comercial, por lo que Windows SmartScreen puede mostrar una advertencia."
+          $assets = @(Get-ChildItem -Path release -Filter *.exe | ForEach-Object { $_.FullName }) + (Resolve-Path release\SHA256SUMS.txt).Path
+          gh release create $tag @assets --title "OMEGA $tag" --notes "$notes" --verify-tag

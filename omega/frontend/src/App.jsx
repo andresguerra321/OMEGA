@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { pageVariants, popVariants } from './lib/motion';
 import {
   Plus,
   Search,
@@ -38,6 +40,7 @@ import {
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaLogo } from './components/OmegaLogo';
+import { OmegaLoader } from './components/OmegaLoader';
 import { SpatialNavPill } from './components/SpatialNavPill';
 import { SecurityPostureStage } from './components/SecurityPostureStage';
 import { CopilotDrawer } from './components/CopilotDrawer';
@@ -938,12 +941,7 @@ export default function App() {
     return (
       <div className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-[#0A0A0C] text-[#F2F2F4] select-none">
         <OmegaAuthBackdrop />
-        <div className="relative z-10 flex flex-col items-center gap-3 motion-safe:animate-scale-in">
-          <OmegaLogo size={54} isThinking framed />
-          <span className="font-tech text-[11px] uppercase tracking-[0.12em] text-[#9A9AA2] motion-safe:animate-pulse">
-            Verificando sesión...
-          </span>
-        </div>
+        <OmegaLoader />
       </div>
     );
   }
@@ -987,7 +985,16 @@ export default function App() {
   return (
     <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none">
       <main className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text">
+        <AnimatePresence mode="wait" initial={false}>
         {isHome ? (
+          <motion.div
+            key="home-stage"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 min-h-0 flex flex-col"
+          >
           <SecurityPostureStage
             isDesktop={isDesktop}
             activeNav={activeNav}
@@ -1019,8 +1026,16 @@ export default function App() {
             onPanicPurge={handlePanicPurge}
             authSession={authSession}
           />
+          </motion.div>
         ) : (
-          <div className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]">
+          <motion.div
+            key="instrument-shell"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
+          >
             <ChatAtmosphere
               variant={activeNav === 'preguntar' && messages.length === 0 ? 'stage' : 'workspace'}
               showWaves={activeNav !== 'preguntar' || messages.length === 0}
@@ -1194,8 +1209,9 @@ export default function App() {
                     <ChevronDown className="h-3 w-3 text-[#9A9AA2] shrink-0" />
                   </button>
 
+                  <AnimatePresence>
                   {sessionsMenuOpen && (
-                    <div className="apple-group animate-scale-in origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] bg-[#141418]/96 p-1.5 z-50 space-y-1">
+                    <motion.div variants={popVariants} initial="initial" animate="animate" exit="exit" className="apple-group origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] bg-[#141418]/96 p-1.5 z-50 space-y-1">
                       <button
                         type="button"
                         onClick={() => {
@@ -1250,8 +1266,9 @@ export default function App() {
                           );
                         })}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
+                  </AnimatePresence>
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -1303,6 +1320,15 @@ export default function App() {
 
               {/* Contenido del instrumento activo */}
               <div className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
+               <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={activeNav}
+                  variants={pageVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                >
                 {activeNav === 'preguntar' ? (
                   <ChatWorkspace
                     messages={messages}
@@ -1434,9 +1460,12 @@ export default function App() {
                     onPanicPurge={handlePanicPurge}
                   />
                 )}
+                </motion.div>
+               </AnimatePresence>
               </div>
-            </div>
+          </motion.div>
           )}
+        </AnimatePresence>
         </main>
 
       {/* Panel Deslizable No Destructivo de Copiloto */}

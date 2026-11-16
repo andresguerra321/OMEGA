@@ -4,6 +4,21 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [1.4.0] - 2026-11-16
+
+### Seguridad y Honestidad Forense
+- **Sesión con cookie `HttpOnly` / `SameSite=Strict` (`SessionCookieHelper.java`, `AuthController.java`, `JwtAuthenticationFilter.java`):** el navegador y la app de escritorio dejan de guardar el JWT en `localStorage`; `OMEGA_COOKIE_SECURE` controla el atributo `Secure` (`false` en desarrollo, `true` en producción).
+- **Frescura del catálogo CTI y alcance por sistema operativo (`cti_db.py`, `forensic_scope.py`):** los veredictos informan la fecha de corte del catálogo y evitan afirmar inmunidad absoluta; el manifiesto STIX se monta en modo lectura dentro del worker.
+- **Integridad de corpus y cadena de suministro (`corpus_integrity.py`, `cti-feed-review.yml`, `release-desktop.yml`, `supply-chain-audit.yml`):** verificación SHA-256 con fallo cerrado de PDFs y bundles STIX, y construcción de instaladores en CI con atestación de procedencia.
+
+### Interfaz y Marca
+- **Animaciones con Framer Motion:** transiciones entre vistas, subrayado deslizante en la navegación, mensajes de chat con resorte, tarjetas escalonadas, y cierre animado del cajón del copiloto y del modal de acceso; respeta `prefers-reduced-motion`.
+- **Pantalla de carga (`OmegaLoader.jsx`):** esfera de OMEGA con anillos orbitales, ondas de pulso y barra de progreso.
+- **Nuevo logo e ícono de la app:** esfera de cristal con Ω azul (`omega/frontend/build/icon.svg`, `icon.png`, `icon.ico` con 7 resoluciones) aplicada también dentro de la interfaz.
+
+### Empaquetado
+- Los instaladores `.exe` dejan de versionarse en Git y se publican como asset de GitHub Release; el nombre de los archivos sigue ahora la versión del proyecto (`OMEGA-Setup-1.4.0-x64.exe`, `OMEGA-Portable-1.4.0-x64.exe`). Los instaladores no están firmados con un certificado comercial.
+
 ## [1.3.1] - 2026-11-15
 
 ### Seguridad en Profundidad (`backend-java` & `omega/api`)
