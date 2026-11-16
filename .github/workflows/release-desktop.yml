@@ -91,4 +91,9 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $notes = "Instaladores de escritorio de OMEGA para Windows. Verifica la integridad con SHA256SUMS.txt. Los instaladores no estan firmados con certificado comercial, por lo que Windows SmartScreen puede mostrar una advertencia."
           $assets = @(Get-ChildItem -Path release -Filter *.exe | ForEach-Object { $_.FullName }) + (Resolve-Path release\SHA256SUMS.txt).Path
-          gh release create $tag @assets --title "OMEGA $tag" --notes "$notes" --verify-tag
+          $notesFile = ".github/release-notes/$tag.md"
+          if (Test-Path "../../$notesFile") {
+            gh release create $tag @assets --title "OMEGA $tag" --notes-file "../../$notesFile" --verify-tag
+          } else {
+            gh release create $tag @assets --title "OMEGA $tag" --notes "$notes" --generate-notes --verify-tag
+          }
