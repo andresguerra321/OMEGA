@@ -1,1 +1,6 @@
 *.exe filter=lfs diff=lfs merge=lfs -text
+
+# Corpus verificado por SHA-256: nunca normalizar saltos de linea (el runner Windows convertia LF a CRLF y rompia los hashes)
+omega/corpus_mvp/** -text
+*.pdf binary
+*.stix2 -text
