@@ -4,6 +4,13 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [1.5.1] - 2026-11-16
+
+### Asistente Paso a Paso de IA (BYOK sin consola) & OmniRoute
+- **Asistente guiado en Ajustes y aviso en Chat (`SettingsPanel.jsx`, `ChatWorkspace.jsx`, `SystemController.java`, `App.jsx`):** cuando una instalación nueva aún no tiene clave de IA configurada, el Chat muestra un acceso directo a **Ajustes → Motor de IA**, donde el usuario encuentra el paso a paso para crear su clave gratuita en Groq (~1 min), pegarla y activar el motor en 1 clic sin editar archivos `.env` ni abrir consola.
+- **Puente IPC seguro en Electron (`dockerOrchestrator.js`, `main.js`, `preload.cjs`):** `getAiEngineConfig()` (solo estado y sufijo enmascarado) y `reapplyAiConfig()` (sanitización anti-inyección en `.env`, escritura con permisos locales y recarga automática de `backend-java`).
+- **Router multi-proveedor opcional OmniRoute (`OmegaProperties.java`, `OpenAiRagAnswerGenerator.java`, `docker-compose.yml`):** soporte para `OMNIROUTE_BASE_URL` / `OMNIROUTE_API_KEY` / `OMNIROUTE_MODEL` (`auto`) con cadena automática de respaldo `OmniRoute → OpenAI → Groq → Extractivo`, contenedor `omega_omniroute` bajo el perfil `omniroute` (`127.0.0.1:20128`) y activación automática en `DockerOrchestrator`.
+
 ## [1.5.0] - 2026-11-16
 
 ### Motor RAG, Síntesis con Groq & Calidad de Respuestas

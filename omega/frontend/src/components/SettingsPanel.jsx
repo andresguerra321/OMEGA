@@ -3,6 +3,9 @@ import {
   Check,
   Copy,
   Database,
+  ExternalLink,
+  Eye,
+  EyeOff,
   FileCheck2,
   Globe,
   KeyRound,
@@ -15,6 +18,7 @@ import {
   Scale,
   Shield,
   ShieldCheck,
+  Sparkles,
   UserPlus,
   Zap,
 } from 'lucide-react';
@@ -38,9 +42,16 @@ import {
 
 const CONFIG_SECTIONS = [
   { id: 'cuenta', label: 'Cuenta y sesión', icon: Shield },
+  { id: 'ia', label: 'Motor de IA', icon: Sparkles },
   { id: 'rag', label: 'Motor RAG', icon: Layers },
   { id: 'permisos', label: 'Permisos y ética', icon: ShieldCheck },
   { id: 'corpus', label: 'Corpus indexado', icon: Database },
+];
+
+const GROQ_MODELS = [
+  { value: 'openai/gpt-oss-120b', label: 'openai/gpt-oss-120b (Recomendado)' },
+  { value: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile (Alternativo)' },
+  { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (Ultra rápido)' },
 ];
 
 const TOPK_OPTIONS = [
@@ -152,8 +163,11 @@ export function SettingsPanel({
   onOpenAuth,
   onLogout,
   onPanicPurge,
+  initialSection = '',
+  initialSectionKey = 0,
+  onAiConfigured,
 }) {
-  const [activeSection, setActiveSection] = useState('cuenta');
+  const [activeSection, setActiveSection] = useState(initialSection || 'cuenta');
   const [gov, setGov] = useState(null);
   const [workspaceId, setWorkspaceId] = useState(() => getWorkspaceId());
   const [auditVerification, setAuditVerification] = useState(null);
@@ -180,11 +194,24 @@ export function SettingsPanel({
   const [rotated, setRotated] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState(false);
 
+  const [desktopAiConfig, setDesktopAiConfig] = useState(null);
+  const [groqKeyDraft, setGroqKeyDraft] = useState('');
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [groqModelDraft, setGroqModelDraft] = useState('openai/gpt-oss-120b');
+  const [omniEnabledDraft, setOmniEnabledDraft] = useState(false);
+  const [omniKeyDraft, setOmniKeyDraft] = useState('');
+  const [openAiKeyDraft, setOpenAiKeyDraft] = useState('');
+  const [savingAiConfig, setSavingAiConfig] = useState(false);
+  const [copiedEnvSnippet, setCopiedEnvSnippet] = useState(false);
+
   const cuentaRef = useRef(null);
+  const iaRef = useRef(null);
   const ragRef = useRef(null);
   const permisosRef = useRef(null);
   const corpusRef = useRef(null);
   const scrollContainerRef = useRef(null);
+
+  const isDesktopApp = Boolean(typeof window !== 'undefined' && window.omegaDesktop?.saveAiEngineConfig);
 
   useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
@@ -322,11 +349,110 @@ export function SettingsPanel({
     setActiveSection(id);
     const map = {
       cuenta: cuentaRef.current,
+      ia: iaRef.current,
       rag: ragRef.current,
       permisos: permisosRef.current,
       corpus: corpusRef.current,
     };
     map[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  useEffect(() => {
+    if (!initialSection) return;
+    const t = setTimeout(() => scrollToSection(initialSection), 80);
+    return () => clearTimeout(t);
+  }, [initialSection, initialSectionKey]);
+
+  useEffect(() => {
+    const getCfg = window?.omegaDesktop?.getAiEngineConfig;
+    if (typeof getCfg !== 'function') return;
+    getCfg()
+      .then((res) => {
+        if (res?.ok && res.config) {
+          setDesktopAiConfig(res.config);
+          if (res.config.groqModel) setGroqModelDraft(res.config.groqModel);
+          setOmniEnabledDraft(Boolean(res.config.omniRouteEnabled));
+        }
+      })
+      .catch(() => {
+        // Sin acceso IPC fuera de Electron
+      });
+  }, []);
+
+  function openExternalLink(url) {
+    if (typeof window?.omegaDesktop?.openExternalUrl === 'function') {
+      void window.omegaDesktop.openExternalUrl(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleSaveAiEngine(e) {
+    e?.preventDefault();
+    if (!isDesktopApp || savingAiConfig) return;
+    await guard(async () => {
+      setSavingAiConfig(true);
+      setActionBanner({
+        tone: 'info',
+        message: 'Guardando configuración y recargando el motor de IA (~5 segundos)...',
+      });
+      try {
+        const res = await window.omegaDesktop.saveAiEngineConfig({
+          groqApiKey: groqKeyDraft.trim(),
+          groqModel: groqModelDraft,
+          omniRouteEnabled: omniEnabledDraft,
+          omniRouteApiKey: omniKeyDraft.trim(),
+          openAiApiKey: openAiKeyDraft.trim(),
+        });
+        if (res?.config) {
+          setDesktopAiConfig(res.config);
+        }
+        if (res?.ok) {
+          setGroqKeyDraft('');
+          setOmniKeyDraft('');
+          setOpenAiKeyDraft('');
+          setActionBanner({
+            tone: 'clean',
+            message: res.config?.configured
+              ? `Motor de IA activo (${res.config.activeProvider} · ${res.config.activeModel}). Ya puedes consultar en el chat.`
+              : 'Configuración guardada y servicio recargado.',
+          });
+          if (authSession) {
+            const refreshed = await fetchSystemGovernance().catch(() => null);
+            if (refreshed) setGov(refreshed);
+          }
+          onAiConfigured?.();
+        } else {
+          setActionBanner({
+            tone: 'danger',
+            message: res?.error || 'No se pudo recargar el motor de IA.',
+          });
+        }
+      } catch (err) {
+        setActionBanner({
+          tone: 'danger',
+          message: err?.message || 'Error guardando la configuración de IA.',
+        });
+      } finally {
+        setSavingAiConfig(false);
+      }
+    });
+  }
+
+  function handleCopyEnvSnippet() {
+    const cleanGroq = groqKeyDraft.trim() || 'gsk_tu_clave_gratuita_de_groq';
+    const lines = [
+      `GROQ_API_KEY=${cleanGroq}`,
+      `GROQ_MODEL=${groqModelDraft}`,
+    ];
+    if (omniEnabledDraft) {
+      lines.push('COMPOSE_PROFILES=omniroute');
+      lines.push('OMNIROUTE_BASE_URL=http://omniroute:20128/v1');
+      if (omniKeyDraft.trim()) lines.push(`OMNIROUTE_API_KEY=${omniKeyDraft.trim()}`);
+    }
+    navigator.clipboard?.writeText(lines.join('\n'));
+    setCopiedEnvSnippet(true);
+    setTimeout(() => setCopiedEnvSnippet(false), 1800);
   }
 
   async function handleCopyWorkspaceId() {
@@ -762,7 +888,217 @@ export function SettingsPanel({
               </div>
             </section>
 
-            {/* Bloque 2 — Profundidad de Recuperación RAG */}
+            {/* Bloque 2 — Configuración del Motor de IA (Groq gratis paso a paso) */}
+            <section ref={iaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="30">
+              {(() => {
+                const govAi = gov?.ai_engine || null;
+                const aiConfigured = Boolean(desktopAiConfig ? desktopAiConfig.configured : govAi?.configured);
+                const activeProvider = desktopAiConfig?.activeProvider || govAi?.active_provider || 'extractive';
+                const activeModel = desktopAiConfig?.activeModel || govAi?.active_model || 'omega-extractive-fallback';
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
+                          Motor de IA para el asistente
+                        </h2>
+                        <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
+                          Sin una clave de IA, el chat solo muestra fragmentos literales. Con Groq gratuito responde en ~2 segundos.
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${
+                          aiConfigured
+                            ? 'border-[#30D158]/35 bg-[#30D158]/10 text-[#30D158]'
+                            : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/12 text-[#FFD60A]'
+                        }`}
+                      >
+                        {aiConfigured ? `Activo · ${activeProvider} (${activeModel})` : 'Sin clave · Modo extractivo'}
+                      </span>
+                    </div>
+
+                    <form onSubmit={handleSaveAiEngine} className="apple-group rounded-[13px] p-4 sm:p-5 space-y-4">
+                      {/* Guía paso a paso */}
+                      <div className="rounded-[11px] border border-white/[0.08] bg-black/25 p-3.5 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[12.5px] font-semibold text-[#F2F2F4]">
+                            Cómo obtener tu clave gratuita de Groq en 1 minuto
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openExternalLink('https://console.groq.com/keys')}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/50 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] transition-colors cursor-pointer"
+                          >
+                            <span>Abrir Groq Console</span>
+                            <ExternalLink className="h-3 w-3 text-[#6EA0FF]" />
+                          </button>
+                        </div>
+                        <ol className="space-y-1 text-[12px] text-[#B8C0D0] list-decimal list-inside leading-relaxed">
+                          <li>Haz clic en <strong>Abrir Groq Console</strong> e inicia sesión gratis con tu cuenta de Google o GitHub (no pide tarjeta).</li>
+                          <li>Entra en <strong>API Keys → Create API Key</strong>, pon cualquier nombre (ej. <code className="font-tech text-[#F2F2F4]">omega</code>) y copia la clave que empieza por <code className="font-tech text-[#F2F2F4]">gsk_</code>.</li>
+                          <li>Pégala aquí abajo y pulsa <strong>Guardar y activar IA</strong>.</li>
+                        </ol>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-[1.35fr_1fr] gap-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label htmlFor="omega-groq-key" className="text-[12px] font-medium text-[#D2D6E2]">
+                              Clave API de Groq
+                            </label>
+                            {desktopAiConfig?.groqConfigured && (
+                              <span className="font-tech text-[10.5px] text-[#30D158]">
+                                Guardada ({desktopAiConfig.groqHint})
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative flex items-center">
+                            <input
+                              id="omega-groq-key"
+                              type={showGroqKey ? 'text' : 'password'}
+                              value={groqKeyDraft}
+                              onChange={(e) => setGroqKeyDraft(e.target.value)}
+                              placeholder={
+                                desktopAiConfig?.groqConfigured
+                                  ? 'Deja vacío para conservar la clave guardada o pega una nueva'
+                                  : 'gsk_...'
+                              }
+                              className="w-full h-9.5 pl-3 pr-10 rounded-[9px] bg-[#0A0A0C]/75 border border-white/[0.1] text-[12.5px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
+                            />
+                            <button
+                              type="button"
+                              aria-label={showGroqKey ? 'Ocultar clave' : 'Mostrar clave'}
+                              onClick={() => setShowGroqKey((v) => !v)}
+                              className="absolute right-2.5 text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+                            >
+                              {showGroqKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="omega-groq-model" className="block text-[12px] font-medium text-[#D2D6E2] mb-1">
+                            Modelo en Groq
+                          </label>
+                          <select
+                            id="omega-groq-model"
+                            value={groqModelDraft}
+                            onChange={(e) => setGroqModelDraft(e.target.value)}
+                            className="w-full h-9.5 px-3 rounded-[9px] bg-[#0A0A0C]/75 border border-white/[0.1] text-[12.5px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
+                          >
+                            {GROQ_MODELS.map((m) => (
+                              <option key={m.value} value={m.value} className="bg-[#121216] text-[#F2F2F4]">
+                                {m.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Opciones avanzadas colapsables: OmniRoute / OpenAI */}
+                      <details className="rounded-[10px] border border-white/[0.07] bg-white/[0.02] px-3.5 py-2.5">
+                        <summary className="text-[12px] font-medium text-[#B8C0D0] hover:text-[#F2F2F4] cursor-pointer select-none">
+                          Opciones avanzadas: OmniRoute (multi-proveedor) u OpenAI
+                        </summary>
+                        <div className="pt-3 space-y-3 border-t border-white/[0.06] mt-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="space-y-0.5">
+                              <div className="text-[12.5px] font-medium text-[#F2F2F4]">
+                                Activar router OmniRoute local
+                              </div>
+                              <p className="text-[11.5px] text-[#9A9AA2]">
+                                Combina varias cuentas/APIs gratuitas con respaldo automático hacia Groq.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {omniEnabledDraft && (
+                                <button
+                                  type="button"
+                                  onClick={() => openExternalLink(desktopAiConfig?.omniRouteDashboardUrl || 'http://127.0.0.1:20128/dashboard')}
+                                  className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer"
+                                >
+                                  <span>Abrir dashboard</span>
+                                  <ExternalLink className="h-3 w-3" />
+                                </button>
+                              )}
+                              <TogglePill
+                                checked={omniEnabledDraft}
+                                onChange={setOmniEnabledDraft}
+                                label="Activar router OmniRoute local"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label htmlFor="omega-omni-key" className="block text-[11.5px] text-[#9A9AA2] mb-1">
+                                Clave de OmniRoute {desktopAiConfig?.omniRouteKeyConfigured ? `(${desktopAiConfig.omniRouteHint})` : '(opcional)'}
+                              </label>
+                              <input
+                                id="omega-omni-key"
+                                type="password"
+                                value={omniKeyDraft}
+                                onChange={(e) => setOmniKeyDraft(e.target.value)}
+                                placeholder="sk-... generada en OmniRoute"
+                                className="w-full h-9 px-3 rounded-[8px] bg-[#0A0A0C]/75 border border-white/[0.09] text-[12px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="omega-openai-key" className="block text-[11.5px] text-[#9A9AA2] mb-1">
+                                Clave OpenAI {desktopAiConfig?.openAiConfigured ? `(${desktopAiConfig.openAiHint})` : '(opcional)'}
+                              </label>
+                              <input
+                                id="omega-openai-key"
+                                type="password"
+                                value={openAiKeyDraft}
+                                onChange={(e) => setOpenAiKeyDraft(e.target.value)}
+                                placeholder="sk-..."
+                                className="w-full h-9 px-3 rounded-[8px] bg-[#0A0A0C]/75 border border-white/[0.09] text-[12px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+
+                      {isDesktopApp ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                          <span className="text-[11.5px] text-[#9A9AA2]">
+                            Se guarda cifrado localmente en tu equipo (<code className="font-tech">.env</code>) sin enviarse a terceros distintos al proveedor elegido.
+                          </span>
+                          <button
+                            type="submit"
+                            disabled={savingAiConfig}
+                            className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] hover:brightness-110 disabled:opacity-55 px-4 py-2 text-[12.5px] font-medium text-white transition-all cursor-pointer"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>{savingAiConfig ? 'Aplicando y recargando...' : 'Guardar y activar IA'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="rounded-[10px] border border-white/[0.08] bg-black/30 p-3 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#B8C0D0]">
+                            <span>Estás usando la versión web; agrega estas líneas en <code className="font-tech text-[#F2F2F4]">omega/.env</code> y reinicia el backend:</span>
+                            <button
+                              type="button"
+                              onClick={handleCopyEnvSnippet}
+                              className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.1] bg-white/[0.05] hover:bg-white/[0.1] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer"
+                            >
+                              {copiedEnvSnippet ? <Check className="h-3 w-3 text-[#30D158]" /> : <Copy className="h-3 w-3" />}
+                              <span>{copiedEnvSnippet ? 'Copiado' : 'Copiar .env'}</span>
+                            </button>
+                          </div>
+                          <pre className="font-tech text-[11px] text-[#9A9AA2] overflow-x-auto">
+                            docker compose -f omega/docker-compose.yml up -d backend-java
+                          </pre>
+                        </div>
+                      )}
+                    </form>
+                  </>
+                );
+              })()}
+            </section>
+
+            {/* Bloque 3 — Profundidad de Recuperación RAG */}
             <section ref={ragRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="50">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">

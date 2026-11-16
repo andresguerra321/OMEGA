@@ -218,6 +218,7 @@ export default function App() {
   const [deviceNavKey, setDeviceNavKey] = useState(0);
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
   const [threatJump, setThreatJump] = useState({ query: '', key: 0 });
+  const [settingsJump, setSettingsJump] = useState({ section: '', key: 0 });
   const [osintJump, setOsintJump] = useState({ value: '', type: 'domain', key: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState('windows');
   const [scanningPc, setScanningPc] = useState(false);
@@ -849,6 +850,12 @@ export default function App() {
       setOsintJump((prev) => ({
         value: opts.assetValue,
         type: opts.assetType || 'domain',
+        key: prev.key + 1,
+      }));
+    }
+    if (opts?.settingsSection) {
+      setSettingsJump((prev) => ({
+        section: opts.settingsSection,
         key: prev.key + 1,
       }));
     }
@@ -1486,6 +1493,8 @@ export default function App() {
                     }}
                     onUploadPdf={handleUploadExpedientePdf}
                     onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                    aiEngine={govStats?.ai_engine || null}
+                    onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
                   />
                 ) : activeNav === 'cuenta' ? (
                   <AuthModulePanel
@@ -1572,6 +1581,9 @@ export default function App() {
                     onOpenAuth={openAuthModal}
                     onLogout={handleLogout}
                     onPanicPurge={handlePanicPurge}
+                    initialSection={settingsJump.section}
+                    initialSectionKey={settingsJump.key}
+                    onAiConfigured={() => void refreshSystemTelemetry()}
                   />
                 )}
                 </motion.div>

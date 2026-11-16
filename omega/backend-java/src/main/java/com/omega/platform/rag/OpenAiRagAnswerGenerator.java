@@ -2,6 +2,7 @@ package com.omega.platform.rag;
 
 import com.omega.platform.config.OmegaProperties;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -37,6 +38,7 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
 
     private final RestClient openAiRestClient;
     private final RestClient groqRestClient;
+    private final RestClient omniRouteRestClient;
     private final OmegaProperties properties;
 
     public OpenAiRagAnswerGenerator(
@@ -47,14 +49,24 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
         this.properties = properties;
 
         String groqBase = properties.rag().groqBaseUrl();
-        String normalizedBase = (groqBase == null || groqBase.isBlank())
+        String normalizedGroqBase = (groqBase == null || groqBase.isBlank())
                 ? "https://api.groq.com/openai/v1"
-                : groqBase.trim();
+                : groqBase.trim().replaceAll("/+$", "");
+        this.groqRestClient = buildGatewayClient(normalizedGroqBase, 10, 45);
+
+        String omniBase = properties.rag().omniRouteBaseUrl();
+        String normalizedOmniBase = (omniBase == null || omniBase.isBlank())
+                ? "http://127.0.0.1:20128/v1"
+                : omniBase.trim().replaceAll("/+$", "");
+        this.omniRouteRestClient = buildGatewayClient(normalizedOmniBase, 5, 45);
+    }
+
+    private static RestClient buildGatewayClient(String baseUrl, int connectSec, int readSec) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(10));
-        factory.setReadTimeout(Duration.ofSeconds(45));
-        this.groqRestClient = RestClient.builder()
-                .baseUrl(normalizedBase)
+        factory.setConnectTimeout(Duration.ofSeconds(connectSec));
+        factory.setReadTimeout(Duration.ofSeconds(readSec));
+        return RestClient.builder()
+                .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
     }
@@ -65,8 +77,8 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
             return "No se encontró evidencia indexada suficiente en este expediente para responder la consulta.";
         }
 
-        LlmTarget target = resolveLlmTarget();
-        if (target != null) {
+        List<LlmTarget> targets = resolveLlmTargets();
+        for (LlmTarget target : targets) {
             try {
                 String llmAnswer = callChatCompletions(question, chunks, target);
                 if (llmAnswer != null && !llmAnswer.isBlank()) {
@@ -74,7 +86,7 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
                     return ensureAllMandatoryCitationsPresent(guarded, chunks);
                 }
             } catch (Exception ex) {
-                log.warn("Fallo invocando Chat Completions ({} / {}); usando síntesis determinista grounded: {}",
+                log.warn("Fallo invocando Chat Completions ({} / {}); intentando siguiente proveedor en cadena: {}",
                         target.providerName(), target.model(), ex.getMessage());
             }
         }
@@ -89,19 +101,41 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
     }
 
     LlmTarget resolveLlmTarget() {
+        List<LlmTarget> targets = resolveLlmTargets();
+        return targets.isEmpty() ? null : targets.get(0);
+    }
+
+    List<LlmTarget> resolveLlmTargets() {
+        List<LlmTarget> targets = new ArrayList<>();
+
+        String omniBase = properties.rag().omniRouteBaseUrl();
+        if (omniBase != null && !omniBase.isBlank()) {
+            String omniKey = properties.rag().omniRouteApiKey();
+            String omniModel = properties.rag().omniRouteModel();
+            String resolvedOmniModel = (omniModel == null || omniModel.isBlank()) ? "auto" : omniModel.trim();
+            targets.add(new LlmTarget(
+                    "omniroute",
+                    omniRouteRestClient,
+                    resolvedOmniModel,
+                    omniKey == null ? "" : omniKey.trim()
+            ));
+        }
+
         String openAiKey = properties.rag().openAiApiKey();
         if (openAiKey != null && !openAiKey.isBlank()) {
-            return new LlmTarget("openai", openAiRestClient, properties.rag().chatModel(), openAiKey.trim());
+            targets.add(new LlmTarget("openai", openAiRestClient, properties.rag().chatModel(), openAiKey.trim()));
         }
+
         String groqKey = properties.rag().groqApiKey();
         if (groqKey != null && !groqKey.isBlank()) {
             String groqModel = properties.rag().groqModel();
             String resolvedModel = (groqModel == null || groqModel.isBlank())
                     ? "openai/gpt-oss-120b"
                     : groqModel.trim();
-            return new LlmTarget("groq", groqRestClient, resolvedModel, groqKey.trim());
+            targets.add(new LlmTarget("groq", groqRestClient, resolvedModel, groqKey.trim()));
         }
-        return null;
+
+        return targets;
     }
 
     private String callChatCompletions(String question, List<RankedChunk> chunks, LlmTarget target) {
@@ -134,7 +168,11 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
 
         ChatResponse resp = target.client().post()
                 .uri("/chat/completions")
-                .header("Authorization", "Bearer " + target.apiKey())
+                .headers(headers -> {
+                    if (target.apiKey() != null && !target.apiKey().isBlank()) {
+                        headers.setBearerAuth(target.apiKey());
+                    }
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(req)
                 .retrieve()

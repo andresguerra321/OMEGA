@@ -101,6 +101,70 @@ export function resolveComposeEnvFilePath(composeRoot, userDataDir = null) {
   return null;
 }
 
+export function maskSecretHint(secret) {
+  const clean = String(secret || '').trim();
+  if (!clean) return '';
+  if (clean.length <= 8) return '••••••••';
+  const prefix = clean.startsWith('gsk_') ? 'gsk_' : clean.startsWith('sk-') ? 'sk-' : '';
+  return `${prefix}••••${clean.slice(-4)}`;
+}
+
+export function sanitizeDotEnvValue(raw) {
+  return String(raw ?? '')
+    .replace(/[\r\n\0]/g, '')
+    .trim();
+}
+
+export function upsertDotEnvContent(rawText, updates = {}) {
+  const lines = rawText ? rawLineSplit(rawText) : [];
+  const remaining = new Map();
+  for (const [k, v] of Object.entries(updates)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) continue;
+    remaining.set(k, v === null ? null : sanitizeDotEnvValue(v));
+  }
+
+  const nextLines = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const eqIdx = trimmed.indexOf('=');
+    if (!trimmed || trimmed.startsWith('#') || eqIdx <= 0) {
+      nextLines.push(line);
+      continue;
+    }
+    const key = trimmed.slice(0, eqIdx).trim();
+    if (!remaining.has(key)) {
+      nextLines.push(line);
+      continue;
+    }
+    const nextVal = remaining.get(key);
+    remaining.delete(key);
+    if (nextVal !== null && nextVal !== '') {
+      nextLines.push(`${key}=${nextVal}`);
+    }
+  }
+
+  for (const [key, val] of remaining.entries()) {
+    if (val !== null && val !== '') {
+      nextLines.push(`${key}=${val}`);
+    }
+  }
+
+  return `${nextLines.join('\n').replace(/\n+$/, '')}\n`;
+}
+
+function writeDotEnvUpdates(envPath, updates) {
+  if (!envPath) return false;
+  try {
+    fs.mkdirSync(path.dirname(envPath), { recursive: true });
+    const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+    const next = upsertDotEnvContent(existing, updates);
+    fs.writeFileSync(envPath, next, { encoding: 'utf8', mode: 0o600 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function findComposeRoot(electronDir, processEnv = process.env, resourcesPath = process.resourcesPath) {
   const candidates = [
     processEnv?.OMEGA_COMPOSE_DIR,
@@ -626,6 +690,7 @@ export class DockerOrchestrator {
       dotEnv.OMEGA_BOOTSTRAP_SECRET,
       dotEnv.GROQ_API_KEY,
       dotEnv.OPENAI_API_KEY,
+      dotEnv.OMNIROUTE_API_KEY,
     ].filter(Boolean);
 
     const childEnv = {
@@ -633,6 +698,19 @@ export class DockerOrchestrator {
       ...process.env,
       ...secretsResult.envOverrides,
     };
+
+    const wantsOmniRoute =
+      String(childEnv.OMNIROUTE_ENABLED || '').toLowerCase() === 'true' ||
+      String(childEnv.OMNIROUTE_BASE_URL || '').includes('omniroute:20128');
+    if (wantsOmniRoute) {
+      const existingProfiles = String(childEnv.COMPOSE_PROFILES || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!existingProfiles.includes('omniroute')) {
+        childEnv.COMPOSE_PROFILES = [...existingProfiles, 'omniroute'].join(',');
+      }
+    }
     this.activeComposeRoot = composeRoot;
     this.activeEnvFilePath = envFilePath;
     this.activeChildEnv = childEnv;
@@ -780,6 +858,179 @@ export class DockerOrchestrator {
     if (!psMap.postgres?.healthy) return 'Iniciando base de datos PostgreSQL 16 (pgvector)…';
     if (!psMap['forensic-worker']?.healthy) return 'Iniciando worker forense stateless (FastAPI)…';
     return 'Esperando healthcheck del núcleo Java (:8080/actuator/health)…';
+  }
+
+  getAiEngineConfig() {
+    const composeRoot = this.findComposeRootFn(this.electronDir);
+    const dotEnv = readDotEnv(composeRoot, this.userDataDir);
+    const groqKey = String(dotEnv.GROQ_API_KEY || '').trim();
+    const openAiKey = String(dotEnv.OPENAI_API_KEY || '').trim();
+    const omniBase = String(dotEnv.OMNIROUTE_BASE_URL || '').trim();
+    const omniKey = String(dotEnv.OMNIROUTE_API_KEY || '').trim();
+    const omniPort = Number(dotEnv.OMNIROUTE_PORT || 20128) || 20128;
+
+    let activeProvider = 'extractive';
+    let activeModel = 'omega-extractive-fallback';
+    if (omniBase) {
+      activeProvider = 'omniroute';
+      activeModel = String(dotEnv.OMNIROUTE_MODEL || 'auto').trim() || 'auto';
+    } else if (openAiKey) {
+      activeProvider = 'openai';
+      activeModel = String(dotEnv.OMEGA_CHAT_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
+    } else if (groqKey) {
+      activeProvider = 'groq';
+      activeModel = String(dotEnv.GROQ_MODEL || 'openai/gpt-oss-120b').trim() || 'openai/gpt-oss-120b';
+    }
+
+    return {
+      configured: Boolean(groqKey || openAiKey || omniBase),
+      activeProvider,
+      activeModel,
+      groqConfigured: Boolean(groqKey),
+      groqHint: maskSecretHint(groqKey),
+      groqModel: String(dotEnv.GROQ_MODEL || 'openai/gpt-oss-120b').trim() || 'openai/gpt-oss-120b',
+      openAiConfigured: Boolean(openAiKey),
+      openAiHint: maskSecretHint(openAiKey),
+      omniRouteEnabled: Boolean(omniBase),
+      omniRouteKeyConfigured: Boolean(omniKey),
+      omniRouteHint: maskSecretHint(omniKey),
+      omniRouteModel: String(dotEnv.OMNIROUTE_MODEL || 'auto').trim() || 'auto',
+      omniRouteDashboardUrl: `http://127.0.0.1:${omniPort}/dashboard`,
+      envFilePath: this.userDataDir ? path.join(this.userDataDir, '.env') : null,
+    };
+  }
+
+  async reapplyAiConfig(payload = {}) {
+    const composeRoot = this.findComposeRootFn(this.electronDir);
+    if (!composeRoot) {
+      return { ok: false, error: 'No se encontró la carpeta de Docker Compose de OMEGA.' };
+    }
+
+    const existing = readDotEnv(composeRoot, this.userDataDir);
+    const updates = {};
+
+    if (payload.clearGroqKey) {
+      updates.GROQ_API_KEY = null;
+    } else if (typeof payload.groqApiKey === 'string' && sanitizeDotEnvValue(payload.groqApiKey)) {
+      updates.GROQ_API_KEY = sanitizeDotEnvValue(payload.groqApiKey);
+    }
+    if (typeof payload.groqModel === 'string' && sanitizeDotEnvValue(payload.groqModel)) {
+      updates.GROQ_MODEL = sanitizeDotEnvValue(payload.groqModel);
+    }
+
+    if (payload.clearOpenAiKey) {
+      updates.OPENAI_API_KEY = null;
+    } else if (typeof payload.openAiApiKey === 'string' && sanitizeDotEnvValue(payload.openAiApiKey)) {
+      updates.OPENAI_API_KEY = sanitizeDotEnvValue(payload.openAiApiKey);
+    }
+
+    if (typeof payload.omniRouteEnabled === 'boolean') {
+      if (payload.omniRouteEnabled) {
+        updates.OMNIROUTE_BASE_URL = 'http://omniroute:20128/v1';
+        const profiles = String(existing.COMPOSE_PROFILES || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (!profiles.includes('omniroute')) {
+          profiles.push('omniroute');
+        }
+        updates.COMPOSE_PROFILES = profiles.join(',');
+      } else {
+        updates.OMNIROUTE_BASE_URL = null;
+        const profiles = String(existing.COMPOSE_PROFILES || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter((p) => p && p !== 'omniroute');
+        updates.COMPOSE_PROFILES = profiles.length ? profiles.join(',') : null;
+      }
+    }
+
+    if (payload.clearOmniRouteKey) {
+      updates.OMNIROUTE_API_KEY = null;
+    } else if (typeof payload.omniRouteApiKey === 'string' && sanitizeDotEnvValue(payload.omniRouteApiKey)) {
+      updates.OMNIROUTE_API_KEY = sanitizeDotEnvValue(payload.omniRouteApiKey);
+    }
+    if (typeof payload.omniRouteModel === 'string' && sanitizeDotEnvValue(payload.omniRouteModel)) {
+      updates.OMNIROUTE_MODEL = sanitizeDotEnvValue(payload.omniRouteModel);
+    }
+
+    const userEnvPath = this.userDataDir ? path.join(this.userDataDir, '.env') : null;
+    const wroteUserEnv = userEnvPath ? writeDotEnvUpdates(userEnvPath, updates) : false;
+    const repoEnvPath = path.join(composeRoot, '.env');
+    if (fs.existsSync(repoEnvPath)) {
+      writeDotEnvUpdates(repoEnvPath, updates);
+    }
+
+    if (!wroteUserEnv && !fs.existsSync(repoEnvPath)) {
+      return { ok: false, error: 'No se pudo escribir el archivo local de configuración.' };
+    }
+
+    try {
+      await this.checkDockerFn();
+    } catch (err) {
+      return {
+        ok: false,
+        savedOnly: true,
+        config: this.getAiEngineConfig(),
+        error: `Configuración guardada, pero Docker no respondió (${err?.message || err}).`,
+      };
+    }
+
+    const dotEnv = readDotEnv(composeRoot, this.userDataDir);
+    const envFilePath = resolveComposeEnvFilePath(composeRoot, this.userDataDir);
+    const secretsResult = loadOrCreateDesktopSecrets(this.userDataDir, dotEnv, process.env);
+    const childEnv = {
+      ...dotEnv,
+      ...process.env,
+      ...secretsResult.envOverrides,
+    };
+    const wantsOmni =
+      Boolean(dotEnv.OMNIROUTE_BASE_URL && String(dotEnv.OMNIROUTE_BASE_URL).includes('omniroute:20128'));
+    const servicesToApply = wantsOmni ? ['backend-java', 'omniroute'] : ['backend-java'];
+    if (wantsOmni) {
+      const profiles = String(childEnv.COMPOSE_PROFILES || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!profiles.includes('omniroute')) {
+        childEnv.COMPOSE_PROFILES = [...profiles, 'omniroute'].join(',');
+      }
+    }
+
+    const upArgs = buildComposeArgs(composeRoot, {
+      prodMode: this.prodMode,
+      envFilePath,
+      subArgs: ['up', '-d', '--wait', ...servicesToApply],
+    });
+    const res = await this.runCommandFn(upArgs, {
+      cwd: composeRoot,
+      env: childEnv,
+      timeoutMs: STARTUP_TIMEOUT_MS,
+    });
+    if (res.code !== 0) {
+      return {
+        ok: false,
+        config: this.getAiEngineConfig(),
+        error: sanitizeLogLine(res.stderr || res.stdout, Object.values(updates).filter(Boolean)) ||
+          'No se pudo recargar el contenedor backend-java.',
+      };
+    }
+
+    const javaPort = Number(process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080);
+    const deadline = Date.now() + 45_000;
+    while (Date.now() < deadline) {
+      const probe = await this.probeHttpHealthFn(javaPort, 2000);
+      if (probe.healthy) {
+        return { ok: true, config: this.getAiEngineConfig() };
+      }
+      await this.sleepFn(800);
+    }
+
+    return {
+      ok: false,
+      config: this.getAiEngineConfig(),
+      error: 'El contenedor se reinició pero tardó demasiado en responder healthy.',
+    };
   }
 
   async shutdownStack() {

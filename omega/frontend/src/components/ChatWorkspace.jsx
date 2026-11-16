@@ -242,6 +242,8 @@ export function ChatWorkspace({
   onDismissDocBanner,
   onUploadPdf,
   onRefreshDocs,
+  aiEngine = null,
+  onOpenAiSetup,
 }) {
   const [input, setInput] = useState('');
   const [iocPopoverOpen, setIocPopoverOpen] = useState(false);
@@ -657,6 +659,28 @@ export function ChatWorkspace({
                   ¿Qué amenaza investigamos hoy?
                 </p>
               </div>
+
+              {/* Aviso accionable cuando el usuario nuevo aún no conecta su clave gratuita de IA */}
+              {authSession && aiEngine && !aiEngine.configured && onOpenAiSetup && (
+                <div className="w-full mb-3.5 rounded-[14px] border border-[#FF9F0A]/40 bg-[#FF9F0A]/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="text-[12.5px] font-semibold text-[#FFE2B8]">
+                      Modo extractivo activo · Falta conectar un motor de IA
+                    </div>
+                    <p className="text-[11.5px] text-[#E6CFA8] leading-snug">
+                      Obtén una clave gratuita en Groq en 1 minuto para recibir respuestas completas y ordenadas.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAiSetup()}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] hover:brightness-110 px-3.5 py-1.5 text-[12px] font-medium text-white transition-all cursor-pointer"
+                  >
+                    <span>Configurar IA paso a paso</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Composer Central Espacioso de Vidrio Esmerilado */}
               <form

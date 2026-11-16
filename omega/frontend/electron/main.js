@@ -1374,6 +1374,18 @@ async function bootDockerAndOpenApp(opts = {}) {
 
 ipcMain.handle('omega:backend-status', () => getDockerOrchestrator().getState());
 
+ipcMain.handle('omega:ai-config-get', () => ({
+  ok: true,
+  config: getDockerOrchestrator().getAiEngineConfig(),
+}));
+
+ipcMain.handle('omega:ai-config-save', async (_event, payload = {}) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { ok: false, error: 'Solicitud de configuración inválida.' };
+  }
+  return getDockerOrchestrator().reapplyAiConfig(payload);
+});
+
 ipcMain.handle('omega:backend-retry', async (_event, opts = {}) => {
   appTransitionedToMain = false;
   return bootDockerAndOpenApp({

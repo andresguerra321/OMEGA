@@ -7,7 +7,11 @@ import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class OpenAiRagAnswerGeneratorTest {
 
@@ -115,5 +119,46 @@ class OpenAiRagAnswerGeneratorTest {
                 .contains("[4][5]")
                 .doesNotContain("【")
                 .doesNotContain("】");
+    }
+
+    @Test
+    void prioritizesOmniRouteAndFallsBackToNextProviderWhenUnavailable() {
+        RestClient.Builder openAiBuilder = RestClient.builder().baseUrl("https://api.openai.test/v1");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(openAiBuilder).build();
+        server.expect(requestTo("https://api.openai.test/v1/chat/completions"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Respuesta de respaldo verificada [1].\"}}]}",
+                        MediaType.APPLICATION_JSON
+                ));
+
+        OmegaProperties props = new OmegaProperties(
+                new OmegaProperties.Security("secret", 3600, "iss", true, "", "internal"),
+                new OmegaProperties.Ingest("/tmp", 1024, "/usr/share/tessdata"),
+                new OmegaProperties.Rag(
+                        "openai", "text-embedding-3-small", 1536,
+                        "https://api.openai.test/v1", "sk-fallback-test", 16, 1, "gpt-4o-mini",
+                        60, 1.0, 1.0, 500, 1000, 120,
+                        "https://api.groq.com/openai/v1", "gsk_backup_test", "openai/gpt-oss-120b",
+                        "http://127.0.0.1:1/v1", "", "auto"
+                ),
+                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
+                new OmegaProperties.Cti("../corpus_mvp/iocs")
+        );
+
+        OpenAiRagAnswerGenerator generator = new OpenAiRagAnswerGenerator(openAiBuilder.build(), props);
+        List<OpenAiRagAnswerGenerator.LlmTarget> chain = generator.resolveLlmTargets();
+        assertThat(chain).extracting(OpenAiRagAnswerGenerator.LlmTarget::providerName)
+                .containsExactly("omniroute", "openai", "groq");
+        assertThat(generator.resolveActiveGeneratorModel()).isEqualTo("auto");
+
+        RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), "report_a.pdf", "a".repeat(64), 6, "Intro", 0,
+                "Pegasus is spyware.", 0.0, 0.5, 0.5
+        );
+        String answer = generator.generateGroundedAnswer("¿Qué es Pegasus?", List.of(chunk));
+        assertThat(answer)
+                .contains("Respuesta de respaldo verificada [1].")
+                .contains("Alcance documental (RNF9)");
+        server.verify();
     }
 }

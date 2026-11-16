@@ -12,30 +12,26 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "omega")
 public record OmegaProperties(
-        @Valid Security security,
-        @Valid Ingest ingest,
-        @Valid Rag rag,
-        @Valid ForensicWorker forensicWorker,
-        @Valid Cti cti
-) {
+                @Valid Security security,
+                @Valid Ingest ingest,
+                @Valid Rag rag,
+                @Valid ForensicWorker forensicWorker,
+                @Valid Cti cti) {
 
-    public record Security(
-            @NotBlank @Size(min = 32, message = "OMEGA_JWT_SECRET debe tener al menos 32 caracteres para HS256")
-            String jwtSecret,
-            @Positive long jwtExpirationSeconds,
-            @NotBlank String jwtIssuer,
-            boolean allowTenantSelfRegistration,
-            String bootstrapSecret,
-            @NotBlank String internalServiceToken
-    ) {
-    }
+        public record Security(
+                        @NotBlank @Size(min = 32, message = "OMEGA_JWT_SECRET debe tener al menos 32 caracteres para HS256") String jwtSecret,
+                        @Positive long jwtExpirationSeconds,
+                        @NotBlank String jwtIssuer,
+                        boolean allowTenantSelfRegistration,
+                        String bootstrapSecret,
+                        @NotBlank String internalServiceToken) {
+        }
 
-    public record Ingest(
-            @NotBlank String tempDir,
-            @Positive long maxPdfBytes,
-            @NotBlank String tesseractDataPath
-    ) {
-    }
+        public record Ingest(
+                        @NotBlank String tempDir,
+                        @Positive long maxPdfBytes,
+                        @NotBlank String tesseractDataPath) {
+        }
 
     public record Rag(
             @NotBlank String embeddingProvider,
@@ -54,7 +50,10 @@ public record OmegaProperties(
             @Min(0) int chunkOverlapTokens,
             String groqBaseUrl,
             String groqApiKey,
-            String groqModel
+            String groqModel,
+            String omniRouteBaseUrl,
+            String omniRouteApiKey,
+            String omniRouteModel
     ) {
         @ConstructorBinding
         public Rag {
@@ -93,7 +92,53 @@ public record OmegaProperties(
                     chunkOverlapTokens,
                     "https://api.groq.com/openai/v1",
                     "",
-                    "openai/gpt-oss-120b"
+                    "openai/gpt-oss-120b",
+                    "",
+                    "",
+                    "auto"
+            );
+        }
+
+        public Rag(
+                String embeddingProvider,
+                String embeddingModel,
+                int embeddingDimensions,
+                String openAiBaseUrl,
+                String openAiApiKey,
+                int openAiBatchSize,
+                int openAiMaxRetries,
+                String chatModel,
+                int rrfK,
+                double vectorWeight,
+                double lexicalWeight,
+                int minChunkTokens,
+                int maxChunkTokens,
+                int chunkOverlapTokens,
+                String groqBaseUrl,
+                String groqApiKey,
+                String groqModel
+        ) {
+            this(
+                    embeddingProvider,
+                    embeddingModel,
+                    embeddingDimensions,
+                    openAiBaseUrl,
+                    openAiApiKey,
+                    openAiBatchSize,
+                    openAiMaxRetries,
+                    chatModel,
+                    rrfK,
+                    vectorWeight,
+                    lexicalWeight,
+                    minChunkTokens,
+                    maxChunkTokens,
+                    chunkOverlapTokens,
+                    groqBaseUrl,
+                    groqApiKey,
+                    groqModel,
+                    "",
+                    "",
+                    "auto"
             );
         }
     }

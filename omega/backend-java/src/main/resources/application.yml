@@ -78,6 +78,9 @@ omega:
     groq-base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
     groq-api-key: ${GROQ_API_KEY:}
     groq-model: ${GROQ_MODEL:openai/gpt-oss-120b}
+    omni-route-base-url: ${OMNIROUTE_BASE_URL:}
+    omni-route-api-key: ${OMNIROUTE_API_KEY:}
+    omni-route-model: ${OMNIROUTE_MODEL:auto}
     rrf-k: 60
     vector-weight: 1.0
     lexical-weight: 1.0

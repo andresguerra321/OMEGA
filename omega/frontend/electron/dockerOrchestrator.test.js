@@ -7,12 +7,14 @@ import {
   buildComposeArgs,
   DockerOrchestrator,
   loadOrCreateDesktopSecrets,
+  maskSecretHint,
   parseComposePsOutput,
   parseDotEnvContent,
   readDotEnv,
   readRuntimeState,
   resolveComposeEnvFilePath,
   sanitizeLogLine,
+  upsertDotEnvContent,
   writeRuntimeState,
 } from './dockerOrchestrator.js';
 
@@ -363,6 +365,98 @@ test('DockerOrchestrator reutiliza servicios cuando coincide la versión y recon
     assert.equal(upRes.upgraded, true);
     assert.equal(dockerCalls.some((a) => a.includes('up') && a.includes('--build')), true);
     assert.equal(readRuntimeState(userDataDir).lastVersion, '1.5.0');
+  } finally {
+    fs.rmSync(composeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('DockerOrchestrator activa perfil omniroute automáticamente cuando OMNIROUTE_BASE_URL apunta al servicio', async () => {
+  const composeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-omni-compose-'));
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-omni-ud-'));
+  let capturedEnv = null;
+  let started = false;
+  try {
+    fs.mkdirSync(path.join(composeDir, 'frontend', 'electron'), { recursive: true });
+    fs.writeFileSync(path.join(composeDir, 'docker-compose.yml'), 'services:\n  backend-java: {}\n');
+    fs.writeFileSync(
+      path.join(composeDir, '.env'),
+      'OMNIROUTE_BASE_URL=http://omniroute:20128/v1\nOMNIROUTE_MODEL=auto\n',
+    );
+    const orchestrator = new DockerOrchestrator({
+      userDataDir,
+      electronDir: path.join(composeDir, 'frontend', 'electron'),
+      findComposeRootFn: () => composeDir,
+      pollIntervalMs: 5,
+      checkDockerFn: async () => {},
+      probeHttpHealthFn: async () => ({ healthy: started, statusCode: started ? 200 : 0 }),
+      runCommandFn: async (args, opts) => {
+        capturedEnv = opts?.env || null;
+        if (args.includes('up')) {
+          started = true;
+        }
+        return {
+          code: 0,
+          stdout: [
+            '{"Service":"postgres","State":"running","Health":"healthy"}',
+            '{"Service":"forensic-worker","State":"running","Health":"healthy"}',
+            '{"Service":"backend-java","State":"running","Health":"healthy"}',
+          ].join('\n'),
+          stderr: '',
+        };
+      },
+    });
+    const res = await orchestrator.start();
+    assert.equal(res.ok, true);
+    assert.equal(capturedEnv?.COMPOSE_PROFILES, 'omniroute');
+  } finally {
+    fs.rmSync(composeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('upsertDotEnvContent sanitiza inyección de líneas y maskSecretHint enmascara API keys', () => {
+  const original = '# Comentario\nPOSTGRES_PASSWORD=keep_secret\nGROQ_API_KEY=gsk_oldkey1234\n';
+  const next = upsertDotEnvContent(original, {
+    GROQ_API_KEY: 'gsk_newkey5678\nEVIL_KEY=injected',
+    GROQ_MODEL: 'openai/gpt-oss-120b',
+    OMNIROUTE_BASE_URL: null,
+  });
+  const parsed = parseDotEnvContent(next);
+  assert.equal(parsed.POSTGRES_PASSWORD, 'keep_secret');
+  assert.equal(parsed.GROQ_API_KEY, 'gsk_newkey5678EVIL_KEY=injected');
+  assert.equal(parsed.EVIL_KEY, undefined);
+  assert.equal(parsed.GROQ_MODEL, 'openai/gpt-oss-120b');
+  assert.equal(maskSecretHint('gsk_abc12345wxyz'), 'gsk_••••wxyz');
+  assert.equal(maskSecretHint(''), '');
+});
+
+test('reapplyAiConfig persiste clave Groq en userData/.env y recarga backend-java', async () => {
+  const composeDir = createTempComposeDir({ envContent: null });
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-ai-ud-'));
+  const dockerCalls = [];
+  try {
+    const orchestrator = new DockerOrchestrator({
+      userDataDir,
+      electronDir: path.join(composeDir, 'frontend', 'electron'),
+      findComposeRootFn: () => composeDir,
+      pollIntervalMs: 5,
+      checkDockerFn: async () => {},
+      probeHttpHealthFn: async () => ({ healthy: true, statusCode: 200 }),
+      runCommandFn: async (args) => {
+        dockerCalls.push(args);
+        return { code: 0, stdout: '', stderr: '' };
+      },
+    });
+    const res = await orchestrator.reapplyAiConfig({
+      groqApiKey: 'gsk_testvalue9999',
+      groqModel: 'llama-3.3-70b-versatile',
+    });
+    assert.equal(res.ok, true);
+    assert.equal(res.config.groqConfigured, true);
+    assert.equal(res.config.groqHint, 'gsk_••••9999');
+    assert.equal(res.config.activeProvider, 'groq');
+    assert.equal(dockerCalls.some((a) => a.includes('up') && a.includes('backend-java')), true);
   } finally {
     fs.rmSync(composeDir, { recursive: true, force: true });
     fs.rmSync(userDataDir, { recursive: true, force: true });

@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('omegaDesktop', {
   getBackendStatus: () => ipcRenderer.invoke('omega:backend-status'),
   retryBackendStartup: (opts = {}) => ipcRenderer.invoke('omega:backend-retry', opts),
   continueWithoutBackend: () => ipcRenderer.invoke('omega:backend-skip'),
+  getAiEngineConfig: () => ipcRenderer.invoke('omega:ai-config-get'),
+  saveAiEngineConfig: (payload = {}) => ipcRenderer.invoke('omega:ai-config-save', payload),
   onBackendStatus: (handler) => {
     if (typeof handler !== 'function') return () => {};
     const listener = (_event, state) => handler(state);

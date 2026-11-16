@@ -129,6 +129,8 @@ public class SystemController {
                 ? stixCatalogService.getCatalogFreshness()
                 : new StixCatalogService.CatalogFreshnessDto("2024-12-16", "2024-12-16", 0, "pr_reviewed_only", false);
 
+        AiEngineStatus aiEngine = resolveAiEngineStatus();
+
         return new GovernanceResponse(
                 tenantId.toString(),
                 properties.rag().embeddingModel(),
@@ -155,7 +157,37 @@ public class SystemController {
                         "cti_supply_chain", "sha256-manifest-pr-reviewed"
                 ),
                 catalogFreshness,
-                OS_SCOPE_NOTICE
+                OS_SCOPE_NOTICE,
+                aiEngine
+        );
+    }
+
+    private AiEngineStatus resolveAiEngineStatus() {
+        OmegaProperties.Rag rag = properties.rag();
+        boolean omniConfigured = rag.omniRouteBaseUrl() != null && !rag.omniRouteBaseUrl().isBlank();
+        boolean openAiConfigured = rag.openAiApiKey() != null && !rag.openAiApiKey().isBlank();
+        boolean groqConfigured = rag.groqApiKey() != null && !rag.groqApiKey().isBlank();
+
+        String activeProvider = "extractive";
+        String activeModel = "omega-extractive-fallback";
+        if (omniConfigured) {
+            activeProvider = "omniroute";
+            activeModel = (rag.omniRouteModel() == null || rag.omniRouteModel().isBlank()) ? "auto" : rag.omniRouteModel().trim();
+        } else if (openAiConfigured) {
+            activeProvider = "openai";
+            activeModel = rag.chatModel();
+        } else if (groqConfigured) {
+            activeProvider = "groq";
+            activeModel = (rag.groqModel() == null || rag.groqModel().isBlank()) ? "openai/gpt-oss-120b" : rag.groqModel().trim();
+        }
+
+        return new AiEngineStatus(
+                omniConfigured || openAiConfigured || groqConfigured,
+                activeProvider,
+                activeModel,
+                groqConfigured,
+                openAiConfigured,
+                omniConfigured
         );
     }
 
@@ -190,6 +222,16 @@ public class SystemController {
     ) {
     }
 
+    public record AiEngineStatus(
+            boolean configured,
+            @JsonProperty("active_provider") String activeProvider,
+            @JsonProperty("active_model") String activeModel,
+            @JsonProperty("groq_configured") boolean groqConfigured,
+            @JsonProperty("openai_configured") boolean openaiConfigured,
+            @JsonProperty("omniroute_configured") boolean omnirouteConfigured
+    ) {
+    }
+
     public record GovernanceResponse(
             @JsonProperty("workspace_id") String workspaceId,
             @JsonProperty("embedding_model") String embeddingModel,
@@ -199,7 +241,8 @@ public class SystemController {
             @JsonProperty("indexed_sources") List<IndexedSourceItem> indexedSources,
             Map<String, String> guarantees,
             @JsonProperty("catalog_freshness") StixCatalogService.CatalogFreshnessDto catalogFreshness,
-            @JsonProperty("os_scope_notice") String osScopeNotice
+            @JsonProperty("os_scope_notice") String osScopeNotice,
+            @JsonProperty("ai_engine") AiEngineStatus aiEngine
     ) {
         public GovernanceResponse(
                 String workspaceId,
@@ -210,7 +253,21 @@ public class SystemController {
                 List<IndexedSourceItem> indexedSources,
                 Map<String, String> guarantees
         ) {
-            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, null, OS_SCOPE_NOTICE);
+            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, null, OS_SCOPE_NOTICE, null);
+        }
+
+        public GovernanceResponse(
+                String workspaceId,
+                String embeddingModel,
+                boolean auditChainValid,
+                CorpusStats corpusStats,
+                TenantStats tenantStats,
+                List<IndexedSourceItem> indexedSources,
+                Map<String, String> guarantees,
+                StixCatalogService.CatalogFreshnessDto catalogFreshness,
+                String osScopeNotice
+        ) {
+            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, catalogFreshness, osScopeNotice, null);
         }
     }
 }
