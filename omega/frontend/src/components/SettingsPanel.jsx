@@ -866,8 +866,8 @@ export function SettingsPanel({
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Privacidad y permisos
                 </h2>
-                <span className="font-tech text-[10.5px] uppercase tracking-[0.06em] text-[#9A9AA2]">
-                  Zero-Retention · RAM volátil · IA aislada
+                <span className="text-[11px] text-[#9A9AA2]">
+                  Procesamiento temporal en memoria
                 </span>
               </div>
 
@@ -876,14 +876,14 @@ export function SettingsPanel({
                   <div className="space-y-0.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[13.5px] font-medium text-[#F2F2F4]">
-                        Procesamiento en RAM (<span className="font-tech">RNF4</span>)
+                        Procesamiento en memoria (RAM)
                       </span>
                       <span className="rounded-full bg-[rgba(28,36,56,0.65)] border border-[#2F6FED]/45 px-2.5 py-0.5 text-[10.5px] font-medium text-[#F2F2F4]">
-                        Obligatorio
+                        Activo
                       </span>
                     </div>
                     <p className="text-[12px] text-[#9A9AA2]">
-                      Analiza respaldos en memoria sin escribir en disco.
+                      Analiza respaldos en memoria sin escribir copias en disco.
                     </p>
                   </div>
 
@@ -897,10 +897,10 @@ export function SettingsPanel({
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="text-[13.5px] font-medium text-[#F2F2F4]">
-                      Inspección pasiva de enlaces (<span className="font-tech">RNF7</span>)
+                      Inspección pasiva de enlaces
                     </div>
                     <p className="text-[12px] text-[#9A9AA2]">
-                      Verifica URLs sin conexión HTTP al destino.
+                      Verifica URLs sin establecer conexión con el destino.
                     </p>
                   </div>
 
@@ -914,10 +914,10 @@ export function SettingsPanel({
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="text-[13.5px] font-medium text-[#F2F2F4]">
-                      Consentimiento OSINT (<span className="font-tech">RNF8</span>)
+                      Confirmación previa en auditorías de dominio
                     </div>
                     <p className="text-[12px] text-[#9A9AA2]">
-                      Exige autorización previa en auditorías de dominio o correo.
+                      Solicita autorización explícita antes de consultar un dominio o correo.
                     </p>
                   </div>
 
@@ -931,27 +931,27 @@ export function SettingsPanel({
                 <div className="p-4 flex items-center justify-between gap-3 sm:gap-4">
                   <div className="space-y-0.5 min-w-0">
                     <div className="text-[13.5px] font-medium text-[#F2F2F4]">
-                      Prerrequisito de cifrado en el equipo (<span className="font-tech">BitLocker / FileVault / LUKS</span>)
+                      Recomendación: cifrado de disco del equipo
                     </div>
                     <p className="text-[12px] text-[#9A9AA2]">
-                      OMEGA no persiste credenciales ni chats en localStorage; activa cifrado de disco completo para proteger paginación del SO e hibernación frente a coerción física.
+                      OMEGA no guarda contraseñas ni conversaciones en el navegador; activa BitLocker, FileVault o LUKS para proteger también tu sistema.
                     </p>
                   </div>
 
-                  <span className="font-tech shrink-0 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 text-[10.5px] text-[#30D158]">
-                    0 B CLIENTE
+                  <span className="shrink-0 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 text-[10.5px] font-medium text-[#30D158]">
+                    Sin caché local
                   </span>
                 </div>
               </div>
             </section>
 
-            {/* Bloque 5 — Trazabilidad del Corpus Indexado (RF7) */}
+            {/* Bloque 5 — Trazabilidad del Corpus Indexado */}
             <section ref={corpusRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="150">
               <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 text-[#9A9AA2] shrink-0" />
                   <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                    Trazabilidad del Corpus Indexado (<span className="font-tech">RF7</span>)
+                    Documentos e informes indexados
                   </h2>
                 </div>
 

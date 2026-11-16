@@ -1324,6 +1324,7 @@ function getDockerOrchestrator() {
     dockerOrchestrator = new DockerOrchestrator({
       userDataDir: app.getPath('userData'),
       electronDir: __dirname,
+      appVersion: app.getVersion(),
       onStateChange: (snapshot) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('omega:backend-status-event', snapshot);

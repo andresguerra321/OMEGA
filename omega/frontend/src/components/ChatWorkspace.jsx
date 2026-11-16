@@ -780,20 +780,22 @@ export function ChatWorkspace({
 
             <div className="flex-1 min-h-[10px] max-h-[56px]" />
 
-            <footer className="relative z-10 w-full max-w-[680px] pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#9A9AA2]">
-              <div className="font-tech flex flex-wrap items-center gap-2 text-[10.5px] uppercase tracking-[0.08em]">
-                <span>Zero-Retention RAM</span>
-              </div>
-              {hasHistory && (
-                <button
-                  type="button"
-                  onClick={onResumeLastSession}
-                  className="font-medium text-[#F2F2F4]/85 hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                >
-                  Retomar última investigación →
-                </button>
-              )}
-            </footer>
+            {(hasHistory || usePrivateDocs) && (
+              <footer className="relative z-10 w-full max-w-[680px] pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#9A9AA2]">
+                <span className="text-[#8A8E99]">
+                  {usePrivateDocs ? 'Procesamiento privado solo en memoria' : ''}
+                </span>
+                {hasHistory && (
+                  <button
+                    type="button"
+                    onClick={onResumeLastSession}
+                    className="font-medium text-[#F2F2F4]/85 hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  >
+                    Retomar última investigación →
+                  </button>
+                )}
+              </footer>
+            )}
           </main>
         ) : (
           /* ============================================================
@@ -814,7 +816,7 @@ export function ChatWorkspace({
                     onClick={() => onTogglePrivateDocs?.(false)}
                     className="text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                   >
-                    Volver a Corpus Público
+                    Volver a fuentes públicas
                   </button>
                 </div>
               </div>

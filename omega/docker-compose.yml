@@ -22,9 +22,9 @@ services:
           - omega-db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omega_admin} -d ${POSTGRES_DB:-omega_cti}"]
-      interval: 5s
-      timeout: 5s
-      retries: 6
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   # 2. Microservicio Forense Stateless (In-RAM Only, sin puertos públicos y protegido por X-Internal-Service-Token)
   forensic-worker:
@@ -68,9 +68,10 @@ services:
           "-c",
           "import os, urllib.request; req = urllib.request.Request('http://127.0.0.1:8000/api/health', headers={'X-Internal-Service-Token': os.environ['INTERNAL_SERVICE_TOKEN']}); urllib.request.urlopen(req, timeout=3)",
         ]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+      interval: 3s
+      timeout: 4s
+      retries: 15
+      start_period: 2s
 
   # 3. Core Transaccional, Seguridad Multi-Tenant, OCR Zero-Retention y Motor RAG Híbrido (Java 21 / Spring Boot)
   backend-java:
@@ -117,10 +118,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 10s
 
   # 4. Frontend React + Proxy Nginx apuntando exclusivamente al gateway backend-java en omega-public
   frontend:

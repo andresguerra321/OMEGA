@@ -77,12 +77,12 @@ export function OmegaWebIntelCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-          <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
-            RAM · RNF4
+          <span className="rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] font-medium text-[#F2F2F4]">
+            Solo en memoria
           </span>
           {scanResult?.persisted_to_db && (
-            <span className="font-tech rounded-full border border-[#30D158]/35 bg-[#30D158]/12 px-2.5 py-0.5 text-[10.5px] text-[#30D158]">
-              Indexado RF7
+            <span className="rounded-full border border-[#30D158]/35 bg-[#30D158]/12 px-2.5 py-0.5 text-[10.5px] font-medium text-[#30D158]">
+              Guardado en índice
             </span>
           )}
         </div>

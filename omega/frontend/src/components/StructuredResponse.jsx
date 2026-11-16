@@ -249,7 +249,7 @@ export function StructuredResponse({
             )}
             {isExtractiveFallback && (
               <span className="font-tech ml-1 rounded-full border border-[#FF9F0A]/35 bg-[#FF9F0A]/12 px-2 py-0.5 text-[11px] text-[#FFD60A]">
-                Sin LLM
+                Extractivo
               </span>
             )}
             {showTelemetry ? (
@@ -346,9 +346,9 @@ export function StructuredResponse({
         />
       </div>
 
-      {!isTyping && (
-        <div className="font-tech text-[10.5px] text-[#8A8E99] border-t border-white/[0.05] pt-2">
-          Alcance documental CTI · Responde sobre fuentes indexadas y no sustituye inspección forense del dispositivo ni parches del SO (RNF9).
+      {!isTyping && !/alcance documental/i.test(fullText) && (
+        <div className="text-[11px] text-[#8A8E99] border-t border-white/[0.05] pt-2">
+          Alcance documental · Basado en fuentes indexadas; no sustituye análisis del dispositivo.
         </div>
       )}
 

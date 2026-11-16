@@ -75,6 +75,9 @@ omega:
     open-ai-batch-size: ${OPENAI_BATCH_SIZE:32}
     open-ai-max-retries: ${OPENAI_MAX_RETRIES:2}
     chat-model: ${OMEGA_CHAT_MODEL:gpt-4o-mini}
+    groq-base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
+    groq-api-key: ${GROQ_API_KEY:}
+    groq-model: ${GROQ_MODEL:openai/gpt-oss-120b}
     rrf-k: 60
     vector-weight: 1.0
     lexical-weight: 1.0

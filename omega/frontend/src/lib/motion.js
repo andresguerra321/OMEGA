@@ -63,3 +63,24 @@ export const drawerVariants = {
 // Micro-interacción para botones/tarjetas.
 export const hoverLift = { y: -2, transition: SPRING_SNAPPY };
 export const tapPress = { scale: 0.97 };
+
+// Deslizamiento direccional entre pasos (onboarding / wizards).
+export const stepSlideVariants = {
+  enter: (direction = 1) => ({
+    opacity: 0,
+    x: direction >= 0 ? 32 : -32,
+    scale: 0.985,
+  }),
+  center: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    transition: { duration: 0.28, ease: EASE_OUT },
+  },
+  exit: (direction = 1) => ({
+    opacity: 0,
+    x: direction >= 0 ? -28 : 28,
+    scale: 0.985,
+    transition: { duration: 0.18, ease: 'easeIn' },
+  }),
+};

@@ -52,6 +52,7 @@ import { LinkVerifierPanel } from './components/LinkVerifierPanel';
 import { AuthModulePanel } from './components/AuthModulePanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AuthModal } from './components/AuthModal';
+import { OnboardingTourModal } from './components/OnboardingTourModal';
 import { sanitizeSearchInput, validateChatMessage, validateUploadFile } from './lib/validators';
 
 const NAV_ITEMS = [
@@ -177,6 +178,28 @@ function formatClockTime(date = new Date()) {
   }
 }
 
+const BOOT_LOADER_STEPS = [
+  'Verificando sesión',
+  'Contactando el servicio local',
+  'Preparando la interfaz',
+];
+
+const LOGIN_LOADER_STEPS = [
+  'Identidad verificada',
+  'Cargando espacio de trabajo',
+  'Abriendo cabina OMEGA',
+];
+
+function getSmoothDelayMs(targetMs) {
+  if (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+  ) {
+    return 0;
+  }
+  return targetMs;
+}
+
 export default function App() {
   const [activeNav, setActiveNav] = useState('inicio');
   const [commandOpen, setCommandOpen] = useState(false);
@@ -214,13 +237,12 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
-  const [verifyingSession, setVerifyingSession] = useState(() => {
-    const isHttpOrigin = typeof window !== 'undefined' && window.location?.protocol !== 'file:';
-    return Boolean(isAuthenticated() || isHttpOrigin);
-  });
+  const [verifyingSession, setVerifyingSession] = useState(true);
+  const [enteringWorkspace, setEnteringWorkspace] = useState(false);
   const [authGateReason, setAuthGateReason] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [activeExpedienteId, setActiveExpedienteId] = useState('');
   const [usePrivateDocs, setUsePrivateDocs] = useState(false);
   const [expedienteDocs, setExpedienteDocs] = useState([]);
@@ -231,6 +253,8 @@ export default function App() {
 
   const textareaRef = useRef(null);
   const sendLockRef = useRef(false);
+  const enterRunIdRef = useRef(0);
+  const workspaceMainRef = useRef(null);
 
   const openAuthModal = useCallback((reason = '') => {
     setAuthModalReason(reason || '');
@@ -346,29 +370,43 @@ export default function App() {
     if (!verifyingSession) return undefined;
     let cancelled = false;
     const hadInMemorySession = isAuthenticated();
-    fetchCurrentPrincipal()
-      .then((me) => {
-        if (cancelled) return;
-        if (me?.userId && me?.tenantId) {
-          const restored = restoreCookieAuthSession(me);
-          if (restored) {
-            setAuthSession(restored);
-          }
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
-          clearAuthSession();
-          setAuthSession(null);
-          if (hadInMemorySession) {
-            setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
-          }
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setVerifyingSession(false);
-      });
+    const isHttpOrigin = typeof window !== 'undefined' && window.location?.protocol !== 'file:';
+    const shouldFetchPrincipal = hadInMemorySession || isHttpOrigin;
+    const minHoldMs = getSmoothDelayMs(850);
+
+    const authPromise = shouldFetchPrincipal
+      ? fetchCurrentPrincipal()
+          .then((me) => {
+            if (cancelled) return;
+            if (me?.userId && me?.tenantId) {
+              const restored = restoreCookieAuthSession(me);
+              if (restored) {
+                setAuthSession(restored);
+              }
+            }
+          })
+          .catch((err) => {
+            if (cancelled) return;
+            if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
+              clearAuthSession();
+              setAuthSession(null);
+              if (hadInMemorySession) {
+                setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
+              }
+            }
+          })
+      : Promise.resolve();
+
+    const holdPromise =
+      minHoldMs > 0
+        ? new Promise((resolve) => {
+            setTimeout(resolve, minHoldMs);
+          })
+        : Promise.resolve();
+
+    void Promise.all([authPromise, holdPromise]).finally(() => {
+      if (!cancelled) setVerifyingSession(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -381,6 +419,8 @@ export default function App() {
       if (next && (next.accessToken || next.cookieBacked)) {
         setAuthGateReason('');
       } else {
+        enterRunIdRef.current += 1;
+        setEnteringWorkspace(false);
         setIsCopilotOpen(false);
         setCommandOpen(false);
         setAuthModalOpen(false);
@@ -926,6 +966,45 @@ export default function App() {
     handleSend(cleanPrompt, 'Todas las fuentes', { forceNewSession: true });
   }
 
+  const completeAuthenticationTransition = useCallback(
+    (session, meta = {}) => {
+      const runId = ++enterRunIdRef.current;
+      setAuthGateReason('');
+      setAuthModalReason('');
+      setAuthModalOpen(false);
+      setVerifyingSession(false);
+      setAuthSession(session);
+      setActiveNav('inicio');
+      setEnteringWorkspace(true);
+
+      const minHoldMs = getSmoothDelayMs(1150);
+      const workspaceReady = Promise.allSettled([
+        refreshSystemTelemetry(),
+        refreshPrivateWorkspace(),
+      ]);
+      const holdPromise =
+        minHoldMs > 0
+          ? new Promise((resolve) => {
+              setTimeout(resolve, minHoldMs);
+            })
+          : Promise.resolve();
+      const maxWait = new Promise((resolve) => {
+        setTimeout(resolve, 2600);
+      });
+
+      void Promise.all([holdPromise, Promise.race([workspaceReady, maxWait])]).finally(() => {
+        if (enterRunIdRef.current !== runId) return;
+        setEnteringWorkspace(false);
+        if (meta?.isNewAccount) {
+          setOnboardingOpen(true);
+        } else {
+          requestAnimationFrame(() => workspaceMainRef.current?.focus({ preventScroll: true }));
+        }
+      });
+    },
+    [refreshSystemTelemetry, refreshPrivateWorkspace],
+  );
+
   const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
   const isSignedIn = Boolean(authSession);
   const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
@@ -937,54 +1016,77 @@ export default function App() {
   const drawerFailedPrompt = lastMsg?.isError ? lastMsg.retryQuery : '';
   const isHome = activeNav === 'inicio';
 
-  if (verifyingSession) {
-    return (
-      <div className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-[#0A0A0C] text-[#F2F2F4] select-none">
-        <OmegaAuthBackdrop />
-        <OmegaLoader />
-      </div>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <div className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4]">
-        <OmegaAuthBackdrop />
-        {isDesktop && (
-          <header
-            aria-label="Barra superior de acceso OMEGA"
-            className="titlebar-drag motion-safe:animate-fade-in absolute top-0 left-0 right-0 z-20 h-[48px] px-4 flex items-center justify-between select-none [&_button]:[-webkit-app-region:no-drag]"
-          >
-            <div className="inline-flex items-center gap-2">
-              <OmegaLogo size={20} />
-              <span className="font-display text-[13px] font-semibold tracking-[0.06em] text-[#F2F2F4]">
-                OMEGA
-              </span>
-            </div>
-            <div className="sm:mr-36" />
-          </header>
-        )}
-        <AuthModulePanel
-          gateMode
-          authSession={null}
-          apiOnline={apiOnline}
-          reasonMessage={authGateReason}
-          onAuthenticated={(session) => {
-            setAuthGateReason('');
-            setVerifyingSession(false);
-            setAuthSession(session);
-            setActiveNav('inicio');
-            void refreshSystemTelemetry();
-            void refreshPrivateWorkspace();
-          }}
-        />
-      </div>
-    );
-  }
+  const screenKey =
+    verifyingSession || enteringWorkspace
+      ? enteringWorkspace
+        ? 'screen-entering-loader'
+        : 'screen-boot-loader'
+      : !isSignedIn
+        ? 'screen-auth-gate'
+        : 'screen-workspace';
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none">
-      <main className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text">
+    <AnimatePresence mode="wait" initial={false}>
+      {verifyingSession || enteringWorkspace ? (
+        <motion.div
+          key={screenKey}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, scale: 0.99, transition: { duration: 0.2 } }}
+          className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-[#0A0A0C] text-[#F2F2F4] select-none"
+        >
+          <OmegaAuthBackdrop />
+          <OmegaLoader
+            key={enteringWorkspace ? 'entering' : 'boot'}
+            steps={enteringWorkspace ? LOGIN_LOADER_STEPS : BOOT_LOADER_STEPS}
+            stepIntervalMs={enteringWorkspace ? 420 : 380}
+            label={enteringWorkspace ? 'Preparando cabina OMEGA' : 'Iniciando OMEGA'}
+          />
+        </motion.div>
+      ) : !isSignedIn ? (
+        <motion.div
+          key="screen-auth-gate"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.28 } }}
+          exit={{ opacity: 0, transition: { duration: 0.18 } }}
+          className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4]"
+        >
+          <OmegaAuthBackdrop />
+          {isDesktop && (
+            <header
+              aria-label="Barra superior de acceso OMEGA"
+              className="titlebar-drag motion-safe:animate-fade-in absolute top-0 left-0 right-0 z-20 h-[48px] px-4 flex items-center justify-between select-none [&_button]:[-webkit-app-region:no-drag]"
+            >
+              <div className="inline-flex items-center gap-2">
+                <OmegaLogo size={20} />
+                <span className="font-display text-[13px] font-semibold tracking-[0.06em] text-[#F2F2F4]">
+                  OMEGA
+                </span>
+              </div>
+              <div className="sm:mr-36" />
+            </header>
+          )}
+          <AuthModulePanel
+            gateMode
+            authSession={null}
+            apiOnline={apiOnline}
+            reasonMessage={authGateReason}
+            onAuthenticated={completeAuthenticationTransition}
+          />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="screen-workspace"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.3 } }}
+          exit={{ opacity: 0, transition: { duration: 0.18 } }}
+          className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none"
+        >
+      <main
+        ref={workspaceMainRef}
+        tabIndex={-1}
+        className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text focus:outline-none"
+      >
         <AnimatePresence mode="wait" initial={false}>
         {isHome ? (
           <motion.div
@@ -1021,6 +1123,7 @@ export default function App() {
               setCommandOpen(true);
               setCommandQuery('');
             }}
+            onOpenOnboarding={() => setOnboardingOpen(true)}
             onNavigate={handleNavigate}
             onLinkVerified={handleLinkVerified}
             onPanicPurge={handlePanicPurge}
@@ -1144,6 +1247,17 @@ export default function App() {
                 >
                   <Search className="h-3.5 w-3.5" />
                   <span className="font-tech hidden 2xl:inline">⌘K</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOnboardingOpen(true)}
+                  aria-label="Abrir guía rápida de uso"
+                  title="Guía rápida de OMEGA"
+                  className="omega-glass-chip h-8 px-2 rounded-[9px] inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                >
+                  <BookOpen className="h-3.5 w-3.5 text-[#6FA0FF]" />
+                  <span className="hidden 2xl:inline">Guía</span>
                 </button>
 
                 <button
@@ -1585,6 +1699,20 @@ export default function App() {
                 </span>
                 <span className="text-[11.5px] text-[#9A9AA2]">Vista actual</span>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCommandOpen(false);
+                  setOnboardingOpen(true);
+                }}
+                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
+              >
+                <span className="inline-flex items-center gap-3">
+                  <BookOpen className="h-4 w-4 text-[#6FA0FF]" />
+                  <span>Abrir guía interactiva de primeros pasos</span>
+                </span>
+                <span className="text-[11.5px] text-[#9A9AA2]">Tutorial</span>
+              </button>
 
               {sessions.length > 0 && (
                 <>
@@ -1625,16 +1753,20 @@ export default function App() {
           setAuthModalOpen(false);
           setAuthModalReason('');
         }}
-        onAuthenticated={(session) => {
-          setAuthSession(session);
-          setAuthModalOpen(false);
-          setAuthModalReason('');
-          void refreshSystemTelemetry();
-          void refreshPrivateWorkspace();
-        }}
+        onAuthenticated={completeAuthenticationTransition}
         reasonMessage={authModalReason}
         onOpenCuenta={() => handleNavigate('cuenta')}
       />
-    </div>
+
+      <OnboardingTourModal
+        isOpen={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+        onNavigate={(targetNav) => handleNavigate(targetNav)}
+        onOpenCopilot={handleOpenCopilot}
+        authSession={authSession}
+      />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

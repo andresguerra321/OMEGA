@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
@@ -50,8 +51,51 @@ public record OmegaProperties(
             @Positive double lexicalWeight,
             @Min(100) int minChunkTokens,
             @Min(200) int maxChunkTokens,
-            @Min(0) int chunkOverlapTokens
+            @Min(0) int chunkOverlapTokens,
+            String groqBaseUrl,
+            String groqApiKey,
+            String groqModel
     ) {
+        @ConstructorBinding
+        public Rag {
+        }
+
+        public Rag(
+                String embeddingProvider,
+                String embeddingModel,
+                int embeddingDimensions,
+                String openAiBaseUrl,
+                String openAiApiKey,
+                int openAiBatchSize,
+                int openAiMaxRetries,
+                String chatModel,
+                int rrfK,
+                double vectorWeight,
+                double lexicalWeight,
+                int minChunkTokens,
+                int maxChunkTokens,
+                int chunkOverlapTokens
+        ) {
+            this(
+                    embeddingProvider,
+                    embeddingModel,
+                    embeddingDimensions,
+                    openAiBaseUrl,
+                    openAiApiKey,
+                    openAiBatchSize,
+                    openAiMaxRetries,
+                    chatModel,
+                    rrfK,
+                    vectorWeight,
+                    lexicalWeight,
+                    minChunkTokens,
+                    maxChunkTokens,
+                    chunkOverlapTokens,
+                    "https://api.groq.com/openai/v1",
+                    "",
+                    "openai/gpt-oss-120b"
+            );
+        }
     }
 
     public record ForensicWorker(

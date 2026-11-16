@@ -94,7 +94,7 @@ function dedupeMatches(rawMatches) {
 }
 
 const DEFAULT_OS_SCOPE_NOTICE =
-  'Sin coincidencias en espacio de usuario contra el catálogo CTI vigente NO garantiza ausencia de exploits zero-click en kernel/BlastDoor/CoreGraphics. Mantén parches del SO, Lockdown Mode (iOS/macOS) y cifrado de disco completo activos (RNF9).';
+  'Sin coincidencias contra el catálogo vigente no descarta exploits avanzados a nivel de sistema. Mantén actualizado tu sistema operativo, activa Modo Aislamiento en iOS/macOS y conserva el cifrado de disco.';
 
 function normalizeParallelResult(res, files = [], customSourceLabel = '') {
   const allMatches = [];
@@ -1007,8 +1007,8 @@ export function MvtVerifierPanel({
 
             <div className="rounded-[11px] border border-[#2F6FED]/30 bg-[#1C2438]/40 px-3.5 py-2.5 text-[12px] text-[#D7DEEE] space-y-1">
               <div className="flex flex-wrap items-center justify-between gap-2 font-tech text-[10.5px] uppercase tracking-[0.05em] text-[#9FB8F5]">
-                <span>Alcance real (SO / Kernel · RNF9)</span>
-                <span>Corte CTI: {cutoffDate}</span>
+                <span>Alcance del análisis</span>
+                <span>Corte de catálogo: {cutoffDate}</span>
               </div>
               <p className="leading-snug text-[#F2F2F4]/85">{scopeNotice}</p>
             </div>

@@ -13,9 +13,13 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,6 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PublicCorpusRagService {
+
+    private static final Pattern TOC_NOISE = Pattern.compile("(?i)\\b(contents|table of contents)\\b|\\.{4,}");
+    private static final Pattern TRACE_DUMP_NOISE = Pattern.compile("(?i)\\b(appendix\\s+[a-z]\\b|detailed traces per target|sms with link to)\\b");
+    private static final Pattern EXPLANATORY_PROSE = Pattern.compile("(?i)\\b(is a surveillance|spyware|nso group|commercial surveillance|zero-click|infect|target|operates|mercenary|es un spyware|software esp[íi]a)\\b");
+    private static final Pattern TRACE_INTENT = Pattern.compile("(?i)\\b(cve-\\d|ioc|sms|appendix|ap[eé]ndice|hash|dominio|domain|url|ip|traza|trace|indicador)\\b");
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final PublicSchemaSupport publicSchemaSupport;
@@ -79,6 +88,7 @@ public class PublicCorpusRagService {
 
         String rawFilter = request.sourceFilter() != null ? request.sourceFilter().trim() : "";
         boolean hasFilter = !rawFilter.isBlank() && !"Todas las fuentes".equalsIgnoreCase(rawFilter);
+        int candidateLimit = Math.min(Math.max(topK * 4, 24), 48);
 
         List<PublicChunkRow> rows = jdbcTemplate.query(
                 """
@@ -102,13 +112,13 @@ public class PublicCorpusRagService {
                       @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
                   AND (:hasFilter = FALSE OR r.organization ILIKE :filterPattern OR r.title ILIKE :filterPattern)
                 ORDER BY lex_score DESC, c.id ASC
-                LIMIT :topK
+                LIMIT :candidateLimit
                 """,
                 new MapSqlParameterSource()
                         .addValue("lexicalTsQuery", tsQuery)
                         .addValue("hasFilter", hasFilter)
                         .addValue("filterPattern", "%" + rawFilter + "%")
-                        .addValue("topK", topK),
+                        .addValue("candidateLimit", candidateLimit),
                 (rs, rowNum) -> new PublicChunkRow(
                         UUID.fromString(rs.getString("report_id")),
                         rs.getString("title"),
@@ -123,7 +133,9 @@ public class PublicCorpusRagService {
                 )
         );
 
-        List<RankedChunk> ranked = rows.stream()
+        List<PublicChunkRow> reranked = rerankCandidates(request.question(), rows, topK);
+
+        List<RankedChunk> ranked = reranked.stream()
                 .map(r -> new RankedChunk(
                         r.reportId(),
                         r.title(),
@@ -143,6 +155,12 @@ public class PublicCorpusRagService {
         String answer = ranked.isEmpty()
                 ? "No se encontraron pasajes verificados en los informes CTI públicos para esta consulta."
                 : answerGenerator.generateGroundedAnswer(request.question(), ranked);
+
+        String responseModel = ranked.isEmpty()
+                ? activeModel
+                : (answer.startsWith("Resumen extractivo sin síntesis LLM")
+                        ? "omega-extractive-fallback"
+                        : answerGenerator.resolveActiveGeneratorModel());
 
         List<RagCitationDto> citations = ranked.stream()
                 .map(c -> new RagCitationDto(
@@ -170,12 +188,71 @@ public class PublicCorpusRagService {
 
         return new RagQueryResponse(
                 citations.isEmpty() ? "OK_EMPTY" : "OK",
-                activeModel,
+                responseModel,
                 answer,
                 List.of(),
                 List.of(),
                 citations
         );
+    }
+
+    static List<PublicChunkRow> rerankCandidates(String question, List<PublicChunkRow> candidates, int topK) {
+        if (candidates == null || candidates.size() <= 1) {
+            return candidates == null ? List.of() : candidates;
+        }
+        boolean asksForTraces = TRACE_INTENT.matcher(question == null ? "" : question).find();
+
+        record ScoredRow(PublicChunkRow row, double adjustedScore) {
+        }
+
+        List<ScoredRow> scored = new ArrayList<>(candidates.size());
+        for (PublicChunkRow row : candidates) {
+            String content = row.content() == null ? "" : row.content();
+            double weight = 1.0;
+
+            if (!asksForTraces) {
+                if (TOC_NOISE.matcher(content).find()) {
+                    weight *= 0.22;
+                }
+                if (TRACE_DUMP_NOISE.matcher(content).find()) {
+                    weight *= 0.28;
+                }
+                if (EXPLANATORY_PROSE.matcher(content).find()) {
+                    weight *= 1.48;
+                }
+                if (row.pageNumber() >= 1 && row.pageNumber() <= 16) {
+                    weight *= 1.18;
+                }
+            }
+            // Penalizar ligeramente párrafos demasiado cortos o portadas sin cuerpo
+            if (content.length() < 180) {
+                weight *= 0.65;
+            }
+            scored.add(new ScoredRow(row, row.lexScore() * weight));
+        }
+
+        scored.sort(Comparator.comparingDouble(ScoredRow::adjustedScore).reversed());
+
+        // Limitar repetición del mismo reporte (máx 2 páginas seguidas por reporte en primera pasada) para mayor diversidad
+        List<PublicChunkRow> selected = new ArrayList<>(topK);
+        Map<UUID, Integer> perReportCount = new LinkedHashMap<>();
+        List<PublicChunkRow> overflow = new ArrayList<>();
+
+        for (ScoredRow entry : scored) {
+            if (selected.size() >= topK) break;
+            int seen = perReportCount.getOrDefault(entry.row().reportId(), 0);
+            if (seen < 2) {
+                selected.add(entry.row());
+                perReportCount.put(entry.row().reportId(), seen + 1);
+            } else {
+                overflow.add(entry.row());
+            }
+        }
+        for (PublicChunkRow extra : overflow) {
+            if (selected.size() >= topK) break;
+            selected.add(extra);
+        }
+        return selected;
     }
 
     public record PublicCtiQueryRequest(

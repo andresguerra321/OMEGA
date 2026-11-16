@@ -139,7 +139,7 @@ export function AuthAccessForm({
         password: validation.sanitized.password,
         tenantSlug: showOrgSlug ? validation.sanitized.tenantSlug : '',
       });
-      onAuthenticated?.(session);
+      onAuthenticated?.(session, { isNewAccount: false });
     } catch (err) {
       const serverFields = err?.problem?.fieldErrors;
       if (serverFields && typeof serverFields === 'object') {
@@ -172,7 +172,7 @@ export function AuthAccessForm({
     setFieldErrorState({ tab: 'register', errors: {} });
     try {
       const session = await registerAccount(validation.sanitized);
-      onAuthenticated?.(session);
+      onAuthenticated?.(session, { isNewAccount: true });
     } catch (err) {
       const serverFields = err?.problem?.fieldErrors;
       if (serverFields && typeof serverFields === 'object') {
@@ -599,7 +599,7 @@ export function AuthAccessForm({
                 className={`block text-[11.5px] font-medium mb-1 flex items-center gap-1 ${labelTone}`}
               >
                 <KeyRound className="h-3 w-3 text-[#FF9F0A]" />
-                Clave de aprovisionamiento (Bootstrap Secret)
+                Código de invitación
               </label>
               <input
                 id={`${uid}-reg-secret`}
@@ -611,7 +611,7 @@ export function AuthAccessForm({
                   setRegForm((p) => ({ ...p, bootstrapSecret: e.target.value }));
                   clearFieldError('register', 'bootstrapSecret');
                 }}
-                placeholder="X-Omega-Bootstrap-Secret"
+                placeholder="Ingresa tu código de acceso"
                 className={`w-full h-9.5 px-3.5 rounded-[10px] bg-[#0A0A0C]/75 border text-[13px] text-[#F2F2F4] placeholder:text-[#9FA6B8] focus:outline-none transition-all duration-200 ${
                   fieldErrors.bootstrapSecret
                     ? 'border-[#FF453A]/75 focus:border-[#FF453A]'
@@ -648,15 +648,6 @@ export function AuthAccessForm({
           </button>
         </form>
       )}
-
-      <div className="rounded-[10px] border border-white/[0.08] bg-[#0A0A0C]/65 px-3 py-2.5 space-y-1 text-[11px] leading-snug text-[#9FA6B8]">
-        <p className="text-[#D2D6E2]">
-          OMEGA nunca te pedirá desactivar Defender, Firewall ni SmartScreen. Desconfía de clones y verifica el SHA-256 de los instaladores de escritorio.
-        </p>
-        <p className="font-tech text-[10px] text-[#8E96AB]">
-          Sesión volátil sin persistencia en localStorage (cookie HttpOnly en web · RAM en desktop). WebAuthn / Passkeys planificados en hoja de ruta.
-        </p>
-      </div>
     </div>
   );
 }
@@ -744,8 +735,8 @@ export function AuthModulePanel({
                     </h1>
                     <p className="mt-0.5 text-[12.5px] text-[#C2C7D6]">
                       {gateTab === 'register'
-                        ? 'Espacio privado de análisis Zero-Retention'
-                        : 'Accede a tu cabina de inteligencia OMEGA'}
+                        ? 'Crea tu espacio privado para investigar documentos y alertas'
+                        : 'Accede a tu espacio de análisis'}
                     </p>
                   </div>
                 </div>
@@ -805,9 +796,6 @@ export function AuthModulePanel({
                   <h1 className="mt-1.5 text-[20px] sm:text-[22px] font-semibold tracking-[-0.02em] text-[#F2F2F4] truncate">
                     {authSession.email}
                   </h1>
-                  <p className="font-tech mt-0.5 text-[11px] text-[#9A9AA2] truncate">
-                    ID de espacio: {authSession.tenantId || 'Sincronizando...'}
-                  </p>
                 </div>
               </div>
 
@@ -976,7 +964,7 @@ export function AuthModulePanel({
                       Resumen de cuenta
                     </h2>
                     <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
-                      Estado de cifrado, Zero-Retention y recursos vinculados.
+                      Resumen de documentos y actividad de tu cuenta.
                     </p>
                   </div>
 
@@ -988,21 +976,21 @@ export function AuthModulePanel({
                       </div>
                     </div>
                     <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">Purgados en RAM</div>
+                      <div className="text-[11px] text-[#9A9AA2]">Archivos eliminados</div>
                       <div className="font-tech mt-1 text-[17px] font-semibold text-[#30D158]">
                         {Number(tenantStats?.zero_retention_purged_pdfs ?? indexedCount)}
                       </div>
                     </div>
                     <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">Activos OSINT</div>
+                      <div className="text-[11px] text-[#9A9AA2]">Activos monitoreados</div>
                       <div className="font-tech mt-1 text-[17px] font-semibold text-[#F2F2F4]">
                         {Number(tenantStats?.osint_assets || 0)}
                       </div>
                     </div>
                     <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">Custodia activa</div>
-                      <div className="font-tech mt-1 text-[14px] font-semibold text-[#F2F2F4]">
-                        JWT HS256
+                      <div className="text-[11px] text-[#9A9AA2]">Sesión</div>
+                      <div className="mt-1 text-[14px] font-semibold text-[#F2F2F4]">
+                        Protegida
                       </div>
                     </div>
                   </div>
@@ -1014,7 +1002,7 @@ export function AuthModulePanel({
                     onClick={() => onOpenSettings('cuenta')}
                     className="w-full rounded-[10px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] px-3.5 py-2.5 text-[12px] font-medium text-[#F2F2F4] flex items-center justify-between transition-colors cursor-pointer"
                   >
-                    <span>Gestionar equipo, auditoría SHA-256 y políticas</span>
+                    <span>Ajustes, equipo y registro de actividad</span>
                     <ArrowRight className="h-3.5 w-3.5 text-[#2F6FED]" />
                   </button>
                 )}
@@ -1023,19 +1011,6 @@ export function AuthModulePanel({
           </>
         )}
       </div>
-
-      {gateMode && !authSession && (
-        <div className="relative z-10 flex items-center justify-center pt-4 shrink-0">
-          <span className="font-tech inline-flex items-center gap-2 text-[10.5px] uppercase tracking-[0.08em] text-[#9A9AA2]/80">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                apiOnline ? 'bg-[#30D158]' : 'bg-[#FF9F0A]'
-              }`}
-            />
-            {apiOnline ? 'GATEWAY · EN LÍNEA' : 'GATEWAY · SIN CONEXIÓN'}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

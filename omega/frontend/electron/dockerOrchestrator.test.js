@@ -10,8 +10,10 @@ import {
   parseComposePsOutput,
   parseDotEnvContent,
   readDotEnv,
+  readRuntimeState,
   resolveComposeEnvFilePath,
   sanitizeLogLine,
+  writeRuntimeState,
 } from './dockerOrchestrator.js';
 
 function createTempComposeDir({ withProd = true, envContent = 'POSTGRES_PASSWORD=localpass\n' } = {}) {
@@ -40,7 +42,7 @@ test('parseDotEnvContent y loadOrCreateDesktopSecrets respetan .env existente y 
     assert.equal(first.envOverrides.POSTGRES_PASSWORD, undefined);
     assert.ok(first.envOverrides.INTERNAL_SERVICE_TOKEN.length >= 64);
     assert.ok(first.envOverrides.OMEGA_JWT_SECRET.length >= 64);
-    assert.ok(first.envOverrides.OMEGA_BOOTSTRAP_SECRET.length >= 64);
+    assert.equal(first.envOverrides.OMEGA_BOOTSTRAP_SECRET, undefined);
 
     // Reutilizar mismos secretos entre reinicios para no invalidar JWTs emitidos
     const second = loadOrCreateDesktopSecrets(userDataDir, dotEnv, {});
@@ -247,6 +249,120 @@ test('readDotEnv y resolveComposeEnvFilePath soportan .env opcional en userData 
     const envFlagIdx = args.indexOf('--env-file');
     assert.ok(envFlagIdx >= 0);
     assert.equal(args[envFlagIdx + 1], userEnvPath);
+  } finally {
+    fs.rmSync(composeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('DockerOrchestrator falla rápido con logs si un servicio entra en bucle restarting', async () => {
+  const composeDir = createTempComposeDir();
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-orch-restarting-'));
+
+  try {
+    const orchestrator = new DockerOrchestrator({
+      userDataDir,
+      electronDir: path.join(composeDir, 'frontend', 'electron'),
+      findComposeRootFn: () => composeDir,
+      probeHttpHealthFn: async () => ({ healthy: false, statusCode: 0 }),
+      checkDockerFn: async () => {},
+      pollIntervalMs: 5,
+      startupTimeoutMs: 5000,
+      runCommandFn: async (args) => {
+        if (args.includes('ps')) {
+          return {
+            code: 0,
+            stdout: [
+              '{"Service":"postgres","State":"running","Health":"healthy"}',
+              '{"Service":"forensic-worker","State":"running","Health":"healthy"}',
+              '{"Service":"backend-java","State":"restarting","Health":""}',
+            ].join('\n'),
+            stderr: '',
+          };
+        }
+        if (args.includes('logs')) {
+          return {
+            code: 0,
+            stdout: 'FATAL: password authentication failed for user "omega_admin"',
+            stderr: '',
+          };
+        }
+        return { code: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    const res = await orchestrator.start();
+    assert.equal(res.ok, false);
+    assert.equal(res.errorCode, 'SERVICE_UNHEALTHY');
+    assert.match(orchestrator.getState().detail, /password authentication failed/i);
+  } finally {
+    fs.rmSync(composeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('DockerOrchestrator reutiliza servicios cuando coincide la versión y reconstruye con --build al subir de 1.4.0 a 1.5.0', async () => {
+  const composeDir = createTempComposeDir();
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-orch-upgrade-'));
+  const dockerCalls = [];
+
+  try {
+    writeRuntimeState(userDataDir, { lastVersion: '1.4.0' });
+
+    // Caso 1: misma versión 1.4.0 con backend ya UP -> sigue adelante sin reconstruir
+    const sameVer = new DockerOrchestrator({
+      userDataDir,
+      electronDir: path.join(composeDir, 'frontend', 'electron'),
+      appVersion: '1.4.0',
+      findComposeRootFn: () => composeDir,
+      probeHttpHealthFn: async () => ({ healthy: true, statusCode: 200 }),
+      runCommandFn: async (args) => {
+        dockerCalls.push(args);
+        return { code: 0, stdout: '', stderr: '' };
+      },
+    });
+    const sameRes = await sameVer.start();
+    assert.equal(sameRes.ok, true);
+    assert.equal(sameRes.alreadyRunning, true);
+    assert.equal(sameRes.upgraded, false);
+    assert.equal(dockerCalls.some((a) => a.includes('--build')), false);
+
+    // Caso 2: sube a 1.5.0 aunque 1.4.0 estuviera UP -> ejecuta up -d --build y actualiza estado a 1.5.0
+    dockerCalls.length = 0;
+    let probeCalls = 0;
+    const upgraded = new DockerOrchestrator({
+      userDataDir,
+      electronDir: path.join(composeDir, 'frontend', 'electron'),
+      appVersion: '1.5.0',
+      findComposeRootFn: () => composeDir,
+      pollIntervalMs: 5,
+      checkDockerFn: async () => {},
+      probeHttpHealthFn: async () => {
+        probeCalls += 1;
+        // 1a sonda pre-check responde UP (v1.4.0 viejo); tras up -d --build responde UP (v1.5.0)
+        return { healthy: probeCalls !== 2, statusCode: 200 };
+      },
+      runCommandFn: async (args) => {
+        dockerCalls.push(args);
+        if (args.includes('ps')) {
+          return {
+            code: 0,
+            stdout: [
+              '{"Service":"postgres","State":"running","Health":"healthy"}',
+              '{"Service":"forensic-worker","State":"running","Health":"healthy"}',
+              '{"Service":"backend-java","State":"running","Health":"healthy"}',
+            ].join('\n'),
+            stderr: '',
+          };
+        }
+        return { code: 0, stdout: '', stderr: '' };
+      },
+    });
+    const upRes = await upgraded.start();
+    assert.equal(upRes.ok, true);
+    assert.equal(upRes.upgraded, true);
+    assert.equal(dockerCalls.some((a) => a.includes('up') && a.includes('--build')), true);
+    assert.equal(readRuntimeState(userDataDir).lastVersion, '1.5.0');
   } finally {
     fs.rmSync(composeDir, { recursive: true, force: true });
     fs.rmSync(userDataDir, { recursive: true, force: true });

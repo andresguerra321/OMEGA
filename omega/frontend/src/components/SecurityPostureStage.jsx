@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  BookOpen,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -76,6 +77,7 @@ export function SecurityPostureStage({
   stageFeedback = null,
   onDismissStageFeedback,
   onOpenCommandPalette,
+  onOpenOnboarding,
   onOpenCopilot,
   onNavigate,
   onLinkVerified,
@@ -384,6 +386,19 @@ export function SecurityPostureStage({
             <Search className="h-3.5 w-3.5" />
             <span className="font-tech hidden 2xl:inline">⌘K</span>
           </button>
+
+          {onOpenOnboarding && (
+            <button
+              type="button"
+              onClick={onOpenOnboarding}
+              aria-label="Abrir guía rápida de uso"
+              title="Guía rápida de OMEGA"
+              className="omega-glass-chip h-8 px-2 rounded-[9px] inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-[#6FA0FF]" />
+              <span className="hidden 2xl:inline">Guía</span>
+            </button>
+          )}
 
           <button
             type="button"

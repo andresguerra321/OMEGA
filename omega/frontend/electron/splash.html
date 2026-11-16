@@ -3,24 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OMEGA — Iniciando servicios</title>
+    <title>OMEGA — Iniciando</title>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0a0a0c;
-        --panel: rgba(20, 20, 24, 0.58);
-        --panel-subtle: rgba(10, 10, 12, 0.72);
-        --border-light: rgba(255, 255, 255, 0.08);
-        --border-dark: rgba(0, 0, 0, 0.4);
+        --bg: #000000;
         --text: #f2f2f4;
-        --muted: #9a9aa2;
+        --muted: #8a8b94;
         --accent: #2f6fed;
-        --accent-soft: rgba(47, 111, 237, 0.16);
-        --ok: #22c55e;
-        --ok-soft: rgba(34, 197, 94, 0.14);
-        --warn: #f59e0b;
-        --err: #ef4444;
-        --err-soft: rgba(239, 68, 68, 0.12);
+        --ok: #30d158;
+        --err: #ff453a;
       }
 
       * {
@@ -32,9 +24,7 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background-color: var(--bg);
-        background-image: radial-gradient(circle, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-        background-size: 24px 24px;
+        background: #000000;
         color: var(--text);
         font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -47,221 +37,165 @@
         top: 0;
         left: 0;
         right: 0;
-        height: 40px;
+        height: 44px;
         -webkit-app-region: drag;
-        display: flex;
-        align-items: center;
-        padding-left: 16px;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(10, 10, 12, 0.85);
+        z-index: 20;
       }
 
       .stage {
         height: 100%;
-        padding: 56px 24px 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .card {
         width: 100%;
-        max-width: 560px;
-        background: var(--panel);
-        backdrop-filter: blur(16px);
-        border: 1px solid var(--border-light);
-        border-bottom-color: var(--border-dark);
-        border-right-color: var(--border-dark);
-        border-radius: 16px;
-        padding: 28px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 60px rgba(0, 0, 0, 0.6);
-      }
-
-      .header {
+        padding: 36px 24px 28px;
         display: flex;
+        flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: 14px;
-        margin-bottom: 20px;
       }
 
-      .logo-wrap {
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
-        background: var(--accent-soft);
-        border: 1px solid rgba(47, 111, 237, 0.4);
+      .eclipse-wrap {
+        position: relative;
+        width: 380px;
+        height: 380px;
+        max-width: 78vmin;
+        max-height: 78vmin;
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0;
+        animation: stageEnter 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
       }
 
-      .logo-wrap svg {
-        width: 22px;
-        height: 22px;
-        color: var(--accent);
+      #eclipseCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
 
-      .eyebrow {
+      @keyframes stageEnter {
+        from {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      .status-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+        max-width: 460px;
+      }
+
+      .wordmark {
+        font-family: 'Sora', 'IBM Plex Sans', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.44em;
+        padding-left: 0.44em;
+        color: rgba(242, 242, 244, 0.92);
+        margin: 0;
+      }
+
+      .headline {
+        margin: 0;
         font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 11px;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
         color: var(--muted);
-        margin-bottom: 3px;
-      }
-
-      h1 {
-        margin: 0;
-        font-size: 19px;
-        font-weight: 600;
-        letter-spacing: -0.015em;
-        color: var(--text);
       }
 
       .subtitle {
-        margin: 0 0 18px;
-        font-size: 13.5px;
-        line-height: 1.5;
-        color: var(--muted);
-        min-height: 20px;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: rgba(138, 139, 148, 0.72);
+        min-height: 18px;
       }
 
-      .progress-track {
-        height: 4px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.08);
-        overflow: hidden;
-        margin-bottom: 20px;
-      }
-
-      .progress-bar {
-        height: 100%;
-        width: 24%;
-        border-radius: 999px;
-        background: var(--accent);
-        transition: width 320ms ease, background-color 220ms ease;
-      }
-
-      .progress-bar.indeterminate {
-        animation: pulseWidth 2.4s ease-in-out infinite;
-      }
-
-      @keyframes pulseWidth {
-        0%,
-        100% {
-          opacity: 0.78;
-        }
-        50% {
-          opacity: 1;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .progress-bar.indeterminate {
-          animation: none;
-        }
-      }
-
-      .services {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 16px;
-      }
-
-      .svc-row {
+      .svc-pills {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 10px 12px;
-        border-radius: 9px;
-        background: var(--panel-subtle);
-        border: 1px solid rgba(255, 255, 255, 0.07);
+        justify-content: center;
+        gap: 16px;
+        margin-top: 2px;
       }
 
-      .svc-meta {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-
-      .svc-name {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--text);
-      }
-
-      .svc-desc {
+      .svc-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         font-family: 'IBM Plex Mono', ui-monospace, monospace;
-        font-size: 11px;
-        color: var(--muted);
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(154, 154, 162, 0.7);
       }
 
-      .badge {
-        font-family: 'IBM Plex Mono', ui-monospace, monospace;
-        font-size: 11px;
-        font-weight: 500;
-        padding: 3px 9px;
+      .dot {
+        width: 6px;
+        height: 6px;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: var(--muted);
-        background: rgba(20, 20, 24, 0.85);
-        white-space: nowrap;
+        background: rgba(255, 255, 255, 0.18);
+        transition: background-color 220ms ease, box-shadow 220ms ease;
       }
 
-      .badge.starting {
-        color: var(--text);
-        border-color: rgba(47, 111, 237, 0.45);
-        background: var(--accent-soft);
+      .svc-pill.starting .dot {
+        background: #9cc0ff;
+        box-shadow: 0 0 8px rgba(156, 192, 255, 0.8);
       }
 
-      .badge.healthy {
-        color: #86efac;
-        border-color: rgba(34, 197, 94, 0.35);
-        background: var(--ok-soft);
+      .svc-pill.starting {
+        color: rgba(242, 242, 244, 0.9);
       }
 
-      .badge.error {
+      .svc-pill.healthy .dot {
+        background: var(--ok);
+        box-shadow: 0 0 8px rgba(48, 209, 88, 0.75);
+      }
+
+      .svc-pill.healthy {
+        color: rgba(242, 242, 244, 0.92);
+      }
+
+      .svc-pill.error .dot {
+        background: var(--err);
+        box-shadow: 0 0 8px rgba(255, 69, 58, 0.85);
+      }
+
+      .svc-pill.error {
         color: #fca5a5;
-        border-color: rgba(239, 68, 68, 0.4);
-        background: var(--err-soft);
       }
 
       .log-strip {
+        margin-top: 2px;
+        max-width: 440px;
         font-family: 'IBM Plex Mono', ui-monospace, monospace;
-        font-size: 11px;
-        line-height: 1.45;
-        color: var(--muted);
-        background: rgba(10, 10, 12, 0.85);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 8px 10px;
+        font-size: 10.5px;
+        color: rgba(154, 154, 162, 0.6);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        min-height: 33px;
       }
 
-      .log-strip.hidden {
-        display: none;
+      .hidden {
+        display: none !important;
       }
 
       .error-box {
-        margin-top: 16px;
-        padding: 14px;
-        border-radius: 10px;
-        background: var(--err-soft);
-        border: 1px solid rgba(239, 68, 68, 0.32);
-      }
-
-      .error-box.hidden {
-        display: none;
+        width: 100%;
+        max-width: 500px;
+        margin-top: 4px;
+        padding: 16px 18px;
+        border-radius: 14px;
+        background: rgba(20, 12, 14, 0.82);
+        border: 1px solid rgba(255, 69, 58, 0.34);
+        backdrop-filter: blur(14px);
       }
 
       .error-detail {
@@ -295,13 +229,13 @@
 
       button {
         font-family: inherit;
-        font-size: 13px;
+        font-size: 12.5px;
         font-weight: 500;
-        border-radius: 8px;
+        border-radius: 9px;
         padding: 8px 14px;
         cursor: pointer;
         border: 1px solid transparent;
-        transition: background-color 140ms ease, border-color 140ms ease, box-shadow 160ms ease;
+        transition: background-color 140ms ease, filter 140ms ease;
       }
 
       .btn-primary {
@@ -310,104 +244,286 @@
       }
 
       .btn-primary:hover {
-        filter: brightness(1.08);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 8px 20px rgba(0, 0, 0, 0.48);
+        filter: brightness(1.1);
       }
 
       .btn-secondary {
-        background: rgba(20, 20, 24, 0.85);
+        background: rgba(255, 255, 255, 0.05);
         color: var(--text);
-        border-color: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.14);
       }
 
       .btn-secondary:hover {
-        background: rgba(28, 36, 56, 0.65);
-        border-color: rgba(47, 111, 237, 0.4);
+        background: rgba(255, 255, 255, 0.1);
       }
 
       .footer-note {
-        margin-top: 14px;
-        font-size: 11.5px;
-        color: var(--muted);
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
+        position: fixed;
+        bottom: 14px;
+        left: 24px;
+        right: 24px;
+        text-align: center;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        color: rgba(138, 139, 148, 0.42);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .eclipse-wrap {
+          animation: none !important;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="titlebar-drag">OMEGA DESKTOP</div>
-    <main class="stage">
-      <section class="card" aria-live="polite">
-        <div class="header">
-          <div class="logo-wrap" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
-              <path d="M12 2.5 4.5 5.8v5.9c0 4.9 3.2 9.4 7.5 10.8 4.3-1.4 7.5-5.9 7.5-10.8V5.8L12 2.5Z" />
-              <path d="M9.5 12.2 11.3 14l3.5-3.8" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </div>
-          <div>
-            <div class="eyebrow" id="modeBadge">ORQUESTACIÓN DOCKER LOCAL</div>
-            <h1 id="headline">Iniciando servicios de OMEGA…</h1>
-          </div>
-        </div>
+    <div class="titlebar-drag"></div>
+    <main class="stage" id="stageRoot" aria-live="polite">
+      <div class="eclipse-wrap" aria-hidden="true">
+        <canvas id="eclipseCanvas"></canvas>
+      </div>
 
-        <p class="subtitle" id="subtitle">Verificando el estado del stack local y healthchecks…</p>
+      <div class="status-block">
+        <p class="wordmark">OMEGA</p>
+        <h1 class="headline" id="headline">Iniciando servicios de OMEGA…</h1>
+        <p class="subtitle" id="subtitle">Verificando entorno local y contenedores</p>
 
-        <div class="progress-track">
-          <div class="progress-bar indeterminate" id="progressBar"></div>
-        </div>
-
-        <div class="services" id="servicesList">
-          <div class="svc-row" data-service="postgres">
-            <div class="svc-meta">
-              <span class="svc-name">PostgreSQL 16 + pgvector</span>
-              <span class="svc-desc">Almacén vectorial híbrido y auditoría SHA-256</span>
-            </div>
-            <span class="badge" id="badge-postgres">Pendiente</span>
-          </div>
-          <div class="svc-row" data-service="forensic-worker">
-            <div class="svc-meta">
-              <span class="svc-name">Forensic Worker (FastAPI)</span>
-              <span class="svc-desc">Motor stateless anti-spyware en memoria RAM</span>
-            </div>
-            <span class="badge" id="badge-forensic-worker">Pendiente</span>
-          </div>
-          <div class="svc-row" data-service="backend-java">
-            <div class="svc-meta">
-              <span class="svc-name">OMEGA Core Gateway (Java 21)</span>
-              <span class="svc-desc">API multi-tenant, Zero-Retention OCR y RAG</span>
-            </div>
-            <span class="badge" id="badge-backend-java">Pendiente</span>
-          </div>
+        <div class="svc-pills" id="servicesList">
+          <span class="svc-pill" id="badge-postgres" title="PostgreSQL 16 + pgvector">
+            <span class="dot" aria-hidden="true"></span>
+            <span>DB</span>
+          </span>
+          <span class="svc-pill" id="badge-forensic-worker" title="Forensic Worker (FastAPI)">
+            <span class="dot" aria-hidden="true"></span>
+            <span>Worker</span>
+          </span>
+          <span class="svc-pill" id="badge-backend-java" title="OMEGA Core Gateway (Java 21)">
+            <span class="dot" aria-hidden="true"></span>
+            <span>Gateway</span>
+          </span>
         </div>
 
         <div class="log-strip hidden" id="logStrip"></div>
+      </div>
 
-        <div class="error-box hidden" id="errorBox">
-          <p class="error-detail" id="errorDetail"></p>
-          <label class="prod-toggle">
-            <input type="checkbox" id="prodModeCheckbox" />
-            <span>Arrancar con override fail-closed (<code>docker-compose.prod.yml</code>)</span>
-          </label>
-          <div class="actions">
-            <button type="button" class="btn-primary" id="retryBtn">Reintentar arranque</button>
-            <button type="button" class="btn-secondary" id="skipBtn">Abrir sin backend (diagnóstico local)</button>
-          </div>
+      <div class="error-box hidden" id="errorBox">
+        <p class="error-detail" id="errorDetail"></p>
+        <label class="prod-toggle">
+          <input type="checkbox" id="prodModeCheckbox" />
+          <span>Arrancar con override fail-closed (<code>docker-compose.prod.yml</code>)</span>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn-primary" id="retryBtn">Reintentar arranque</button>
+          <button type="button" class="btn-secondary" id="skipBtn">Abrir sin backend (diagnóstico)</button>
         </div>
-
-        <div class="footer-note">
-          <span id="ownershipNote">Red aislada · Volúmenes persistentes protegidos</span>
-          <span id="secretsNote"></span>
-        </div>
-      </section>
+      </div>
     </main>
 
+    <div class="footer-note" id="ownershipNote">Red aislada · Volúmenes persistentes protegidos</div>
+
     <script>
+      (function startEclipseCanvas() {
+        const canvas = document.getElementById('eclipseCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const prefersReduced =
+          window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        const stars = Array.from({ length: 16 }, (_, idx) => ({
+          angle: idx * 2.39996,
+          distFrac: 0.72 + ((idx * 17) % 44) / 100,
+          speed: 0.04 + ((idx % 4) * 0.015),
+          size: 0.7 + (idx % 3) * 0.35,
+          alpha: 0.25 + ((idx % 5) * 0.12),
+        }));
+
+        function drawConicTrailRing(cx, cy, radius, lineWidth, startAngle, maxAlpha) {
+          ctx.save();
+          ctx.lineWidth = lineWidth;
+          if (typeof ctx.createConicGradient === 'function') {
+            const grad = ctx.createConicGradient(startAngle, cx, cy);
+            grad.addColorStop(0.0, `rgba(255, 255, 255, ${maxAlpha})`);
+            grad.addColorStop(0.22, `rgba(235, 240, 250, ${maxAlpha * 0.55})`);
+            grad.addColorStop(0.55, `rgba(210, 220, 238, ${maxAlpha * 0.12})`);
+            grad.addColorStop(0.85, 'rgba(255, 255, 255, 0)');
+            grad.addColorStop(1.0, `rgba(255, 255, 255, ${maxAlpha * 0.85})`);
+            ctx.strokeStyle = grad;
+          } else {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${maxAlpha * 0.45})`;
+          }
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        function drawFrame(tSec) {
+          const rect = canvas.getBoundingClientRect();
+          const cssSize = Math.max(180, Math.min(rect.width || 380, rect.height || 380));
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          const targetPx = Math.round(cssSize * dpr);
+          if (canvas.width !== targetPx || canvas.height !== targetPx) {
+            canvas.width = targetPx;
+            canvas.height = targetPx;
+          }
+
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, cssSize, cssSize);
+
+          const cx = cssSize / 2;
+          const cy = cssSize / 2;
+          const R = cssSize * 0.43;
+          const eclipseAngle = 2.4 + tSec * 0.62;
+
+          // 1. Halo ambiental suave
+          const ambient = ctx.createRadialGradient(cx, cy, R * 0.18, cx, cy, R * 1.12);
+          ambient.addColorStop(0, 'rgba(255, 255, 255, 0.14)');
+          ambient.addColorStop(0.45, 'rgba(225, 232, 244, 0.05)');
+          ambient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = ambient;
+          ctx.beginPath();
+          ctx.arc(cx, cy, R * 1.12, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 2. Bandas orbitales difuminadas con estela cónica
+          drawConicTrailRing(cx, cy, R * 0.92, R * 0.11, -tSec * 0.32 + 0.9, 0.13);
+          drawConicTrailRing(cx, cy, R * 0.78, R * 0.065, tSec * 0.48 + 2.2, 0.24);
+          drawConicTrailRing(cx, cy, R * 0.64, R * 0.035, -tSec * 0.65 + 4.1, 0.30);
+
+          // Anillos nítidos finos superpuestos
+          ctx.save();
+          ctx.lineWidth = 0.9;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, R * 0.78, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, R * 0.64, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          // Cometas luminosos en órbitas
+          const comets = [
+            { r: R * 0.78, a: tSec * 0.62 + 1.4, span: 0.18, w: 2.0, alpha: 0.9 },
+            { r: R * 0.92, a: -tSec * 0.38 + 4.3, span: 0.11, w: 1.5, alpha: 0.75 },
+          ];
+          comets.forEach((c) => {
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
+            ctx.shadowBlur = 7;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${c.alpha})`;
+            ctx.lineWidth = c.w;
+            ctx.beginPath();
+            ctx.arc(cx, cy, c.r, c.a, c.a + c.span);
+            ctx.stroke();
+            ctx.restore();
+          });
+
+          // 3. Corona vórtice de partículas en espiral (34 brazos x 5 niveles)
+          const arms = 34;
+          const rings = 5;
+          const spinOffset = tSec * 0.16;
+          for (let i = 0; i < arms; i++) {
+            const baseA = (i / arms) * Math.PI * 2 + spinOffset;
+            for (let j = 0; j < rings; j++) {
+              const frac = j / (rings - 1);
+              const r = R * (0.335 + frac * 0.27);
+              const a = baseA + frac * 0.38;
+              const px = cx + Math.cos(a) * r;
+              const py = cy + Math.sin(a) * r;
+              const align = Math.cos(a - eclipseAngle);
+              const radialFade = 1 - frac * 0.55;
+              const alpha = Math.max(0.06, Math.min(0.88, (0.36 + 0.34 * align) * radialFade));
+              const dotR = j === 0 ? 1.15 : 0.95;
+              ctx.fillStyle = `rgba(244, 246, 252, ${alpha.toFixed(3)})`;
+              ctx.beginPath();
+              ctx.arc(px, py, dotR, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // 4. Micro-partículas flotantes externas
+          stars.forEach((s) => {
+            const a = s.angle + tSec * s.speed;
+            const r = R * s.distFrac;
+            const px = cx + Math.cos(a) * r;
+            const py = cy + Math.sin(a) * r;
+            ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+            ctx.beginPath();
+            ctx.arc(px, py, s.size, 0, Math.PI * 2);
+            ctx.fill();
+          });
+
+          // 5. Disco central Eclipse + creciente blanco orbital
+          const coreR = R * 0.275;
+          const gx = cx + Math.cos(eclipseAngle) * (coreR * 0.14);
+          const gy = cy + Math.sin(eclipseAngle) * (coreR * 0.14);
+          const rimGlow = ctx.createRadialGradient(gx, gy, coreR * 0.72, gx, gy, coreR * 1.48);
+          rimGlow.addColorStop(0, 'rgba(255, 255, 255, 0.34)');
+          rimGlow.addColorStop(0.55, 'rgba(232, 238, 248, 0.10)');
+          rimGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = rimGlow;
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreR * 1.48, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Centro negro puro
+          ctx.fillStyle = '#000000';
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Aro sutil completo del eclipse
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Creciente luminoso exterior rotatorio
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
+          ctx.shadowBlur = 12;
+          const arcSpan = Math.PI * 0.92;
+          const arcGrad = ctx.createRadialGradient(
+            cx + Math.cos(eclipseAngle) * coreR,
+            cy + Math.sin(eclipseAngle) * coreR,
+            2,
+            cx,
+            cy,
+            coreR * 1.15,
+          );
+          arcGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+          arcGrad.addColorStop(0.65, 'rgba(242, 245, 252, 0.55)');
+          arcGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.strokeStyle = arcGrad;
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreR, eclipseAngle - arcSpan / 2, eclipseAngle + arcSpan / 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (prefersReduced) {
+          drawFrame(0);
+          return;
+        }
+
+        const start = performance.now();
+        function loop(now) {
+          drawFrame((now - start) / 1000);
+          requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+      })();
+
       const headlineEl = document.getElementById('headline');
       const subtitleEl = document.getElementById('subtitle');
-      const modeBadgeEl = document.getElementById('modeBadge');
-      const progressBarEl = document.getElementById('progressBar');
       const logStripEl = document.getElementById('logStrip');
       const errorBoxEl = document.getElementById('errorBox');
       const errorDetailEl = document.getElementById('errorDetail');
@@ -416,35 +532,25 @@
       const skipBtn = document.getElementById('skipBtn');
       const servicesListEl = document.getElementById('servicesList');
       const ownershipNoteEl = document.getElementById('ownershipNote');
-      const secretsNoteEl = document.getElementById('secretsNote');
 
       const params = new URLSearchParams(window.location.search);
       const isClosingView = params.get('mode') === 'closing';
 
-      function formatBadge(svcState) {
-        if (!svcState) return { label: 'Pendiente', cls: '' };
-        if (svcState.healthy) return { label: 'Listo', cls: 'healthy' };
-        if (svcState.health === 'unhealthy' || svcState.state === 'exited' || svcState.state === 'dead') {
-          return { label: 'Error', cls: 'error' };
+      function pillClassFor(svcState) {
+        if (!svcState) return 'svc-pill';
+        if (svcState.healthy) return 'svc-pill healthy';
+        if (
+          svcState.health === 'unhealthy' ||
+          svcState.state === 'exited' ||
+          svcState.state === 'dead' ||
+          svcState.state === 'restarting'
+        ) {
+          return 'svc-pill error';
         }
-        if (svcState.running || svcState.state === 'created' || svcState.state === 'restarting') {
-          return { label: 'Iniciando…', cls: 'starting' };
+        if (svcState.running || svcState.state === 'created') {
+          return 'svc-pill starting';
         }
-        return { label: 'Pendiente', cls: '' };
-      }
-
-      function computeProgress(state) {
-        if (state.phase === 'ready') return 100;
-        if (state.phase === 'checking_existing') return 14;
-        if (state.phase === 'checking_docker') return 22;
-        if (state.phase === 'starting_containers') return 36;
-        const svcs = state.services || {};
-        let score = 42;
-        if (svcs.postgres?.healthy) score += 18;
-        if (svcs['forensic-worker']?.healthy) score += 18;
-        if (svcs['backend-java']?.running) score += 10;
-        if (svcs['backend-java']?.healthy) score = 100;
-        return Math.min(94, score);
+        return 'svc-pill';
       }
 
       function renderState(state) {
@@ -452,43 +558,28 @@
 
         headlineEl.textContent = state.message || 'Iniciando servicios de OMEGA…';
         subtitleEl.textContent = state.detail || '';
-        modeBadgeEl.textContent = state.prodMode
-          ? 'PERFIL PRODUCCIÓN FAIL-CLOSED'
-          : 'ORQUESTACIÓN DOCKER LOCAL';
 
         if (typeof state.prodMode === 'boolean') {
           prodCheckboxEl.checked = state.prodMode;
         }
 
-        const pct = computeProgress(state);
-        progressBarEl.style.width = `${pct}%`;
-
         if (state.phase === 'error') {
-          progressBarEl.classList.remove('indeterminate');
-          progressBarEl.style.backgroundColor = '#ef4444';
           errorBoxEl.classList.remove('hidden');
           errorDetailEl.textContent = state.detail || 'No se pudieron iniciar los servicios locales.';
-        } else if (state.phase === 'ready') {
-          progressBarEl.classList.remove('indeterminate');
-          progressBarEl.style.backgroundColor = '#22c55e';
-          errorBoxEl.classList.add('hidden');
         } else {
-          progressBarEl.classList.add('indeterminate');
-          progressBarEl.style.backgroundColor = '#2f6fed';
           errorBoxEl.classList.add('hidden');
         }
 
         for (const svcName of ['postgres', 'forensic-worker', 'backend-java']) {
           const el = document.getElementById(`badge-${svcName}`);
           if (!el) continue;
-          const badge = formatBadge(state.services?.[svcName]);
-          el.textContent = badge.label;
-          el.className = `badge ${badge.cls}`.trim();
+          el.className = pillClassFor(state.services?.[svcName]);
         }
 
-        const lastLog = Array.isArray(state.logLines) && state.logLines.length > 0
-          ? state.logLines[state.logLines.length - 1]
-          : '';
+        const lastLog =
+          Array.isArray(state.logLines) && state.logLines.length > 0
+            ? state.logLines[state.logLines.length - 1]
+            : '';
         if (lastLog && state.phase !== 'ready') {
           logStripEl.textContent = lastLog;
           logStripEl.classList.remove('hidden');
@@ -497,23 +588,17 @@
         }
 
         ownershipNoteEl.textContent = state.startedByElectron
-          ? 'Ciclo automático activo (se cerrará al salir · datos en omega_pgdata protegidos)'
-          : 'Conectando con instancia Docker de OMEGA o arrancando servicios…';
-
-        secretsNoteEl.textContent = state.secretsGenerated
-          ? 'Secretos generados en userData'
-          : '';
+          ? 'Ciclo automático activo · Volúmenes protegidos (omega_pgdata)'
+          : 'Conectando con entorno local · Red aislada OMEGA';
       }
 
       if (isClosingView) {
-        modeBadgeEl.textContent = 'CIERRE SEGURO';
         headlineEl.textContent = 'Deteniendo contenedores de OMEGA…';
-        subtitleEl.textContent = 'Ejecutando cierre limpio sin eliminar el volumen de datos (omega_pgdata).';
-        progressBarEl.style.width = '72%';
-        servicesListEl.style.display = 'none';
+        subtitleEl.textContent = 'Cierre limpio sin alterar tus datos persistentes';
+        servicesListEl.classList.add('hidden');
         logStripEl.classList.add('hidden');
         errorBoxEl.classList.add('hidden');
-        ownershipNoteEl.textContent = 'Conservando postgres volume omega_pgdata';
+        ownershipNoteEl.textContent = 'Conservando volumen omega_pgdata';
       } else if (window.omegaDesktop) {
         const bridge = window.omegaDesktop;
         if (typeof bridge.getBackendStatus === 'function') {

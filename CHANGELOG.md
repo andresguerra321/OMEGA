@@ -4,6 +4,22 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [1.5.0] - 2026-11-16
+
+### Motor RAG, Síntesis con Groq & Calidad de Respuestas
+- **Soporte dual OpenAI / Groq (`OmegaProperties.java`, `application.yml`, `OpenAiRagAnswerGenerator.java`):** cuando `OPENAI_API_KEY` está vacío y `GROQ_API_KEY` está configurado, OMEGA usa Groq (`/chat/completions`, `openai/gpt-oss-120b` por defecto) en lugar de caer al resumen extractivo crudo, manteniendo los delimitadores `<FRAGMENTO_NO_CONFIABLE>` y el alcance documental (`RNF9`).
+- **Context box y normalización de citas (`OpenAiRagAnswerGenerator.java`):** numeración `[1]`..`[N]` de fragmentos recuperados, instrucciones estrictas para definiciones directas y viñetas ordenadas sin volcar `CONTENTS` ni listados crudos de SMS en preguntas conceptuales, y normalización de corchetes `【1】` / `[2, 3]` a `[1]`, `[2][3]` clicables.
+- **Re-ranking CTI anti-ruido (`PublicCorpusRagService.java`):** ventana ampliada de candidatos, penalización de ruido estructural (`TOC` / trazas Appendix C) en consultas conceptuales y diversificación por reporte.
+
+### Escritorio `.exe`, Arranque & Orquestación Docker
+- **Validación automática de versión al actualizar (`dockerOrchestrator.js`):** registro `omega-desktop-state.json` en `userData`; si el usuario abre una versión nueva (`1.4.0 → 1.5.0`) con contenedores anteriores activos, reconstruye automáticamente (`up -d --build`) conservando volúmenes y secretos.
+- **Corrección de aprovisionamiento y salud (`dockerOrchestrator.js`, `main.js`, `docker-compose.yml`):** se deja de autogenerar `OMEGA_BOOTSTRAP_SECRET` en instalaciones locales, se sincroniza `.env` en `userData`, se añade fallo rápido ante servicios en bucle `restarting` y se agilizan los intervalos de healthcheck.
+- **Eclipse Orbital Loader y transición fluida (`splash.html`, `OmegaLoader.jsx`, `App.jsx`):** pantalla de carga Canvas 2D a 60 FPS tanto al abrir la app como al iniciar sesión, sin parpadeos.
+- **Tour interactivo inicial (`OnboardingTourModal.jsx`):** guía de 5 pasos al crear cuenta nueva, re-abrible desde `Guía`.
+
+### Auditoría UI/UX & Simplicidad
+- **Limpieza de jerga y avisos repetidos (`AuthModulePanel.jsx`, `StructuredResponse.jsx`, `ChatWorkspace.jsx`, `SettingsPanel.jsx`, `OmegaWebIntelCard.jsx`, `MvtVerifierPanel.jsx`, `CampaignsPanel.jsx`):** retirado el cartel técnico redundante de `localStorage / HttpOnly / Passkeys`, el indicador `GATEWAY · EN LÍNEA`, el pie duplicado de alcance documental y etiquetas internas (`RNF*`, `RF7`, `JWT HS256`, `Bootstrap Secret`) en textos orientados al usuario.
+
 ## [1.4.0] - 2026-11-16
 
 ### Seguridad y Honestidad Forense

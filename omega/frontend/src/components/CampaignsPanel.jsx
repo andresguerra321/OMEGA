@@ -594,7 +594,7 @@ export function CampaignsPanel({
                 <button
                   type="button"
                   onClick={() => setShowWebExtractor((prev) => !prev)}
-                  title="Extraer IPv4, dominios y CVEs desde artículo web en RAM (WebBaseLoader RNF4)"
+                  title="Extraer indicadores de amenaza desde un artículo web sin guardarlo en disco"
                   className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3 py-1.5 text-[12.5px] active:scale-[0.97] transition-all cursor-pointer ${
                     showWebExtractor
                       ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.2)]'

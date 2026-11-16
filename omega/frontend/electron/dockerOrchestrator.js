@@ -9,9 +9,42 @@ const execFileAsync = promisify(execFile);
 
 export const BACKEND_SERVICES = ['postgres', 'forensic-worker', 'backend-java'];
 const DEFAULT_SECRETS_FILENAME = 'omega-desktop-secrets.json';
+const DEFAULT_RUNTIME_STATE_FILENAME = 'omega-desktop-state.json';
 const HEALTHCHECK_POLL_MS = 1000;
 const STARTUP_TIMEOUT_MS = 180_000;
 const SHUTDOWN_TIMEOUT_MS = 30_000;
+
+export function readRuntimeState(userDataDir) {
+  if (!userDataDir) return {};
+  const statePath = path.join(userDataDir, DEFAULT_RUNTIME_STATE_FILENAME);
+  if (!fs.existsSync(statePath)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeRuntimeState(userDataDir, patch = {}) {
+  if (!userDataDir) return null;
+  const statePath = path.join(userDataDir, DEFAULT_RUNTIME_STATE_FILENAME);
+  const next = {
+    ...readRuntimeState(userDataDir),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  try {
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, `${JSON.stringify(next, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
+  } catch {
+    // No bloquear arranque si userData es de solo lectura
+  }
+  return next;
+}
 
 export function parseDotEnvContent(rawText) {
   const result = {};
@@ -90,11 +123,11 @@ export function loadOrCreateDesktopSecrets(userDataDir, dotEnv = {}, processEnv 
     'INTERNAL_SERVICE_TOKEN',
     'OMEGA_JWT_SECRET',
     'POSTGRES_PASSWORD',
-    'OMEGA_BOOTSTRAP_SECRET',
   ];
 
   const secretsPath = userDataDir ? path.join(userDataDir, DEFAULT_SECRETS_FILENAME) : null;
   let stored = {};
+  let updated = false;
   if (secretsPath && fs.existsSync(secretsPath)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
@@ -106,7 +139,12 @@ export function loadOrCreateDesktopSecrets(userDataDir, dotEnv = {}, processEnv 
     }
   }
 
-  let updated = false;
+  // OMEGA_BOOTSTRAP_SECRET no debe autogenerarse en Desktop: bloquearía Crear cuenta con una clave desconocida
+  if (Object.prototype.hasOwnProperty.call(stored, 'OMEGA_BOOTSTRAP_SECRET')) {
+    delete stored.OMEGA_BOOTSTRAP_SECRET;
+    updated = true;
+  }
+
   const generatedEnv = {};
   for (const key of secretKeys) {
     const fromEnv = processEnv?.[key] || dotEnv?.[key];
@@ -361,11 +399,13 @@ export class DockerOrchestrator {
     runCommandFn = defaultRunCommand,
     sleepFn = defaultSleep,
     findComposeRootFn = findComposeRoot,
+    appVersion = null,
     startupTimeoutMs = STARTUP_TIMEOUT_MS,
     pollIntervalMs = HEALTHCHECK_POLL_MS,
   }) {
     this.userDataDir = userDataDir;
     this.electronDir = electronDir;
+    this.appVersion = appVersion ? String(appVersion).trim() : null;
     this.onStateChange = typeof onStateChange === 'function' ? onStateChange : () => {};
     this.probeHttpHealthFn = probeHttpHealthFn;
     this.checkDockerFn = checkDockerFn;
@@ -492,11 +532,16 @@ export class DockerOrchestrator {
     const dotEnv = readDotEnv(composeRoot, this.userDataDir);
     const envFilePath = resolveComposeEnvFilePath(composeRoot, this.userDataDir);
     const javaPort = Number(process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080);
+    const runtimeState = readRuntimeState(this.userDataDir);
+    const previousVersion = runtimeState?.lastVersion ? String(runtimeState.lastVersion).trim() : null;
+    const isAppUpgrade = Boolean(this.appVersion && previousVersion && previousVersion !== this.appVersion);
 
     this.#updateState({
       phase: 'checking_existing',
       message: 'Comprobando si OMEGA ya está en ejecución…',
-      detail: '',
+      detail: isAppUpgrade
+        ? `Actualización detectada (${previousVersion} → ${this.appVersion}): validando contenedores existentes.`
+        : '',
       errorCode: null,
       canRetry: false,
       alreadyRunning: false,
@@ -504,9 +549,10 @@ export class DockerOrchestrator {
       logLines: [],
     });
 
-    // 1. Si backend-java ya responde /actuator/health UP, no reiniciamos ni asumimos ownership
+    // 1. Si backend-java ya responde /actuator/health UP y no hubo cambio de versión,
+    // seguimos adelante sin reiniciar ni asumir ownership de los contenedores.
     const preHealth = await this.probeHttpHealthFn(javaPort, 2000);
-    if (preHealth.healthy) {
+    if (preHealth.healthy && !isAppUpgrade) {
       this.startedByElectron = false;
       this.activeComposeRoot = composeRoot;
       const psSnapshot = composeRoot
@@ -520,6 +566,9 @@ export class DockerOrchestrator {
         running: true,
         healthy: true,
       };
+      if (this.appVersion) {
+        writeRuntimeState(this.userDataDir, { lastVersion: this.appVersion });
+      }
       this.#updateState({
         phase: 'ready',
         message: 'Servicios de OMEGA activos.',
@@ -527,7 +576,7 @@ export class DockerOrchestrator {
         alreadyRunning: true,
         services: readyServices,
       });
-      return { ok: true, alreadyRunning: true, startedByElectron: false };
+      return { ok: true, alreadyRunning: true, startedByElectron: false, upgraded: false };
     }
 
     if (!composeRoot) {
@@ -596,24 +645,32 @@ export class DockerOrchestrator {
 
     this.#updateState({
       phase: 'starting_containers',
-      message: 'Iniciando servicios de OMEGA…',
-      detail: this.prodMode
-        ? 'Perfil producción activo (docker-compose.yml + docker-compose.prod.yml).'
-        : 'Levantando PostgreSQL pgvector, worker forense y núcleo Java…',
+      message: isAppUpgrade
+        ? `Actualizando servicios a OMEGA v${this.appVersion}…`
+        : 'Iniciando servicios de OMEGA…',
+      detail: isAppUpgrade
+        ? `Reconstruyendo imágenes sobre datos persistentes (${previousVersion} → ${this.appVersion})…`
+        : this.prodMode
+          ? 'Perfil producción activo (docker-compose.yml + docker-compose.prod.yml).'
+          : 'Levantando PostgreSQL pgvector, worker forense y núcleo Java…',
       secretsGenerated: secretsResult.generatedKeys.length > 0,
       services: prePs || createInitialServicesMap(false),
     });
 
+    const upSubArgs = isAppUpgrade
+      ? ['up', '-d', '--build', ...BACKEND_SERVICES]
+      : ['up', '-d', ...BACKEND_SERVICES];
+
     const upArgs = buildComposeArgs(composeRoot, {
       prodMode: this.prodMode,
       envFilePath,
-      subArgs: ['up', '-d', ...BACKEND_SERVICES],
+      subArgs: upSubArgs,
     });
 
     const upResult = await this.runCommandFn(upArgs, {
       cwd: composeRoot,
       env: childEnv,
-      timeoutMs: 180_000,
+      timeoutMs: isAppUpgrade ? 600_000 : 180_000,
       onLine: (line) => this.#pushLog(line),
     }).catch((err) => ({
       code: 1,
@@ -638,10 +695,10 @@ export class DockerOrchestrator {
     }
 
     // 4. Esperar healthchecks de postgres -> forensic-worker -> backend-java (:8080/actuator/health)
-    return this.#waitForHealthchecks(composeRoot, childEnv, javaPort);
+    return this.#waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded: isAppUpgrade });
   }
 
-  async #waitForHealthchecks(composeRoot, childEnv, javaPort) {
+  async #waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded = false } = {}) {
     const deadline = Date.now() + this.startupTimeoutMs;
 
     while (!this.aborted && Date.now() < deadline) {
@@ -653,6 +710,7 @@ export class DockerOrchestrator {
           (svc) =>
             psMap[svc]?.state === 'exited' ||
             psMap[svc]?.state === 'dead' ||
+            psMap[svc]?.state === 'restarting' ||
             psMap[svc]?.health === 'unhealthy',
         );
         if (failedSvc) {
@@ -678,13 +736,18 @@ export class DockerOrchestrator {
           running: true,
           healthy: true,
         };
+        if (this.appVersion) {
+          writeRuntimeState(this.userDataDir, { lastVersion: this.appVersion });
+        }
         this.#updateState({
           phase: 'ready',
           message: 'Servicios de OMEGA listos.',
-          detail: `Núcleo Java operativo en 127.0.0.1:${javaPort}.`,
+          detail: upgraded
+            ? `Servicios actualizados a v${this.appVersion} en 127.0.0.1:${javaPort} conservando tus datos.`
+            : `Núcleo Java operativo en 127.0.0.1:${javaPort}.`,
           services: finalServices,
         });
-        return { ok: true, alreadyRunning: false, startedByElectron: this.startedByElectron };
+        return { ok: true, alreadyRunning: false, startedByElectron: this.startedByElectron, upgraded };
       }
 
       const progressMsg = this.#describeWaitingPhase(psMap);
