@@ -1,6 +1,8 @@
+import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { AuthAccessForm } from './AuthModulePanel';
 import { OmegaLogo } from './OmegaLogo';
+import { backdropVariants, popVariants } from '../lib/motion';
 
 export function AuthModal({
   isOpen,
@@ -9,16 +11,21 @@ export function AuthModal({
   reasonMessage = '',
   onOpenCuenta,
 }) {
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0A0C]/78 p-4 motion-safe:animate-fade-in"
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div
+      key="auth-modal"
+      variants={backdropVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0A0C]/78 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Acceso a cuenta OMEGA"
     >
-      <div className="omega-glass-panel motion-safe:animate-scale-in w-full max-w-[440px] rounded-[20px] overflow-hidden">
+      <motion.div variants={popVariants} initial="initial" animate="animate" exit="exit" className="omega-glass-panel w-full max-w-[440px] rounded-[20px] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
           <div className="flex items-center gap-3">
             <OmegaLogo size={34} isThinking={false} />
@@ -67,7 +74,9 @@ export function AuthModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   );
 }

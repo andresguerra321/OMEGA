@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { backdropVariants, drawerVariants } from '../lib/motion';
 import {
   ArrowUp,
   Maximize2,
@@ -64,8 +66,6 @@ export function CopilotDrawer({
     }
   }, [isOpen, messages.length, isLoading]);
 
-  if (!isOpen) return null;
-
   function handleSubmit(e) {
     e?.preventDefault();
     if (isLoading) return;
@@ -90,23 +90,31 @@ export function CopilotDrawer({
   }
 
   return (
-    <div
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div
+      key="copilot-drawer"
+      initial="initial"
+      animate="animate"
+      exit="exit"
       className="fixed inset-0 z-50 flex justify-end"
       role="dialog"
       aria-modal="true"
       aria-label="Copiloto de análisis OMEGA"
     >
       {/* Fondo atenuado sin destruir el estado inferior */}
-      <button
+      <motion.button
         type="button"
         aria-label="Cerrar panel de copiloto"
         onClick={onClose}
-        className="animate-fade-in flex-1 bg-black/55 cursor-default"
+        variants={backdropVariants}
+        className="flex-1 bg-black/55 cursor-default"
       />
 
       {/* Cajón lateral deslizable vidrio esmerilado */}
-      <aside
-        className={`animate-slide-right relative h-full w-full max-w-[470px] border-l border-white/[0.08] bg-[rgba(20,20,24,0.72)] backdrop-blur-xl shadow-[-18px_0_52px_rgba(0,0,0,0.72)] flex flex-col ${
+      <motion.aside
+        variants={drawerVariants}
+        className={`relative h-full w-full max-w-[470px] border-l border-white/[0.08] bg-[rgba(20,20,24,0.72)] backdrop-blur-xl shadow-[-18px_0_52px_rgba(0,0,0,0.72)] flex flex-col ${
           typeof window !== 'undefined' && window.omegaDesktop?.isDesktop ? 'pt-9' : ''
         }`}
       >
@@ -284,7 +292,9 @@ export function CopilotDrawer({
             </button>
           </div>
         </form>
-      </aside>
-    </div>
+      </motion.aside>
+    </motion.div>
+    )}
+    </AnimatePresence>
   );
 }

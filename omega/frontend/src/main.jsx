@@ -17,10 +17,13 @@ import '@fontsource/ibm-plex-mono/latin-ext-400.css'
 import '@fontsource/ibm-plex-mono/latin-500.css'
 import '@fontsource/ibm-plex-mono/latin-ext-500.css'
 import './index.css'
+import { MotionConfig } from 'framer-motion'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <MotionConfig reducedMotion="user">
+      <App />
+    </MotionConfig>
   </StrictMode>,
 )
