@@ -7,7 +7,7 @@ Todas las entregas relevantes de arquitectura, seguridad y calidad verificada de
 ## [1.4.0] - 2026-11-16
 
 ### Seguridad y Honestidad Forense
-- **Sesión con cookie `HttpOnly` / `SameSite=Strict` (`SessionCookieHelper.java`, `AuthController.java`, `JwtAuthenticationFilter.java`):** el navegador y la app de escritorio dejan de guardar el JWT en `localStorage`; `OMEGA_COOKIE_SECURE` controla el atributo `Secure` (`false` en desarrollo, `true` en producción).
+- **Sesión con cookie `HttpOnly` / `SameSite=Strict` (`SessionCookieHelper.java`, `AuthController.java`, `JwtAuthenticationFilter.java`):** el navegador y la app de escritorio dejan de guardar el JWT en `localStorage`; `OMEGA_COOKIE_SECURE` controla el atributo `Secure` (`false` en desarrollo, `true` en producción). Se mantiene el acceso sin credenciales demo fijas en la interfaz (primer ingreso vía **Crear cuenta**).
 - **Frescura del catálogo CTI y alcance por sistema operativo (`cti_db.py`, `forensic_scope.py`):** los veredictos informan la fecha de corte del catálogo y evitan afirmar inmunidad absoluta; el manifiesto STIX se monta en modo lectura dentro del worker.
 - **Integridad de corpus y cadena de suministro (`corpus_integrity.py`, `cti-feed-review.yml`, `release-desktop.yml`, `supply-chain-audit.yml`):** verificación SHA-256 con fallo cerrado de PDFs y bundles STIX, y construcción de instaladores en CI con atestación de procedencia.
 
@@ -38,7 +38,7 @@ Todas las entregas relevantes de arquitectura, seguridad y calidad verificada de
 ## [1.3.0] - 2026-11-14
 
 ### Compuerta de Autenticación Obligatoria & Escena Orbital
-- **Bloqueo integral sin sesión activa (`AuthModulePanel.jsx`, `OmegaAuthBackdrop.jsx`, `AuthService.java`, `AuthController.java`):** Toda la plataforma requiere inicio de sesión previo; soporte de autenticación solo con correo y contraseña cuando la cuenta es única sin exigir `tenantSlug` manual, recuperación de contraseña asistida, animaciones Tailwind y acceso demo en 1 clic (`admin@omega.local` / `OmegaDemo!2026`).
+- **Bloqueo integral sin sesión activa (`AuthModulePanel.jsx`, `OmegaAuthBackdrop.jsx`, `AuthService.java`, `AuthController.java`):** Toda la plataforma requiere inicio de sesión previo; soporte de autenticación solo con correo y contraseña cuando la cuenta es única sin exigir `tenantSlug` manual, recuperación de contraseña asistida y animaciones Tailwind *(el acceso demo en 1 clic con `admin@omega.local` introducido inicialmente en v1.3.0 fue retirado posteriormente al eliminar credenciales fijas de la UI)*.
 
 ### Empaquetado Nativo Windows (`.exe` Setup + Portable)
 - **Instalador NSIS y ejecutable portable (`omega/frontend/release/`):** Generación de `OMEGA-Setup-1.0.0-x64.exe` y `OMEGA-Portable-1.0.0-x64.exe` con orquestación automática de Docker Compose e íconos nativos (`omega/frontend/build/icon.ico`, `icon.png`).

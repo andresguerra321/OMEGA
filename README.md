@@ -135,7 +135,7 @@ Para usar la aplicación de escritorio directamente sin ejecutar Vite manualment
 2. Descargar desde **GitHub Releases (`v1.4.0`)** o ejecutar desde `omega/frontend/release/`:
    * **Instalador Windows:** `OMEGA-Setup-1.4.0-x64.exe`
    * **Portable Windows (sin instalación):** `OMEGA-Portable-1.4.0-x64.exe`
-3. En la pantalla de acceso puedes usar el botón de **Acceso Demo en 1 clic** o iniciar sesión con `admin@omega.local` / `OmegaDemo!2026`.
+3. En la pantalla de acceso haz clic en **Crear cuenta** para registrar tu usuario administrador inicial y su organización (`Espacio personal` incluido; contraseña mínima de `12` caracteres), o inicia sesión si ya tienes cuenta. *(El antiguo acceso demo con credenciales fijas fue retirado por endurecimiento de seguridad).*
 
 ### Docker Compose (modo servidor / desarrollo)
 
