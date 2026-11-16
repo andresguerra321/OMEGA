@@ -28,6 +28,7 @@ import {
   fetchSystemGovernance,
   getWorkspaceId,
   rotateWorkspaceId,
+  testAiEngineConnection,
   verifyAuditChain,
 } from '../lib/api';
 import { stripUnsafeChars, validateTenantUserForm } from '../lib/validators';
@@ -48,11 +49,164 @@ const CONFIG_SECTIONS = [
   { id: 'corpus', label: 'Corpus indexado', icon: Database },
 ];
 
-const GROQ_MODELS = [
-  { value: 'openai/gpt-oss-120b', label: 'openai/gpt-oss-120b (Recomendado)' },
-  { value: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile (Alternativo)' },
-  { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (Ultra rápido)' },
+const AI_PROVIDER_PRESETS = [
+  {
+    id: 'groq',
+    label: 'Groq (Por defecto)',
+    badge: 'Gratis · ~2s',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    baseUrlEditable: false,
+    keyRequired: true,
+    keyPlaceholder: 'gsk_...',
+    defaultModel: 'openai/gpt-oss-120b',
+    suggestedModels: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+    docsUrl: 'https://console.groq.com/keys',
+    docsLabel: 'Abrir Groq Console',
+    summary: 'Opción recomendada por defecto: rápida y con plan gratuito sin tarjeta.',
+    steps: [
+      'Haz clic en Abrir Groq Console e inicia sesión con Google o GitHub.',
+      'Entra en API Keys → Create API Key y copia la clave que empieza por gsk_.',
+      'Pégala aquí abajo y pulsa Guardar y activar IA.',
+    ],
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama (Local)',
+    badge: 'Sin API Key',
+    baseUrl: 'http://host.docker.internal:11434/v1',
+    baseUrlEditable: true,
+    keyRequired: false,
+    keyPlaceholder: 'No requiere API key en Ollama local',
+    defaultModel: 'llama3.2',
+    suggestedModels: ['llama3.2', 'qwen2.5:7b', 'mistral', 'deepseek-r1:8b'],
+    docsUrl: 'https://ollama.com',
+    docsLabel: 'Ver modelos Ollama',
+    summary: '100% local en tu PC, sin internet ni cuentas externas (requiere tener Ollama ejecutándose).',
+    steps: [
+      'Abre Ollama en tu equipo y descarga un modelo (ej. ollama pull llama3.2).',
+      'Conserva http://host.docker.internal:11434/v1 (o la URL de tu servidor en red).',
+      'Pulsa Probar conexión para detectar tus modelos instalados y luego Guardar.',
+    ],
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    badge: 'Google AI',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    baseUrlEditable: false,
+    keyRequired: true,
+    keyPlaceholder: 'AIza...',
+    defaultModel: 'gemini-2.5-flash',
+    suggestedModels: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    docsUrl: 'https://aistudio.google.com/apikey',
+    docsLabel: 'Abrir Google AI Studio',
+    summary: 'Usa tu propia clave de Gemini desde Google AI Studio mediante compatibilidad OpenAI.',
+    steps: [
+      'Abre Google AI Studio → Get API key y genera una clave (empieza por AIza...).',
+      'Pégala aquí y selecciona gemini-2.5-flash o gemini-2.5-pro.',
+      'Pulsa Probar conexión y luego Guardar y activar IA.',
+    ],
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    badge: 'Multi-modelo',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    baseUrlEditable: false,
+    keyRequired: true,
+    keyPlaceholder: 'sk-or-v1-...',
+    defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
+    suggestedModels: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'],
+    docsUrl: 'https://openrouter.ai/keys',
+    docsLabel: 'Abrir OpenRouter Keys',
+    summary: 'Unifica decenas de modelos comerciales y gratuitos con una sola clave.',
+    steps: [
+      'Genera una clave en openrouter.ai/keys.',
+      'Elige el identificador completo del modelo (o añade :free para tier gratuito).',
+      'Prueba conexión y pulsa Guardar y activar IA.',
+    ],
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    badge: 'ChatGPT API',
+    baseUrl: 'https://api.openai.com/v1',
+    baseUrlEditable: false,
+    keyRequired: true,
+    keyPlaceholder: 'sk-...',
+    defaultModel: 'gpt-4o-mini',
+    suggestedModels: ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4.1'],
+    docsUrl: 'https://platform.openai.com/api-keys',
+    docsLabel: 'Abrir OpenAI Platform',
+    summary: 'Usa tu propia clave de OpenAI tanto para el asistente como para embeddings vectoriales.',
+    steps: [
+      'Copia tu clave secreta desde platform.openai.com/api-keys.',
+      'Selecciona gpt-4o-mini o el modelo de tu preferencia.',
+      'Prueba conexión y pulsa Guardar y activar IA.',
+    ],
+  },
+  {
+    id: 'lmstudio',
+    label: 'LM Studio',
+    badge: 'Local',
+    baseUrl: 'http://host.docker.internal:1234/v1',
+    baseUrlEditable: true,
+    keyRequired: false,
+    keyPlaceholder: 'Opcional (ej. lm-studio)',
+    defaultModel: 'local-model',
+    suggestedModels: ['local-model'],
+    docsUrl: 'https://lmstudio.ai',
+    docsLabel: 'Abrir LM Studio',
+    summary: 'Conecta el servidor local OpenAI-compatible de LM Studio en el puerto 1234.',
+    steps: [
+      'En LM Studio, carga un modelo y activa Local Server (Start Server en puerto 1234).',
+      'Verifica que CORS / Network access permita conexiones locales.',
+      'Pulsa Probar conexión para listar el modelo activo y guarda.',
+    ],
+  },
+  {
+    id: 'omniroute',
+    label: 'OmniRoute',
+    badge: 'Auto-Router',
+    baseUrl: 'http://omniroute:20128/v1',
+    baseUrlEditable: false,
+    keyRequired: false,
+    keyPlaceholder: 'sk-... generada en OmniRoute (opcional)',
+    defaultModel: 'auto',
+    suggestedModels: ['auto'],
+    docsUrl: 'http://127.0.0.1:20128/dashboard',
+    docsLabel: 'Abrir dashboard OmniRoute',
+    summary: 'Router multi-cuenta integrado en Docker con fallback automático de cuotas.',
+    steps: [
+      'Activa OmniRoute guardando esta opción o visita http://127.0.0.1:20128/dashboard.',
+      'Conecta ahí tus cuentas/llaves y copia el token de Endpoints si activaste autenticación.',
+      'Deja el modelo en auto para balancear automáticamente.',
+    ],
+  },
+  {
+    id: 'custom',
+    label: 'API personalizada',
+    badge: 'Cualquier /v1',
+    baseUrl: '',
+    baseUrlEditable: true,
+    keyRequired: false,
+    keyPlaceholder: 'Bearer token (opcional si es red interna)',
+    defaultModel: '',
+    suggestedModels: [],
+    docsUrl: '',
+    docsLabel: '',
+    summary: 'Conecta cualquier servidor privado, vLLM, LiteLLM, Azure o API compatible con /v1/chat/completions.',
+    steps: [
+      'Ingresa la URL base hasta el prefijo de API (ej. https://tu-servidor.com/v1).',
+      'Escribe el nombre exacto del modelo y tu token si el endpoint lo exige.',
+      'Usa Probar conexión antes de guardar para confirmar respuesta.',
+    ],
+  },
 ];
+
+function findAiPreset(id) {
+  return AI_PROVIDER_PRESETS.find((p) => p.id === id) || AI_PROVIDER_PRESETS[0];
+}
 
 const TOPK_OPTIONS = [
   {
@@ -195,12 +349,13 @@ export function SettingsPanel({
   const [savedFeedback, setSavedFeedback] = useState(false);
 
   const [desktopAiConfig, setDesktopAiConfig] = useState(null);
-  const [groqKeyDraft, setGroqKeyDraft] = useState('');
-  const [showGroqKey, setShowGroqKey] = useState(false);
-  const [groqModelDraft, setGroqModelDraft] = useState('openai/gpt-oss-120b');
-  const [omniEnabledDraft, setOmniEnabledDraft] = useState(false);
-  const [omniKeyDraft, setOmniKeyDraft] = useState('');
-  const [openAiKeyDraft, setOpenAiKeyDraft] = useState('');
+  const [aiProviderDraft, setAiProviderDraft] = useState('groq');
+  const [aiBaseUrlDraft, setAiBaseUrlDraft] = useState('https://api.groq.com/openai/v1');
+  const [aiKeyDraft, setAiKeyDraft] = useState('');
+  const [showAiKey, setShowAiKey] = useState(false);
+  const [aiModelDraft, setAiModelDraft] = useState('openai/gpt-oss-120b');
+  const [testingAiConn, setTestingAiConn] = useState(false);
+  const [aiProbeResult, setAiProbeResult] = useState(null);
   const [savingAiConfig, setSavingAiConfig] = useState(false);
   const [copiedEnvSnippet, setCopiedEnvSnippet] = useState(false);
 
@@ -369,9 +524,27 @@ export function SettingsPanel({
     getCfg()
       .then((res) => {
         if (res?.ok && res.config) {
-          setDesktopAiConfig(res.config);
-          if (res.config.groqModel) setGroqModelDraft(res.config.groqModel);
-          setOmniEnabledDraft(Boolean(res.config.omniRouteEnabled));
+          const cfg = res.config;
+          setDesktopAiConfig(cfg);
+          const detectedProvider =
+            cfg.activeProvider && cfg.activeProvider !== 'extractive'
+              ? cfg.activeProvider
+              : 'groq';
+          const preset = findAiPreset(detectedProvider);
+          setAiProviderDraft(preset.id);
+          if (cfg.customConfigured && cfg.customBaseUrl) {
+            setAiBaseUrlDraft(cfg.customBaseUrl);
+            setAiModelDraft(cfg.customModel || preset.defaultModel);
+          } else if (detectedProvider === 'omniroute') {
+            setAiBaseUrlDraft(preset.baseUrl);
+            setAiModelDraft(cfg.omniRouteModel || 'auto');
+          } else if (detectedProvider === 'openai') {
+            setAiBaseUrlDraft(preset.baseUrl);
+            setAiModelDraft(cfg.openAiChatModel || 'gpt-4o-mini');
+          } else {
+            setAiBaseUrlDraft(preset.baseUrl);
+            setAiModelDraft(cfg.groqModel || 'openai/gpt-oss-120b');
+          }
         }
       })
       .catch(() => {
@@ -380,6 +553,7 @@ export function SettingsPanel({
   }, []);
 
   function openExternalLink(url) {
+    if (!url) return;
     if (typeof window?.omegaDesktop?.openExternalUrl === 'function') {
       void window.omegaDesktop.openExternalUrl(url);
       return;
@@ -387,30 +561,104 @@ export function SettingsPanel({
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
+  function handleSelectAiPreset(presetId) {
+    const preset = findAiPreset(presetId);
+    setAiProviderDraft(preset.id);
+    setAiBaseUrlDraft(
+      preset.id === 'omniroute' && desktopAiConfig?.omniRouteDashboardUrl
+        ? 'http://omniroute:20128/v1'
+        : preset.baseUrl,
+    );
+    setAiModelDraft(preset.defaultModel);
+    setAiKeyDraft('');
+    setAiProbeResult(null);
+  }
+
+  async function handleTestAiConnection() {
+    if (testingAiConn) return;
+    if (!authSession) {
+      setAiProbeResult({
+        ok: false,
+        message: 'Inicia sesión primero para probar la conexión desde el backend.',
+      });
+      return;
+    }
+    setTestingAiConn(true);
+    setAiProbeResult(null);
+    try {
+      const res = await testAiEngineConnection({
+        provider: aiProviderDraft,
+        baseUrl: aiBaseUrlDraft.trim(),
+        apiKey: aiKeyDraft.trim(),
+        model: aiModelDraft.trim(),
+      });
+      setAiProbeResult(res || { ok: false, message: 'Sin respuesta del backend.' });
+      if (res?.ok && Array.isArray(res.detected_models) && res.detected_models.length > 0 && !aiModelDraft.trim()) {
+        setAiModelDraft(res.detected_models[0]);
+      }
+    } catch (err) {
+      setAiProbeResult({
+        ok: false,
+        message: err?.message || 'No se pudo probar la conexión.',
+      });
+    } finally {
+      setTestingAiConn(false);
+    }
+  }
+
   async function handleSaveAiEngine(e) {
     e?.preventDefault();
     if (!isDesktopApp || savingAiConfig) return;
+    const preset = findAiPreset(aiProviderDraft);
+    const cleanKey = aiKeyDraft.trim();
+    const cleanModel = aiModelDraft.trim() || preset.defaultModel;
+    const cleanBase = aiBaseUrlDraft.trim() || preset.baseUrl;
+
     await guard(async () => {
       setSavingAiConfig(true);
       setActionBanner({
         tone: 'info',
-        message: 'Guardando configuración y recargando el motor de IA (~5 segundos)...',
+        message: `Guardando proveedor ${preset.label} y recargando el motor (~5 segundos)...`,
       });
       try {
-        const res = await window.omegaDesktop.saveAiEngineConfig({
-          groqApiKey: groqKeyDraft.trim(),
-          groqModel: groqModelDraft,
-          omniRouteEnabled: omniEnabledDraft,
-          omniRouteApiKey: omniKeyDraft.trim(),
-          openAiApiKey: openAiKeyDraft.trim(),
-        });
+        let payload;
+        if (aiProviderDraft === 'groq') {
+          payload = {
+            clearCustomProvider: true,
+            omniRouteEnabled: false,
+            groqApiKey: cleanKey,
+            groqModel: cleanModel,
+          };
+        } else if (aiProviderDraft === 'openai') {
+          payload = {
+            clearCustomProvider: true,
+            omniRouteEnabled: false,
+            openAiApiKey: cleanKey,
+            openAiChatModel: cleanModel,
+          };
+        } else if (aiProviderDraft === 'omniroute') {
+          payload = {
+            clearCustomProvider: true,
+            omniRouteEnabled: true,
+            omniRouteApiKey: cleanKey,
+            omniRouteModel: cleanModel || 'auto',
+          };
+        } else {
+          payload = {
+            customProvider: aiProviderDraft,
+            customBaseUrl: cleanBase,
+            customApiKey: cleanKey,
+            clearCustomKey: Boolean(!cleanKey && (aiProviderDraft === 'ollama' || aiProviderDraft === 'lmstudio')),
+            customModel: cleanModel,
+          };
+        }
+
+        const res = await window.omegaDesktop.saveAiEngineConfig(payload);
         if (res?.config) {
           setDesktopAiConfig(res.config);
         }
         if (res?.ok) {
-          setGroqKeyDraft('');
-          setOmniKeyDraft('');
-          setOpenAiKeyDraft('');
+          setAiKeyDraft('');
           setActionBanner({
             tone: 'clean',
             message: res.config?.configured
@@ -439,18 +687,33 @@ export function SettingsPanel({
     });
   }
 
-  function handleCopyEnvSnippet() {
-    const cleanGroq = groqKeyDraft.trim() || 'gsk_tu_clave_gratuita_de_groq';
-    const lines = [
-      `GROQ_API_KEY=${cleanGroq}`,
-      `GROQ_MODEL=${groqModelDraft}`,
-    ];
-    if (omniEnabledDraft) {
-      lines.push('COMPOSE_PROFILES=omniroute');
-      lines.push('OMNIROUTE_BASE_URL=http://omniroute:20128/v1');
-      if (omniKeyDraft.trim()) lines.push(`OMNIROUTE_API_KEY=${omniKeyDraft.trim()}`);
+  function buildEnvSnippetText() {
+    const preset = findAiPreset(aiProviderDraft);
+    const cleanModel = aiModelDraft.trim() || preset.defaultModel || 'modelo';
+    if (aiProviderDraft === 'groq') {
+      return `GROQ_API_KEY=${aiKeyDraft.trim() || 'gsk_tu_clave'}\nGROQ_MODEL=${cleanModel}`;
     }
-    navigator.clipboard?.writeText(lines.join('\n'));
+    if (aiProviderDraft === 'openai') {
+      return `OPENAI_API_KEY=${aiKeyDraft.trim() || 'sk-tu_clave'}\nOMEGA_CHAT_MODEL=${cleanModel}`;
+    }
+    if (aiProviderDraft === 'omniroute') {
+      return [
+        'COMPOSE_PROFILES=omniroute',
+        'OMNIROUTE_BASE_URL=http://omniroute:20128/v1',
+        `OMNIROUTE_MODEL=${cleanModel}`,
+        aiKeyDraft.trim() ? `OMNIROUTE_API_KEY=${aiKeyDraft.trim()}` : '# OMNIROUTE_API_KEY=',
+      ].join('\n');
+    }
+    return [
+      `CUSTOM_LLM_PROVIDER=${aiProviderDraft}`,
+      `CUSTOM_LLM_BASE_URL=${aiBaseUrlDraft.trim() || preset.baseUrl}`,
+      `CUSTOM_LLM_MODEL=${cleanModel}`,
+      aiKeyDraft.trim() ? `CUSTOM_LLM_API_KEY=${aiKeyDraft.trim()}` : '# CUSTOM_LLM_API_KEY= (opcional)',
+    ].join('\n');
+  }
+
+  function handleCopyEnvSnippet() {
+    navigator.clipboard?.writeText(buildEnvSnippetText());
     setCopiedEnvSnippet(true);
     setTimeout(() => setCopiedEnvSnippet(false), 1800);
   }
@@ -888,22 +1151,41 @@ export function SettingsPanel({
               </div>
             </section>
 
-            {/* Bloque 2 — Configuración del Motor de IA (Groq gratis paso a paso) */}
+            {/* Bloque 2 — Motor de IA universal (Groq por defecto u Ollama / Gemini / OpenAI / API propia) */}
             <section ref={iaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="30">
               {(() => {
                 const govAi = gov?.ai_engine || null;
                 const aiConfigured = Boolean(desktopAiConfig ? desktopAiConfig.configured : govAi?.configured);
                 const activeProvider = desktopAiConfig?.activeProvider || govAi?.active_provider || 'extractive';
                 const activeModel = desktopAiConfig?.activeModel || govAi?.active_model || 'omega-extractive-fallback';
+                const currentPreset = findAiPreset(aiProviderDraft);
+                const savedHint =
+                  aiProviderDraft === 'groq'
+                    ? desktopAiConfig?.groqHint
+                    : aiProviderDraft === 'openai'
+                      ? desktopAiConfig?.openAiHint
+                      : aiProviderDraft === 'omniroute'
+                        ? desktopAiConfig?.omniRouteHint
+                        : desktopAiConfig?.customProvider === aiProviderDraft
+                          ? desktopAiConfig?.customHint
+                          : '';
+                const docsTargetUrl =
+                  aiProviderDraft === 'omniroute' && desktopAiConfig?.omniRouteDashboardUrl
+                    ? desktopAiConfig.omniRouteDashboardUrl
+                    : currentPreset.docsUrl;
+                const detectedModels = Array.isArray(aiProbeResult?.detected_models)
+                  ? aiProbeResult.detected_models
+                  : [];
+
                 return (
                   <>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                          Motor de IA para el asistente
+                          Motor de IA (Groq por defecto o tu propia API)
                         </h2>
                         <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
-                          Sin una clave de IA, el chat solo muestra fragmentos literales. Con Groq gratuito responde en ~2 segundos.
+                          Usa Groq gratis por defecto o conecta Ollama local, Gemini, OpenAI, OpenRouter o cualquier endpoint `/v1`.
                         </p>
                       </div>
                       <span
@@ -913,182 +1195,222 @@ export function SettingsPanel({
                             : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/12 text-[#FFD60A]'
                         }`}
                       >
-                        {aiConfigured ? `Activo · ${activeProvider} (${activeModel})` : 'Sin clave · Modo extractivo'}
+                        {aiConfigured ? `Activo · ${activeProvider} (${activeModel})` : 'Sin motor · Modo extractivo'}
                       </span>
                     </div>
 
                     <form onSubmit={handleSaveAiEngine} className="apple-group rounded-[13px] p-4 sm:p-5 space-y-4">
-                      {/* Guía paso a paso */}
-                      <div className="rounded-[11px] border border-white/[0.08] bg-black/25 p-3.5 space-y-2.5">
+                      {/* Selector visual de proveedor */}
+                      <div className="space-y-2">
+                        <div className="text-[11.5px] font-medium text-[#D2D6E2]">
+                          Elige el proveedor de IA
+                        </div>
+                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Selector de proveedor de IA">
+                          {AI_PROVIDER_PRESETS.map((preset) => {
+                            const selected = aiProviderDraft === preset.id;
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => handleSelectAiPreset(preset.id)}
+                                className={`inline-flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.5 text-[12px] font-medium transition-all cursor-pointer ${
+                                  selected
+                                    ? 'border-[#2F6FED]/65 bg-[rgba(28,36,56,0.78)] text-white shadow-[0_0_18px_rgba(47,111,237,0.22)]'
+                                    : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:border-white/[0.18] hover:text-[#F2F2F4]'
+                                }`}
+                              >
+                                <span>{preset.label}</span>
+                                <span className={`font-tech text-[10px] ${selected ? 'text-[#9EC0FF]' : 'text-[#7F879B]'}`}>
+                                  {preset.badge}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Guía dinámica del proveedor elegido */}
+                      <div className="rounded-[11px] border border-white/[0.08] bg-black/25 p-3.5 space-y-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-[12.5px] font-semibold text-[#F2F2F4]">
-                            Cómo obtener tu clave gratuita de Groq en 1 minuto
+                            {currentPreset.summary}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => openExternalLink('https://console.groq.com/keys')}
-                            className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/50 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] transition-colors cursor-pointer"
-                          >
-                            <span>Abrir Groq Console</span>
-                            <ExternalLink className="h-3 w-3 text-[#6EA0FF]" />
-                          </button>
+                          {docsTargetUrl && (
+                            <button
+                              type="button"
+                              onClick={() => openExternalLink(docsTargetUrl)}
+                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/50 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] transition-colors cursor-pointer shrink-0"
+                            >
+                              <span>{currentPreset.docsLabel}</span>
+                              <ExternalLink className="h-3 w-3 text-[#6EA0FF]" />
+                            </button>
+                          )}
                         </div>
-                        <ol className="space-y-1 text-[12px] text-[#B8C0D0] list-decimal list-inside leading-relaxed">
-                          <li>Haz clic en <strong>Abrir Groq Console</strong> e inicia sesión gratis con tu cuenta de Google o GitHub (no pide tarjeta).</li>
-                          <li>Entra en <strong>API Keys → Create API Key</strong>, pon cualquier nombre (ej. <code className="font-tech text-[#F2F2F4]">omega</code>) y copia la clave que empieza por <code className="font-tech text-[#F2F2F4]">gsk_</code>.</li>
-                          <li>Pégala aquí abajo y pulsa <strong>Guardar y activar IA</strong>.</li>
+                        <ol className="space-y-1 text-[11.5px] text-[#B8C0D0] list-decimal list-inside leading-relaxed">
+                          {currentPreset.steps.map((step, i) => (
+                            <li key={i}>{step}</li>
+                          ))}
                         </ol>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-[1.35fr_1fr] gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label htmlFor="omega-groq-key" className="text-[12px] font-medium text-[#D2D6E2]">
-                              Clave API de Groq
+                      {/* Campos de conexión */}
+                      <div className="space-y-3">
+                        {(currentPreset.baseUrlEditable || aiProviderDraft !== 'groq') && (
+                          <div>
+                            <label htmlFor="omega-ai-base-url" className="block text-[12px] font-medium text-[#D2D6E2] mb-1">
+                              Endpoint Base URL (compatible con OpenAI `/v1`)
                             </label>
-                            {desktopAiConfig?.groqConfigured && (
-                              <span className="font-tech text-[10.5px] text-[#30D158]">
-                                Guardada ({desktopAiConfig.groqHint})
-                              </span>
-                            )}
-                          </div>
-                          <div className="relative flex items-center">
                             <input
-                              id="omega-groq-key"
-                              type={showGroqKey ? 'text' : 'password'}
-                              value={groqKeyDraft}
-                              onChange={(e) => setGroqKeyDraft(e.target.value)}
-                              placeholder={
-                                desktopAiConfig?.groqConfigured
-                                  ? 'Deja vacío para conservar la clave guardada o pega una nueva'
-                                  : 'gsk_...'
-                              }
-                              className="w-full h-9.5 pl-3 pr-10 rounded-[9px] bg-[#0A0A0C]/75 border border-white/[0.1] text-[12.5px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
+                              id="omega-ai-base-url"
+                              type="text"
+                              value={aiBaseUrlDraft}
+                              readOnly={!currentPreset.baseUrlEditable}
+                              onChange={(e) => setAiBaseUrlDraft(e.target.value)}
+                              placeholder="https://tu-servidor.com/v1 o http://host.docker.internal:11434/v1"
+                              className={`w-full h-9.5 px-3 rounded-[9px] border border-white/[0.1] text-[12.5px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED] ${
+                                currentPreset.baseUrlEditable ? 'bg-[#0A0A0C]/75' : 'bg-[#0A0A0C]/45 text-[#B8C0D0]'
+                              }`}
                             />
-                            <button
-                              type="button"
-                              aria-label={showGroqKey ? 'Ocultar clave' : 'Mostrar clave'}
-                              onClick={() => setShowGroqKey((v) => !v)}
-                              className="absolute right-2.5 text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
-                            >
-                              {showGroqKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                            </button>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-[1.25fr_1fr] gap-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label htmlFor="omega-ai-key" className="text-[12px] font-medium text-[#D2D6E2]">
+                                API Key {!currentPreset.keyRequired ? '(opcional)' : ''}
+                              </label>
+                              {savedHint && (
+                                <span className="font-tech text-[10.5px] text-[#30D158]">
+                                  Guardada ({savedHint})
+                                </span>
+                              )}
+                            </div>
+                            <div className="relative flex items-center">
+                              <input
+                                id="omega-ai-key"
+                                type={showAiKey ? 'text' : 'password'}
+                                value={aiKeyDraft}
+                                onChange={(e) => setAiKeyDraft(e.target.value)}
+                                placeholder={
+                                  savedHint
+                                    ? 'Deja vacío para conservar la clave guardada o pega otra'
+                                    : currentPreset.keyPlaceholder
+                                }
+                                className="w-full h-9.5 pl-3 pr-10 rounded-[9px] bg-[#0A0A0C]/75 border border-white/[0.1] text-[12.5px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
+                              />
+                              <button
+                                type="button"
+                                aria-label={showAiKey ? 'Ocultar clave' : 'Mostrar clave'}
+                                onClick={() => setShowAiKey((v) => !v)}
+                                className="absolute right-2.5 text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+                              >
+                                {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label htmlFor="omega-ai-model" className="block text-[12px] font-medium text-[#D2D6E2] mb-1">
+                              Modelo (Model ID)
+                            </label>
+                            <input
+                              id="omega-ai-model"
+                              type="text"
+                              value={aiModelDraft}
+                              onChange={(e) => setAiModelDraft(e.target.value)}
+                              placeholder={currentPreset.defaultModel || 'ej. llama3.2'}
+                              className="w-full h-9.5 px-3 rounded-[9px] bg-[#0A0A0C]/75 border border-white/[0.1] text-[12.5px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
+                            />
                           </div>
                         </div>
 
-                        <div>
-                          <label htmlFor="omega-groq-model" className="block text-[12px] font-medium text-[#D2D6E2] mb-1">
-                            Modelo en Groq
-                          </label>
-                          <select
-                            id="omega-groq-model"
-                            value={groqModelDraft}
-                            onChange={(e) => setGroqModelDraft(e.target.value)}
-                            className="w-full h-9.5 px-3 rounded-[9px] bg-[#0A0A0C]/75 border border-white/[0.1] text-[12.5px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
-                          >
-                            {GROQ_MODELS.map((m) => (
-                              <option key={m.value} value={m.value} className="bg-[#121216] text-[#F2F2F4]">
-                                {m.label}
-                              </option>
+                        {(currentPreset.suggestedModels.length > 0 || detectedModels.length > 0) && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <span className="text-[11px] text-[#9A9AA2] mr-1">
+                              {detectedModels.length > 0 ? 'Detectados:' : 'Sugeridos:'}
+                            </span>
+                            {(detectedModels.length > 0 ? detectedModels : currentPreset.suggestedModels).slice(0, 8).map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setAiModelDraft(m)}
+                                className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] transition-colors cursor-pointer ${
+                                  aiModelDraft === m
+                                    ? 'border-[#2F6FED]/65 bg-[#2F6FED]/20 text-white'
+                                    : 'border-white/[0.08] bg-white/[0.03] text-[#B8C0D0] hover:text-white'
+                                }`}
+                              >
+                                {m}
+                              </button>
                             ))}
-                          </select>
-                        </div>
+                          </div>
+                        )}
+
+                        {aiProbeResult && (
+                          <div
+                            className={`rounded-[9px] border px-3 py-2 text-[12px] ${
+                              aiProbeResult.ok
+                                ? 'border-[#30D158]/35 bg-[#30D158]/10 text-[#B8F2C7]'
+                                : 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FFDAD6]'
+                            }`}
+                          >
+                            {aiProbeResult.message}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Opciones avanzadas colapsables: OmniRoute / OpenAI */}
-                      <details className="rounded-[10px] border border-white/[0.07] bg-white/[0.02] px-3.5 py-2.5">
-                        <summary className="text-[12px] font-medium text-[#B8C0D0] hover:text-[#F2F2F4] cursor-pointer select-none">
-                          Opciones avanzadas: OmniRoute (multi-proveedor) u OpenAI
-                        </summary>
-                        <div className="pt-3 space-y-3 border-t border-white/[0.06] mt-2.5">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="space-y-0.5">
-                              <div className="text-[12.5px] font-medium text-[#F2F2F4]">
-                                Activar router OmniRoute local
-                              </div>
-                              <p className="text-[11.5px] text-[#9A9AA2]">
-                                Combina varias cuentas/APIs gratuitas con respaldo automático hacia Groq.
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {omniEnabledDraft && (
-                                <button
-                                  type="button"
-                                  onClick={() => openExternalLink(desktopAiConfig?.omniRouteDashboardUrl || 'http://127.0.0.1:20128/dashboard')}
-                                  className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer"
-                                >
-                                  <span>Abrir dashboard</span>
-                                  <ExternalLink className="h-3 w-3" />
-                                </button>
-                              )}
-                              <TogglePill
-                                checked={omniEnabledDraft}
-                                onChange={setOmniEnabledDraft}
-                                label="Activar router OmniRoute local"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label htmlFor="omega-omni-key" className="block text-[11.5px] text-[#9A9AA2] mb-1">
-                                Clave de OmniRoute {desktopAiConfig?.omniRouteKeyConfigured ? `(${desktopAiConfig.omniRouteHint})` : '(opcional)'}
-                              </label>
-                              <input
-                                id="omega-omni-key"
-                                type="password"
-                                value={omniKeyDraft}
-                                onChange={(e) => setOmniKeyDraft(e.target.value)}
-                                placeholder="sk-... generada en OmniRoute"
-                                className="w-full h-9 px-3 rounded-[8px] bg-[#0A0A0C]/75 border border-white/[0.09] text-[12px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
-                              />
-                            </div>
-                            <div>
-                              <label htmlFor="omega-openai-key" className="block text-[11.5px] text-[#9A9AA2] mb-1">
-                                Clave OpenAI {desktopAiConfig?.openAiConfigured ? `(${desktopAiConfig.openAiHint})` : '(opcional)'}
-                              </label>
-                              <input
-                                id="omega-openai-key"
-                                type="password"
-                                value={openAiKeyDraft}
-                                onChange={(e) => setOpenAiKeyDraft(e.target.value)}
-                                placeholder="sk-..."
-                                className="w-full h-9 px-3 rounded-[8px] bg-[#0A0A0C]/75 border border-white/[0.09] text-[12px] font-tech text-[#F2F2F4] placeholder:text-[#8E96AB] focus:outline-none focus:border-[#2F6FED]"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </details>
-
                       {isDesktopApp ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/[0.06]">
                           <span className="text-[11.5px] text-[#9A9AA2]">
-                            Se guarda cifrado localmente en tu equipo (<code className="font-tech">.env</code>) sin enviarse a terceros distintos al proveedor elegido.
+                            Se guarda localmente en <code className="font-tech">.env</code>; las claves de respaldo previas como Groq se mantienen como fallback.
                           </span>
-                          <button
-                            type="submit"
-                            disabled={savingAiConfig}
-                            className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] hover:brightness-110 disabled:opacity-55 px-4 py-2 text-[12.5px] font-medium text-white transition-all cursor-pointer"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" />
-                            <span>{savingAiConfig ? 'Aplicando y recargando...' : 'Guardar y activar IA'}</span>
-                          </button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={testingAiConn}
+                              onClick={handleTestAiConnection}
+                              className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.12] bg-white/[0.05] hover:bg-white/[0.09] disabled:opacity-55 px-3.5 py-2 text-[12px] font-medium text-[#F2F2F4] transition-all cursor-pointer"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${testingAiConn ? 'animate-spin' : ''}`} />
+                              <span>{testingAiConn ? 'Probando...' : 'Probar conexión'}</span>
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={savingAiConfig}
+                              className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] hover:brightness-110 disabled:opacity-55 px-4 py-2 text-[12.5px] font-medium text-white transition-all cursor-pointer"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              <span>{savingAiConfig ? 'Aplicando...' : 'Guardar y activar IA'}</span>
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="rounded-[10px] border border-white/[0.08] bg-black/30 p-3 space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#B8C0D0]">
-                            <span>Estás usando la versión web; agrega estas líneas en <code className="font-tech text-[#F2F2F4]">omega/.env</code> y reinicia el backend:</span>
-                            <button
-                              type="button"
-                              onClick={handleCopyEnvSnippet}
-                              className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.1] bg-white/[0.05] hover:bg-white/[0.1] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer"
-                            >
-                              {copiedEnvSnippet ? <Check className="h-3 w-3 text-[#30D158]" /> : <Copy className="h-3 w-3" />}
-                              <span>{copiedEnvSnippet ? 'Copiado' : 'Copiar .env'}</span>
-                            </button>
+                            <span>En modo web puedes probar la conexión aquí y copiar las variables para tu <code className="font-tech text-[#F2F2F4]">omega/.env</code>:</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={testingAiConn}
+                                onClick={handleTestAiConnection}
+                                className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.1] bg-white/[0.05] hover:bg-white/[0.1] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer"
+                              >
+                                <RefreshCw className={`h-3 w-3 ${testingAiConn ? 'animate-spin' : ''}`} />
+                                <span>{testingAiConn ? 'Probando...' : 'Probar'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCopyEnvSnippet}
+                                className="inline-flex items-center gap-1 rounded-[7px] border border-white/[0.1] bg-white/[0.05] hover:bg-white/[0.1] px-2.5 py-1 text-[11px] text-[#F2F2F4] cursor-pointer"
+                              >
+                                {copiedEnvSnippet ? <Check className="h-3 w-3 text-[#30D158]" /> : <Copy className="h-3 w-3" />}
+                                <span>{copiedEnvSnippet ? 'Copiado' : 'Copiar .env'}</span>
+                              </button>
+                            </div>
                           </div>
-                          <pre className="font-tech text-[11px] text-[#9A9AA2] overflow-x-auto">
-                            docker compose -f omega/docker-compose.yml up -d backend-java
+                          <pre className="font-tech text-[11px] text-[#9A9AA2] overflow-x-auto whitespace-pre-wrap">
+                            {buildEnvSnippetText()}
                           </pre>
                         </div>
                       )}

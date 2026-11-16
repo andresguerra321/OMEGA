@@ -691,6 +691,7 @@ export class DockerOrchestrator {
       dotEnv.GROQ_API_KEY,
       dotEnv.OPENAI_API_KEY,
       dotEnv.OMNIROUTE_API_KEY,
+      dotEnv.CUSTOM_LLM_API_KEY,
     ].filter(Boolean);
 
     const childEnv = {
@@ -868,10 +869,17 @@ export class DockerOrchestrator {
     const omniBase = String(dotEnv.OMNIROUTE_BASE_URL || '').trim();
     const omniKey = String(dotEnv.OMNIROUTE_API_KEY || '').trim();
     const omniPort = Number(dotEnv.OMNIROUTE_PORT || 20128) || 20128;
+    const customProvider = String(dotEnv.CUSTOM_LLM_PROVIDER || '').trim().toLowerCase();
+    const customBase = String(dotEnv.CUSTOM_LLM_BASE_URL || '').trim();
+    const customKey = String(dotEnv.CUSTOM_LLM_API_KEY || '').trim();
+    const customModel = String(dotEnv.CUSTOM_LLM_MODEL || '').trim();
 
     let activeProvider = 'extractive';
     let activeModel = 'omega-extractive-fallback';
-    if (omniBase) {
+    if (customBase) {
+      activeProvider = customProvider || 'custom';
+      activeModel = customModel || 'llama3.2';
+    } else if (omniBase) {
       activeProvider = 'omniroute';
       activeModel = String(dotEnv.OMNIROUTE_MODEL || 'auto').trim() || 'auto';
     } else if (openAiKey) {
@@ -883,7 +891,7 @@ export class DockerOrchestrator {
     }
 
     return {
-      configured: Boolean(groqKey || openAiKey || omniBase),
+      configured: Boolean(customBase || groqKey || openAiKey || omniBase),
       activeProvider,
       activeModel,
       groqConfigured: Boolean(groqKey),
@@ -891,11 +899,18 @@ export class DockerOrchestrator {
       groqModel: String(dotEnv.GROQ_MODEL || 'openai/gpt-oss-120b').trim() || 'openai/gpt-oss-120b',
       openAiConfigured: Boolean(openAiKey),
       openAiHint: maskSecretHint(openAiKey),
+      openAiChatModel: String(dotEnv.OMEGA_CHAT_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
       omniRouteEnabled: Boolean(omniBase),
       omniRouteKeyConfigured: Boolean(omniKey),
       omniRouteHint: maskSecretHint(omniKey),
       omniRouteModel: String(dotEnv.OMNIROUTE_MODEL || 'auto').trim() || 'auto',
       omniRouteDashboardUrl: `http://127.0.0.1:${omniPort}/dashboard`,
+      customConfigured: Boolean(customBase),
+      customProvider: customProvider || '',
+      customBaseUrl: customBase,
+      customKeyConfigured: Boolean(customKey),
+      customHint: maskSecretHint(customKey),
+      customModel,
       envFilePath: this.userDataDir ? path.join(this.userDataDir, '.env') : null,
     };
   }
@@ -922,6 +937,31 @@ export class DockerOrchestrator {
       updates.OPENAI_API_KEY = null;
     } else if (typeof payload.openAiApiKey === 'string' && sanitizeDotEnvValue(payload.openAiApiKey)) {
       updates.OPENAI_API_KEY = sanitizeDotEnvValue(payload.openAiApiKey);
+    }
+    if (typeof payload.openAiChatModel === 'string' && sanitizeDotEnvValue(payload.openAiChatModel)) {
+      updates.OMEGA_CHAT_MODEL = sanitizeDotEnvValue(payload.openAiChatModel);
+    }
+
+    if (payload.clearCustomProvider) {
+      updates.CUSTOM_LLM_PROVIDER = null;
+      updates.CUSTOM_LLM_BASE_URL = null;
+      updates.CUSTOM_LLM_API_KEY = null;
+      updates.CUSTOM_LLM_MODEL = null;
+    } else {
+      if (typeof payload.customProvider === 'string' && sanitizeDotEnvValue(payload.customProvider)) {
+        updates.CUSTOM_LLM_PROVIDER = sanitizeDotEnvValue(payload.customProvider).toLowerCase();
+      }
+      if (typeof payload.customBaseUrl === 'string' && sanitizeDotEnvValue(payload.customBaseUrl)) {
+        updates.CUSTOM_LLM_BASE_URL = sanitizeDotEnvValue(payload.customBaseUrl).replace(/\/+$/, '');
+      }
+      if (payload.clearCustomKey) {
+        updates.CUSTOM_LLM_API_KEY = null;
+      } else if (typeof payload.customApiKey === 'string' && sanitizeDotEnvValue(payload.customApiKey)) {
+        updates.CUSTOM_LLM_API_KEY = sanitizeDotEnvValue(payload.customApiKey);
+      }
+      if (typeof payload.customModel === 'string' && sanitizeDotEnvValue(payload.customModel)) {
+        updates.CUSTOM_LLM_MODEL = sanitizeDotEnvValue(payload.customModel);
+      }
     }
 
     if (typeof payload.omniRouteEnabled === 'boolean') {

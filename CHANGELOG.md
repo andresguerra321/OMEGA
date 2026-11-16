@@ -4,6 +4,14 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [1.6.0] - 2026-11-16
+
+### Selector Universal de IA ("Trae tu propia API" · Nivel Comercial)
+- **Soporte desacoplado de proveedor personal (`OmegaProperties.java`, `application.yml`, `OpenAiRagAnswerGenerator.java`, `docker-compose.yml`):** nuevas variables `CUSTOM_LLM_PROVIDER`, `CUSTOM_LLM_BASE_URL`, `CUSTOM_LLM_API_KEY` y `CUSTOM_LLM_MODEL` completamente separadas de `OPENAI_BASE_URL` de embeddings, con `host.docker.internal:host-gateway` para Ollama/LM Studio y cadena automática de respaldo (`Proveedor personal → OmniRoute → OpenAI → Groq → Extractivo`).
+- **Endpoint seguro `"Probar conexión"` (`POST /api/v1/system/ai-test` en `SystemController.java`):** verifica latencia real y lista los modelos detectados (`/models` con fallback a ping de chat) bloqueando destinos internos/metadata contra SSRF (`postgres`, `forensic-worker`, `169.254.*`, esquemas no-HTTP).
+- **UI comercial en Ajustes y Chat (`SettingsPanel.jsx`, `ChatWorkspace.jsx`, `api.js`):** selector visual con presets listos para **Groq (por defecto)**, **Ollama local (sin API key)**, **Gemini**, **OpenRouter**, **OpenAI**, **LM Studio**, **OmniRoute** y **API personalizada (`/v1`)**, chips de modelos sugeridos/detectados y botón **Probar conexión** antes de guardar.
+- **Orquestador Desktop (`dockerOrchestrator.js`):** lectura/escritura segura de configuraciones personalizadas desde Electron IPC y limpieza al cambiar de proveedor.
+
 ## [1.5.1] - 2026-11-16
 
 ### Asistente Paso a Paso de IA (BYOK sin consola) & OmniRoute

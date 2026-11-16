@@ -39,6 +39,7 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
     private final RestClient openAiRestClient;
     private final RestClient groqRestClient;
     private final RestClient omniRouteRestClient;
+    private final RestClient customChatRestClient;
     private final OmegaProperties properties;
 
     public OpenAiRagAnswerGenerator(
@@ -59,6 +60,12 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
                 ? "http://127.0.0.1:20128/v1"
                 : omniBase.trim().replaceAll("/+$", "");
         this.omniRouteRestClient = buildGatewayClient(normalizedOmniBase, 5, 45);
+
+        String customBase = properties.rag().customChatBaseUrl();
+        String normalizedCustomBase = (customBase == null || customBase.isBlank())
+                ? "http://host.docker.internal:11434/v1"
+                : customBase.trim().replaceAll("/+$", "");
+        this.customChatRestClient = buildGatewayClient(normalizedCustomBase, 8, 90);
     }
 
     private static RestClient buildGatewayClient(String baseUrl, int connectSec, int readSec) {
@@ -107,6 +114,25 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
 
     List<LlmTarget> resolveLlmTargets() {
         List<LlmTarget> targets = new ArrayList<>();
+
+        String customBase = properties.rag().customChatBaseUrl();
+        if (customBase != null && !customBase.isBlank()) {
+            String customProvider = properties.rag().customChatProvider();
+            String resolvedProvider = (customProvider == null || customProvider.isBlank())
+                    ? "custom"
+                    : customProvider.trim().toLowerCase();
+            String customModel = properties.rag().customChatModel();
+            String resolvedCustomModel = (customModel == null || customModel.isBlank())
+                    ? "llama3.2"
+                    : customModel.trim();
+            String customKey = properties.rag().customChatApiKey();
+            targets.add(new LlmTarget(
+                    resolvedProvider,
+                    customChatRestClient,
+                    resolvedCustomModel,
+                    customKey == null ? "" : customKey.trim()
+            ));
+        }
 
         String omniBase = properties.rag().omniRouteBaseUrl();
         if (omniBase != null && !omniBase.isBlank()) {

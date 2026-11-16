@@ -161,4 +161,29 @@ class OpenAiRagAnswerGeneratorTest {
                 .contains("Alcance documental (RNF9)");
         server.verify();
     }
+
+    @Test
+    void prioritizesCustomProviderWithoutApiKeyOverGroqForLocalOllamaAndKeepsFallbackChain() {
+        OmegaProperties props = new OmegaProperties(
+                new OmegaProperties.Security("secret", 3600, "iss", true, "", "internal"),
+                new OmegaProperties.Ingest("/tmp", 1024, "/usr/share/tessdata"),
+                new OmegaProperties.Rag(
+                        "openai", "text-embedding-3-small", 1536,
+                        "https://api.openai.com/v1", "", 16, 1, "gpt-4o-mini",
+                        60, 1.0, 1.0, 500, 1000, 120,
+                        "https://api.groq.com/openai/v1", "gsk_backup_test", "openai/gpt-oss-120b",
+                        "", "", "auto",
+                        "ollama", "http://host.docker.internal:11434/v1", "", "llama3.2"
+                ),
+                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
+                new OmegaProperties.Cti("../corpus_mvp/iocs")
+        );
+
+        OpenAiRagAnswerGenerator generator = new OpenAiRagAnswerGenerator(RestClient.create(), props);
+        List<OpenAiRagAnswerGenerator.LlmTarget> chain = generator.resolveLlmTargets();
+        assertThat(chain).extracting(OpenAiRagAnswerGenerator.LlmTarget::providerName)
+                .containsExactly("ollama", "groq");
+        assertThat(generator.resolveActiveGeneratorModel()).isEqualTo("llama3.2");
+        assertThat(chain.get(0).apiKey()).isEmpty();
+    }
 }

@@ -668,7 +668,7 @@ export function ChatWorkspace({
                       Modo extractivo activo · Falta conectar un motor de IA
                     </div>
                     <p className="text-[11.5px] text-[#E6CFA8] leading-snug">
-                      Obtén una clave gratuita en Groq en 1 minuto para recibir respuestas completas y ordenadas.
+                      Conecta tu clave gratuita de Groq (1 min) o usa tu propia API (Ollama local, Gemini, OpenAI, OpenRouter o endpoint `/v1`).
                     </p>
                   </div>
                   <button

@@ -81,6 +81,10 @@ omega:
     omni-route-base-url: ${OMNIROUTE_BASE_URL:}
     omni-route-api-key: ${OMNIROUTE_API_KEY:}
     omni-route-model: ${OMNIROUTE_MODEL:auto}
+    custom-chat-provider: ${CUSTOM_LLM_PROVIDER:}
+    custom-chat-base-url: ${CUSTOM_LLM_BASE_URL:}
+    custom-chat-api-key: ${CUSTOM_LLM_API_KEY:}
+    custom-chat-model: ${CUSTOM_LLM_MODEL:}
     rrf-k: 60
     vector-weight: 1.0
     lexical-weight: 1.0

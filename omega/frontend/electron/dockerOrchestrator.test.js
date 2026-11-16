@@ -462,3 +462,41 @@ test('reapplyAiConfig persiste clave Groq en userData/.env y recarga backend-jav
     fs.rmSync(userDataDir, { recursive: true, force: true });
   }
 });
+
+test('reapplyAiConfig soporta Ollama local sin API key y luego permite volver a Groq limpiando CUSTOM_LLM', async () => {
+  const composeDir = createTempComposeDir({ envContent: null });
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-ollama-ud-'));
+  try {
+    const orchestrator = new DockerOrchestrator({
+      userDataDir,
+      electronDir: path.join(composeDir, 'frontend', 'electron'),
+      findComposeRootFn: () => composeDir,
+      pollIntervalMs: 5,
+      checkDockerFn: async () => {},
+      probeHttpHealthFn: async () => ({ healthy: true, statusCode: 200 }),
+      runCommandFn: async () => ({ code: 0, stdout: '', stderr: '' }),
+    });
+    const ollamaRes = await orchestrator.reapplyAiConfig({
+      customProvider: 'ollama',
+      customBaseUrl: 'http://host.docker.internal:11434/v1/',
+      customModel: 'qwen2.5:7b',
+      groqApiKey: 'gsk_backup123456',
+    });
+    assert.equal(ollamaRes.ok, true);
+    assert.equal(ollamaRes.config.customConfigured, true);
+    assert.equal(ollamaRes.config.activeProvider, 'ollama');
+    assert.equal(ollamaRes.config.activeModel, 'qwen2.5:7b');
+    assert.equal(ollamaRes.config.customBaseUrl, 'http://host.docker.internal:11434/v1');
+
+    const backToGroq = await orchestrator.reapplyAiConfig({
+      clearCustomProvider: true,
+      groqModel: 'openai/gpt-oss-120b',
+    });
+    assert.equal(backToGroq.ok, true);
+    assert.equal(backToGroq.config.customConfigured, false);
+    assert.equal(backToGroq.config.activeProvider, 'groq');
+  } finally {
+    fs.rmSync(composeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+});

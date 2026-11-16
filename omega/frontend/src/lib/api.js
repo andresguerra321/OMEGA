@@ -681,6 +681,18 @@ export async function fetchSystemGovernance() {
   return apiFetch('/system/governance');
 }
 
+export async function testAiEngineConnection({ provider, baseUrl, apiKey, model } = {}) {
+  return apiFetch('/system/ai-test', {
+    method: 'POST',
+    body: {
+      provider: provider || 'groq',
+      base_url: baseUrl || '',
+      api_key: apiKey || '',
+      model: model || '',
+    },
+  });
+}
+
 export async function fetchAuditLogs(limit = 30) {
   return apiFetch(`/audit-logs?limit=${encodeURIComponent(limit)}`);
 }

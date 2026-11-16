@@ -6,17 +6,28 @@ import com.omega.platform.cti.PublicSchemaSupport;
 import com.omega.platform.cti.StixCatalogService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
+import java.net.InetAddress;
+import java.net.URI;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Gobernanza agregada del sistema: estadísticas del corpus público, aislamiento de tenant
@@ -164,13 +175,22 @@ public class SystemController {
 
     private AiEngineStatus resolveAiEngineStatus() {
         OmegaProperties.Rag rag = properties.rag();
+        boolean customConfigured = rag.customChatBaseUrl() != null && !rag.customChatBaseUrl().isBlank();
         boolean omniConfigured = rag.omniRouteBaseUrl() != null && !rag.omniRouteBaseUrl().isBlank();
         boolean openAiConfigured = rag.openAiApiKey() != null && !rag.openAiApiKey().isBlank();
         boolean groqConfigured = rag.groqApiKey() != null && !rag.groqApiKey().isBlank();
+        String customProvider = (rag.customChatProvider() == null || rag.customChatProvider().isBlank())
+                ? "custom"
+                : rag.customChatProvider().trim().toLowerCase(Locale.ROOT);
 
         String activeProvider = "extractive";
         String activeModel = "omega-extractive-fallback";
-        if (omniConfigured) {
+        if (customConfigured) {
+            activeProvider = customProvider;
+            activeModel = (rag.customChatModel() == null || rag.customChatModel().isBlank())
+                    ? "llama3.2"
+                    : rag.customChatModel().trim();
+        } else if (omniConfigured) {
             activeProvider = "omniroute";
             activeModel = (rag.omniRouteModel() == null || rag.omniRouteModel().isBlank()) ? "auto" : rag.omniRouteModel().trim();
         } else if (openAiConfigured) {
@@ -182,13 +202,194 @@ public class SystemController {
         }
 
         return new AiEngineStatus(
-                omniConfigured || openAiConfigured || groqConfigured,
+                customConfigured || omniConfigured || openAiConfigured || groqConfigured,
                 activeProvider,
                 activeModel,
                 groqConfigured,
                 openAiConfigured,
-                omniConfigured
+                omniConfigured,
+                customConfigured,
+                customConfigured ? customProvider : ""
         );
+    }
+
+    @PostMapping("/ai-test")
+    public AiConnectionTestResponse testAiConnection(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @RequestBody(required = false) AiConnectionTestRequest request
+    ) {
+        if (principal == null) {
+            return new AiConnectionTestResponse(false, 0L, "", List.of(), "Sesión requerida para probar la conexión.");
+        }
+        String provider = request == null || request.provider() == null ? "groq" : request.provider().trim().toLowerCase(Locale.ROOT);
+        String resolvedUrl = resolveProbeBaseUrl(provider, request == null ? null : request.baseUrl());
+        String safetyError = validateProbeTargetUrl(resolvedUrl);
+        if (safetyError != null) {
+            return new AiConnectionTestResponse(false, 0L, "", List.of(), safetyError);
+        }
+
+        String apiKey = resolveProbeApiKey(provider, request == null ? null : request.apiKey());
+        String model = request == null || request.model() == null ? "" : request.model().trim();
+
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(4));
+        factory.setReadTimeout(Duration.ofSeconds(12));
+        RestClient probeClient = RestClient.builder()
+                .baseUrl(resolvedUrl)
+                .requestFactory(factory)
+                .build();
+
+        long startNs = System.nanoTime();
+        try {
+            ModelsListResponse modelsResp = probeClient.get()
+                    .uri("/models")
+                    .headers(h -> {
+                        if (!apiKey.isBlank()) {
+                            h.setBearerAuth(apiKey);
+                        }
+                    })
+                    .retrieve()
+                    .body(ModelsListResponse.class);
+
+            long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            List<String> detected = new ArrayList<>();
+            if (modelsResp != null && modelsResp.data() != null) {
+                for (ModelItem item : modelsResp.data()) {
+                    if (item != null && item.id() != null && !item.id().isBlank()) {
+                        detected.add(item.id().trim());
+                        if (detected.size() >= 12) break;
+                    }
+                }
+            }
+            String summary = detected.isEmpty()
+                    ? String.format("Conexión verificada con %s en %d ms.", provider, latencyMs)
+                    : String.format("Conexión verificada (%d ms · %d modelos detectados).", latencyMs, detected.size());
+            return new AiConnectionTestResponse(true, latencyMs, resolvedUrl, detected, summary);
+        } catch (RestClientResponseException httpEx) {
+            int code = httpEx.getStatusCode().value();
+            if ((code == 404 || code == 405) && !model.isBlank()) {
+                return runFallbackChatPing(probeClient, resolvedUrl, apiKey, model, provider, startNs);
+            }
+            long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            String detail = code == 401 || code == 403
+                    ? "API Key rechazada o faltante (HTTP " + code + ")."
+                    : "El servidor respondió HTTP " + code + ".";
+            return new AiConnectionTestResponse(false, latencyMs, resolvedUrl, List.of(), detail);
+        } catch (Exception ex) {
+            long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            return new AiConnectionTestResponse(
+                    false,
+                    latencyMs,
+                    resolvedUrl,
+                    List.of(),
+                    "No se pudo conectar con " + resolvedUrl + ". Verifica que el servicio esté activo y accesible."
+            );
+        }
+    }
+
+    private AiConnectionTestResponse runFallbackChatPing(
+            RestClient probeClient,
+            String resolvedUrl,
+            String apiKey,
+            String model,
+            String provider,
+            long startNs
+    ) {
+        try {
+            probeClient.post()
+                    .uri("/chat/completions")
+                    .headers(h -> {
+                        if (!apiKey.isBlank()) {
+                            h.setBearerAuth(apiKey);
+                        }
+                    })
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "model", model,
+                            "max_tokens", 8,
+                            "messages", List.of(Map.of("role", "user", "content", "ok"))
+                    ))
+                    .retrieve()
+                    .toBodilessEntity();
+            long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            return new AiConnectionTestResponse(
+                    true,
+                    latencyMs,
+                    resolvedUrl,
+                    List.of(model),
+                    String.format("Conexión verificada con %s (%s) en %d ms.", provider, model, latencyMs)
+            );
+        } catch (RestClientResponseException ex) {
+            long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            return new AiConnectionTestResponse(false, latencyMs, resolvedUrl, List.of(), "HTTP " + ex.getStatusCode().value() + " al probar el modelo " + model + ".");
+        } catch (Exception ex) {
+            long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
+            return new AiConnectionTestResponse(false, latencyMs, resolvedUrl, List.of(), "Error de red probando " + resolvedUrl + ".");
+        }
+    }
+
+    private String resolveProbeBaseUrl(String provider, String providedBaseUrl) {
+        if (providedBaseUrl != null && !providedBaseUrl.isBlank()) {
+            return providedBaseUrl.trim().replaceAll("/+$", "");
+        }
+        return switch (provider) {
+            case "groq" -> "https://api.groq.com/openai/v1";
+            case "openai" -> "https://api.openai.com/v1";
+            case "gemini" -> "https://generativelanguage.googleapis.com/v1beta/openai";
+            case "openrouter" -> "https://openrouter.ai/api/v1";
+            case "ollama" -> "http://host.docker.internal:11434/v1";
+            case "lmstudio" -> "http://host.docker.internal:1234/v1";
+            case "omniroute" -> "http://omniroute:20128/v1";
+            default -> properties.rag().customChatBaseUrl() == null ? "" : properties.rag().customChatBaseUrl().trim().replaceAll("/+$", "");
+        };
+    }
+
+    private String resolveProbeApiKey(String provider, String providedKey) {
+        if (providedKey != null && !providedKey.isBlank()) {
+            return providedKey.trim();
+        }
+        OmegaProperties.Rag rag = properties.rag();
+        return switch (provider) {
+            case "groq" -> rag.groqApiKey() == null ? "" : rag.groqApiKey().trim();
+            case "openai" -> rag.openAiApiKey() == null ? "" : rag.openAiApiKey().trim();
+            case "omniroute" -> rag.omniRouteApiKey() == null ? "" : rag.omniRouteApiKey().trim();
+            default -> rag.customChatApiKey() == null ? "" : rag.customChatApiKey().trim();
+        };
+    }
+
+    static String validateProbeTargetUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            return "Indica la URL base del proveedor (ej. http://host.docker.internal:11434/v1 o https://...).";
+        }
+        URI uri;
+        try {
+            uri = URI.create(rawUrl.trim());
+        } catch (IllegalArgumentException ex) {
+            return "URL base inválida.";
+        }
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (!scheme.equals("http") && !scheme.equals("https")) {
+            return "Solo se admiten endpoints http:// o https://.";
+        }
+        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
+        if (host.isBlank()) {
+            return "La URL debe incluir un host válido.";
+        }
+        if (host.equals("postgres") || host.equals("omega-db") || host.equals("omega_postgres")
+                || host.equals("forensic-worker") || host.equals("omega-api") || host.equals("omega_forensic_worker")
+                || host.equals("metadata.google.internal") || host.equals("metadata.goog")
+                || host.startsWith("169.254.") || host.equals("100.100.100.200")) {
+            return "Destino bloqueado por seguridad interna.";
+        }
+        try {
+            InetAddress addr = InetAddress.getByName(host);
+            if (addr.isLinkLocalAddress()) {
+                return "Destino link-local bloqueado por seguridad.";
+            }
+        } catch (Exception ignored) {
+            // Host remoto o aún no resoluble; el cliente informará si no conecta
+        }
+        return null;
     }
 
     private long queryCount(String sql) {
@@ -228,8 +429,33 @@ public class SystemController {
             @JsonProperty("active_model") String activeModel,
             @JsonProperty("groq_configured") boolean groqConfigured,
             @JsonProperty("openai_configured") boolean openaiConfigured,
-            @JsonProperty("omniroute_configured") boolean omnirouteConfigured
+            @JsonProperty("omniroute_configured") boolean omnirouteConfigured,
+            @JsonProperty("custom_configured") boolean customConfigured,
+            @JsonProperty("custom_provider") String customProvider
     ) {
+    }
+
+    public record AiConnectionTestRequest(
+            String provider,
+            @JsonProperty("base_url") String baseUrl,
+            @JsonProperty("api_key") String apiKey,
+            String model
+    ) {
+    }
+
+    public record AiConnectionTestResponse(
+            boolean ok,
+            @JsonProperty("latency_ms") long latencyMs,
+            @JsonProperty("tested_url") String testedUrl,
+            @JsonProperty("detected_models") List<String> detectedModels,
+            String message
+    ) {
+    }
+
+    public record ModelsListResponse(List<ModelItem> data) {
+    }
+
+    public record ModelItem(String id) {
     }
 
     public record GovernanceResponse(

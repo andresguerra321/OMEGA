@@ -53,7 +53,11 @@ public record OmegaProperties(
             String groqModel,
             String omniRouteBaseUrl,
             String omniRouteApiKey,
-            String omniRouteModel
+            String omniRouteModel,
+            String customChatProvider,
+            String customChatBaseUrl,
+            String customChatApiKey,
+            String customChatModel
     ) {
         @ConstructorBinding
         public Rag {
@@ -95,7 +99,11 @@ public record OmegaProperties(
                     "openai/gpt-oss-120b",
                     "",
                     "",
-                    "auto"
+                    "auto",
+                    "",
+                    "",
+                    "",
+                    ""
             );
         }
 
@@ -138,7 +146,61 @@ public record OmegaProperties(
                     groqModel,
                     "",
                     "",
-                    "auto"
+                    "auto",
+                    "",
+                    "",
+                    "",
+                    ""
+            );
+        }
+
+        public Rag(
+                String embeddingProvider,
+                String embeddingModel,
+                int embeddingDimensions,
+                String openAiBaseUrl,
+                String openAiApiKey,
+                int openAiBatchSize,
+                int openAiMaxRetries,
+                String chatModel,
+                int rrfK,
+                double vectorWeight,
+                double lexicalWeight,
+                int minChunkTokens,
+                int maxChunkTokens,
+                int chunkOverlapTokens,
+                String groqBaseUrl,
+                String groqApiKey,
+                String groqModel,
+                String omniRouteBaseUrl,
+                String omniRouteApiKey,
+                String omniRouteModel
+        ) {
+            this(
+                    embeddingProvider,
+                    embeddingModel,
+                    embeddingDimensions,
+                    openAiBaseUrl,
+                    openAiApiKey,
+                    openAiBatchSize,
+                    openAiMaxRetries,
+                    chatModel,
+                    rrfK,
+                    vectorWeight,
+                    lexicalWeight,
+                    minChunkTokens,
+                    maxChunkTokens,
+                    chunkOverlapTokens,
+                    groqBaseUrl,
+                    groqApiKey,
+                    groqModel,
+                    omniRouteBaseUrl,
+                    omniRouteApiKey,
+                    omniRouteModel,
+                    "",
+                    "",
+                    "",
+                    ""
             );
         }
     }
