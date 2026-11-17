@@ -455,23 +455,20 @@ public class StixCatalogService {
         }
 
         Map<String, ManifestBundleMeta> byFilename = new HashMap<>();
-        for (JsonNode entry : manifest.path("bundles")) {
-            String filename = entry.path("filename").asText("").trim();
-            String expectedSha = entry.path("expected_sha256").asText("").trim().toLowerCase(Locale.ROOT);
-            String organization = entry.path("organization").asText("").trim();
-            String sourceUrl = entry.path("source_url").asText("").trim();
-            String publishedDate = entry.path("published_date").asText("").trim();
-
-            if (filename.isBlank() || expectedSha.length() != 64) {
-                throw new IllegalStateException("Entrada inválida o sin expected_sha256 en stix_manifest.json: " + filename);
+        JsonNode bundlesNode = manifest.path("bundles");
+        if (bundlesNode.isObject()) {
+            var fields = bundlesNode.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                String filename = field.getKey() == null ? "" : field.getKey().trim();
+                JsonNode entry = field.getValue();
+                registerManifestEntry(byFilename, trustedOrgs, filename, entry);
             }
-            if (!trustedOrgs.contains(organization)) {
-                throw new IllegalStateException("Organización no confiable en stix_manifest.json para " + filename + ": " + organization);
+        } else {
+            for (JsonNode entry : bundlesNode) {
+                String filename = entry.path("filename").asText("").trim();
+                registerManifestEntry(byFilename, trustedOrgs, filename, entry);
             }
-            if (!sourceUrl.startsWith("https://")) {
-                throw new IllegalStateException("URL de origen STIX debe usar HTTPS en " + filename);
-            }
-            byFilename.put(filename, new ManifestBundleMeta(filename, expectedSha, organization, sourceUrl, publishedDate));
         }
 
         for (Path file : stixFiles) {
@@ -486,6 +483,29 @@ public class StixCatalogService {
             }
         }
         return byFilename;
+    }
+
+    private static void registerManifestEntry(
+            Map<String, ManifestBundleMeta> byFilename,
+            Set<String> trustedOrgs,
+            String filename,
+            JsonNode entry
+    ) {
+        String expectedSha = entry.path("expected_sha256").asText("").trim().toLowerCase(Locale.ROOT);
+        String organization = entry.path("organization").asText("").trim();
+        String sourceUrl = entry.path("source_url").asText("").trim();
+        String publishedDate = entry.path("published_date").asText("").trim();
+
+        if (filename.isBlank() || expectedSha.length() != 64) {
+            throw new IllegalStateException("Entrada inválida o sin expected_sha256 en stix_manifest.json: " + filename);
+        }
+        if (!trustedOrgs.contains(organization)) {
+            throw new IllegalStateException("Organización no confiable en stix_manifest.json para " + filename + ": " + organization);
+        }
+        if (!sourceUrl.startsWith("https://")) {
+            throw new IllegalStateException("URL de origen STIX debe usar HTTPS en " + filename);
+        }
+        byFilename.put(filename, new ManifestBundleMeta(filename, expectedSha, organization, sourceUrl, publishedDate));
     }
 
     private static String computeSha256Hex(Path file) {

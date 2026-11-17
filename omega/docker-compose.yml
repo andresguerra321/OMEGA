@@ -54,6 +54,8 @@ services:
       OMEGA_STIX_MANIFEST_PATH: /app/corpus_mvp/iocs/stix_manifest.json
     volumes:
       - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
+      - ./corpus_mvp/pdfs:/app/corpus_mvp/pdfs:ro
+      - ./corpus_mvp/corpus_manifest.json:/app/corpus_mvp/corpus_manifest.json:ro
     expose:
       - "8000"
     networks:
@@ -111,6 +113,11 @@ services:
       CUSTOM_LLM_API_KEY: ${CUSTOM_LLM_API_KEY:-}
       CUSTOM_LLM_MODEL: ${CUSTOM_LLM_MODEL:-}
       OMEGA_BOOTSTRAP_SECRET: ${OMEGA_BOOTSTRAP_SECRET:-}
+      OMEGA_SMTP_HOST: ${OMEGA_SMTP_HOST:-}
+      OMEGA_SMTP_PORT: ${OMEGA_SMTP_PORT:-587}
+      OMEGA_SMTP_USERNAME: ${OMEGA_SMTP_USERNAME:-}
+      OMEGA_SMTP_PASSWORD: ${OMEGA_SMTP_PASSWORD:-}
+      OMEGA_SMTP_FROM: ${OMEGA_SMTP_FROM:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -120,6 +127,8 @@ services:
       - /tmp/omega_ingest:rw,noexec,nosuid,nodev,size=512m,mode=0700,uid=10001,gid=10001
     volumes:
       - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
+      - ./corpus_mvp/pdfs:/app/corpus_mvp/pdfs:ro
+      - ./corpus_mvp/corpus_manifest.json:/app/corpus_mvp/corpus_manifest.json:ro
     networks:
       - omega-public
       - omega-private

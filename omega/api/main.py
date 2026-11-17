@@ -24,6 +24,7 @@ from forensic_engine import analyze_forensic_payload
 from host_forensics import run_host_live_audit
 from ios_backup_crypto import decrypt_binary_artifacts_in_ram, unlock_encrypted_ios_backup_in_ram
 from link_verifier import inspect_suspicious_link
+from owasp_rules import scan_artifacts_with_owasp
 from schemas import (
     IocRawRequest,
     IocVerifyResponse,
@@ -271,12 +272,14 @@ async def yara_scan_in_ram(files: list[UploadFile] = File(...)):
             artifacts.append({"filename": f.filename or "artifact.bin", "bytes": raw})
 
         hits = await asyncio.to_thread(scan_artifacts_with_yara, artifacts)
+        owasp_hits = await asyncio.to_thread(scan_artifacts_with_owasp, artifacts)
         return {
             "files_scanned": len(artifacts),
-            "total_hits": len(hits),
+            "total_hits": len(hits) + len(owasp_hits),
             "yara_hits": hits,
+            "owasp_hits": owasp_hits,
             "yara_engine": get_yara_engine_status(),
-            "ephemeral_notice": "Escaneo YARA ejecutado íntegramente en memoria RAM sin escritura en disco (RNF4).",
+            "ephemeral_notice": "Escaneo YARA + OWASP ejecutado íntegramente en memoria RAM sin escritura en disco (RNF4).",
         }
     finally:
         for art in artifacts:

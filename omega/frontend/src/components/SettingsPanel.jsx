@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import {
   createTenantUser,
+  fetchApiHealth,
   fetchAuditLogs,
   fetchSystemGovernance,
   getWorkspaceId,
@@ -586,12 +587,20 @@ export function SettingsPanel({
     setTestingAiConn(true);
     setAiProbeResult(null);
     try {
-      const res = await testAiEngineConnection({
+      const payload = {
         provider: aiProviderDraft,
         baseUrl: aiBaseUrlDraft.trim(),
         apiKey: aiKeyDraft.trim(),
         model: aiModelDraft.trim(),
-      });
+      };
+      let res;
+      try {
+        res = await testAiEngineConnection(payload);
+      } catch (firstErr) {
+        if (!firstErr?.isNetworkError) throw firstErr;
+        await new Promise((r) => setTimeout(r, 1500));
+        res = await testAiEngineConnection(payload);
+      }
       setAiProbeResult(res || { ok: false, message: 'Sin respuesta del backend.' });
       if (res?.ok && Array.isArray(res.detected_models) && res.detected_models.length > 0 && !aiModelDraft.trim()) {
         setAiModelDraft(res.detected_models[0]);
@@ -659,6 +668,11 @@ export function SettingsPanel({
         }
         if (res?.ok) {
           setAiKeyDraft('');
+          for (let attempt = 0; attempt < 15; attempt += 1) {
+            const h = await fetchApiHealth().catch(() => ({ status: 'down' }));
+            if (h?.status === 'ok') break;
+            await new Promise((r) => setTimeout(r, 1200));
+          }
           setActionBanner({
             tone: 'clean',
             message: res.config?.configured

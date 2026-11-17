@@ -208,12 +208,22 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
     finalBody = JSON.stringify(body);
   }
 
-  const response = await fetch(url, {
-    method,
-    headers: reqHeaders,
-    body: finalBody,
-    credentials: shouldIncludeCredentials() ? 'include' : 'same-origin',
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: reqHeaders,
+      body: finalBody,
+      credentials: shouldIncludeCredentials() ? 'include' : 'same-origin',
+    });
+  } catch (networkErr) {
+    const err = new Error(
+      'No se pudo conectar con el núcleo backend (:8080). Si acabas de guardar ajustes o iniciar OMEGA, espera unos segundos a que termine de arrancar e inténtalo de nuevo.'
+    );
+    err.cause = networkErr;
+    err.isNetworkError = true;
+    throw err;
+  }
 
   let parsed = null;
   const contentType = response.headers.get('content-type') || '';
@@ -331,6 +341,32 @@ export async function loginWithPassword({ tenantSlug, email, password }) {
     },
   });
   return saveAuthSession(tokenRes);
+}
+
+export async function requestPasswordReset({ email, tenantSlug } = {}) {
+  const normalizedSlug = String(tenantSlug || '').trim().toLowerCase();
+  return apiFetch('/auth/password-reset/request', {
+    method: 'POST',
+    skipAuth: true,
+    body: {
+      email: String(email || '').trim().toLowerCase(),
+      ...(normalizedSlug ? { tenantSlug: normalizedSlug } : {}),
+    },
+  });
+}
+
+export async function confirmPasswordReset({ email, code, newPassword, tenantSlug } = {}) {
+  const normalizedSlug = String(tenantSlug || '').trim().toLowerCase();
+  return apiFetch('/auth/password-reset/confirm', {
+    method: 'POST',
+    skipAuth: true,
+    body: {
+      email: String(email || '').trim().toLowerCase(),
+      code: String(code || '').trim(),
+      newPassword,
+      ...(normalizedSlug ? { tenantSlug: normalizedSlug } : {}),
+    },
+  });
 }
 
 export async function registerAccount({

@@ -4,9 +4,13 @@ import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.security.SessionCookieHelper;
 import com.omega.platform.service.AuthService;
+import com.omega.platform.service.PasswordResetService;
 import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
 import com.omega.platform.web.dto.AuthDtos.CreateTenantUserRequest;
 import com.omega.platform.web.dto.AuthDtos.LoginRequest;
+import com.omega.platform.web.dto.AuthDtos.PasswordResetConfirmRequest;
+import com.omega.platform.web.dto.AuthDtos.PasswordResetRequest;
+import com.omega.platform.web.dto.AuthDtos.PasswordResetResponse;
 import com.omega.platform.web.dto.AuthDtos.PrincipalMeResponse;
 import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
@@ -37,19 +41,29 @@ public class AuthController {
     private final AuthService authService;
     private final OmegaProperties properties;
     private final SessionCookieHelper sessionCookieHelper;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(AuthService authService, OmegaProperties properties) {
-        this(authService, properties, null);
+        this(authService, properties, null, null);
+    }
+
+    public AuthController(
+            AuthService authService,
+            OmegaProperties properties,
+            SessionCookieHelper sessionCookieHelper) {
+        this(authService, properties, sessionCookieHelper, null);
     }
 
     @Autowired
     public AuthController(
             AuthService authService,
             OmegaProperties properties,
-            SessionCookieHelper sessionCookieHelper) {
+            SessionCookieHelper sessionCookieHelper,
+            @Autowired(required = false) PasswordResetService passwordResetService) {
         this.authService = authService;
         this.properties = properties;
         this.sessionCookieHelper = sessionCookieHelper;
+        this.passwordResetService = passwordResetService;
     }
 
     @GetMapping("/config")
@@ -135,6 +149,22 @@ public class AuthController {
     @GetMapping("/me")
     public PrincipalMeResponse me(@AuthenticationPrincipal OmegaPrincipal principal) {
         return authService.resolveCurrentPrincipal(principal);
+    }
+
+    @PostMapping("/password-reset/request")
+    public PasswordResetResponse requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
+        if (passwordResetService == null) {
+            throw new IllegalStateException("Servicio de recuperación no inicializado.");
+        }
+        return passwordResetService.requestReset(request);
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public PasswordResetResponse confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        if (passwordResetService == null) {
+            throw new IllegalStateException("Servicio de recuperación no inicializado.");
+        }
+        return passwordResetService.confirmReset(request);
     }
 
     private void attachSessionCookieIfAvailable(

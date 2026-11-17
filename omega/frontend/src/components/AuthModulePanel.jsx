@@ -19,9 +19,11 @@ import {
   X,
 } from 'lucide-react';
 import {
+  confirmPasswordReset,
   getAuthConfig,
   loginWithPassword,
   registerAccount,
+  requestPasswordReset,
 } from '../lib/api';
 import {
   validateAuthLoginForm,
@@ -83,6 +85,15 @@ export function AuthAccessForm({
     password: '',
     bootstrapSecret: '',
   });
+
+  const [recoverForm, setRecoverForm] = useState({
+    email: '',
+    code: '',
+    newPassword: '',
+    step: 'request',
+    statusMessage: '',
+  });
+  const [showRecoverPwd, setShowRecoverPwd] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +199,80 @@ export function AuthAccessForm({
     }
   }
 
+  async function handleRecoverRequest(e) {
+    e.preventDefault();
+    const cleanEmail = recoverForm.email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorState({ tab: 'recover', message: 'Ingresa un correo electrónico válido.' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    setLoading(true);
+    setErrorState({ tab: 'recover', message: '' });
+    try {
+      const res = await requestPasswordReset({
+        email: cleanEmail,
+        tenantSlug: loginForm.tenantSlug,
+      });
+      setRecoverForm((p) => ({
+        ...p,
+        email: cleanEmail,
+        step: 'confirm',
+        statusMessage: res?.message || 'Código generado. Revisa tu correo o los logs locales.',
+      }));
+    } catch (err) {
+      setErrorState({
+        tab: 'recover',
+        message: err?.message || 'No se pudo solicitar el código de recuperación.',
+      });
+      setShakeTick((n) => n + 1);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRecoverConfirm(e) {
+    e.preventDefault();
+    const cleanCode = recoverForm.code.trim();
+    if (!/^\d{6}$/.test(cleanCode)) {
+      setErrorState({ tab: 'recover', message: 'El código debe tener exactamente 6 dígitos.' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    if (recoverForm.newPassword.length < 12) {
+      setErrorState({ tab: 'recover', message: 'La nueva contraseña debe tener al menos 12 caracteres (letras y números o símbolos).' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    setLoading(true);
+    setErrorState({ tab: 'recover', message: '' });
+    try {
+      const res = await confirmPasswordReset({
+        email: recoverForm.email,
+        code: cleanCode,
+        newPassword: recoverForm.newPassword,
+        tenantSlug: loginForm.tenantSlug,
+      });
+      setLoginForm((p) => ({ ...p, email: recoverForm.email, password: '' }));
+      setRecoverForm({
+        email: '',
+        code: '',
+        newPassword: '',
+        step: 'request',
+        statusMessage: res?.message || 'Contraseña actualizada correctamente.',
+      });
+      setTab('login');
+    } catch (err) {
+      setErrorState({
+        tab: 'recover',
+        message: err?.message || 'No se pudo restablecer la contraseña.',
+      });
+      setShakeTick((n) => n + 1);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const pwdLength = regForm.password.length;
   const pwdReady = pwdLength >= 12;
 
@@ -254,7 +339,145 @@ export function AuthAccessForm({
         </div>
       )}
 
-      {tab === 'login' ? (
+      {tab === 'recover' ? (
+        <form
+          key="form-recover"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void guard(() =>
+              recoverForm.step === 'confirm' ? handleRecoverConfirm(e) : handleRecoverRequest(e)
+            );
+          }}
+          className={`motion-safe:animate-panel-switch ${minimalChrome ? 'space-y-3.5' : 'space-y-3'}`}
+        >
+          {recoverForm.statusMessage && (
+            <div className="rounded-[10px] border border-[#30D158]/35 bg-[#30D158]/10 px-3.5 py-2.5 text-[12px] text-[#CFFAD9]">
+              {recoverForm.statusMessage}
+            </div>
+          )}
+
+          <div>
+            <label
+              htmlFor={`${uid}-recover-email`}
+              className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
+            >
+              Correo electrónico registrado
+            </label>
+            <div className="group relative flex items-center">
+              <Mail className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
+              <input
+                id={`${uid}-recover-email`}
+                type="email"
+                required
+                disabled={recoverForm.step === 'confirm'}
+                value={recoverForm.email}
+                onChange={(e) => setRecoverForm((p) => ({ ...p, email: e.target.value }))}
+                placeholder="nombre@organizacion.org"
+                className={`w-full h-10 pl-9.5 pr-3.5 rounded-[10px] border text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 disabled:opacity-65 ${inputSurface}`}
+              />
+            </div>
+          </div>
+
+          {recoverForm.step === 'confirm' && (
+            <>
+              <div>
+                <label
+                  htmlFor={`${uid}-recover-code`}
+                  className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
+                >
+                  Código de recuperación (6 dígitos)
+                </label>
+                <div className="group relative flex items-center">
+                  <KeyRound className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
+                  <input
+                    id={`${uid}-recover-code`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={recoverForm.code}
+                    onChange={(e) =>
+                      setRecoverForm((p) => ({ ...p, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))
+                    }
+                    placeholder="123456"
+                    className={`w-full h-10 pl-9.5 pr-3.5 rounded-[10px] border text-[13px] font-mono tracking-widest text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputSurface}`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor={`${uid}-recover-pwd`}
+                  className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
+                >
+                  Nueva contraseña (mín. 12 caracteres)
+                </label>
+                <div className="group relative flex items-center">
+                  <Lock className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
+                  <input
+                    id={`${uid}-recover-pwd`}
+                    type={showRecoverPwd ? 'text' : 'password'}
+                    required
+                    minLength={12}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={recoverForm.newPassword}
+                    onChange={(e) => setRecoverForm((p) => ({ ...p, newPassword: e.target.value }))}
+                    placeholder="Mín. 12 caracteres con letras y números"
+                    className={`w-full h-10 pl-9.5 pr-10 rounded-[10px] border text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputSurface}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRecoverPwd((v) => !v)}
+                    aria-label={showRecoverPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    className="absolute right-2.5 p-1.5 rounded-[6px] text-[#9FA6B8] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  >
+                    {showRecoverPwd ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="group w-full h-10.5 mt-1 rounded-[10px] bg-[#2F6FED] border border-white/15 hover:brightness-110 disabled:opacity-50 text-[13px] font-medium text-white inline-flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
+          >
+            <span>
+              {loading
+                ? 'Procesando...'
+                : recoverForm.step === 'confirm'
+                  ? 'Restablecer contraseña'
+                  : 'Enviar código de recuperación'}
+            </span>
+            {!loading && <ArrowRight className="h-3.5 w-3.5" />}
+          </button>
+
+          <div className="flex items-center justify-between pt-1 text-[11.5px]">
+            {recoverForm.step === 'confirm' ? (
+              <button
+                type="button"
+                onClick={() => setRecoverForm((p) => ({ ...p, step: 'request', code: '' }))}
+                className="text-[#9FA6B8] hover:text-white cursor-pointer"
+              >
+                Reenviar código
+              </button>
+            ) : <span />}
+            <button
+              type="button"
+              onClick={() => {
+                setRecoverForm((p) => ({ ...p, step: 'request', statusMessage: '' }));
+                setTab('login');
+              }}
+              className="text-[#6EA0FF] hover:text-white font-medium cursor-pointer"
+            >
+              Volver a iniciar sesión
+            </button>
+          </div>
+        </form>
+      ) : tab === 'login' ? (
         <form
           key="form-login"
           noValidate
@@ -338,7 +561,7 @@ export function AuthAccessForm({
             )}
           </div>
 
-          <div className="pt-0.5">
+          <div className="pt-0.5 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => setShowOrgSlug((v) => !v)}
@@ -349,8 +572,23 @@ export function AuthAccessForm({
               }`}
             >
               {showOrgSlug
-                ? 'Ocultar identificador de organización'
-                : '¿Tu correo pertenece a más de una organización?'}
+                ? 'Ocultar organización'
+                : '¿Varias organizaciones?'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRecoverForm((p) => ({
+                  ...p,
+                  email: loginForm.email || p.email,
+                  step: 'request',
+                  statusMessage: '',
+                }));
+                setTab('recover');
+              }}
+              className="text-[11.5px] font-medium text-[#6EA0FF] hover:text-white transition-colors duration-150 cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
             </button>
 
             {showOrgSlug && (
@@ -731,12 +969,18 @@ export function AuthModulePanel({
                   <OmegaLogo size={40} />
                   <div key={gateTab} className="min-w-0 motion-safe:animate-fade-in">
                     <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#F2F2F4] leading-tight">
-                      {gateTab === 'register' ? 'Crear cuenta' : 'Iniciar sesión'}
+                      {gateTab === 'register'
+                        ? 'Crear cuenta'
+                        : gateTab === 'recover'
+                          ? 'Recuperar contraseña'
+                          : 'Iniciar sesión'}
                     </h1>
                     <p className="mt-0.5 text-[12.5px] text-[#C2C7D6]">
                       {gateTab === 'register'
                         ? 'Crea tu espacio privado para investigar documentos y alertas'
-                        : 'Accede a tu espacio de análisis'}
+                        : gateTab === 'recover'
+                          ? 'Solicita un código de verificación para restablecer tu clave'
+                          : 'Accede a tu espacio de análisis'}
                     </p>
                   </div>
                 </div>

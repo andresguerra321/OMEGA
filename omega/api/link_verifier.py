@@ -6,6 +6,7 @@ import urllib.request
 from urllib.parse import urlparse
 
 from cti_db import lookup_iocs_detailed
+from owasp_rules import evaluate_url_owasp
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ def _passive_cert_count(domain: str) -> int | None:
             f"https://crt.sh/?q={q}&output=json",
             headers={"User-Agent": "Omega-CTI-Passive-Check/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=4) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
             return len(data) if isinstance(data, list) else 0
     except Exception as exc:
@@ -129,19 +130,33 @@ def inspect_suspicious_link(raw_url: str) -> dict:
     cti_matches = lookup_iocs_detailed(candidates)
 
     cert_records = _passive_cert_count(host) if not IPV4_HOST_RE.match(host) else None
+    owasp_findings = evaluate_url_owasp(normalized_url, host, parsed, cert_records)
+
+    for finding in owasp_findings:
+        msg = f"[{finding['rule_id']}] {finding['title']}: {finding['detail']}"
+        if msg not in heuristics and finding["rule_id"] != "OWASP-A02-NO-TLS":
+            heuristics.append(msg)
+
+    has_high_owasp = any(f.get("severity") == "HIGH" for f in owasp_findings)
+    has_medium_owasp = any(f.get("severity") == "MEDIUM" for f in owasp_findings)
+    total_signals = len(heuristics) + len(owasp_findings)
 
     if cti_matches:
         risk_level = "HIGH"
-        verdict = "Peligroso — Coincidencia con infraestructura de spyware documentada"
+        verdict = "Peligroso — Coincidencia con infraestructura maliciosa documentada (CTI)"
         recommendation = "No abras este enlace. Si llegó por SMS, WhatsApp o correo, conserva una captura y revisa tu dispositivo en 'Revisar mi equipo'."
-    elif len(heuristics) >= 2:
+    elif has_high_owasp or total_signals >= 3:
+        risk_level = "HIGH"
+        verdict = "Alto riesgo — Reglas OWASP y señales heurísticas activadas"
+        recommendation = "No abras este enlace ni descargues archivos desde él. Presenta señales de alto riesgo (OWASP / distribución no verificada / ofuscación)."
+    elif has_medium_owasp or len(heuristics) >= 2:
         risk_level = "MEDIUM"
-        verdict = "Precaución — Presenta múltiples señales de enlace ofuscado o desechable"
-        recommendation = "Evita abrir el enlace directamente; verifica por otro canal con el remitente antes de interactuar."
+        verdict = "Precaución — Sin cifrado/certificado válido o con alertas OWASP"
+        recommendation = "Evita ingresar datos o descargar archivos. El enlace carece de cifrado TLS/certificados verificados o presenta señales sospechosas."
     else:
         risk_level = "LOW"
-        verdict = "Sin coincidencias conocidas en la base de inteligencia"
-        recommendation = "No aparece en los reportes indexados actualmente, pero mantén precaución si proviene de un remitente desconocido."
+        verdict = "Sin alertas OWASP ni coincidencias conocidas en la base CTI"
+        recommendation = "Usa HTTPS y no aparece en reportes ni reglas OWASP actuales, pero mantén precaución si proviene de un remitente desconocido."
 
     return {
         "normalized_url": normalized_url,
@@ -153,8 +168,9 @@ def inspect_suspicious_link(raw_url: str) -> dict:
         "verdict": verdict,
         "recommendation": recommendation,
         "heuristics": heuristics,
+        "owasp_findings": owasp_findings,
         "passive_ct_certificates": cert_records,
         "cti_matches": cti_matches,
-        "privacy_notice": "Verificación 100% pasiva: Omega no realizó ninguna conexión al enlace ni almacenó la URL consultada (RNF4, RNF7).",
+        "privacy_notice": "Verificación 100% pasiva (CTI + OWASP + CT): Omega no realizó ninguna conexión al enlace ni almacenó la URL consultada (RNF4, RNF7).",
     }
 

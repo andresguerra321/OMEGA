@@ -122,4 +122,40 @@ public final class AuthDtos {
             this(userId, tenantId, null, email, role);
         }
     }
+
+    public record PasswordResetRequest(
+            @NotBlank(message = "El correo electrónico es obligatorio")
+            @Size(max = 255, message = "El correo no puede superar 255 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido (ej. nombre@organizacion.org)")
+            String email,
+            @Size(max = 80, message = "El identificador de organización no puede superar 80 caracteres")
+            @Pattern(regexp = ValidationPatterns.OPTIONAL_TENANT_SLUG_REGEX, message = "Identificador de organización inválido")
+            String tenantSlug
+    ) {
+    }
+
+    public record PasswordResetConfirmRequest(
+            @NotBlank(message = "El correo electrónico es obligatorio")
+            @Size(max = 255, message = "El correo no puede superar 255 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido")
+            String email,
+            @NotBlank(message = "El código de recuperación es obligatorio")
+            @Pattern(regexp = "^\\d{6}$", message = "El código de recuperación debe tener 6 dígitos")
+            String code,
+            @NotBlank(message = "La nueva contraseña es obligatoria")
+            @Size(min = 12, max = 128, message = "La contraseña debe tener entre 12 y 128 caracteres")
+            @Pattern(regexp = ValidationPatterns.STRONG_PASSWORD_REGEX, message = "La contraseña debe incluir letras y números o símbolos, sin espacios al inicio ni al final")
+            String newPassword,
+            @Size(max = 80, message = "El identificador de organización no puede superar 80 caracteres")
+            @Pattern(regexp = ValidationPatterns.OPTIONAL_TENANT_SLUG_REGEX, message = "Identificador de organización inválido")
+            String tenantSlug
+    ) {
+    }
+
+    public record PasswordResetResponse(
+            boolean ok,
+            String deliveryMode,
+            String message
+    ) {
+    }
 }

@@ -29,6 +29,17 @@ spring:
     multipart:
       max-file-size: ${OMEGA_MAX_UPLOAD_SIZE:64MB}
       max-request-size: ${OMEGA_MAX_REQUEST_SIZE:128MB}
+  mail:
+    host: ${OMEGA_SMTP_HOST:}
+    port: ${OMEGA_SMTP_PORT:587}
+    username: ${OMEGA_SMTP_USERNAME:}
+    password: ${OMEGA_SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${OMEGA_SMTP_AUTH:true}
+          starttls:
+            enable: ${OMEGA_SMTP_STARTTLS:true}
 
 server:
   port: 8080
@@ -43,6 +54,9 @@ server:
     include-stacktrace: never
 
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
