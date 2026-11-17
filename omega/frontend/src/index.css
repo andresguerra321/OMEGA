@@ -74,6 +74,23 @@
     overflow: hidden;
   }
 
+  html,
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  pre,
+  code,
+  [contenteditable="true"],
+  .select-text {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
   ::selection {
     background: rgba(47, 111, 237, 0.36);
     color: #F2F2F4;

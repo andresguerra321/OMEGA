@@ -341,7 +341,71 @@ export async function loginWithPassword({ tenantSlug, email, password }) {
       password,
     },
   });
+  if (tokenRes?.mfaRequired) {
+    return {
+      mfaRequired: true,
+      mfaChallengeToken: tokenRes.mfaChallengeToken,
+      mfaMethod: tokenRes.mfaMethod,
+      maskedEmail: tokenRes.maskedEmail,
+      email: tokenRes.email,
+    };
+  }
   return saveAuthSession(tokenRes);
+}
+
+export async function verifyMfaLogin({ challengeToken, code } = {}) {
+  const tokenRes = await apiFetch('/auth/mfa/verify', {
+    method: 'POST',
+    skipAuth: true,
+    body: {
+      challengeToken: String(challengeToken || '').trim(),
+      code: String(code || '').trim(),
+    },
+  });
+  return saveAuthSession(tokenRes);
+}
+
+export async function resendMfaEmail(challengeToken) {
+  return apiFetch('/auth/mfa/resend-email', {
+    method: 'POST',
+    skipAuth: true,
+    body: {
+      challengeToken: String(challengeToken || '').trim(),
+    },
+  });
+}
+
+export async function fetchMfaStatus() {
+  return apiFetch('/auth/mfa/status');
+}
+
+export async function setupTotpMfa() {
+  return apiFetch('/auth/mfa/totp/setup', { method: 'POST' });
+}
+
+export async function confirmTotpMfa(code) {
+  return apiFetch('/auth/mfa/totp/confirm', {
+    method: 'POST',
+    body: { code: String(code || '').trim() },
+  });
+}
+
+export async function setupEmailMfa() {
+  return apiFetch('/auth/mfa/email/setup', { method: 'POST' });
+}
+
+export async function confirmEmailMfa(code) {
+  return apiFetch('/auth/mfa/email/confirm', {
+    method: 'POST',
+    body: { code: String(code || '').trim() },
+  });
+}
+
+export async function disableMfa(password) {
+  return apiFetch('/auth/mfa/disable', {
+    method: 'POST',
+    body: { password },
+  });
 }
 
 export async function requestPasswordReset({ email, tenantSlug } = {}) {

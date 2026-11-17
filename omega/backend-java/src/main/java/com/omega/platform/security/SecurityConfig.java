@@ -67,7 +67,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout",
                                 "/api/v1/auth/register", "/api/v1/auth/tenants/register",
-                                "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm")
+                                "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
+                                "/api/v1/auth/mfa/verify", "/api/v1/auth/mfa/resend-email")
                         .permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())

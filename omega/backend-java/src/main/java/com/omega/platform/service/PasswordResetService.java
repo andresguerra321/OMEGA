@@ -20,17 +20,20 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 
 @Service
 public class PasswordResetService {
@@ -101,18 +104,7 @@ public class PasswordResetService {
 
             if (smtpConfigured) {
                 try {
-                    SimpleMailMessage message = new SimpleMailMessage();
-                    message.setFrom(smtpFrom);
-                    message.setTo(user.getEmail());
-                    message.setSubject("OMEGA — Código de recuperación de contraseña");
-                    message.setText(
-                            "Hola " + user.getFullName() + ",\n\n"
-                                    + "Recibimos una solicitud para restablecer tu contraseña en OMEGA.\n"
-                                    + "Tu código de verificación (válido por 15 minutos) es:\n\n"
-                                    + "    " + code + "\n\n"
-                                    + "Si no solicitaste este cambio, ignora este mensaje.\n"
-                    );
-                    mailSender.send(message);
+                    sendStyledRecoveryEmail(user, code);
                 } catch (Exception ex) {
                     log.warn("No se pudo enviar correo SMTP de recuperación a {}: {}", maskEmail(email), ex.getMessage());
                     log.info("[OMEGA-AUTH-RECOVERY] Código de recuperación para {}: {} (válido {} min)", maskEmail(email), code, TOKEN_TTL_MINUTES);
@@ -181,6 +173,96 @@ public class PasswordResetService {
                 "completed",
                 "Contraseña actualizada correctamente. Ya puedes iniciar sesión con tu nueva clave."
         );
+    }
+
+    private void sendStyledRecoveryEmail(UserEntity user, String code) throws Exception {
+        MimeMessage mimeMessage = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, StandardCharsets.UTF_8.name());
+        helper.setFrom(smtpFrom, "OMEGA Security");
+        helper.setTo(user.getEmail());
+        helper.setSubject("OMEGA — Código de recuperación de contraseña");
+
+        ClassPathResource bannerResource = new ClassPathResource("mail/omega-banner.jpg");
+        boolean hasBanner = bannerResource.exists();
+        String safeName = HtmlUtils.htmlEscape(user.getFullName() == null ? "Analista" : user.getFullName());
+        String bannerBlock = hasBanner
+                ? "<tr><td style=\"padding:0;line-height:0;\"><a href=\"#omega\" style=\"display:block;text-decoration:none;border:0;outline:none;cursor:default;\"><img src=\"cid:omegaBanner\" alt=\"OMEGA\" width=\"560\" border=\"0\" style=\"display:block;width:100%;max-width:560px;height:auto;border:0;border-top-left-radius:16px;border-top-right-radius:16px;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;\" /></a></td></tr>"
+                : "";
+
+        String plainText = "Hola " + user.getFullName() + ",\n\n"
+                + "Recibimos una solicitud para restablecer tu contraseña en OMEGA.\n"
+                + "Tu código de verificación (válido por 15 minutos) es: " + code + "\n\n"
+                + "Si no solicitaste este cambio, ignora este mensaje.\n";
+
+        String html = """
+                <!DOCTYPE html>
+                <html lang="es">
+                <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+                <body style="margin:0;padding:0;background-color:#0A0A0C;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#F2F2F4;">
+                  <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="background-color:#0A0A0C;padding:32px 16px;">
+                    <tr>
+                      <td align="center">
+                        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%%;max-width:560px;background-color:#141418;border:1px solid rgba(255,255,255,0.10);border-radius:16px;overflow:hidden;">
+                          %s
+                          <tr>
+                            <td style="padding:32px 32px 28px 32px;">
+                              <div style="display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid rgba(47,111,237,0.45);background-color:rgba(47,111,237,0.14);color:#8BB2FF;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">
+                                Recuperación de Acceso · Zero-Trust
+                              </div>
+                              <h1 style="margin:16px 0 8px 0;font-size:22px;line-height:1.3;font-weight:600;color:#F2F2F4;">
+                                Restablecer contraseña
+                              </h1>
+                              <p style="margin:0 0 22px 0;font-size:14px;line-height:1.6;color:#C2C7D6;">
+                                Hola <strong style="color:#F2F2F4;">%s</strong>, recibimos una solicitud para cambiar la contraseña de tu cuenta en <strong style="color:#F2F2F4;">OMEGA</strong>. Usa el siguiente código de verificación dentro de los próximos <strong style="color:#F2F2F4;">15 minutos</strong>:
+                              </p>
+                              <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="margin:0 0 22px 0;">
+                                <tr>
+                                  <td align="center" style="padding:18px 12px;background-color:#0A0A0C;border:1px solid rgba(47,111,237,0.35);border-radius:14px;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0">
+                                      <tr>
+                                        %s
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                              <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9A9AA2;">
+                                Si no solicitaste este restablecimiento, puedes ignorar este correo de forma segura; tu contraseña actual seguirá intacta.
+                              </p>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding:16px 32px;background-color:#0E0E12;border-top:1px solid rgba(255,255,255,0.06);font-size:11.5px;color:#7C7D87;">
+                              OMEGA · Plataforma Defensiva de Cyber Threat Intelligence &amp; Forensics
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </body>
+                </html>
+                """.formatted(bannerBlock, safeName, buildOtpCellsHtml(code));
+
+        helper.setText(plainText, html);
+        if (hasBanner) {
+            helper.addInline("omegaBanner", bannerResource, "image/jpeg");
+        }
+        mailSender.send(mimeMessage);
+    }
+
+    private static String buildOtpCellsHtml(String code) {
+        StringBuilder cells = new StringBuilder();
+        for (int i = 0; i < code.length(); i++) {
+            cells.append("<td style=\"padding:0 4px;user-select:none;-webkit-user-select:none;\">")
+                    .append("<div style=\"width:44px;height:54px;line-height:54px;text-align:center;")
+                    .append("background-color:#141418;border:1px solid rgba(47,111,237,0.55);border-radius:12px;")
+                    .append("font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;")
+                    .append("font-size:26px;font-weight:700;color:#F2F2F4;user-select:none;-webkit-user-select:none;\">")
+                    .append(code.charAt(i))
+                    .append("</div></td>");
+        }
+        return cells.toString();
     }
 
     private Optional<UserEntity> resolveTargetUser(String email, String tenantSlug) {

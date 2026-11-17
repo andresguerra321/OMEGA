@@ -28,6 +28,7 @@ import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -46,6 +47,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final OmegaProperties properties;
     private final LoginRateLimiter loginRateLimiter;
+    private final TwoFactorService twoFactorService;
 
     public AuthService(
             TenantRepository tenantRepository,
@@ -55,6 +57,20 @@ public class AuthService {
             JwtService jwtService,
             OmegaProperties properties,
             LoginRateLimiter loginRateLimiter) {
+        this(tenantRepository, userRepository, expedienteRepository, passwordEncoder, jwtService,
+                properties, loginRateLimiter, null);
+    }
+
+    @Autowired
+    public AuthService(
+            TenantRepository tenantRepository,
+            UserRepository userRepository,
+            ExpedienteRepository expedienteRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            OmegaProperties properties,
+            LoginRateLimiter loginRateLimiter,
+            @Autowired(required = false) TwoFactorService twoFactorService) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
         this.expedienteRepository = expedienteRepository;
@@ -62,6 +78,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.properties = properties;
         this.loginRateLimiter = loginRateLimiter;
+        this.twoFactorService = twoFactorService;
     }
 
     @Transactional
@@ -117,12 +134,12 @@ public class AuthService {
         return issueTokenResponse(adminUser, tenant.getSlug());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthTokenResponse login(LoginRequest request) {
         return login(request, "local");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthTokenResponse login(LoginRequest request, String clientIp) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         String rawSlug = request.tenantSlug() == null ? "" : request.tenantSlug().trim().toLowerCase(Locale.ROOT);
@@ -169,7 +186,7 @@ public class AuthService {
                 throw new BadCredentialsException("Credenciales inválidas");
             }
 
-            return issueTokenResponse(user, tenant.getSlug());
+            return finishLoginOrMfaChallenge(user, tenant);
         }
 
         List<UserEntity> matches = userRepository.findAllActiveByEmailIgnoreCase(normalizedEmail).stream()
@@ -188,6 +205,33 @@ public class AuthService {
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
+        return finishLoginOrMfaChallenge(user, tenant);
+    }
+
+    private AuthTokenResponse finishLoginOrMfaChallenge(UserEntity user, TenantEntity tenant) {
+        if (twoFactorService != null && user.isMfaEnabled()) {
+            TwoFactorService.LoginChallengeResult challenge = twoFactorService.createLoginChallenge(user);
+            return AuthTokenResponse.mfaChallenge(
+                    user.getId(),
+                    user.getTenantId(),
+                    tenant.getSlug(),
+                    user.getEmail(),
+                    user.getRole(),
+                    challenge.challengeToken(),
+                    challenge.method(),
+                    challenge.maskedEmail());
+        }
+        return issueTokenResponse(user, tenant.getSlug());
+    }
+
+    @Transactional(noRollbackFor = BadCredentialsException.class)
+    public AuthTokenResponse completeMfaLogin(String challengeToken, String code) {
+        if (twoFactorService == null) {
+            throw new IllegalStateException("Servicio 2FA no disponible");
+        }
+        UserEntity user = twoFactorService.verifyLoginChallenge(challengeToken, code);
+        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
+                .orElseThrow(() -> new BadCredentialsException("Organización no disponible"));
         return issueTokenResponse(user, tenant.getSlug());
     }
 

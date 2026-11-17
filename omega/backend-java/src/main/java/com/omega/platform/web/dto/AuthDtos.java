@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public final class AuthDtos {
@@ -96,8 +97,48 @@ public final class AuthDtos {
             UUID tenantId,
             String tenantSlug,
             String email,
-            Role role
+            Role role,
+            boolean mfaRequired,
+            String mfaChallengeToken,
+            String mfaMethod,
+            String maskedEmail
     ) {
+        public AuthTokenResponse(
+                String accessToken,
+                String tokenType,
+                long expiresInSeconds,
+                UUID userId,
+                UUID tenantId,
+                String tenantSlug,
+                String email,
+                Role role) {
+            this(accessToken, tokenType, expiresInSeconds, userId, tenantId, tenantSlug, email, role,
+                    false, null, null, null);
+        }
+
+        public static AuthTokenResponse mfaChallenge(
+                UUID userId,
+                UUID tenantId,
+                String tenantSlug,
+                String email,
+                Role role,
+                String challengeToken,
+                String mfaMethod,
+                String maskedEmail) {
+            return new AuthTokenResponse(
+                    null,
+                    "MfaChallenge",
+                    300L,
+                    userId,
+                    tenantId,
+                    tenantSlug,
+                    email,
+                    role,
+                    true,
+                    challengeToken,
+                    mfaMethod,
+                    maskedEmail);
+        }
     }
 
     public record UserSummaryResponse(
@@ -155,6 +196,67 @@ public final class AuthDtos {
     public record PasswordResetResponse(
             boolean ok,
             String deliveryMode,
+            String message
+    ) {
+    }
+
+    public record MfaVerifyLoginRequest(
+            @NotBlank(message = "El token de verificación es obligatorio")
+            String challengeToken,
+            @NotBlank(message = "El código de verificación es obligatorio")
+            @Size(min = 6, max = 16, message = "El código de verificación no es válido")
+            String code
+    ) {
+    }
+
+    public record MfaChallengeActionRequest(
+            @NotBlank(message = "El token de verificación es obligatorio")
+            String challengeToken
+    ) {
+    }
+
+    public record MfaCodeRequest(
+            @NotBlank(message = "El código de verificación es obligatorio")
+            @Pattern(regexp = "^\\d{6}$", message = "Ingresa un código de 6 dígitos")
+            String code
+    ) {
+    }
+
+    public record MfaDisableRequest(
+            @NotBlank(message = "Debes confirmar tu contraseña actual")
+            @Size(min = 1, max = 128, message = "Contraseña inválida")
+            String password
+    ) {
+    }
+
+    public record MfaStatusResponse(
+            boolean mfaEnabled,
+            String method,
+            int backupCodesRemaining,
+            boolean smtpConfigured
+    ) {
+    }
+
+    public record MfaTotpSetupResponse(
+            String secret,
+            String otpauthUri,
+            String issuer,
+            String accountName
+    ) {
+    }
+
+    public record MfaEmailSetupResponse(
+            boolean sent,
+            String deliveryMode,
+            String maskedEmail,
+            String message
+    ) {
+    }
+
+    public record MfaActivationResponse(
+            boolean mfaEnabled,
+            String method,
+            List<String> backupCodes,
             String message
     ) {
     }

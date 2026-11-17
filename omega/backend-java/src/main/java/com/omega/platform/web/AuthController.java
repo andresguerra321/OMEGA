@@ -5,9 +5,18 @@ import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.security.SessionCookieHelper;
 import com.omega.platform.service.AuthService;
 import com.omega.platform.service.PasswordResetService;
+import com.omega.platform.service.TwoFactorService;
 import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
 import com.omega.platform.web.dto.AuthDtos.CreateTenantUserRequest;
 import com.omega.platform.web.dto.AuthDtos.LoginRequest;
+import com.omega.platform.web.dto.AuthDtos.MfaActivationResponse;
+import com.omega.platform.web.dto.AuthDtos.MfaChallengeActionRequest;
+import com.omega.platform.web.dto.AuthDtos.MfaCodeRequest;
+import com.omega.platform.web.dto.AuthDtos.MfaDisableRequest;
+import com.omega.platform.web.dto.AuthDtos.MfaEmailSetupResponse;
+import com.omega.platform.web.dto.AuthDtos.MfaStatusResponse;
+import com.omega.platform.web.dto.AuthDtos.MfaTotpSetupResponse;
+import com.omega.platform.web.dto.AuthDtos.MfaVerifyLoginRequest;
 import com.omega.platform.web.dto.AuthDtos.PasswordResetConfirmRequest;
 import com.omega.platform.web.dto.AuthDtos.PasswordResetRequest;
 import com.omega.platform.web.dto.AuthDtos.PasswordResetResponse;
@@ -42,16 +51,17 @@ public class AuthController {
     private final OmegaProperties properties;
     private final SessionCookieHelper sessionCookieHelper;
     private final PasswordResetService passwordResetService;
+    private final TwoFactorService twoFactorService;
 
     public AuthController(AuthService authService, OmegaProperties properties) {
-        this(authService, properties, null, null);
+        this(authService, properties, null, null, null);
     }
 
     public AuthController(
             AuthService authService,
             OmegaProperties properties,
             SessionCookieHelper sessionCookieHelper) {
-        this(authService, properties, sessionCookieHelper, null);
+        this(authService, properties, sessionCookieHelper, null, null);
     }
 
     @Autowired
@@ -59,11 +69,13 @@ public class AuthController {
             AuthService authService,
             OmegaProperties properties,
             SessionCookieHelper sessionCookieHelper,
-            @Autowired(required = false) PasswordResetService passwordResetService) {
+            @Autowired(required = false) PasswordResetService passwordResetService,
+            @Autowired(required = false) TwoFactorService twoFactorService) {
         this.authService = authService;
         this.properties = properties;
         this.sessionCookieHelper = sessionCookieHelper;
         this.passwordResetService = passwordResetService;
+        this.twoFactorService = twoFactorService;
     }
 
     @GetMapping("/config")
@@ -167,11 +179,72 @@ public class AuthController {
         return passwordResetService.confirmReset(request);
     }
 
+    @PostMapping("/mfa/verify")
+    public AuthTokenResponse verifyMfaLogin(
+            @Valid @RequestBody MfaVerifyLoginRequest request,
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse) {
+        AuthTokenResponse response = authService.completeMfaLogin(request.challengeToken(), request.code());
+        attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
+        return response;
+    }
+
+    @PostMapping("/mfa/resend-email")
+    public MfaEmailSetupResponse resendMfaEmail(@Valid @RequestBody MfaChallengeActionRequest request) {
+        return requireTwoFactorService().resendEmailLoginChallenge(request.challengeToken());
+    }
+
+    @GetMapping("/mfa/status")
+    public MfaStatusResponse getMfaStatus(@AuthenticationPrincipal OmegaPrincipal principal) {
+        return requireTwoFactorService().getStatus(principal.userId());
+    }
+
+    @PostMapping("/mfa/totp/setup")
+    public MfaTotpSetupResponse beginTotpSetup(@AuthenticationPrincipal OmegaPrincipal principal) {
+        return requireTwoFactorService().beginTotpSetup(principal.userId());
+    }
+
+    @PostMapping("/mfa/totp/confirm")
+    public MfaActivationResponse confirmTotpSetup(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @Valid @RequestBody MfaCodeRequest request) {
+        return requireTwoFactorService().confirmTotpSetup(principal.userId(), request.code());
+    }
+
+    @PostMapping("/mfa/email/setup")
+    public MfaEmailSetupResponse beginEmailMfaSetup(@AuthenticationPrincipal OmegaPrincipal principal) {
+        return requireTwoFactorService().beginEmailSetup(principal.userId());
+    }
+
+    @PostMapping("/mfa/email/confirm")
+    public MfaActivationResponse confirmEmailMfaSetup(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @Valid @RequestBody MfaCodeRequest request) {
+        return requireTwoFactorService().confirmEmailSetup(principal.userId(), request.code());
+    }
+
+    @PostMapping("/mfa/disable")
+    public MfaStatusResponse disableMfa(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @Valid @RequestBody MfaDisableRequest request) {
+        return requireTwoFactorService().disableMfa(principal.userId(), request.password());
+    }
+
+    private TwoFactorService requireTwoFactorService() {
+        if (twoFactorService == null) {
+            throw new IllegalStateException("Servicio 2FA no inicializado.");
+        }
+        return twoFactorService;
+    }
+
     private void attachSessionCookieIfAvailable(
             HttpServletRequest request,
             HttpServletResponse response,
             AuthTokenResponse tokenResponse) {
-        if (sessionCookieHelper != null && tokenResponse != null) {
+        if (sessionCookieHelper != null
+                && tokenResponse != null
+                && !tokenResponse.mfaRequired()
+                && tokenResponse.accessToken() != null) {
             sessionCookieHelper.attachSessionCookie(request, response, tokenResponse.accessToken());
         }
     }

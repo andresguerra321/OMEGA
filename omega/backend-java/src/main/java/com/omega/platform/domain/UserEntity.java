@@ -47,6 +47,21 @@ public class UserEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "mfa_enabled", nullable = false)
+    private boolean mfaEnabled = false;
+
+    @Column(name = "mfa_method", nullable = false, length = 20)
+    private String mfaMethod = "NONE";
+
+    @Column(name = "mfa_totp_secret", length = 128)
+    private String mfaTotpSecret;
+
+    @Column(name = "mfa_totp_pending_secret", length = 128)
+    private String mfaTotpPendingSecret;
+
+    @Column(name = "mfa_backup_codes_json", columnDefinition = "TEXT")
+    private String mfaBackupCodesJson;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -97,6 +112,46 @@ public class UserEntity {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isMfaEnabled() {
+        return mfaEnabled;
+    }
+
+    public void setMfaEnabled(boolean mfaEnabled) {
+        this.mfaEnabled = mfaEnabled;
+    }
+
+    public String getMfaMethod() {
+        return mfaMethod;
+    }
+
+    public void setMfaMethod(String mfaMethod) {
+        this.mfaMethod = mfaMethod;
+    }
+
+    public String getMfaTotpSecret() {
+        return mfaTotpSecret;
+    }
+
+    public void setMfaTotpSecret(String mfaTotpSecret) {
+        this.mfaTotpSecret = mfaTotpSecret;
+    }
+
+    public String getMfaTotpPendingSecret() {
+        return mfaTotpPendingSecret;
+    }
+
+    public void setMfaTotpPendingSecret(String mfaTotpPendingSecret) {
+        this.mfaTotpPendingSecret = mfaTotpPendingSecret;
+    }
+
+    public String getMfaBackupCodesJson() {
+        return mfaBackupCodesJson;
+    }
+
+    public void setMfaBackupCodesJson(String mfaBackupCodesJson) {
+        this.mfaBackupCodesJson = mfaBackupCodesJson;
     }
 
     public Instant getCreatedAt() {

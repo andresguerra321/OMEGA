@@ -40,6 +40,7 @@ import { stripUnsafeChars, validateTenantUserForm } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
+import { TwoFactorSettingsCard } from './TwoFactorSettingsCard';
 import {
   ActionConfirmationBanner,
   PanelErrorBanner,
@@ -967,6 +968,8 @@ export function SettingsPanel({
                         </div>
                       </div>
                     )}
+
+                    <TwoFactorSettingsCard authSession={authSession} />
 
                     {authSession.role === 'ADMIN' && (
                       <div className="pt-3 border-t border-white/[0.06] space-y-3">

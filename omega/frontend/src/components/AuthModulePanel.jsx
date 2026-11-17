@@ -12,6 +12,8 @@ import {
   LogOut,
   Mail,
   RefreshCw,
+  ShieldCheck,
+  Smartphone,
   Sparkles,
   Upload,
   User,
@@ -24,6 +26,8 @@ import {
   loginWithPassword,
   registerAccount,
   requestPasswordReset,
+  resendMfaEmail,
+  verifyMfaLogin,
 } from '../lib/api';
 import {
   validateAuthLoginForm,
@@ -56,6 +60,15 @@ export function AuthAccessForm({
     defaultTab === 'register' ? 'register' : 'login',
   );
   const tab = activeTab ?? internalTab;
+  const setTab = (nextTab) => {
+    setErrorState({ tab: nextTab, message: '' });
+    setFieldErrorState({ tab: nextTab, errors: {} });
+    if (typeof onTabChange === 'function') {
+      onTabChange(nextTab);
+    } else {
+      setInternalTab(nextTab);
+    }
+  };
 
   const [authConfig, setAuthConfig] = useState({
     tenantSelfRegistrationEnabled: true,
@@ -90,10 +103,18 @@ export function AuthAccessForm({
     email: '',
     code: '',
     newPassword: '',
+    confirmPassword: '',
     step: 'request',
     statusMessage: '',
   });
   const [showRecoverPwd, setShowRecoverPwd] = useState(false);
+  const [showConfirmRecoverPwd, setShowConfirmRecoverPwd] = useState(false);
+  const otpRefs = useRef([]);
+  const [mfaChallenge, setMfaChallenge] = useState(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaBackupMode, setMfaBackupMode] = useState(false);
+  const [mfaStatusMsg, setMfaStatusMsg] = useState('');
+  const mfaOtpRefs = useRef([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +171,23 @@ export function AuthAccessForm({
         password: validation.sanitized.password,
         tenantSlug: showOrgSlug ? validation.sanitized.tenantSlug : '',
       });
+      if (session?.mfaRequired) {
+        setMfaChallenge({
+          challengeToken: session.mfaChallengeToken,
+          method: session.mfaMethod,
+          maskedEmail: session.maskedEmail,
+          email: session.email,
+        });
+        setMfaCode('');
+        setMfaBackupMode(false);
+        setMfaStatusMsg(
+          session.mfaMethod === 'EMAIL'
+            ? `Enviamos un código de 6 dígitos a ${session.maskedEmail}.`
+            : 'Ingresa el código de 6 dígitos de tu aplicación autenticadora.'
+        );
+        selectTab('mfa');
+        return;
+      }
       onAuthenticated?.(session, { isNewAccount: false });
     } catch (err) {
       const serverFields = err?.problem?.fieldErrors;
@@ -240,7 +278,17 @@ export function AuthAccessForm({
       return;
     }
     if (recoverForm.newPassword.length < 12) {
-      setErrorState({ tab: 'recover', message: 'La nueva contraseña debe tener al menos 12 caracteres (letras y números o símbolos).' });
+      setErrorState({ tab: 'recover', message: 'La nueva contraseña debe tener al menos 12 caracteres.' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    if (!/[A-Za-z]/.test(recoverForm.newPassword) || !/[\d\W_]/.test(recoverForm.newPassword)) {
+      setErrorState({ tab: 'recover', message: 'La contraseña debe incluir letras y números o símbolos.' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    if (recoverForm.newPassword !== recoverForm.confirmPassword) {
+      setErrorState({ tab: 'recover', message: 'Las contraseñas no coinciden.' });
       setShakeTick((n) => n + 1);
       return;
     }
@@ -258,6 +306,7 @@ export function AuthAccessForm({
         email: '',
         code: '',
         newPassword: '',
+        confirmPassword: '',
         step: 'request',
         statusMessage: res?.message || 'Contraseña actualizada correctamente.',
       });
@@ -268,6 +317,61 @@ export function AuthAccessForm({
         message: err?.message || 'No se pudo restablecer la contraseña.',
       });
       setShakeTick((n) => n + 1);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleMfaVerifySubmit(e) {
+    e?.preventDefault();
+    if (!mfaChallenge?.challengeToken) return;
+    const cleanCode = mfaBackupMode
+      ? mfaCode.trim().toUpperCase()
+      : mfaCode.replace(/\D/g, '').slice(0, 6);
+    if (!mfaBackupMode && cleanCode.length !== 6) {
+      setErrorState({ tab: 'mfa', message: 'Ingresa los 6 dígitos de verificación.' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    if (mfaBackupMode && cleanCode.replace('-', '').length !== 8) {
+      setErrorState({ tab: 'mfa', message: 'Ingresa un código de respaldo válido (ej. ABCD-1234).' });
+      setShakeTick((n) => n + 1);
+      return;
+    }
+    setLoading(true);
+    setErrorState({ tab: 'mfa', message: '' });
+    try {
+      const session = await verifyMfaLogin({
+        challengeToken: mfaChallenge.challengeToken,
+        code: cleanCode,
+      });
+      setMfaChallenge(null);
+      setMfaCode('');
+      setMfaBackupMode(false);
+      onAuthenticated?.(session, { isNewAccount: false });
+    } catch (err) {
+      setErrorState({
+        tab: 'mfa',
+        message: err?.message || 'Código inválido o expirado.',
+      });
+      setShakeTick((n) => n + 1);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleMfaResendEmail() {
+    if (!mfaChallenge?.challengeToken || mfaChallenge.method !== 'EMAIL') return;
+    setLoading(true);
+    setErrorState({ tab: 'mfa', message: '' });
+    try {
+      const res = await resendMfaEmail(mfaChallenge.challengeToken);
+      setMfaStatusMsg(res?.message || 'Nuevo código enviado a tu correo.');
+    } catch (err) {
+      setErrorState({
+        tab: 'mfa',
+        message: err?.message || 'No se pudo reenviar el código.',
+      });
     } finally {
       setLoading(false);
     }
@@ -339,7 +443,165 @@ export function AuthAccessForm({
         </div>
       )}
 
-      {tab === 'recover' ? (
+      {tab === 'mfa' && mfaChallenge ? (
+        <form
+          key="form-mfa"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void guard(() => handleMfaVerifySubmit(e));
+          }}
+          className={`motion-safe:animate-panel-switch ${minimalChrome ? 'space-y-3.5' : 'space-y-3'}`}
+        >
+          <div className="pt-1 pb-1.5 text-center space-y-2">
+            <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#2F6FED]/40 bg-gradient-to-b from-[#2F6FED]/25 to-[#0A0A0C]/80 shadow-[0_8px_28px_rgba(47,111,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)]">
+              {mfaChallenge.method === 'EMAIL' ? (
+                <Mail className="h-6 w-6 text-[#8BB2FF]" />
+              ) : (
+                <Smartphone className="h-6 w-6 text-[#8BB2FF]" />
+              )}
+              <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#2F6FED] text-[10px] font-bold text-white shadow-[0_0_12px_rgba(47,111,237,0.75)]">
+                Ω
+              </span>
+            </div>
+            <div>
+              <h2 className="text-[16px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
+                Verificación en dos pasos
+              </h2>
+              <p className="mt-0.5 text-[12px] text-[#9FA6B8]">
+                {mfaStatusMsg}
+              </p>
+            </div>
+          </div>
+
+          {!mfaBackupMode ? (
+            <div>
+              <label className="sr-only">Código de verificación 2FA de 6 dígitos</label>
+              <div
+                className="grid grid-cols-6 gap-2"
+                onPaste={(e) => {
+                  const pasted = (e.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+                  if (!pasted) return;
+                  e.preventDefault();
+                  setMfaCode(pasted);
+                  const nextIdx = Math.min(pasted.length, 5);
+                  mfaOtpRefs.current[nextIdx]?.focus();
+                }}
+              >
+                {[0, 1, 2, 3, 4, 5].map((idx) => {
+                  const digit = mfaCode[idx] || '';
+                  return (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        mfaOtpRefs.current[idx] = el;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete={idx === 0 ? 'one-time-code' : 'off'}
+                      maxLength={1}
+                      aria-label={`Dígito 2FA ${idx + 1} de 6`}
+                      value={digit}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(-1);
+                        const chars = mfaCode.padEnd(6, ' ').split('').slice(0, 6);
+                        chars[idx] = val || ' ';
+                        const nextCode = chars.join('').replace(/\s+/g, '');
+                        setMfaCode(nextCode);
+                        if (val && idx < 5) {
+                          mfaOtpRefs.current[idx + 1]?.focus();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Backspace' && !digit && idx > 0) {
+                          mfaOtpRefs.current[idx - 1]?.focus();
+                        } else if (e.key === 'ArrowLeft' && idx > 0) {
+                          e.preventDefault();
+                          mfaOtpRefs.current[idx - 1]?.focus();
+                        } else if (e.key === 'ArrowRight' && idx < 5) {
+                          e.preventDefault();
+                          mfaOtpRefs.current[idx + 1]?.focus();
+                        }
+                      }}
+                      className={`h-13 w-full rounded-[14px] border text-center font-mono text-[20px] font-semibold text-[#F2F2F4] transition-all duration-150 focus:outline-none ${
+                        digit
+                          ? 'border-[#2F6FED]/70 bg-[#2F6FED]/15 shadow-[0_0_18px_rgba(47,111,237,0.24)]'
+                          : inputSurface
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label
+                htmlFor={`${uid}-mfa-backup`}
+                className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
+              >
+                Código de respaldo (8 caracteres)
+              </label>
+              <div className="group relative flex items-center">
+                <KeyRound className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
+                <input
+                  id={`${uid}-mfa-backup`}
+                  type="text"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.toUpperCase())}
+                  placeholder="ABCD-1234"
+                  className={`w-full h-10 pl-9.5 pr-3.5 rounded-[10px] border font-mono tracking-wider text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputSurface}`}
+                />
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="group w-full h-10.5 mt-1 rounded-[10px] bg-[#2F6FED] border border-white/15 hover:brightness-110 disabled:opacity-50 text-[13px] font-medium text-white inline-flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>{loading ? 'Verificando...' : 'Confirmar y entrar'}</span>
+          </button>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11.5px]">
+            <button
+              type="button"
+              onClick={() => {
+                setMfaBackupMode((v) => !v);
+                setMfaCode('');
+                setErrorState({ tab: 'mfa', message: '' });
+              }}
+              className="text-[#8BB2FF] hover:text-white transition-colors cursor-pointer"
+            >
+              {mfaBackupMode ? 'Usar código de 6 dígitos' : 'Usar código de respaldo'}
+            </button>
+            {mfaChallenge.method === 'EMAIL' && !mfaBackupMode && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void handleMfaResendEmail()}
+                className="text-[#9FA6B8] hover:text-[#F2F2F4] transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Reenviar código
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMfaChallenge(null);
+              setMfaCode('');
+              setMfaBackupMode(false);
+              selectTab('login');
+            }}
+            className="w-full text-center text-[11.5px] text-[#9FA6B8] hover:text-[#F2F2F4] transition-colors cursor-pointer pt-0.5"
+          >
+            Volver al inicio de sesión
+          </button>
+        </form>
+      ) : tab === 'recover' ? (
         <form
           key="form-recover"
           noValidate
@@ -381,28 +643,74 @@ export function AuthAccessForm({
 
           {recoverForm.step === 'confirm' && (
             <>
+              <div className="pt-1 pb-2 text-center space-y-2">
+                <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#2F6FED]/40 bg-gradient-to-b from-[#2F6FED]/25 to-[#0A0A0C]/80 shadow-[0_8px_28px_rgba(47,111,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)]">
+                  <Mail className="h-6 w-6 text-[#8BB2FF]" />
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#2F6FED] text-[10px] font-bold text-white shadow-[0_0_12px_rgba(47,111,237,0.75)]">
+                    Ω
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-[16px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
+                    Revisa el código de verificación
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#9FA6B8]">
+                    Enviamos un código de 6 dígitos a{' '}
+                    <span className="font-medium text-[#F2F2F4]">{recoverForm.email}</span>
+                  </p>
+                </div>
+              </div>
+
               <div>
-                <label
-                  htmlFor={`${uid}-recover-code`}
-                  className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
+                <label className="sr-only">Código de recuperación de 6 dígitos</label>
+                <div
+                  className="grid grid-cols-6 gap-2"
+                  onPaste={(e) => {
+                    const pasted = (e.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+                    if (!pasted) return;
+                    e.preventDefault();
+                    setRecoverForm((p) => ({ ...p, code: pasted }));
+                    const nextIdx = Math.min(pasted.length, 5);
+                    otpRefs.current[nextIdx]?.focus();
+                  }}
                 >
-                  Código de recuperación (6 dígitos)
-                </label>
-                <div className="group relative flex items-center">
-                  <KeyRound className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
-                  <input
-                    id={`${uid}-recover-code`}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                    value={recoverForm.code}
-                    onChange={(e) =>
-                      setRecoverForm((p) => ({ ...p, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))
-                    }
-                    placeholder="123456"
-                    className={`w-full h-10 pl-9.5 pr-3.5 rounded-[10px] border text-[13px] font-mono tracking-widest text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputSurface}`}
-                  />
+                  {[0, 1, 2, 3, 4, 5].map((idx) => {
+                    const digit = recoverForm.code[idx] || '';
+                    return (
+                      <input
+                        key={idx}
+                        ref={(el) => { otpRefs.current[idx] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        aria-label={`Dígito ${idx + 1} del código`}
+                        value={digit}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(-1);
+                          const chars = Array.from({ length: 6 }, (_, i) => recoverForm.code[i] || '');
+                          chars[idx] = val;
+                          setRecoverForm((p) => ({ ...p, code: chars.join('') }));
+                          if (val && idx < 5) {
+                            otpRefs.current[idx + 1]?.focus();
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Backspace' && !digit && idx > 0) {
+                            otpRefs.current[idx - 1]?.focus();
+                          } else if (e.key === 'ArrowLeft' && idx > 0) {
+                            otpRefs.current[idx - 1]?.focus();
+                          } else if (e.key === 'ArrowRight' && idx < 5) {
+                            otpRefs.current[idx + 1]?.focus();
+                          }
+                        }}
+                        className={`h-12 w-full rounded-[14px] border text-center font-mono text-[20px] font-semibold text-[#F2F2F4] bg-[#0A0A0C]/78 focus:outline-none transition-all duration-150 ${
+                          digit
+                            ? 'border-[#2F6FED]/70 shadow-[0_0_16px_rgba(47,111,237,0.28)]'
+                            : 'border-white/[0.14] focus:border-[#2F6FED] focus:shadow-[0_0_18px_rgba(47,111,237,0.28)]'
+                        }`}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -411,7 +719,7 @@ export function AuthAccessForm({
                   htmlFor={`${uid}-recover-pwd`}
                   className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
                 >
-                  Nueva contraseña (mín. 12 caracteres)
+                  Nueva contraseña
                 </label>
                 <div className="group relative flex items-center">
                   <Lock className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
@@ -424,7 +732,7 @@ export function AuthAccessForm({
                     autoComplete="new-password"
                     value={recoverForm.newPassword}
                     onChange={(e) => setRecoverForm((p) => ({ ...p, newPassword: e.target.value }))}
-                    placeholder="Mín. 12 caracteres con letras y números"
+                    placeholder="Escribe tu nueva contraseña"
                     className={`w-full h-10 pl-9.5 pr-10 rounded-[10px] border text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputSurface}`}
                   />
                   <button
@@ -436,6 +744,66 @@ export function AuthAccessForm({
                     {showRecoverPwd ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
                 </div>
+
+                {/* Lista de verificación en vivo estilo referencia */}
+                <div className="mt-2 rounded-[10px] border border-white/[0.08] bg-white/[0.03] px-3 py-2 space-y-1 text-[11.5px]">
+                  <div className={`flex items-center gap-2 ${recoverForm.newPassword.length >= 12 ? 'text-[#30D158]' : 'text-[#9FA6B8]'}`}>
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    <span>Debe tener al menos 12 caracteres.</span>
+                  </div>
+                  <div
+                    className={`flex items-center gap-2 ${
+                      /[A-Za-z]/.test(recoverForm.newPassword) && /[\d\W_]/.test(recoverForm.newPassword)
+                        ? 'text-[#30D158]'
+                        : 'text-[#9FA6B8]'
+                    }`}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    <span>Debe incluir letras y al menos un número o carácter especial.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor={`${uid}-recover-pwd-confirm`}
+                  className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}
+                >
+                  Confirmar contraseña
+                </label>
+                <div className="group relative flex items-center">
+                  <Lock className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] transition-all duration-150 absolute left-3.5 pointer-events-none" />
+                  <input
+                    id={`${uid}-recover-pwd-confirm`}
+                    type={showConfirmRecoverPwd ? 'text' : 'password'}
+                    required
+                    minLength={12}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={recoverForm.confirmPassword}
+                    onChange={(e) => setRecoverForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                    placeholder="Repite tu nueva contraseña"
+                    className={`w-full h-10 pl-9.5 pr-10 rounded-[10px] border text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 ${
+                      recoverForm.confirmPassword && recoverForm.confirmPassword !== recoverForm.newPassword
+                        ? '!border-[#FF453A]/75'
+                        : inputSurface
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmRecoverPwd((v) => !v)}
+                    aria-label={showConfirmRecoverPwd ? 'Ocultar confirmación' : 'Mostrar confirmación'}
+                    className="absolute right-2.5 p-1.5 rounded-[6px] text-[#9FA6B8] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  >
+                    {showConfirmRecoverPwd ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+
+                {recoverForm.confirmPassword && recoverForm.confirmPassword !== recoverForm.newPassword && (
+                  <div className="mt-2 rounded-[10px] border border-[#FF453A]/35 bg-[#FF453A]/10 px-3 py-1.5 text-[11.5px] text-[#FFB4AE]">
+                    Las contraseñas no coinciden.
+                  </div>
+                )}
               </div>
             </>
           )}
