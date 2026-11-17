@@ -215,6 +215,8 @@ export function ChatWorkspace({
   onChangeTopK,
   sourceScope,
   onChangeSourceScope,
+  generalChatMode = false,
+  onToggleGeneralChatMode,
   onSendMessage,
   onRetryFailedTurn,
   chatContext,
@@ -552,6 +554,21 @@ export function ChatWorkspace({
               compact={compact}
             />
           )}
+
+          {!usePrivateDocs && typeof onToggleGeneralChatMode === 'function' && (
+            <button
+              type="button"
+              onClick={onToggleGeneralChatMode}
+              title="Permite responder preguntas conceptuales fuera del corpus indexado, claramente etiquetadas como no verificadas"
+              className={`inline-flex items-center gap-1 rounded-[7px] border px-2 py-1 text-[11px] font-medium transition-all duration-150 cursor-pointer ${
+                generalChatMode
+                  ? 'border-[#FF9F0A]/55 bg-[#FF9F0A]/15 text-[#FFD591]'
+                  : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:text-[#F2F2F4]'
+              }`}
+            >
+              <span>{generalChatMode ? 'Modo general: ON' : 'Modo general'}</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -885,10 +902,16 @@ export function ChatWorkspace({
                     </motion.div>
                   ) : (
                     <motion.div key={idx} variants={messageVariants} initial="initial" animate="animate" className="space-y-2">
-                      {Array.isArray(msg.warnings) && msg.warnings.length > 0 && (
+                      {msg.generalMode && (
+                        <div className="inline-flex items-center gap-1.5 rounded-[9px] border border-[#FF9F0A]/40 bg-[#FF9F0A]/12 px-2.5 py-1 text-[11px] font-medium text-[#FFD591]">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          <span>Respuesta general — no verificada contra fuentes indexadas</span>
+                        </div>
+                      )}
+                      {Array.isArray(msg.warnings) && msg.warnings.filter((w) => w !== 'GENERAL_KNOWLEDGE_UNVERIFIED').length > 0 && (
                         <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[9px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/10 px-2.5 py-1 text-[11px] text-[#FFD591]">
                           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                          <span>{msg.warnings.join(' · ')}</span>
+                          <span>{msg.warnings.filter((w) => w !== 'GENERAL_KNOWLEDGE_UNVERIFIED').join(' · ')}</span>
                         </div>
                       )}
                       <StructuredResponse

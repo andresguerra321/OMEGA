@@ -15,9 +15,8 @@ import {
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', ariaLabel: 'Inicio', icon: Home },
   { id: 'equipo', label: 'Equipos', ariaLabel: 'Equipos — revisar mi dispositivo', icon: Laptop },
-  { id: 'enlace', label: 'Enlaces', ariaLabel: 'Enlaces — verificar antes de abrir', icon: Link2 },
+  { id: 'exposicion', label: 'Enlaces y OSINT', ariaLabel: 'Enlaces, dominios y correos — verificación y OSINT', icon: Radar },
   { id: 'amenazas', label: 'Amenazas', ariaLabel: 'Amenazas — campañas y CVEs', icon: Layers },
-  { id: 'exposicion', label: 'Exposición', ariaLabel: 'Exposición — huella pública OSINT', icon: Radar },
   { id: 'preguntar', label: 'Asistente', ariaLabel: 'Asistente — consultas con citas', icon: MessageSquare, dividerBefore: true },
   { id: 'cuenta', label: 'Cuenta', ariaLabel: 'Cuenta — acceso y PDFs privados', icon: UserCheck },
   { id: 'ajustes', label: 'Ajustes', ariaLabel: 'Ajustes', icon: Settings },

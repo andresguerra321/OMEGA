@@ -304,6 +304,7 @@ function normalizeRagResponse(data, expedienteId = null) {
 
   return {
     status: data?.status || 'OK',
+    generalMode: data?.status === 'GENERAL_MODE',
     answer: data?.answer || '',
     model: data?.activeEmbeddingModel || 'omega-rag-v1',
     warnings: Array.isArray(data?.warnings) ? data.warnings : [],
@@ -561,9 +562,26 @@ export async function sendChatQuery(
       question: query,
       topK,
       source_filter: sourceFilter || null,
+      general_mode: Boolean(options?.generalMode),
     },
   });
   return normalizeRagResponse(res, null);
+}
+
+export async function fetchCorpusDiscovery(status = 'PENDING') {
+  return apiFetch(`/cti/discovery?status=${encodeURIComponent(status)}`);
+}
+
+export async function scanCorpusDiscovery() {
+  return apiFetch('/cti/discovery/scan', { method: 'POST' });
+}
+
+export async function approveCorpusCandidate(id) {
+  return apiFetch(`/cti/discovery/${id}/approve`, { method: 'POST' });
+}
+
+export async function rejectCorpusCandidate(id) {
+  return apiFetch(`/cti/discovery/${id}/reject`, { method: 'POST' });
 }
 
 // ---------- CTI Campañas, STIX y WebLoader ----------

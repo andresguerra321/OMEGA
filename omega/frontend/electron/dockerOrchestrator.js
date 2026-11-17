@@ -737,8 +737,8 @@ export class DockerOrchestrator {
     });
 
     const upSubArgs = isAppUpgrade
-      ? ['up', '-d', '--build', ...BACKEND_SERVICES]
-      : ['up', '-d', ...BACKEND_SERVICES];
+      ? ['up', '-d', '--remove-orphans', '--build', ...BACKEND_SERVICES]
+      : ['up', '-d', '--remove-orphans', ...BACKEND_SERVICES];
 
     const upArgs = buildComposeArgs(composeRoot, {
       prodMode: this.prodMode,
@@ -746,7 +746,7 @@ export class DockerOrchestrator {
       subArgs: upSubArgs,
     });
 
-    const upResult = await this.runCommandFn(upArgs, {
+    let upResult = await this.runCommandFn(upArgs, {
       cwd: composeRoot,
       env: childEnv,
       timeoutMs: isAppUpgrade ? 600_000 : 180_000,
@@ -756,6 +756,28 @@ export class DockerOrchestrator {
       stderr: err?.message || String(err),
       stdout: '',
     }));
+
+    if (upResult.code !== 0 && !this.aborted) {
+      const errText = `${upResult.stderr || ''} ${upResult.stdout || ''}`;
+      if (/already in use|conflict/i.test(errText)) {
+        this.#pushLog('Detectado conflicto con contenedores previos de OMEGA; limpiando y reintentando…');
+        await execFileAsync(
+          'docker',
+          ['rm', '-f', 'omega_postgres', 'omega_forensic_worker', 'omega_backend_java', 'omega_frontend', 'omega_omniroute'],
+          { timeout: 15_000 },
+        ).catch(() => {});
+        upResult = await this.runCommandFn(upArgs, {
+          cwd: composeRoot,
+          env: childEnv,
+          timeoutMs: isAppUpgrade ? 600_000 : 180_000,
+          onLine: (line) => this.#pushLog(line),
+        }).catch((err) => ({
+          code: 1,
+          stderr: err?.message || String(err),
+          stdout: '',
+        }));
+      }
+    }
 
     if (this.aborted) {
       return { ok: false, aborted: true };
@@ -777,7 +799,7 @@ export class DockerOrchestrator {
     return this.#waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded: isAppUpgrade });
   }
 
-  async #waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded = false } = {}) {
+  async #waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded = false, passwordResetAttempted = false } = {}) {
     const deadline = Date.now() + this.startupTimeoutMs;
 
     while (!this.aborted && Date.now() < deadline) {
@@ -794,6 +816,28 @@ export class DockerOrchestrator {
         );
         if (failedSvc) {
           const tail = await this.#collectFailureTail(composeRoot, this.prodMode, childEnv, failedSvc);
+          if (
+            !passwordResetAttempted &&
+            failedSvc === 'backend-java' &&
+            /password authentication failed for user/i.test(tail || '')
+          ) {
+            this.#pushLog('Credenciales de volumen PostgreSQL desactualizadas; reinicializando volumen limpio…');
+            const downArgs = buildComposeArgs(composeRoot, {
+              prodMode: this.prodMode,
+              envFilePath: this.activeEnvFilePath,
+              subArgs: ['down', '-v', '--remove-orphans'],
+            });
+            await this.runCommandFn(downArgs, { cwd: composeRoot, env: childEnv, timeoutMs: 30_000 }).catch(() => {});
+            const retryUpArgs = buildComposeArgs(composeRoot, {
+              prodMode: this.prodMode,
+              envFilePath: this.activeEnvFilePath,
+              subArgs: ['up', '-d', '--remove-orphans', ...BACKEND_SERVICES],
+            });
+            const retryUp = await this.runCommandFn(retryUpArgs, { cwd: composeRoot, env: childEnv, timeoutMs: 180_000 }).catch(() => ({ code: 1 }));
+            if (retryUp.code === 0) {
+              return this.#waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded, passwordResetAttempted: true });
+            }
+          }
           this.#updateState({
             phase: 'error',
             message: `El servicio "${failedSvc}" falló durante el arranque.`,

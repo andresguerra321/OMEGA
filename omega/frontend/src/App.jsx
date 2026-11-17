@@ -58,9 +58,8 @@ import { sanitizeSearchInput, validateChatMessage, validateUploadFile } from './
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', subtitle: 'Estado en vivo y escudos', icon: Gauge },
   { id: 'equipo', label: 'Equipos', subtitle: 'PC Windows, Android e iPhone', icon: Laptop },
-  { id: 'enlace', label: 'Enlaces', subtitle: 'Verificar antes de abrir', icon: Link2 },
+  { id: 'exposicion', label: 'Enlaces y OSINT', subtitle: 'URLs, dominios y correos', icon: Radar },
   { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
-  { id: 'exposicion', label: 'Exposición', subtitle: 'Huella pública y OSINT', icon: Radar },
   { id: 'preguntar', label: 'Asistente', subtitle: 'Consultas con citas', icon: MessageSquare },
   { id: 'cuenta', label: 'Cuenta', subtitle: 'Registro, sesión y PDFs privados', icon: UserCheck },
   { id: 'ajustes', label: 'Ajustes', subtitle: 'Motor RAG, cuenta y permisos', icon: Settings },
@@ -220,6 +219,7 @@ export default function App() {
   const [threatJump, setThreatJump] = useState({ query: '', key: 0 });
   const [settingsJump, setSettingsJump] = useState({ section: '', key: 0 });
   const [osintJump, setOsintJump] = useState({ value: '', type: 'domain', key: 0 });
+  const [intelTab, setIntelTab] = useState('link');
   const [selectedNodeId, setSelectedNodeId] = useState('windows');
   const [scanningPc, setScanningPc] = useState(false);
   const [syncingStix, setSyncingStix] = useState(false);
@@ -232,6 +232,7 @@ export default function App() {
 
   const [loadingChat, setLoadingChat] = useState(false);
   const [topK, setTopK] = useState(6);
+  const [generalChatMode, setGeneralChatMode] = useState(false);
   const [sourceScope, setSourceScope] = useState('Todas las fuentes');
   const [selectedCitation, setSelectedCitation] = useState(null);
   const [isSourcesPanelOpen, setIsSourcesPanelOpen] = useState(false);
@@ -727,13 +728,17 @@ export default function App() {
         topK,
         effectiveScope,
         pinnedContextPayload,
-        { expedienteId: usePrivateDocs && activeExpedienteId ? activeExpedienteId : null },
+        {
+          expedienteId: usePrivateDocs && activeExpedienteId ? activeExpedienteId : null,
+          generalMode: generalChatMode,
+        },
       );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: res.answer,
+        generalMode: Boolean(res.generalMode),
         citations: res.citations || [],
         warnings: res.warnings || [],
         reindexRequiredDocuments: res.reindexRequiredDocuments || [],
@@ -860,6 +865,14 @@ export default function App() {
       }));
     }
     setSessionsMenuOpen(false);
+    if (navId === 'enlace') {
+      setIntelTab('link');
+      setActiveNav('exposicion');
+      return;
+    }
+    if (navId === 'exposicion' && opts?.assetValue) {
+      setIntelTab('osint');
+    }
     setActiveNav(navId);
   }
 
@@ -1456,6 +1469,8 @@ export default function App() {
                     loading={loadingChat}
                     topK={topK}
                     onChangeTopK={setTopK}
+                    generalChatMode={generalChatMode}
+                    onToggleGeneralChatMode={() => setGeneralChatMode((v) => !v)}
                     sourceScope={sourceScope}
                     onChangeSourceScope={setSourceScope}
                     onSendMessage={handleSend}
@@ -1548,27 +1563,60 @@ export default function App() {
                       />
                     )}
                     {activeNav === 'exposicion' && (
-                      <OsintPanel
-                        onAskInChat={askInChat}
-                        onVerifyLink={(url) => handleNavigate('enlace', { url })}
-                        onAuditDevice={(tab = 'pc') => handleNavigate('equipo', { tab })}
-                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
-                        initialAsset={osintJump}
-                        initialJumpKey={osintJump.key}
-                      />
-                    )}
-                    {activeNav === 'enlace' && (
-                      <LinkVerifierPanel
-                        onAskInChat={askInChat}
-                        onAuditDomain={(assetValue) =>
-                          handleNavigate('exposicion', { assetValue, assetType: 'domain' })
-                        }
-                        onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
-                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
-                        initialUrl={linkJump.url}
-                        initialCheckKey={linkJump.key}
-                        onLinkVerified={handleLinkVerified}
-                      />
+                      <div className="space-y-6">
+                        <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] pb-4">
+                          <button
+                            type="button"
+                            onClick={() => setIntelTab('link')}
+                            className={`inline-flex items-center gap-2 rounded-[10px] border px-3.5 py-2 text-[12.5px] font-medium transition-all cursor-pointer ${
+                              intelTab === 'link'
+                                ? 'border-[#2F6FED]/55 bg-[#2F6FED]/15 text-[#F2F2F4]'
+                                : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:text-[#F2F2F4]'
+                            }`}
+                          >
+                            <Link2 className="h-3.5 w-3.5 text-[#6EA0FF]" />
+                            <span>Verificar enlace (URL + OWASP)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIntelTab('osint')}
+                            className={`inline-flex items-center gap-2 rounded-[10px] border px-3.5 py-2 text-[12.5px] font-medium transition-all cursor-pointer ${
+                              intelTab === 'osint'
+                                ? 'border-[#2F6FED]/55 bg-[#2F6FED]/15 text-[#F2F2F4]'
+                                : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:text-[#F2F2F4]'
+                            }`}
+                          >
+                            <Radar className="h-3.5 w-3.5 text-[#6EA0FF]" />
+                            <span>Dominios y correos (OSINT + HIBP)</span>
+                          </button>
+                        </div>
+                        {intelTab === 'link' ? (
+                          <LinkVerifierPanel
+                            onAskInChat={askInChat}
+                            onAuditDomain={(assetValue) => {
+                              setOsintJump((prev) => ({ value: assetValue, type: 'domain', key: prev.key + 1 }));
+                              setIntelTab('osint');
+                            }}
+                            onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
+                            onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                            initialUrl={linkJump.url}
+                            initialCheckKey={linkJump.key}
+                            onLinkVerified={handleLinkVerified}
+                          />
+                        ) : (
+                          <OsintPanel
+                            onAskInChat={askInChat}
+                            onVerifyLink={(url) => {
+                              setLinkJump((prev) => ({ url, key: prev.key + 1 }));
+                              setIntelTab('link');
+                            }}
+                            onAuditDevice={(tab = 'pc') => handleNavigate('equipo', { tab })}
+                            onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                            initialAsset={osintJump}
+                            initialJumpKey={osintJump.key}
+                          />
+                        )}
+                      </div>
                     )}
                   </div>
                 ) : (

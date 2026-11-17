@@ -11,6 +11,7 @@ personales ni guardar rastros en disco (RNF4):
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import ipaddress
 import json
 import logging
@@ -155,13 +156,86 @@ def _evaluate_host_posture(platform_name: str, host: dict[str, Any]) -> list[dic
         smart = host.get("smartscreen_enabled")
         if smart is not None:
             checks.append({
-                "control": "SmartScreen / Filtro de aplicaciones",
+                "control": "SmartScreen / Filtro de aplicaciones [CIS 18.9.80]",
                 "value": "ACTIVO" if smart else "DESACTIVADO",
                 "status": "OK" if smart else "WARN",
                 "detail": (
-                    "SmartScreen verifica reputación de ejecutables y sitios web."
+                    "SmartScreen evalúa reputación de descargas y ejecutables desconocidos."
                     if smart
-                    else "Conviene activar SmartScreen para frenar ejecutables desconocidos."
+                    else "SmartScreen desactivado reduce la barrera frente a ejecutables maliciosos."
+                ),
+            })
+
+        smbv1 = host.get("smbv1_enabled")
+        if smbv1 is not None:
+            checks.append({
+                "control": "Protocolo legado SMBv1 [CIS Benchmark 18.3.1]",
+                "value": "ACTIVO (RIESGO)" if smbv1 else "DESHABILITADO",
+                "status": "CRITICAL" if smbv1 else "OK",
+                "detail": (
+                    "SMBv1 está habilitado; protocolo obsoleto explotado por ransomware (EternalBlue/WannaCry)."
+                    if smbv1
+                    else "SMBv1 deshabilitado conforme a endurecimiento CIS."
+                ),
+            })
+
+        bitlocker = host.get("bitlocker_protected")
+        if bitlocker is not None:
+            checks.append({
+                "control": "Cifrado de disco BitLocker [CIS Benchmark 18.10.9]",
+                "value": "PROTEGIDO" if bitlocker else "SIN CIFRADO",
+                "status": "OK" if bitlocker else "WARN",
+                "detail": (
+                    "El volumen del sistema está cifrado con BitLocker."
+                    if bitlocker
+                    else "El volumen del sistema no tiene protección BitLocker activa ante robo o extracción física."
+                ),
+            })
+
+        rdp = host.get("rdp_enabled")
+        if rdp is not None:
+            checks.append({
+                "control": "Escritorio Remoto (RDP / fDenyTSConnections) [CIS Benchmark 18.9.65.3]",
+                "value": "HABILITADO" if rdp else "DESHABILITADO",
+                "status": "WARN" if rdp else "OK",
+                "detail": (
+                    "RDP está habilitado (fDenyTSConnections=0); verifica NLA y restricción por VPN/firewall."
+                    if rdp
+                    else "Escritorio Remoto deshabilitado conforme a CIS."
+                ),
+            })
+
+        pwd_min = host.get("password_policy_min_len")
+        if isinstance(pwd_min, int):
+            checks.append({
+                "control": "Política local: longitud mínima de contraseña [CIS Benchmark 1.1.4]",
+                "value": f"{pwd_min} caracteres",
+                "status": "OK" if pwd_min >= 8 else "WARN",
+                "detail": (
+                    "Longitud mínima de contraseña acorde a política base."
+                    if pwd_min >= 8
+                    else "Longitud mínima inferior a 8 caracteres (CIS recomienda >= 14 en entornos corporativos)."
+                ),
+            })
+
+        patch_date = str(host.get("last_security_patch_date") or "").strip()
+        patch_id = str(host.get("last_security_patch_id") or "").strip()
+        if patch_date:
+            patch_status = "OK"
+            try:
+                days_old = (datetime.now(timezone.utc).date() - datetime.strptime(patch_date, "%Y-%m-%d").date()).days
+                if days_old > 60:
+                    patch_status = "WARN"
+            except ValueError:
+                days_old = None
+            checks.append({
+                "control": "Último parche de seguridad instalado [CIS Control 7]",
+                "value": f"{patch_id or 'KB'} ({patch_date})",
+                "status": patch_status,
+                "detail": (
+                    "Actualizaciones de seguridad recientes."
+                    if patch_status == "OK"
+                    else f"El último parche registrado tiene más de 60 días ({patch_date}); revisa Windows Update."
                 ),
             })
     elif platform_name == "darwin":

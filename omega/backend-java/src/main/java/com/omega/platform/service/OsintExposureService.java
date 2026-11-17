@@ -38,6 +38,7 @@ import javax.naming.directory.DirContext;
 import javax.naming.directory.InitialDirContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +64,7 @@ public class OsintExposureService {
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
     private final boolean externalLookupsEnabled;
+    private final String hibpApiKey;
     private final HttpClient httpClient;
 
     public OsintExposureService(
@@ -70,13 +72,26 @@ public class OsintExposureService {
             PublicSchemaSupport publicSchemaSupport,
             AuditLogService auditLogService,
             ObjectMapper objectMapper,
-            @Value("${omega.osint.external-lookups-enabled:true}") boolean externalLookupsEnabled
+            boolean externalLookupsEnabled
+    ) {
+        this(assetRepository, publicSchemaSupport, auditLogService, objectMapper, externalLookupsEnabled, "");
+    }
+
+    @Autowired
+    public OsintExposureService(
+            OsintAssetRepository assetRepository,
+            PublicSchemaSupport publicSchemaSupport,
+            AuditLogService auditLogService,
+            ObjectMapper objectMapper,
+            @Value("${omega.osint.external-lookups-enabled:true}") boolean externalLookupsEnabled,
+            @Value("${HIBP_API_KEY:}") String hibpApiKey
     ) {
         this.assetRepository = assetRepository;
         this.publicSchemaSupport = publicSchemaSupport;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
         this.externalLookupsEnabled = externalLookupsEnabled;
+        this.hibpApiKey = hibpApiKey == null ? "" : hibpApiKey.trim();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(4))
                 .build();
@@ -154,7 +169,7 @@ public class OsintExposureService {
                 : List.of();
 
         EmailBreachesDto emailBreaches = "institutional_email".equals(asset.getAssetType())
-                ? new EmailBreachesDto("unavailable", List.of(), "HIBP_API_KEY no configurada en este servidor")
+                ? checkHibpEmailBreaches(value)
                 : null;
 
         Instant checkedAt = Instant.now();
@@ -379,6 +394,107 @@ public class OsintExposureService {
                     e.isExplicitConsent(),
                     e.getConsentedAt(),
                     e.getLastCheckedAt()
+            );
+        }
+    }
+
+    private EmailBreachesDto checkHibpEmailBreaches(String email) {
+        if (!externalLookupsEnabled) {
+            return new EmailBreachesDto(
+                    "unavailable",
+                    List.of(),
+                    "Consultas OSINT externas desactivadas en este entorno."
+            );
+        }
+        if (hibpApiKey.isBlank()) {
+            return new EmailBreachesDto(
+                    "unconfigured",
+                    List.of(),
+                    "Consulta de brechas por correo no disponible sin HIBP_API_KEY (servicio de pago en haveibeenpwned.com). El dominio asociado sí se evalúa gratis por DNS (SPF/DMARC) y Certificate Transparency (crt.sh)."
+            );
+        }
+
+        try {
+            String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://haveibeenpwned.com/api/v3/breachedaccount/" + encodedEmail + "?truncateResponse=false"))
+                    .timeout(Duration.ofSeconds(6))
+                    .header("hibp-api-key", hibpApiKey)
+                    .header("user-agent", "OMEGA-CTI-Platform/1.6")
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            int status = response.statusCode();
+            if (status == 404) {
+                return new EmailBreachesDto(
+                        "clean",
+                        List.of(),
+                        "No se encontraron filtraciones públicas registradas para este correo en Have I Been Pwned."
+                );
+            }
+            if (status == 401 || status == 403) {
+                return new EmailBreachesDto(
+                        "unavailable",
+                        List.of(),
+                        "HIBP_API_KEY rechazada o sin suscripción activa (HTTP " + status + ")."
+                );
+            }
+            if (status == 429) {
+                return new EmailBreachesDto(
+                        "unavailable",
+                        List.of(),
+                        "Límite de tasa de Have I Been Pwned alcanzado (HTTP 429). Intenta de nuevo en unos segundos."
+                );
+            }
+            if (status != 200) {
+                return new EmailBreachesDto(
+                        "unavailable",
+                        List.of(),
+                        "Respuesta inesperada de Have I Been Pwned (HTTP " + status + ")."
+                );
+            }
+
+            String raw;
+            try (InputStream body = response.body()) {
+                raw = readBoundedJson(body);
+            }
+            List<Map<String, Object>> parsed = objectMapper.readValue(
+                    raw,
+                    new TypeReference<List<Map<String, Object>>>() {
+                    }
+            );
+            List<Map<String, Object>> breaches = parsed == null ? List.of() : parsed.stream()
+                    .limit(25)
+                    .map(b -> Map.<String, Object>of(
+                            "name", String.valueOf(b.getOrDefault("Name", "")),
+                            "domain", String.valueOf(b.getOrDefault("Domain", "")),
+                            "breach_date", String.valueOf(b.getOrDefault("BreachDate", "")),
+                            "pwn_count", b.getOrDefault("PwnCount", 0),
+                            "data_classes", b.getOrDefault("DataClasses", List.of()),
+                            "is_verified", Boolean.TRUE.equals(b.get("IsVerified"))
+                    ))
+                    .toList();
+
+            if (breaches.isEmpty()) {
+                return new EmailBreachesDto(
+                        "clean",
+                        List.of(),
+                        "No se encontraron filtraciones públicas registradas para este correo en Have I Been Pwned."
+                );
+            }
+            return new EmailBreachesDto(
+                    "exposed",
+                    breaches,
+                    "Se detectaron " + breaches.size() + " filtración(es) pública(s) en Have I Been Pwned."
+            );
+        } catch (Exception ex) {
+            log.warn("Error consultando Have I Been Pwned para activo OSINT: {}", ex.getMessage());
+            return new EmailBreachesDto(
+                    "unavailable",
+                    List.of(),
+                    "No se pudo completar la consulta a Have I Been Pwned."
             );
         }
     }

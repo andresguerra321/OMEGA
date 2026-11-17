@@ -1187,6 +1187,50 @@ foreach ($rk in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', 'H
   } catch {}
 }
 
+$smb1On = $null
+try {
+  $smbFeat = Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -ErrorAction SilentlyContinue
+  if ($smbFeat) { $smb1On = ($smbFeat.State -eq 'Enabled') }
+} catch {}
+if ($null -eq $smb1On) {
+  try {
+    $smbVal = (Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters' -ErrorAction SilentlyContinue).SMB1
+    if ($null -ne $smbVal) { $smb1On = ($smbVal -eq 1) }
+  } catch {}
+}
+
+$bitlockerOn = $null
+try {
+  $bl = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction SilentlyContinue
+  if ($bl) { $bitlockerOn = ($bl.ProtectionStatus -eq 'On' -or [int]$bl.ProtectionStatus -eq 1) }
+} catch {}
+
+$rdpOn = $null
+try {
+  $fDeny = (Get-ItemProperty 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -ErrorAction SilentlyContinue).fDenyTSConnections
+  if ($null -ne $fDeny) { $rdpOn = ($fDeny -eq 0) }
+} catch {}
+
+$pwdMinLen = $null
+try {
+  $netAcc = net accounts 2>$null
+  foreach ($line in $netAcc) {
+    if ($line -match '(?:Minimum password length|Longitud m.nima de contrase.a)\s*:\s*(\d+)') {
+      $pwdMinLen = [int]$Matches[1]
+    }
+  }
+} catch {}
+
+$lastPatchId = $null
+$lastPatchDate = $null
+try {
+  $hf = Get-HotFix -ErrorAction SilentlyContinue | Where-Object { $_.InstalledOn } | Sort-Object InstalledOn -Descending | Select-Object -First 1
+  if ($hf) {
+    $lastPatchId = [string]$hf.HotFixID
+    $lastPatchDate = $hf.InstalledOn.ToString('yyyy-MM-dd')
+  }
+} catch {}
+
 [pscustomobject]@{
   platform = 'win32'
   host = @{
@@ -1196,6 +1240,12 @@ foreach ($rk in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', 'H
     firewall_enabled = $fwOn
     uac_enabled = $uacOn
     smartscreen_enabled = $smartOn
+    smbv1_enabled = $smb1On
+    bitlocker_protected = $bitlockerOn
+    rdp_enabled = $rdpOn
+    password_policy_min_len = $pwdMinLen
+    last_security_patch_id = $lastPatchId
+    last_security_patch_date = $lastPatchDate
   }
   tcp_connections = @($tcpOut)
   processes = @($interestingProcs)

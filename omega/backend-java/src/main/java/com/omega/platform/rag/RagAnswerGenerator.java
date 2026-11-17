@@ -9,6 +9,10 @@ public interface RagAnswerGenerator {
 
     String generateGroundedAnswer(String question, List<RankedChunk> chunks);
 
+    default String generateGeneralAnswer(String question) {
+        return null;
+    }
+
     default String resolveActiveGeneratorModel() {
         return "omega-extractive-fallback";
     }

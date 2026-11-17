@@ -102,6 +102,50 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
     }
 
     @Override
+    public String generateGeneralAnswer(String question) {
+        if (question == null || question.isBlank()) {
+            return null;
+        }
+        String systemPrompt = "Eres OMEGA, asistente técnico de ciberseguridad y análisis forense. "
+                + "Responde preguntas conceptuales con claridad y precisión en español. "
+                + "NO inventes citas numéricas [1], ni atribuciones a Citizen Lab, Amnesty Tech o Google TAG, "
+                + "ni afirmes haber auditado un dispositivo.";
+        for (LlmTarget target : resolveLlmTargets()) {
+            try {
+                ChatRequest req = new ChatRequest(
+                        target.model(),
+                        0.2,
+                        List.of(
+                                new ChatMessage("system", systemPrompt),
+                                new ChatMessage("user", question.trim())
+                        )
+                );
+                ChatResponse resp = target.client().post()
+                        .uri("/chat/completions")
+                        .headers(headers -> {
+                            if (target.apiKey() != null && !target.apiKey().isBlank()) {
+                                headers.setBearerAuth(target.apiKey());
+                            }
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(req)
+                        .retrieve()
+                        .body(ChatResponse.class);
+                if (resp != null && resp.choices() != null && !resp.choices().isEmpty()
+                        && resp.choices().get(0).message() != null) {
+                    String text = resp.choices().get(0).message().content();
+                    if (text != null && !text.isBlank()) {
+                        return sanitizeGeneratedAnswer(text);
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Fallo en modo general ({} / {}): {}", target.providerName(), target.model(), ex.getMessage());
+            }
+        }
+        return null;
+    }
+
+    @Override
     public String resolveActiveGeneratorModel() {
         LlmTarget target = resolveLlmTarget();
         return target != null ? target.model() : "omega-extractive-fallback";

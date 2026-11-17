@@ -152,6 +152,28 @@ public class PublicCorpusRagService {
                 ))
                 .toList();
 
+        if (ranked.isEmpty() && Boolean.TRUE.equals(request.generalMode())) {
+            String generalAnswer = answerGenerator.generateGeneralAnswer(request.question());
+            if (generalAnswer != null && !generalAnswer.isBlank()) {
+                auditLogService.record(
+                        principal.tenantId(),
+                        principal.userId(),
+                        "PUBLIC_CTI_GENERAL_MODE_QUERIED",
+                        "GENERAL_KNOWLEDGE",
+                        "NO_CORPUS_CITATIONS",
+                        Map.of("topK", topK)
+                );
+                return new RagQueryResponse(
+                        "GENERAL_MODE",
+                        answerGenerator.resolveActiveGeneratorModel(),
+                        generalAnswer,
+                        List.of("GENERAL_KNOWLEDGE_UNVERIFIED"),
+                        List.of(),
+                        List.of()
+                );
+            }
+        }
+
         String answer = ranked.isEmpty()
                 ? "No se encontraron pasajes verificados en los informes CTI públicos para esta consulta."
                 : answerGenerator.generateGroundedAnswer(request.question(), ranked);
@@ -258,8 +280,12 @@ public class PublicCorpusRagService {
     public record PublicCtiQueryRequest(
             @NotBlank @Size(min = 2, max = 2000) String question,
             @Min(1) @Max(20) Integer topK,
-            @JsonProperty("source_filter") String sourceFilter
+            @JsonProperty("source_filter") String sourceFilter,
+            @JsonProperty("general_mode") Boolean generalMode
     ) {
+        public PublicCtiQueryRequest(String question, Integer topK, String sourceFilter) {
+            this(question, topK, sourceFilter, false);
+        }
     }
 
     private record PublicChunkRow(
