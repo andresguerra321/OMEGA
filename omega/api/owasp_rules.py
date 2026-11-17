@@ -28,14 +28,45 @@ DANGEROUS_EXT_RE = re.compile(
 )
 
 PHISHING_BRAND_RE = re.compile(
-    r"(?:bancolombia|nequi|daviplata|davivienda|dian|paypal|microsoft|apple|icloud|whatsapp|google|binance|metamask)",
+    r"(?:bancolombia|nequi|daviplata|davivienda|dian|paypal|microsoft|apple|icloud|whatsapp|google|binance|metamask|bbva|banco|colpatria|avvillas)",
     re.IGNORECASE,
 )
 
 PHISHING_ACTION_RE = re.compile(
-    r"(?:login|signin|verify|verificacion|secure|seguridad|update|actualiza|soporte|support|wallet|cuenta|factura|bloqueo)",
+    r"(?:login|signin|verify|verificacion|secure|seguridad|update|actualiza|actualizacion|soporte|support|wallet|cuenta|factura|bloqueo|phishing|malware|testsafebrowsing|credential|auth)",
     re.IGNORECASE,
 )
+
+OFFICIAL_BRAND_ROOTS = {
+    "bancolombia.com",
+    "nequi.com.co",
+    "daviplata.com",
+    "davivienda.com",
+    "dian.gov.co",
+    "paypal.com",
+    "microsoft.com",
+    "apple.com",
+    "icloud.com",
+    "whatsapp.com",
+    "google.com",
+    "binance.com",
+    "metamask.io",
+}
+
+SHARED_HOSTING_ROOTS = {
+    "appspot.com",
+    "github.io",
+    "vercel.app",
+    "netlify.app",
+    "pages.dev",
+    "web.app",
+    "firebaseapp.com",
+    "workers.dev",
+    "herokuapp.com",
+    "blogspot.com",
+    "onrender.com",
+    "glitch.me",
+}
 
 ARTIFACT_OWASP_RULES = [
     (
@@ -152,14 +183,35 @@ def evaluate_url_owasp(normalized_url: str, host: str, parsed, cert_records: int
             "detail": "Detectado " + " y ".join(reasons) + ". Los sitios de repacks/piratería o descargas directas sin verificación suelen distribuir infostealers o troyanos.",
         })
 
-    # OWASP A07: Identification and Authentication Failures (Phishing / Suplantación)
-    if PHISHING_BRAND_RE.search(host) or (PHISHING_ACTION_RE.search(decoded_url) and host.count("-") >= 2):
+    # OWASP A07: Identification and Authentication Failures (Phishing / Suplantación en URL completa)
+    parts = host.lower().strip(".").split(".")
+    root_domain = ".".join(parts[-2:]) if len(parts) >= 2 else host.lower()
+    is_official_brand = root_domain in OFFICIAL_BRAND_ROOTS
+    is_shared_paas = root_domain in SHARED_HOSTING_ROOTS and host.lower() != root_domain
+
+    brand_in_url = PHISHING_BRAND_RE.search(host) or PHISHING_BRAND_RE.search(path_and_query)
+    action_in_url = PHISHING_ACTION_RE.search(host) or PHISHING_ACTION_RE.search(path_and_query)
+
+    if is_shared_paas and (brand_in_url or action_in_url):
+        findings.append({
+            "rule_id": "OWASP-A07-PAAS-PHISHING",
+            "category": "A07:2021 Identification and Authentication Failures",
+            "severity": "HIGH",
+            "title": "Subdominio o ruta sospechosa en servicio de alojamiento compartido",
+            "detail": f"La URL completa se aloja en infraestructura compartida ({root_domain}) pero incluye indicadores de suplantación o amenaza en el subdominio o ruta ({host}{parsed.path or ''}).",
+        })
+    elif not is_official_brand and (
+        (brand_in_url and action_in_url)
+        or (brand_in_url and host.lower() != root_domain)
+        or (action_in_url and (host.count("-") >= 1 or "/phishing" in path_and_query.lower() or "/malware" in path_and_query.lower()))
+    ):
+        severity = "HIGH" if (brand_in_url and action_in_url) or "phishing" in decoded_url.lower() or "testsafebrowsing" in host.lower() else "MEDIUM"
         findings.append({
             "rule_id": "OWASP-A07-PHISHING-LURE",
             "category": "A07:2021 Identification and Authentication Failures",
-            "severity": "MEDIUM",
-            "title": "Posible señuelo de suplantación o robo de credenciales",
-            "detail": "El enlace combina términos de marca reconocida o autenticación en un dominio sospechoso.",
+            "severity": severity,
+            "title": "Señuelo de suplantación o captura de credenciales en URL completa",
+            "detail": "El dominio, subdominio o ruta contiene términos sensibles (marca/entidad o acción de verificación/login) fuera del dominio oficial, independientemente de si usa HTTPS.",
         })
 
     return findings

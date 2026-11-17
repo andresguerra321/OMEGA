@@ -8,19 +8,17 @@ export const SPRING_SNAPPY = { type: 'spring', stiffness: 420, damping: 32 };
 
 // Transición entre vistas (Inicio ↔ instrumentos y entre instrumentos).
 export const pageVariants = {
-  // Sin `filter`: crearía un contenedor de bloque para descendientes `position: fixed`.
-  initial: { opacity: 0, y: 14, scale: 0.992 },
+  // Sin `filter` ni `scale`: evita re-rasterización subpixel y mantiene `position: fixed`.
+  initial: { opacity: 0, y: 8 },
   animate: {
     opacity: 1,
     y: 0,
-    scale: 1,
-    transition: { duration: 0.36, ease: EASE_OUT },
+    transition: { duration: 0.22, ease: EASE_OUT },
   },
   exit: {
     opacity: 0,
-    y: -8,
-    scale: 0.996,
-    transition: { duration: 0.16, ease: 'easeIn' },
+    y: -6,
+    transition: { duration: 0.12, ease: 'easeIn' },
   },
 };
 

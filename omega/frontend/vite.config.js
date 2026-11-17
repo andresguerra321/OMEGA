@@ -12,9 +12,11 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             { name: 'vendor-three', test: /node_modules[\\/]three/ },
+            { name: 'vendor-motion', test: /node_modules[\\/]framer-motion/ },
             { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)/ },
             { name: 'vendor-markdown', test: /node_modules[\\/](react-markdown|remark-gfm|unified|mdast|micromark|hast)/ },
             { name: 'vendor-icons', test: /node_modules[\\/]lucide-react/ },
+            { name: 'vendor-qrcode', test: /node_modules[\\/]qrcode/ },
           ],
         },
       },

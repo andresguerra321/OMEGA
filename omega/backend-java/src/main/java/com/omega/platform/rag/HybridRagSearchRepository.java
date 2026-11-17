@@ -33,6 +33,9 @@ public class HybridRagSearchRepository {
             "donde", "sobre", "entre", "esta", "este", "estos", "estas", "ese", "esa", "esos",
             "esas", "del", "hay", "son", "fue", "fueron", "desde", "hasta", "cual", "cuales",
             "quien", "quienes", "segun", "sus", "sin", "mas", "pero", "estan", "tienen",
+            "hola", "buenas", "buenos", "dias", "tardes", "noches", "wey", "bro", "brother",
+            "papu", "cojones", "berger", "verga", "monda", "puedo", "hacer", "hago", "ayuda",
+            "porfa", "favor", "gracias", "algo", "todo", "todos", "todas",
             "the", "and", "for", "with", "what", "how", "where", "when", "who", "from", "this", "that", "into"
     );
 
@@ -262,16 +265,33 @@ public class HybridRagSearchRepository {
         }
 
         Matcher m = TOKEN_PATTERN.matcher(normalized);
-        while (m.find() && clauses.size() < 24) {
+        while (m.find() && clauses.size() < 28) {
             String tok = m.group();
             String ascii = stripAccents(tok);
             if (!ascii.chars().allMatch(Character::isDigit)
                     && !STOP_WORDS.contains(ascii)
                     && !cveSubTokensToSkip.contains(ascii)) {
                 clauses.add(tok);
+                expandSpanishCtiTerms(ascii, clauses);
             }
         }
         return String.join(" | ", clauses);
+    }
+
+    private static void expandSpanishCtiTerms(String ascii, Set<String> clauses) {
+        if (ascii.startsWith("proteg") || ascii.startsWith("protecc") || ascii.startsWith("defend")
+                || ascii.startsWith("defens") || ascii.startsWith("mitig") || ascii.startsWith("preven")
+                || ascii.startsWith("cuid") || ascii.startsWith("evit") || ascii.startsWith("segur")
+                || ascii.startsWith("recomend") || ascii.startsWith("consej") || ascii.startsWith("aislam")) {
+            clauses.addAll(List.of("spyware", "pegasus", "forensic", "target", "exploit", "ios", "android", "security", "detection"));
+        } else if (ascii.startsWith("celul") || ascii.startsWith("telefon") || ascii.startsWith("movil")
+                || ascii.startsWith("dispositiv") || ascii.startsWith("infect") || ascii.startsWith("espia")
+                || ascii.startsWith("espiar") || ascii.startsWith("hack") || ascii.startsWith("compromet")
+                || ascii.startsWith("ataqu") || ascii.startsWith("amenaz") || ascii.startsWith("vulnerab")) {
+            clauses.addAll(List.of("spyware", "pegasus", "predator", "mobile", "ios", "android", "exploit", "forensic", "indicator"));
+        } else if (ascii.startsWith("mensaj") || ascii.startsWith("enlac") || ascii.startsWith("phish")) {
+            clauses.addAll(List.of("sms", "link", "imessage", "whatsapp", "pegasus", "target"));
+        }
     }
 
     private static String stripAccents(String value) {

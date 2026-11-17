@@ -15,7 +15,17 @@ from datetime import datetime, timezone
 import ipaddress
 import json
 import logging
+import hashlib
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import threading
+import time
 from typing import Any
+
+from host_runtime import powershell, run_command
 
 from cti_db import get_catalog_freshness, lookup_iocs_detailed
 from forensic_scope import (
@@ -27,26 +37,193 @@ from yara_engine import scan_artifacts_with_yara
 
 logger = logging.getLogger(__name__)
 
-IMPERSONATED_WIN_BINARIES = {
-    "svchost.exe",
-    "lsass.exe",
-    "csrss.exe",
-    "winlogon.exe",
-    "services.exe",
-    "smss.exe",
-    "wmiutils.dll",
-    "taskhostw.exe",
-    "conhost.exe",
-    "dllhost.exe",
-    "agentservice.exe",
-}
+_SIGNATURE_CACHE: dict[tuple, tuple[float, dict]] = {}
+_SIGNATURE_LOCK = threading.Lock()
 
-LEGIT_WIN_PATH_MARKERS = (
-    "\\windows\\system32\\",
-    "\\windows\\syswow64\\",
-    "\\windows\\winsxs\\",
-    "\\windows\\systemapps\\",
-)
+
+def prime_windows_signature_cache(paths: list[str]):
+    """One PowerShell launch per audit, instead of one per executable."""
+    if sys.platform != 'win32':
+        return
+    pending = {}
+    with _SIGNATURE_LOCK:
+        for path in dict.fromkeys(paths):
+            try:
+                stat = Path(path).stat()
+                key = (str(Path(path).resolve()), stat.st_mtime_ns, stat.st_size)
+                cached = _SIGNATURE_CACHE.get(key)
+                if not cached or time.monotonic() - cached[0] >= 300:
+                    pending[path] = key
+            except OSError:
+                continue
+    if not pending:
+        return
+    try:
+        result = powershell("$paths=([Console]::In.ReadToEnd()|ConvertFrom-Json); $out=@(); foreach($p in $paths){try{"
+                            "$s=Get-AuthenticodeSignature -LiteralPath $p -ErrorAction Stop;"
+                            "$out+=@{path=$p;status=[string]$s.Status;publisher=[string]$s.SignerCertificate.Subject}"
+                            "}catch{}}; ConvertTo-Json -InputObject @($out) -Compress", input_text=json.dumps(list(pending)))
+        if result.returncode:
+            return
+        rows = json.loads(result.stdout.lstrip('\ufeff') or '[]')
+        with _SIGNATURE_LOCK:
+            for row in rows:
+                key = pending.get(row['path'])
+                stat = Path(row['path']).stat()
+                if key and (stat.st_mtime_ns, stat.st_size) == key[1:]:
+                    _SIGNATURE_CACHE[key] = (time.monotonic(), {'status': {'Valid': 'Valid', 'NotSigned': 'Unsigned', 'HashMismatch': 'Tampered'}.get(row['status'], 'Unknown'),
+                                                             'publisher': row['publisher'], 'teamIdentifier': '', 'verificationType': 'Authenticode', 'detail': row['status']})
+            while len(_SIGNATURE_CACHE) > 1024:
+                _SIGNATURE_CACHE.pop(next(iter(_SIGNATURE_CACHE)))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return
+
+
+def sha256_file(path: str) -> str:
+    """Hash regular files only, with a size bound and mutation detection."""
+    target = Path(path)
+    before = target.stat()
+    if not target.is_file() or before.st_size > 512 * 1024 * 1024:
+        raise ValueError('Archivo no regular o superior a 512 MiB')
+    digest = hashlib.sha256()
+    with target.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    after = target.stat()
+    if (before.st_mtime_ns, before.st_size, before.st_ino) != (after.st_mtime_ns, after.st_size, after.st_ino):
+        raise ValueError('El archivo cambió durante la lectura')
+    return digest.hexdigest()
+
+
+def verify_binary_signature(path: str, platform_name: str | None = None) -> dict:
+    """Unknown is distinct from unsigned. Linux checks package integrity, not Authenticode."""
+    platform_name = platform_name or sys.platform
+    unknown = {'status': 'Unknown', 'publisher': '', 'teamIdentifier': '', 'verificationType': '', 'detail': ''}
+    if path.endswith(' (deleted)'):
+        return {**unknown, 'status': 'Deleted', 'detail': 'El ejecutable ya no existe en disco.'}
+    if platform_name != sys.platform:
+        return {**unknown, 'detail': 'La firma requiere un recolector nativo del sistema de origen.'}
+    try:
+        stat = Path(path).stat()
+        if not Path(path).is_file():
+            return {**unknown, 'detail': 'No es un archivo regular.'}
+        key = (str(Path(path).resolve()), stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return {**unknown, 'detail': 'Archivo ausente o sin permiso de lectura.'}
+    with _SIGNATURE_LOCK:
+        cached = _SIGNATURE_CACHE.get(key)
+        if cached and time.monotonic() - cached[0] < 300:
+            return dict(cached[1])
+    result = dict(unknown)
+    try:
+        if platform_name == 'win32':
+            env = dict(os.environ, OMEGA_VERIFY_PATH=path)
+            output = powershell("$ErrorActionPreference='Stop'; $s=Get-AuthenticodeSignature -LiteralPath $env:OMEGA_VERIFY_PATH; "
+                                "@{status=[string]$s.Status;publisher=[string]$s.SignerCertificate.Subject}|ConvertTo-Json -Compress", env=env)
+            if output.returncode == 0:
+                data = json.loads(output.stdout.lstrip('\ufeff'))
+                state = {'Valid': 'Valid', 'NotSigned': 'Unsigned', 'HashMismatch': 'Tampered'}.get(data.get('status'), 'Unknown')
+                result.update(status=state, publisher=data.get('publisher', ''), verificationType='Authenticode', detail=data.get('status', ''))
+        elif platform_name == 'darwin':
+            check = run_command(['codesign', '--verify', '-vv', '--deep', '--strict', path])
+            info = run_command(['codesign', '-d', '--verbose=4', path])
+            text = info.stderr + info.stdout
+            authorities = re.findall(r'^Authority=(.+)$', text, re.M)
+            team = re.search(r'^TeamIdentifier=(.+)$', text, re.M)
+            state = 'Valid' if check.returncode == 0 else 'Unsigned' if 'not signed at all' in check.stderr else 'Unknown'
+            if 'invalid signature' in check.stderr or 'modified' in check.stderr:
+                state = 'Tampered'
+            result.update(status=state, publisher='; '.join(authorities), teamIdentifier=team[1] if team else '', verificationType='codesign', detail=check.stderr[:500])
+            if state == 'Valid':
+                apple = run_command(['codesign', '--verify', '--strict', '-R', '=anchor apple', path])
+                result['osVendorVerified'] = apple.returncode == 0
+        else:
+            import shutil
+            if shutil.which('dpkg-query'):
+                owner = run_command(['dpkg-query', '-S', path])
+                if owner.returncode == 0 and ': ' in owner.stdout:
+                    package = owner.stdout.split(': ', 1)[0].strip()
+                    check = run_command(['dpkg', '-V', package])
+                    relevant = [line for line in check.stdout.splitlines() if line.split() and line.split()[-1] == path]
+                    # dpkg does not cover every installed file; require a stored checksum for this exact file.
+                    sums = run_command(['dpkg-query', '--control-show', package, 'md5sums'])
+                    covered = any(line.split(maxsplit=1)[-1].lstrip('/') == path.lstrip('/') for line in sums.stdout.splitlines())
+                    state = 'Tampered' if relevant else 'Valid' if check.returncode in (0, 1) and sums.returncode == 0 and covered else 'Unknown'
+                    result.update(status=state, publisher=package, verificationType='dpkg-integrity', detail='Integridad de paquete; no es una firma del fabricante.')
+                elif owner.returncode == 1:
+                    result.update(status='Unmanaged', verificationType='dpkg-integrity')
+            elif shutil.which('rpm'):
+                owner = run_command(['rpm', '-qf', '--', path])
+                if owner.returncode == 0:
+                    check = run_command(['rpm', '-Vf', '--', path])
+                    relevant = [line for line in check.stdout.splitlines() if line.split() and line.split()[-1] == path]
+                    result.update(status='Tampered' if relevant else 'Valid' if check.returncode in (0, 1) else 'Unknown',
+                                  publisher=owner.stdout.strip(), verificationType='rpm-integrity', detail='Integridad de paquete; no es una firma del fabricante.')
+                elif owner.returncode == 1:
+                    result.update(status='Unmanaged', verificationType='rpm-integrity')
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        result['detail'] = f'Verificación no disponible: {type(exc).__name__}'
+    try:
+        after = Path(path).stat()
+        if (after.st_mtime_ns, after.st_size) != (stat.st_mtime_ns, stat.st_size):
+            return {**unknown, 'detail': 'El archivo cambió durante la verificación.'}
+    except OSError:
+        return unknown
+    with _SIGNATURE_LOCK:
+        if len(_SIGNATURE_CACHE) >= 512:
+            _SIGNATURE_CACHE.pop(next(iter(_SIGNATURE_CACHE)))
+        _SIGNATURE_CACHE[key] = (time.monotonic(), result)
+    return dict(result)
+
+
+def inspect_process_identity(proc: dict, platform_name: str) -> list[dict]:
+    """Evaluate measured process metadata; unavailable signatures never prove tampering."""
+    name = str(proc.get('name', '')).lower()
+    path = str(proc.get('exe_path', ''))
+    normalized = path.replace('\\', '/').lower()
+    signature = proc.get('signature') or {'status': proc.get('signature_status', 'Unknown'), 'publisher': proc.get('signer', '')}
+    critical = {
+        'svchost.exe': ('/windows/system32/svchost.exe',), 'lsass.exe': ('/windows/system32/lsass.exe',),
+        'csrss.exe': ('/windows/system32/csrss.exe',), 'services.exe': ('/windows/system32/services.exe',),
+        'winlogon.exe': ('/windows/system32/winlogon.exe',), 'smss.exe': ('/windows/system32/smss.exe',),
+        'taskhostw.exe': ('/windows/system32/taskhostw.exe',), 'conhost.exe': ('/windows/system32/conhost.exe',),
+        'dllhost.exe': ('/windows/system32/dllhost.exe',),
+        'launchd': ('/sbin/launchd',), 'windowserver': ('/system/library/privateframeworks/skylight.framework/versions/a/resources/windowserver',),
+        'springboard': ('/system/library/coreservices/springboard.app/springboard',),
+        'sshd': ('/usr/sbin/sshd',), 'systemd': ('/usr/lib/systemd/systemd', '/lib/systemd/systemd'),
+    }
+    findings = []
+    def add(category, severity, title, detail):
+        findings.append({'category': category, 'severity': severity, 'indicator': path or name,
+                         'artifact': f"Proceso PID {proc.get('pid', '')}", 'detail': detail,
+                         'userFriendlyTitle': title, 'userFriendlyExplanation': detail,
+                         'recommendedAction': 'Verifica el origen del programa y conserva el resultado para revisión técnica.',
+                         'targetPath': path, 'sha256': proc.get('sha256', ''), 'signatureStatus': signature.get('status', 'Unknown'), 'publisher': signature.get('publisher', '')})
+    if name in critical and path:
+        canonical = any(normalized == candidate or (platform_name == 'win32' and normalized == os.environ.get('SystemRoot', 'C:/Windows').replace('\\', '/').lower() + '/system32/' + name) for candidate in critical[name])
+        publisher = signature.get('publisher', '').lower()
+        bad_vendor = signature.get('status') == 'Valid' and ((platform_name == 'win32' and 'microsoft' not in publisher) or (platform_name == 'darwin' and 'apple' not in publisher))
+        if signature.get('status') == 'Valid' and platform_name == 'darwin' and signature.get('osVendorVerified') is False:
+            bad_vendor = True
+        if signature.get('status') == 'Valid' and platform_name.startswith('linux'):
+            allowed_packages = ('openssh', 'openssh-server') if name == 'sshd' else ('systemd',)
+            bad_vendor = not any(re.match(r'^' + re.escape(package) + r'(?:$|[-:])', publisher) for package in allowed_packages)
+        if not canonical or signature.get('status') in ('Tampered', 'Unsigned', 'Deleted', 'Unmanaged') or bad_vendor:
+            add('HOST_SYSTEM_BINARY_MASQUERADE', 'CRITICAL', 'Un programa parece hacerse pasar por un componente del sistema',
+                f"Nombre: {name}. Ruta canónica: {canonical}. Verificación: {signature.get('status', 'Unknown')}. Requiere investigación; no atribuye una familia de spyware.")
+    if path.endswith(' (deleted)') or normalized.startswith(('/tmp/', '/var/tmp/', '/dev/shm/')):
+        add('HOST_VOLATILE_EXECUTABLE', 'HIGH', 'Programa ejecutándose desde una ubicación temporal o eliminada', 'Esta ubicación dificulta verificar su origen y merece revisión; no demuestra infección por sí sola.')
+    privileged = proc.get('privileged') is True
+    if privileged:
+        env = proc.get('environment') or {}
+        injected = [key for key in ('LD_PRELOAD', 'DYLD_INSERT_LIBRARIES') if env.get(key)]
+        modules = [str(m) for m in proc.get('modules', []) if str(m).startswith(('/tmp/', '/var/tmp/', '/dev/shm/'))
+                   or str(m).endswith(' (deleted)') or any(marker in str(m).replace('\\', '/').lower()
+                   for marker in ('/appdata/local/temp/', '/windows/temp/', '/users/public/'))]
+        if injected or modules:
+            add('HOST_LIBRARY_INJECTION', 'HIGH', 'Un programa privilegiado carga bibliotecas que requieren revisión',
+                f"Variables de carga: {', '.join(injected) or 'ninguna'}. Módulos anómalos: {', '.join(modules[:10])}.")
+    return findings
 
 STRICT_TEMP_MARKERS = (
     "\\appdata\\local\\temp\\",
@@ -361,7 +538,6 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
         ppath = str(proc.get("exe_path") or "").strip()
         cmdline = str(proc.get("command_line") or "").strip()
         sig_status = str(proc.get("signature_status") or "").strip()
-        signer = str(proc.get("signer") or "").strip()
         sha = str(proc.get("sha256") or "").strip()
         pid = int(proc.get("pid") or 0)
 
@@ -370,30 +546,15 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
         if sha:
             sha256_candidates.append(sha)
 
-        pname_low = pname.lower()
         ppath_low = ppath.lower()
         sig_low = sig_status.lower()
-        is_unsigned = bool(sig_low) and sig_low not in ("valid", "signed", "ok")
+        is_unsigned = sig_low in ('unsigned', 'notsigned', 'tampered', 'hashmismatch', 'unmanaged')
 
-        # 2a. Suplantación de binarios del sistema Windows (Candiru / Trojans)
-        base_exe = pname_low if pname_low.endswith((".exe", ".dll")) else f"{pname_low}.exe"
-        if base_exe in IMPERSONATED_WIN_BINARIES or pname_low == "wmiutils":
-            in_legit_dir = any(m in ppath_low for m in LEGIT_WIN_PATH_MARKERS) if ppath_low else True
-            non_ms_signer = bool(signer) and "microsoft" not in signer.lower()
-            if (ppath_low and not in_legit_dir) or is_unsigned or non_ms_signer:
-                ind = ppath or pname
-                if ind not in seen_indicators:
-                    seen_indicators.add(ind)
-                    behavioral_anomalies.append({
-                        "category": "HOST_SYSTEM_BINARY_MASQUERADE",
-                        "severity": "CRITICAL",
-                        "indicator": ind,
-                        "artifact": f"Proceso PID {pid} ({pname})",
-                        "detail": (
-                            f"El proceso '{pname}' imita un componente crítico de Windows fuera de la ruta oficial o sin firma válida de Microsoft "
-                            f"(Firma: {sig_status or 'Desconocida'}). Técnica documentada en Candiru / DevilsTongue."
-                        ),
-                    })
+        # An unavailable signature alone does not establish masquerading.
+        for finding in inspect_process_identity(proc, platform_name):
+            if finding['indicator'] not in seen_indicators:
+                seen_indicators.add(finding['indicator'])
+                behavioral_anomalies.append(finding)
 
         # 2b. Ejecutable no firmado en rutas temporales / públicas
         in_risky_path = any(m in ppath_low for m in HIGH_RISK_TEMP_MARKERS)

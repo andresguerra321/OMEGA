@@ -35,3 +35,19 @@ Thumbs.db
 *.log
 *.tmp
 
+# Local agent instructions, skills and design context
+AGENTS.md
+SKILL.md
+DESIGN.md
+.agents/
+.codex/
+.gemini/
+.impeccable/
+skills/
+graphify-out/
+
+# Local test caches
+.pytest_cache/
+.pytest-phase1*/
+.pytest-phase*/
+

@@ -46,6 +46,40 @@ function resolveApiOrigin() {
 const API_ORIGIN = resolveApiOrigin();
 const API_V1 = `${API_ORIGIN}/api/v1`;
 
+export function getHostRealtimeStatus() {
+  return apiFetch('/forensics/host/realtime/status');
+}
+
+export function toggleHostRealtime(enabled) {
+  return apiFetch('/forensics/host/realtime/toggle', {
+    method: 'POST', body: { enabled },
+  });
+}
+
+export function auditHostPersistence() {
+  return apiFetch('/forensics/host/persistence/audit', { method: 'POST', body: {} });
+}
+
+export function previewContainment(candidate) {
+  return apiFetch('/forensic/containment/execute', { method: 'POST', body: { ...candidate, dryRun: true } });
+}
+
+export function executeContainment(candidate, previewToken, credentials) {
+  return apiFetch('/forensic/containment/execute', { method: 'POST', body: { ...candidate, dryRun: false, previewToken, ...credentials } });
+}
+
+export function containmentChallenge(currentPassword) {
+  return apiFetch('/forensic/containment/challenge', { method: 'POST', body: { currentPassword } });
+}
+
+export function containmentHistory() {
+  return apiFetch('/forensic/containment/history');
+}
+
+export function rollbackContainment(actionId, credentials) {
+  return apiFetch(`/forensic/containment/rollback/${encodeURIComponent(actionId)}`, { method: 'POST', body: credentials });
+}
+
 function emitAuthChanged(session) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('omega:auth-changed', { detail: session || null }));
@@ -190,7 +224,7 @@ function buildFriendlyError(status, payload, fallbackMessage) {
   return detail || payload?.title || fallbackMessage || `Error HTTP ${status}`;
 }
 
-async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false } = {}) {
+async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json' } = {}) {
   const url = rawUrl ? path : `${API_V1}${path}`;
   const reqHeaders = new Headers(headers);
   const session = getAuthSession();
@@ -225,6 +259,8 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
     throw err;
   }
 
+  if (response.ok && responseType === 'blob') return response.blob();
+
   let parsed = null;
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json') || contentType.includes('application/problem+json')) {
@@ -247,6 +283,11 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
   }
 
   return parsed;
+}
+
+export function exportExpedienteDossier(expedienteId, format = 'pdf') {
+  if (!expedienteId || !['pdf', 'json'].includes(format)) throw new Error('Selecciona un expediente y un formato válido.');
+  return apiFetch(`/expedientes/${encodeURIComponent(expedienteId)}/export/${format}`, { responseType: 'blob' });
 }
 
 function base64ToBlob(base64Str, mimeType = 'application/octet-stream') {
@@ -612,10 +653,18 @@ export async function sendChatQuery(
   options = {},
 ) {
   const expedienteId = options?.expedienteId || null;
+  const analysisContext =
+    typeof options?.analysisContext === 'string' && options.analysisContext.trim()
+      ? options.analysisContext.trim().slice(0, 4000)
+      : null;
   if (expedienteId) {
     const res = await apiFetch(`/expedientes/${expedienteId}/query`, {
       method: 'POST',
-      body: { question: query, topK },
+      body: {
+        question: query,
+        topK,
+        ...(analysisContext ? { analysis_context: analysisContext } : {}),
+      },
     });
     return normalizeRagResponse(res, expedienteId);
   }
@@ -627,6 +676,7 @@ export async function sendChatQuery(
       topK,
       source_filter: sourceFilter || null,
       general_mode: Boolean(options?.generalMode),
+      ...(analysisContext ? { analysis_context: analysisContext } : {}),
     },
   });
   return normalizeRagResponse(res, null);
@@ -789,14 +839,40 @@ export async function resolveEncryptedIosManifestTargets(manifestPlistB64, manif
   });
 }
 
-export async function verifySuspiciousLink(url, expedienteId = null) {
+export async function verifySuspiciousLink(url, expedienteId = null, activeProbe = false) {
   return apiFetch('/forensics/link/verify', {
     method: 'POST',
     body: {
       url,
       expedienteId: expedienteId || undefined,
+      activeProbe,
     },
   });
+}
+
+export async function fetchMobileUsbDevices() {
+  return apiFetch('/forensic/mobile/devices');
+}
+
+export async function startMobileUsbAudit({
+  platform,
+  deviceId,
+  backupPassword = '',
+  asyncMode = false,
+} = {}) {
+  return apiFetch('/forensic/mobile/audit', {
+    method: 'POST',
+    body: {
+      platform,
+      device_id: deviceId,
+      ...(backupPassword ? { backup_password: backupPassword } : {}),
+      async_mode: Boolean(asyncMode),
+    },
+  });
+}
+
+export async function fetchMobileUsbAuditJob(jobId) {
+  return apiFetch(`/forensic/mobile/audit/${encodeURIComponent(String(jobId || '').trim())}`);
 }
 
 // ---------- OSINT Multi-Tenant ----------

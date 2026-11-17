@@ -1,3 +1,4 @@
+import DossierExportButtons from './DossierExportButtons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { messageVariants, staggerContainer, fadeUpItem, hoverLift, tapPress } from '../lib/motion';
@@ -238,6 +239,7 @@ export function ChatWorkspace({
   usePrivateDocs = false,
   onTogglePrivateDocs,
   privateDocs = [],
+  activeExpedienteId = null,
   loadingDocs = false,
   uploadingPdf = false,
   docNotice = '',
@@ -497,6 +499,7 @@ export function ChatWorkspace({
           </div>
         )}
 
+        {showDocsStrip && <DossierExportButtons expedienteId={activeExpedienteId} />}
         {(docNotice || docError) && (
           <div
             className={`flex items-center justify-between gap-2 rounded-[8px] px-2.5 py-1.5 text-[11.5px] ${

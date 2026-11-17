@@ -28,7 +28,28 @@ def get_db_dsn() -> str:
 
 
 def get_connection() -> psycopg.Connection:
-    return psycopg.connect(get_db_dsn())
+    return psycopg.connect(get_db_dsn(), connect_timeout=5)
+
+
+def load_host_iocs() -> list[dict[str, Any]]:
+    """Load the current ingested CTI snapshot, never synthetic fallback indicators.
+
+    The existing schema has no expiry/revocation columns. Catalog freshness and
+    that limitation must be reported rather than describing old entries as live C2.
+    """
+    rows = []
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for relation, value_column in (('omega_rag.ioc_indicators', 'normalized_value'), ('public.iocs', 'ioc_value')):
+                if not _has_relation(cur, relation):
+                    continue
+                # Identifiers are fixed constants, not request data.
+                cur.execute(f'SELECT ioc_type, {value_column} FROM {relation} LIMIT 200001')
+                values = cur.fetchall()
+                if len(values) > 200000:
+                    raise ValueError('El catálogo excede el límite de 200000 indicadores por fuente')
+                rows.extend({'ioc_type': str(kind), 'ioc_value': str(value), 'source': relation} for kind, value in values)
+    return rows
 
 
 def _has_relation(cur: psycopg.Cursor, regclass_name: str) -> bool:

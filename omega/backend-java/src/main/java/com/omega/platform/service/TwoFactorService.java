@@ -316,6 +316,18 @@ public class TwoFactorService {
     }
 
     @Transactional(noRollbackFor = BadCredentialsException.class)
+    public void verifyContainmentChallenge(UUID userId, String token, String code) {
+        UUID id = parseChallengeUuid(token);
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM omega_rag.mfa_challenges WHERE id = ? AND user_id = ? AND purpose = 'LOGIN'", Integer.class, id, userId);
+        if (count == null || count != 1) {
+            throw new BadCredentialsException("Desafío 2FA ajeno o inválido");
+        }
+        UserEntity verified = verifyLoginChallenge(token, code);
+        if (!verified.getId().equals(userId)) throw new BadCredentialsException("Usuario del desafío no válido");
+    }
+
+    @Transactional(noRollbackFor = BadCredentialsException.class)
     public UserEntity verifyLoginChallenge(String rawChallengeToken, String rawCode) {
         UUID challengeId = parseChallengeUuid(rawChallengeToken);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
@@ -323,6 +335,7 @@ public class TwoFactorService {
                 SELECT id, user_id, method, email_code_hash, attempts
                 FROM omega_rag.mfa_challenges
                 WHERE id = ? AND purpose = 'LOGIN' AND consumed_at IS NULL AND expires_at > NOW()
+                FOR UPDATE
                 """,
                 challengeId);
         if (rows.isEmpty()) {

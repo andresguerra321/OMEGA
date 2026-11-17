@@ -41,12 +41,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Extractor efímero en RAM para analizar reportes CTI públicos por URL con protección estricta anti-SSRF
- * (bloqueo de localhost, RFC1918, CGNAT, link-local / metadata 169.254.169.254, redirecciones privadas
+ * Extractor efímero en RAM para analizar reportes CTI públicos por URL con
+ * protección estricta anti-SSRF
+ * (bloqueo de localhost, RFC1918, CGNAT, link-local / metadata 169.254.169.254,
+ * redirecciones privadas
  * y conexión TCP fijada a la IP validada para mitigar DNS rebinding).
  */
 @Service
 public class WebIntelExtractorService {
+    @org.springframework.beans.factory.annotation.Value("${omega.ai.provider:openai}")
+    private String aiProvider = "openai";
 
     private static final int MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024;
     private static final int MAX_REDIRECTS = 3;
@@ -57,6 +61,12 @@ public class WebIntelExtractorService {
 
     private static final Pattern TITLE_PATTERN = Pattern.compile("<title[^>]*>(.*?)</title>",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern PASSWORD_INPUT_PATTERN = Pattern.compile(
+            "<input[^>]*type\\s*=\\s*[\"']?password[\"']?[^>]*>",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern IFRAME_PATTERN = Pattern.compile("<iframe\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern OBFUSCATED_JS_PATTERN = Pattern.compile(
+            "(?i)\\b(eval\\s*\\(|atob\\s*\\(|fromCharCode|unescape\\s*\\(|document\\.write\\s*\\()");
     private static final Pattern SCRIPT_STYLE_PATTERN = Pattern.compile("<(script|style|noscript)[^>]*>.*?</\\1>",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
@@ -83,8 +93,7 @@ public class WebIntelExtractorService {
                 auditLogService,
                 InetAddress::getAllByName,
                 WebIntelExtractorService::isPublicRoutableAddress,
-                (SSLSocketFactory) SSLSocketFactory.getDefault()
-        );
+                (SSLSocketFactory) SSLSocketFactory.getDefault());
     }
 
     WebIntelExtractorService(
@@ -92,8 +101,7 @@ public class WebIntelExtractorService {
             AuditLogService auditLogService,
             DnsResolver dnsResolver,
             Predicate<InetAddress> addressPolicy,
-            SSLSocketFactory sslSocketFactory
-    ) {
+            SSLSocketFactory sslSocketFactory) {
         this.publicSchemaSupport = publicSchemaSupport;
         this.auditLogService = auditLogService;
         this.dnsResolver = dnsResolver;
@@ -106,6 +114,8 @@ public class WebIntelExtractorService {
             OmegaPrincipal principal,
             String rawUrl,
             List<String> activeNet4Ips) {
+        if ("ollama".equals(aiProvider)) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Exploración web deshabilitada en Modo Soberano Local.");
         ValidatedTarget target = parseAndValidatePublicTarget(rawUrl, dnsResolver, addressPolicy);
         String html = fetchBoundedHtmlWithSafeRedirects(target);
 
@@ -115,6 +125,7 @@ public class WebIntelExtractorService {
         List<String> ipv4s = extractDistinctPublicIpv4s(cleanText);
         List<String> domains = extractDistinctDomains(cleanText, target.uri().getHost());
         List<String> cves = extractDistinctCves(cleanText);
+        List<String> htmlRiskSignals = extractHtmlRiskSignals(html);
 
         Set<String> activeSet = new LinkedHashSet<>();
         if (activeNet4Ips != null) {
@@ -157,22 +168,21 @@ public class WebIntelExtractorService {
                 matchedLiveNet4,
                 knownMatches,
                 false,
-                preview);
+                preview,
+                htmlRiskSignals);
     }
 
     static URI parseAndValidatePublicUri(String rawUrl) {
         return parseAndValidatePublicTarget(
                 rawUrl,
                 InetAddress::getAllByName,
-                WebIntelExtractorService::isPublicRoutableAddress
-        ).uri();
+                WebIntelExtractorService::isPublicRoutableAddress).uri();
     }
 
     static ValidatedTarget parseAndValidatePublicTarget(
             String rawUrl,
             DnsResolver dnsResolver,
-            Predicate<InetAddress> addressPolicy
-    ) {
+            Predicate<InetAddress> addressPolicy) {
         if (rawUrl == null || rawUrl.isBlank()) {
             throw new InvalidDocumentException("La URL del reporte público es obligatoria.");
         }
@@ -215,7 +225,8 @@ public class WebIntelExtractorService {
                     throw new InvalidDocumentException(
                             "URL bloqueada por política anti-SSRF: IP privada, loopback o reservada (" + host + ").");
                 }
-                if (pinnedAddress == null || (!(pinnedAddress instanceof Inet4Address) && addr instanceof Inet4Address)) {
+                if (pinnedAddress == null
+                        || (!(pinnedAddress instanceof Inet4Address) && addr instanceof Inet4Address)) {
                     pinnedAddress = addr;
                 }
             }
@@ -332,8 +343,7 @@ public class WebIntelExtractorService {
             InetAddress pinnedAddress,
             String peerHost,
             int port,
-            boolean isHttps
-    ) throws IOException {
+            boolean isHttps) throws IOException {
         Socket plain = new Socket(Proxy.NO_PROXY);
         try {
             plain.connect(new InetSocketAddress(pinnedAddress, port), CONNECT_TIMEOUT_MS);
@@ -656,6 +666,23 @@ public class WebIntelExtractorService {
         return new ArrayList<>(found);
     }
 
+    private static List<String> extractHtmlRiskSignals(String html) {
+        if (html == null || html.isBlank()) {
+            return List.of();
+        }
+        List<String> signals = new ArrayList<>();
+        if (PASSWORD_INPUT_PATTERN.matcher(html).find()) {
+            signals.add("Formulario con campo de contraseña (posible captura de credenciales si el dominio no es oficial)");
+        }
+        if (IFRAME_PATTERN.matcher(html).find()) {
+            signals.add("Contiene <iframe> embebido (posible carga de contenido externo o clickjacking)");
+        }
+        if (OBFUSCATED_JS_PATTERN.matcher(html).find()) {
+            signals.add("Patrones de JavaScript dinámico u ofuscado (eval/atob/fromCharCode/document.write)");
+        }
+        return signals;
+    }
+
     public record WebIntelScanResponse(
             String url,
             String title,
@@ -665,6 +692,19 @@ public class WebIntelExtractorService {
             @JsonProperty("matched_live_net4") List<String> matchedLiveNet4,
             @JsonProperty("known_cti_matches") List<CtiMatchRecord> knownCtiMatches,
             @JsonProperty("persisted_to_db") boolean persistedToDb,
-            @JsonProperty("chunks_preview") String chunksPreview) {
+            @JsonProperty("chunks_preview") String chunksPreview,
+            @JsonProperty("html_risk_signals") List<String> htmlRiskSignals) {
+        public WebIntelScanResponse(
+                String url,
+                String title,
+                List<String> ipv4Iocs,
+                List<String> domains,
+                List<String> cves,
+                List<String> matchedLiveNet4,
+                List<CtiMatchRecord> knownCtiMatches,
+                boolean persistedToDb,
+                String chunksPreview) {
+            this(url, title, ipv4Iocs, domains, cves, matchedLiveNet4, knownCtiMatches, persistedToDb, chunksPreview, List.of());
+        }
     }
 }

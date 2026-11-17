@@ -186,4 +186,23 @@ class OpenAiRagAnswerGeneratorTest {
         assertThat(generator.resolveActiveGeneratorModel()).isEqualTo("llama3.2");
         assertThat(chain.get(0).apiKey()).isEmpty();
     }
+
+    @Test
+    void usesAnalysisContextInPromptAndDeterministicFallbackInsteadOfUnrelatedDump() {
+        OmegaProperties props = new OmegaProperties(
+                new OmegaProperties.Security("secret", 3600, "iss", true, "", "internal"),
+                new OmegaProperties.Ingest("/tmp", 1024, "/usr/share/tessdata"),
+                new OmegaProperties.Rag("openai", "text-embedding-3-small", 1536, "https://api.openai.com/v1", "", 16, 1, "gpt-4o-mini", 60, 1.0, 1.0, 500, 1000, 120),
+                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
+                new OmegaProperties.Cti("../corpus_mvp/iocs")
+        );
+        OpenAiRagAnswerGenerator generator = new OpenAiRagAnswerGenerator(RestClient.create(), props);
+        String telemetry = "URL analizada: http://testsafebrowsing.appspot.com/s/phishing.html\nNivel de riesgo: HIGH\nReglas OWASP activadas: [OWASP-A02-NO-TLS HIGH] Sin HTTPS";
+
+        String answer = generator.generateGroundedAnswer("pero que tiene esta web de maliciosa", List.of(), telemetry);
+        assertThat(answer)
+                .contains("Análisis técnico de la web / enlace inspeccionado en OMEGA")
+                .contains("testsafebrowsing.appspot.com")
+                .contains("OWASP-A02-NO-TLS");
+    }
 }

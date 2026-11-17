@@ -1,3 +1,4 @@
+import DossierExportButtons from './DossierExportButtons';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -110,6 +111,7 @@ export function AuthAccessForm({
   const [showRecoverPwd, setShowRecoverPwd] = useState(false);
   const [showConfirmRecoverPwd, setShowConfirmRecoverPwd] = useState(false);
   const otpRefs = useRef([]);
+  const recoverTimerRef = useRef(null);
   const [mfaChallenge, setMfaChallenge] = useState(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaBackupMode, setMfaBackupMode] = useState(false);
@@ -301,16 +303,28 @@ export function AuthAccessForm({
         newPassword: recoverForm.newPassword,
         tenantSlug: loginForm.tenantSlug,
       });
-      setLoginForm((p) => ({ ...p, email: recoverForm.email, password: '' }));
+      const recoveredEmail = recoverForm.email;
+      const doneMsg = res?.message || 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.';
+      setLoginForm((p) => ({ ...p, email: recoveredEmail, password: '' }));
       setRecoverForm({
-        email: '',
+        email: recoveredEmail,
         code: '',
         newPassword: '',
         confirmPassword: '',
-        step: 'request',
-        statusMessage: res?.message || 'Contraseña actualizada correctamente.',
+        step: 'completed',
+        statusMessage: doneMsg,
       });
-      setTab('login');
+      if (recoverTimerRef.current) {
+        clearTimeout(recoverTimerRef.current);
+      }
+      recoverTimerRef.current = setTimeout(() => {
+        setRecoverForm((prev) => ({
+          ...prev,
+          email: '',
+          step: 'request',
+        }));
+        selectTab('login');
+      }, 2200);
     } catch (err) {
       setErrorState({
         tab: 'recover',
@@ -607,12 +621,64 @@ export function AuthAccessForm({
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            if (recoverForm.step === 'completed') return;
             void guard(() =>
               recoverForm.step === 'confirm' ? handleRecoverConfirm(e) : handleRecoverRequest(e)
             );
           }}
           className={`motion-safe:animate-panel-switch ${minimalChrome ? 'space-y-3.5' : 'space-y-3'}`}
         >
+          {recoverForm.step === 'completed' ? (
+            <div className="py-4 text-center space-y-4 motion-safe:animate-fade-up">
+              <div className="relative mx-auto flex h-18 w-18 items-center justify-center rounded-3xl border border-[#30D158]/50 bg-gradient-to-b from-[#30D158]/28 via-[#2F6FED]/18 to-[#0A0A0C]/90 shadow-[0_12px_40px_rgba(48,209,88,0.32),inset_0_1px_0_rgba(255,255,255,0.22)]">
+                <span className="absolute inset-0 rounded-3xl border border-[#30D158]/40 animate-ping opacity-25 pointer-events-none" />
+                <CheckCircle2 className="h-9 w-9 text-[#30D158]" />
+                <span className="absolute -bottom-1 -right-1 flex h-5.5 w-5.5 items-center justify-center rounded-full bg-[#2F6FED] text-[10px] font-bold text-white shadow-[0_0_12px_rgba(47,111,237,0.8)]">
+                  Ω
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-[#30D158]/35 bg-[#30D158]/12 text-[10.5px] font-semibold tracking-[0.08em] uppercase text-[#86EFAC]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#30D158] animate-pulse" />
+                  Completado
+                </div>
+                <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
+                  ¡Contraseña restablecida!
+                </h2>
+                <p className="text-[12px] text-[#9FA6B8] max-w-[300px] mx-auto">
+                  Tu nueva clave ha sido cifrada y verificada. Redirigiendo al inicio de sesión…
+                </p>
+              </div>
+
+              <div className="w-44 mx-auto h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#2F6FED] to-[#30D158]"
+                  style={{ width: '100%', animation: 'pulse 1.1s ease-in-out infinite' }}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (recoverTimerRef.current) {
+                    clearTimeout(recoverTimerRef.current);
+                  }
+                  setRecoverForm((prev) => ({
+                    ...prev,
+                    email: '',
+                    step: 'request',
+                  }));
+                  selectTab('login');
+                }}
+                className="w-full h-10 rounded-[10px] bg-[#2F6FED] border border-white/15 hover:brightness-110 text-[13px] font-medium text-white inline-flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
+              >
+                <span>Continuar al inicio de sesión</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <>
           {recoverForm.statusMessage && (
             <div className="rounded-[10px] border border-[#30D158]/35 bg-[#30D158]/10 px-3.5 py-2.5 text-[12px] text-[#CFFAD9]">
               {recoverForm.statusMessage}
@@ -813,14 +879,25 @@ export function AuthAccessForm({
             disabled={loading}
             className="group w-full h-10.5 mt-1 rounded-[10px] bg-[#2F6FED] border border-white/15 hover:brightness-110 disabled:opacity-50 text-[13px] font-medium text-white inline-flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
           >
-            <span>
-              {loading
-                ? 'Procesando...'
-                : recoverForm.step === 'confirm'
-                  ? 'Restablecer contraseña'
-                  : 'Enviar código de recuperación'}
-            </span>
-            {!loading && <ArrowRight className="h-3.5 w-3.5" />}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.24s]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.12s]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce" />
+                </span>
+                <span>{recoverForm.step === 'confirm' ? 'Verificando código...' : 'Enviando código...'}</span>
+              </span>
+            ) : (
+              <>
+                <span>
+                  {recoverForm.step === 'confirm'
+                    ? 'Restablecer contraseña'
+                    : 'Enviar código de recuperación'}
+                </span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </>
+            )}
           </button>
 
           <div className="flex items-center justify-between pt-1 text-[11.5px]">
@@ -844,6 +921,8 @@ export function AuthAccessForm({
               Volver a iniciar sesión
             </button>
           </div>
+          </>
+          )}
         </form>
       ) : tab === 'login' ? (
         <form
@@ -852,6 +931,12 @@ export function AuthAccessForm({
           onSubmit={(e) => { e.preventDefault(); void guard(() => handleLoginSubmit(e)); }}
           className={`motion-safe:animate-panel-switch ${minimalChrome ? 'space-y-3.5' : 'space-y-3'}`}
         >
+          {recoverForm.statusMessage && (
+            <div className="motion-safe:animate-fade-up flex items-center gap-2 rounded-[10px] border border-[#30D158]/35 bg-[#30D158]/12 px-3.5 py-2.5 text-[12px] text-[#CFFAD9]">
+              <CheckCircle2 className="h-4 w-4 text-[#30D158] shrink-0" />
+              <span>{recoverForm.statusMessage}</span>
+            </div>
+          )}
           <div>
             <label
               htmlFor={`${uid}-login-email`}
@@ -1267,6 +1352,7 @@ export function AuthModulePanel({
   onLogout,
   govStats,
   privateDocs = [],
+  activeExpedienteId = null,
   loadingDocs = false,
   uploadingPdf = false,
   docNotice = '',
@@ -1507,6 +1593,7 @@ export function AuthModulePanel({
                   </div>
                 )}
 
+                <DossierExportButtons expedienteId={activeExpedienteId} />
                 {privateDocs.length === 0 ? (
                   <div className="rounded-[13px] border border-dashed border-white/[0.12] bg-black/25 p-6 text-center space-y-2">
                     <FileText className="h-6 w-6 text-[#2F6FED] mx-auto" />

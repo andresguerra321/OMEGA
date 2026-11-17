@@ -14,7 +14,33 @@ public final class ForensicWorkerContracts {
     private ForensicWorkerContracts() {
     }
 
-    public record LinkCheckRequest(String url) {
+    public record RealtimeToggleRequest(@jakarta.validation.constraints.NotNull Boolean enabled) {}
+
+    public record HostIndicator(String ioc_type, String ioc_value, String source) {}
+
+    public record PersistenceFinding(
+            String id, String category, String persistenceType, String location, String targetPath,
+            String sha256, String signatureStatus, String publisher, String severity,
+            String userFriendlyTitle, String userFriendlyExplanation, String recommendedAction,
+            Map<String, Object> evidence, List<Map<String, Object>> ctiMatches
+    ) {}
+
+    public record PersistenceAuditResponse(
+            String scope, String platform, String hostname, String collectedAt,
+            List<PersistenceFinding> findings, List<Map<String, Object>> processes,
+            List<Map<String, Object>> processFindings, List<String> limitations, boolean complete, String notice
+    ) {}
+
+    public record RealtimeStatus(
+            boolean enabled, boolean running, boolean active, String state, String scope, String hostname,
+            String platform, double intervalSeconds, String lastCheck, int indicatorCount,
+            boolean catalogLoaded, String catalogVersion, String catalogError, String sensorError,
+            String dnsCoverage, List<Map<String, Object>> alerts, int alertCount,
+            Map<String, Object> capabilities, String notice
+    ) {}
+
+    public record LinkCheckRequest(String url, boolean activeProbe) {
+        public LinkCheckRequest(String url) { this(url, false); }
     }
 
     public record CtiLinkMatch(
@@ -41,9 +67,29 @@ public final class ForensicWorkerContracts {
             List<String> heuristics,
             @JsonProperty("passive_ct_certificates") Integer passiveCtCertificates,
             @JsonProperty("cti_matches") List<CtiLinkMatch> ctiMatches,
-            @JsonProperty("privacy_notice") String privacyNotice
+            @JsonProperty("privacy_notice") String privacyNotice,
+            Integer domainAgeDays, Boolean freshTlsCertificate, Boolean cloakingDetected,
+            Integer evasionRiskScore, List<String> evasionReasons,
+            @JsonProperty("infrastructure_intelligence") Map<String, Object> infrastructureIntelligence
     ) {
+        public LinkVerifyResponse(String normalizedUrl, String host, String rootDomain, String scheme, String path,
+                String riskLevel, String verdict, String recommendation, List<String> heuristics,
+                Integer passiveCtCertificates, List<CtiLinkMatch> ctiMatches, String privacyNotice) {
+            this(normalizedUrl, host, rootDomain, scheme, path, riskLevel, verdict, recommendation, heuristics,
+                    passiveCtCertificates, ctiMatches, privacyNotice, null, null, null, null, List.of(), Map.of());
+        }
     }
+
+    public record ContainmentRequest(
+            @jakarta.validation.constraints.NotBlank String actionType,
+            @jakarta.validation.constraints.NotNull Map<String, Object> target,
+            @jakarta.validation.constraints.NotNull Boolean dryRun,
+            String previewToken, String currentPassword, String challengeToken, String code, java.util.UUID expedienteId
+    ) {}
+
+    public record ContainmentCredentials(
+            @jakarta.validation.constraints.NotBlank String currentPassword, String challengeToken, String code, java.util.UUID expedienteId
+    ) {}
 
     public record YaraRuleResponse(
             @JsonProperty("campaign_id") String campaignId,
@@ -99,6 +145,14 @@ public final class ForensicWorkerContracts {
             @JsonProperty("hits_count") int hitsCount,
             List<Map<String, Object>> hits,
             @JsonProperty("yara_engine") Map<String, Object> yaraEngine
+    ) {
+    }
+
+    public record MobileUsbAuditWorkerRequest(
+            String platform,
+            @JsonProperty("device_id") String deviceId,
+            @JsonProperty("backup_password") String backupPassword,
+            @JsonProperty("async_mode") boolean asyncMode
     ) {
     }
 }

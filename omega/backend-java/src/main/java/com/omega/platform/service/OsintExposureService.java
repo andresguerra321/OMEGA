@@ -49,6 +49,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class OsintExposureService {
+    @Value("${omega.ai.provider:openai}")
+    private String aiProvider = "openai";
 
     private static final Logger log = LoggerFactory.getLogger(OsintExposureService.class);
     private static final Pattern DOMAIN_PATTERN =
@@ -146,6 +148,8 @@ public class OsintExposureService {
 
     @Transactional
     public OsintScanReport scanAsset(OmegaPrincipal principal, UUID assetId) {
+        if ("ollama".equals(aiProvider)) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "OSINT externo deshabilitado en Modo Soberano Local.");
         OsintMonitoredAssetEntity asset = assetRepository
                 .findByIdAndTenantIdAndUserId(assetId, principal.tenantId(), principal.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Activo OSINT no encontrado: " + assetId));
@@ -360,7 +364,40 @@ public class OsintExposureService {
         } catch (Exception ex) {
             log.debug("Consulta pasiva crt.sh omitida para {}: {}", domain, ex.getMessage());
         }
+
+        if (subdomains.isEmpty()) {
+            fetchHackerTargetSubdomains(domain, subdomains);
+        }
         return new ArrayList<>(subdomains);
+    }
+
+    private void fetchHackerTargetSubdomains(String domain, Set<String> subdomains) {
+        try {
+            String encoded = URLEncoder.encode(domain, StandardCharsets.UTF_8);
+            HttpRequest req = HttpRequest.newBuilder(URI.create("https://api.hackertarget.com/hostsearch/?q=" + encoded))
+                    .timeout(Duration.ofSeconds(4))
+                    .header("User-Agent", "OMEGA-OSINT-Passive/1.0")
+                    .GET()
+                    .build();
+            HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() == 200 && res.body() != null) {
+                for (String line : res.body().split("\\R")) {
+                    int comma = line.indexOf(',');
+                    if (comma <= 0) continue;
+                    String candidate = line.substring(0, comma).trim().toLowerCase(Locale.ROOT);
+                    if (!candidate.isBlank()
+                            && !candidate.equals(domain)
+                            && candidate.endsWith("." + domain)) {
+                        subdomains.add(candidate);
+                        if (subdomains.size() >= 30) {
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Fallback HackerTarget omitido para {}: {}", domain, ex.getMessage());
+        }
     }
 
     private static String readBoundedJson(InputStream is) throws IOException {

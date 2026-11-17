@@ -259,15 +259,31 @@ export function OsintPanel({
               <button
                 type="button"
                 onClick={() => {
+                  const telemetry = [
+                    `Activo OSINT auditado: ${report.asset_value}`,
+                    `Coincidencias CTI spyware: ${ctiMatches.length}`,
+                    ctiMatches.length > 0
+                      ? `Detalle CTI: ${ctiMatches.slice(0, 5).map((m) => `${m.ioc_value} (${m.spyware_family || 'CTI'})`).join(', ')}`
+                      : '',
+                    `SPF configurado: ${dns.spf_configured ? dns.spf_record || 'Sí' : 'No'}`,
+                    `DMARC configurado: ${dns.dmarc_configured ? dns.dmarc_record || 'Sí' : 'No'}`,
+                    `Subdominios crt.sh: ${subdomains.length}`,
+                    isEmailReport ? `Brechas de correo (HIBP): ${breaches.length}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join('\n');
                   const prompt = [
                     `Analiza defensivamente la exposición pública del activo ${report.asset_value}:`,
-                    `- Coincidencias CTI spyware: ${(report.cti_ioc_matches || []).length}`,
+                    `- Coincidencias CTI spyware: ${ctiMatches.length}`,
                     `- SPF configurado: ${dns.spf_configured ? dns.spf_record || 'Sí' : 'No'}`,
                     `- DMARC configurado: ${dns.dmarc_configured ? dns.dmarc_record || 'Sí' : 'No'}`,
                     `- Subdominios crt.sh: ${subdomains.length}`,
                     `¿Cómo pueden abusar campañas de spyware 1-click o phishing de esta superficie y qué medidas defensivas priorizar?`,
                   ].join('\n');
-                  onAskInChat(prompt);
+                  onAskInChat(prompt, {
+                    analysisContext: telemetry,
+                    pinnedContext: report.asset_value,
+                  });
                 }}
                 className="inline-flex items-center rounded-[9px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
               >

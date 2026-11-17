@@ -195,6 +195,18 @@ public class StixCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public List<com.omega.platform.integration.forensic.ForensicWorkerContracts.HostIndicator> hostIndicators() {
+        var rows = indicatorRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 200001));
+        if (rows.getTotalElements() > 200000) {
+            throw new IllegalStateException("El catálogo excede el límite del sensor de equipo");
+        }
+        return rows.getContent().stream()
+                .map(i -> new com.omega.platform.integration.forensic.ForensicWorkerContracts.HostIndicator(
+                        i.getIocType(), i.getNormalizedValue(), i.getSourceUrl() == null ? "" : i.getSourceUrl()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<IocIndicatorEntity> lookupIndicator(String value) {
         if (value == null || value.isBlank()) {
             return List.of();

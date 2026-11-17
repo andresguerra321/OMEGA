@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -22,6 +23,7 @@ import org.springframework.web.client.RestClient;
  * Visual Prompt Injection (todo contenido visual es tratado como evidencia no confiable).
  */
 @Component
+@ConditionalOnProperty(name = "omega.ai.provider", havingValue = "openai", matchIfMissing = true)
 public class OpenAiVisionAnalysisProvider implements VisionAnalysisProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiVisionAnalysisProvider.class);
@@ -112,7 +114,7 @@ public class OpenAiVisionAnalysisProvider implements VisionAnalysisProvider {
         );
     }
 
-    private ImageForensicExtraction parseExtraction(String rawContent, String model) {
+    protected ImageForensicExtraction parseExtraction(String rawContent, String model) {
         if (rawContent == null || rawContent.isBlank()) {
             return new ImageForensicExtraction("Sin descripción visual.", List.of(), List.of(), "BENIGN_OR_UNKNOWN", model);
         }

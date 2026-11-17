@@ -1,4 +1,4 @@
-name: Release Desktop Installers (Signed Provenance)
+name: Release Desktop Installers (Signatures and Provenance)
 
 on:
   push:
@@ -7,93 +7,161 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Versión de etiqueta o paquete'
+        description: 'Versión de etiqueta o paquete de pruebas'
         required: false
-        default: 'v1.4.0-local-ci'
+        default: 'local-ci'
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
-  build-windows-desktop:
-    name: Build & Attest OMEGA Desktop (.exe)
-    runs-on: windows-latest
+  build-desktop:
+    name: Build OMEGA Desktop (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            targets: '--win nsis portable'
+          - os: macos-latest
+            platform: macos
+            targets: '--mac dmg'
+          - os: ubuntu-latest
+            platform: linux
+            targets: '--linux AppImage'
     defaults:
       run:
         working-directory: omega/frontend
+        shell: pwsh
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: omega/frontend/package-lock.json
-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.12'
 
-      - name: Verify CTI & PDF Corpus SHA-256 Manifests
+      - name: Verify CTI and PDF Corpus SHA-256 Manifests
         working-directory: .
         run: python omega/rag_engine/corpus_integrity.py
 
-      - name: Install Dependencies & Run Checks
+      - name: Install Dependencies and Run Checks
         run: |
           npm ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
           npm run lint
+          if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
           npm run test:desktop
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed' }
           node node_modules/electron/install.js
+          if ($LASTEXITCODE -ne 0) { throw 'Electron install failed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
 
-      - name: Build Windows NSIS & Portable Installers
+      - name: Package with Conditional Authenticode or Developer ID and Notarization
         env:
-          # Opcional: configurar certificados Authenticode OV/EV o Azure Trusted Signing como GitHub Secrets
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WIN_CSC_LINK != '' }}
-        run: npm run desktop:dist
-
-      - name: Generate Verifiable SHA256SUMS.txt
-        shell: pwsh
+          BUILD_TARGETS: ${{ matrix.targets }}
+          CSC_LINK: ${{ runner.os == 'Windows' && (secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK) && (secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD) && (secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK) || runner.os == 'macOS' && secrets.APPLE_CSC_LINK && secrets.APPLE_ID && secrets.APPLE_APP_SPECIFIC_PASSWORD && secrets.APPLE_TEAM_ID && secrets.APPLE_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && (secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD) || runner.os == 'macOS' && secrets.APPLE_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         run: |
-          $files = Get-ChildItem -Path release -Filter *.exe | Sort-Object Name
-          $lines = foreach ($f in $files) {
-            $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $($f.Name)"
+          $targets = $env:BUILD_TARGETS.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
+          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
+            $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
+            if ($env:RUNNER_OS -eq 'Windows') {
+              Write-Output '::warning::Certificado Windows incompleto o ausente. Instaladores de pruebas sin Authenticode.'
+            }
+            if ($env:RUNNER_OS -eq 'macOS') {
+              Write-Output '::warning::Credenciales Apple incompletas o ausentes. Build de pruebas sin Developer ID ni notarización.'
+              $targets += @('-c.mac.identity=-', '-c.mac.notarize=false')
+            }
+          } else {
+            $env:CSC_IDENTITY_AUTO_DISCOVERY = 'true'
+            if ($env:RUNNER_OS -eq 'macOS') { $targets += '-c.mac.notarize=true' }
           }
-          $lines | Out-File -FilePath release\SHA256SUMS.txt -Encoding ascii
-          Get-Content release\SHA256SUMS.txt
+          npx electron-builder @targets --publish never
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop packaging or configured code signing failed' }
 
-      - name: Attest Build Provenance (Sigstore / SLSA)
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: |
-            omega/frontend/release/*.exe
-            omega/frontend/release/SHA256SUMS.txt
+      - name: Require Installer SHA-256 Manifest
+        run: python ../scripts/release_integrity.py --source release --output release
 
-      - name: Upload Signed Build Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload Platform Installers and Checksums
+        uses: actions/upload-artifact@v7.0.2
         with:
-          name: omega-desktop-windows
+          name: omega-desktop-${{ matrix.platform }}
+          if-no-files-found: error
           path: |
             omega/frontend/release/*.exe
+            omega/frontend/release/*.msi
+            omega/frontend/release/*.dmg
+            omega/frontend/release/*.AppImage
+            omega/frontend/release/*.deb
             omega/frontend/release/SHA256SUMS.txt
           retention-days: 90
 
+  release-integrity:
+    name: Verify, Sign and Attest Consolidated Installers
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: omega-desktop-*
+          path: installer-input
+      - name: Generate Mandatory Checksums and Optional Detached Signature
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python omega/scripts/release_integrity.py --source installer-input --output release --recursive
+      - name: Attest Build Provenance (Sigstore / SLSA)
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: 'release/*'
+      - name: Upload Verifiable Release Bundle
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: omega-desktop-release
+          path: release/*
+          if-no-files-found: error
+          retention-days: 90
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          $notes = "Instaladores de escritorio de OMEGA para Windows. Verifica la integridad con SHA256SUMS.txt. Los instaladores no estan firmados con certificado comercial, por lo que Windows SmartScreen puede mostrar una advertencia."
-          $assets = @(Get-ChildItem -Path release -Filter *.exe | ForEach-Object { $_.FullName }) + (Resolve-Path release\SHA256SUMS.txt).Path
-          $notesFile = ".github/release-notes/$tag.md"
-          if (Test-Path "../../$notesFile") {
-            gh release create $tag @assets --title "OMEGA $tag" --notes-file "../../$notesFile" --verify-tag
-          } else {
-            gh release create $tag @assets --title "OMEGA $tag" --notes "$notes" --generate-notes --verify-tag
+          $tag = $env:RELEASE_TAG
+          $assets = @(Get-ChildItem -LiteralPath release -File | ForEach-Object { $_.FullName })
+          $notesFile = Join-Path '.github/release-notes' ($tag + '.md')
+          if (-not (Test-Path -LiteralPath $notesFile)) {
+            $notesFile = Join-Path $env:RUNNER_TEMP 'omega-release-notes.md'
+            @(
+              'Instaladores OMEGA para Windows, macOS y Linux.'
+              ''
+              'Comprueba SHA256SUMS.txt y la atestación de procedencia. Si hay firma separada, verifica SHA256SUMS.txt.sig con una clave pública obtenida por un canal confiable.'
+              ''
+              'Authenticode, Developer ID y notarización dependen de los certificados configurados. Consulta los logs de empaquetado; los builds de pruebas pueden carecer de firma comercial.'
+            ) | Set-Content -LiteralPath $notesFile -Encoding utf8
           }
+          gh release view $tag --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --title "OMEGA $tag" --notes-file $notesFile --verify-tag
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Failed to publish release $tag" }

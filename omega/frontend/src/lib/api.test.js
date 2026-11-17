@@ -129,3 +129,61 @@ test('restoreCookieAuthSession restaura sesión respaldada por cookie HttpOnly s
   assert.equal(api.isAuthenticated(), false);
   assert.equal(env.lsStore.size, 0);
 });
+
+test('host protection uses authenticated gateway routes and explicit JSON toggle', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js');
+  api.saveAuthSession({ accessToken: makeFutureJwt(), expiresInSeconds: 3600, role: 'ADMIN' });
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ enabled: false }) };
+  };
+  await api.getHostRealtimeStatus();
+  await api.toggleHostRealtime(false);
+  await api.auditHostPersistence();
+  assert.equal(calls[0].url, '/api/v1/forensics/host/realtime/status');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(calls[1].options.headers.get('Content-Type'), 'application/json');
+  assert.deepEqual(JSON.parse(calls[1].options.body), { enabled: false });
+  assert.match(calls[1].options.headers.get('Authorization'), /^Bearer /);
+  assert.equal(calls[2].url, '/api/v1/forensics/host/persistence/audit');
+  assert.equal(calls[2].options.headers.get('Content-Type'), 'application/json');
+});
+
+test('containment preview never implies execute and active link probing is explicit', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js');
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({}) };
+  };
+  const candidate = { actionType: 'BLOCK_NETWORK_INDICATOR', target: { indicator: '93.184.216.34' } };
+  await api.previewContainment(candidate);
+  await api.executeContainment(candidate, 'plan-token', { currentPassword: 'fixture' });
+  await api.verifySuspiciousLink('https://example.com');
+  await api.verifySuspiciousLink('https://example.com', null, true);
+  assert.equal(JSON.parse(calls[0].options.body).dryRun, true);
+  assert.equal(JSON.parse(calls[1].options.body).dryRun, false);
+  assert.equal(JSON.parse(calls[1].options.body).previewToken, 'plan-token');
+  assert.equal(calls[0].options.headers.get('Content-Type'), 'application/json');
+  assert.equal(JSON.parse(calls[2].options.body).activeProbe, false);
+  assert.equal(JSON.parse(calls[3].options.body).activeProbe, true);
+});
+test('dossier export downloads authenticated binary data and preserves permission errors', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js');
+  api.saveAuthSession({ accessToken: makeFutureJwt(), expiresInSeconds: 3600, role: 'ANALYST' });
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(new Blob(['%PDF-fixture'], { type: 'application/pdf' }), { status: 200, headers: { 'content-type': 'application/pdf' } });
+  };
+  const blob = await api.exportExpedienteDossier('case-id', 'pdf');
+  assert.equal(await blob.text(), '%PDF-fixture');
+  assert.equal(calls[0].url, '/api/v1/expedientes/case-id/export/pdf');
+  assert.match(calls[0].options.headers.get('Authorization'), /^Bearer /);
+  globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'Sin permisos sobre el expediente' }), { status: 403, headers: { 'content-type': 'application/json' } });
+  await assert.rejects(api.exportExpedienteDossier('case-id', 'json'), error => error.status === 403);
+});

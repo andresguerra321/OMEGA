@@ -5,7 +5,6 @@ import {
   Home,
   Laptop,
   Layers,
-  Link2,
   MessageSquare,
   Radar,
   Settings,

@@ -134,11 +134,30 @@ export function OmegaWebIntelCard({
               <button
                 type="button"
                 onClick={() => {
+                  const htmlSignals = Array.isArray(scanResult.html_risk_signals)
+                    ? scanResult.html_risk_signals
+                    : [];
+                  const telemetry = [
+                    `Web analizada en RAM: ${scanResult.url} (${scanResult.title || 'sin título'})`,
+                    `IPv4 públicas: ${ipv4List.slice(0, 12).join(', ') || 'ninguna'}`,
+                    `CVEs: ${cvesList.join(', ') || 'ninguno'}`,
+                    `Dominios destacados: ${domainsList.slice(0, 12).join(', ') || 'ninguno'}`,
+                    knownMatches.length > 0
+                      ? `Coincidencias CTI en catálogo (${knownMatches.length}): ${knownMatches.slice(0, 5).map((m) => `${m.ioc_value} (${m.spyware_family || 'CTI'})`).join(', ')}`
+                      : 'Coincidencias CTI en catálogo: 0',
+                    htmlSignals.length > 0 ? `Señales HTML/JS: ${htmlSignals.join(' ; ')}` : '',
+                    matchedLive.length > 0
+                      ? `ALERTA socket activo en dispositivo: ${matchedLive.join(', ')}`
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join('\n');
                   const prompt = [
                     `Resume y correlaciona los indicadores extraídos en RAM desde ${scanResult.url}:`,
                     `- IPv4 públicas (net4): ${ipv4List.slice(0, 12).join(', ') || 'ninguna'}`,
                     `- CVEs: ${cvesList.join(', ') || 'ninguno'}`,
                     `- Dominios destacados: ${domainsList.slice(0, 12).join(', ') || 'ninguno'}`,
+                    htmlSignals.length > 0 ? `- Señales HTML/JS: ${htmlSignals.join('; ')}` : '',
                     matchedLive.length > 0
                       ? `- ALERTA: Coincidencia activa con sockets del dispositivo: ${matchedLive.join(', ')}`
                       : '',
@@ -146,7 +165,10 @@ export function OmegaWebIntelCard({
                   ]
                     .filter(Boolean)
                     .join('\n');
-                  onAskInChat(prompt);
+                  onAskInChat(prompt, {
+                    analysisContext: telemetry,
+                    pinnedContext: scanResult.title || scanResult.url,
+                  });
                 }}
                 className="shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
               >

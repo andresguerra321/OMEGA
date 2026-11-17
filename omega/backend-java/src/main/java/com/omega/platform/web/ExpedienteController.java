@@ -2,6 +2,11 @@ package com.omega.platform.web;
 
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.ExpedienteService;
+import com.omega.platform.cti.ForensicDossierExportService;
+import com.omega.platform.cti.ForensicDossierExportService.DossierExportPayload;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import com.omega.platform.web.dto.ExpedienteDtos.CreateExpedienteRequest;
 import com.omega.platform.web.dto.ExpedienteDtos.ExpedienteDetailResponse;
 import com.omega.platform.web.dto.ExpedienteDtos.ExpedienteSummaryResponse;
@@ -26,9 +31,26 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExpedienteController {
 
     private final ExpedienteService expedienteService;
+    private final ForensicDossierExportService dossierExport;
 
-    public ExpedienteController(ExpedienteService expedienteService) {
+    public ExpedienteController(ExpedienteService expedienteService, ForensicDossierExportService dossierExport) {
         this.expedienteService = expedienteService;
+        this.dossierExport = dossierExport;
+    }
+
+    @GetMapping(value = "/{expedienteId}/export/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportPdf(@PathVariable UUID expedienteId) {
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"OMEGA-" + expedienteId + ".pdf\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store").header("X-Content-Type-Options", "nosniff")
+                .body(dossierExport.exportAsPdf(expedienteId));
+    }
+
+    @GetMapping(value = "/{expedienteId}/export/json", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<DossierExportPayload> exportJson(@PathVariable UUID expedienteId) {
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"OMEGA-" + expedienteId + ".json\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store").header("X-Content-Type-Options", "nosniff")
+                .body(dossierExport.exportAsJson(expedienteId));
     }
 
     @GetMapping

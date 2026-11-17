@@ -21,7 +21,7 @@ import org.springframework.web.client.RestClientResponseException;
  * procesada en RAM por {@code omega/api/} ni activos OSINT.</p>
  */
 @Service
-@ConditionalOnProperty(prefix = "omega.rag", name = "embedding-provider", havingValue = "openai", matchIfMissing = true)
+@ConditionalOnProperty(name = "omega.ai.provider", havingValue = "openai", matchIfMissing = true)
 public class OpenAiEmbeddingProvider implements EmbeddingProvider {
 
     private final RestClient openAiRestClient;

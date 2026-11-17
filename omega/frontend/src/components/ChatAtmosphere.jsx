@@ -14,8 +14,8 @@ export function ChatAtmosphere({
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 overflow-hidden z-0 select-none"
-      style={{ backgroundColor: '#0A0A0C' }}
+      className="pointer-events-none fixed inset-0 overflow-hidden z-0 select-none transform-gpu"
+      style={{ backgroundColor: '#0A0A0C', contain: 'strict' }}
     >
       {/* Textura micro-punteada de 24px (visible bajo los paneles translúcidos) */}
       <div
@@ -51,11 +51,10 @@ export function ChatAtmosphere({
         <svg
           viewBox="0 0 1440 480"
           preserveAspectRatio="none"
-          className={`absolute left-0 right-0 bottom-0 w-full ${
-            isStage
-              ? 'h-[36vh] sm:h-[40vh] opacity-40'
-              : 'h-[26vh] sm:h-[30vh] opacity-25'
-          }`}
+          className={`absolute left-0 right-0 bottom-0 w-full ${isStage
+            ? 'h-[36vh] sm:h-[40vh] opacity-40'
+            : 'h-[26vh] sm:h-[30vh] opacity-25'
+            }`}
           fill="none"
         >
           <path

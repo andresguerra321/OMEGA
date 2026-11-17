@@ -2,6 +2,13 @@ import pytest
 from link_verifier import inspect_suspicious_link
 
 
+@pytest.fixture(autouse=True)
+def mock_infrastructure_provider(monkeypatch):
+    monkeypatch.setattr('link_verifier.inspect_evasion', lambda *args, **kwargs: {
+        'domainAgeDays': None, 'freshTlsCertificate': None, 'cloakingDetected': None,
+        'evasionRiskScore': 0, 'evasionReasons': [], 'riskLevel': 'LOW', 'limitations': []})
+
+
 @pytest.mark.parametrize(
     "bad_input",
     [

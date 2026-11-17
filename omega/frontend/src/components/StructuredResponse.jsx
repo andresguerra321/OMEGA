@@ -9,6 +9,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { MarkdownMessage } from './MarkdownMessage';
+import { InfrastructureBadges, EmergencyGuidance } from './ContainmentPanel';
 
 const completedTypingIds = new Set();
 
@@ -124,15 +125,23 @@ export function StructuredResponse({
 
     let rafId = 0;
     let cancelled = false;
-    const durationMs = Math.min(2200, Math.max(850, fullText.length * 4.5));
+    const durationMs = Math.min(1800, Math.max(700, fullText.length * 3.8));
     let startTime = null;
     let lastCommitted = 0;
+    let lastTickTime = 0;
 
     const tick = (now) => {
       if (cancelled) return;
       if (startTime === null) startTime = now;
       const elapsed = now - startTime;
       const linear = Math.min(1, elapsed / durationMs);
+
+      if (linear < 1 && now - lastTickTime < 28) {
+        rafId = window.requestAnimationFrame(tick);
+        return;
+      }
+      lastTickTime = now;
+
       const eased = 1 - Math.pow(1 - linear, 1.25);
       const rawIdx = Math.ceil(eased * fullText.length);
       const nextIdx =
@@ -344,6 +353,8 @@ export function StructuredResponse({
           onSelectCitation={onSelectCitation}
           isTyping={isTyping}
         />
+        {(message.multimodal?.link_checks || []).map((link, index) => <InfrastructureBadges key={link.host || index} result={link} />)}
+        {['HIGH', 'CRITICAL'].includes(message.multimodal?.risk_level) && <EmergencyGuidance mobile />}
       </div>
 
       {!isTyping && !/alcance documental/i.test(fullText) && (

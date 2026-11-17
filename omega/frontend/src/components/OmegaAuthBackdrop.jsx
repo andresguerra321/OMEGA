@@ -73,8 +73,8 @@ export function OmegaAuthBackdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none"
-      style={{ backgroundColor: '#0A0A0C' }}
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none transform-gpu"
+      style={{ backgroundColor: '#0A0A0C', contain: 'strict' }}
     >
       {/* Textura punteada estructural atenuada radialmente hacia los bordes */}
       <div

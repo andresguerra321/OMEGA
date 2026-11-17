@@ -486,6 +486,10 @@ test('reapplyAiConfig soporta Ollama local sin API key y luego permite volver a 
     assert.equal(ollamaRes.config.customConfigured, true);
     assert.equal(ollamaRes.config.activeProvider, 'ollama');
     assert.equal(ollamaRes.config.activeModel, 'qwen2.5:7b');
+    assert.equal(ollamaRes.config.sovereignLocal, true);
+    const savedMode = readDotEnv(composeDir, userDataDir);
+    assert.equal(savedMode.OMEGA_AI_PROVIDER, 'ollama');
+    assert.equal(savedMode.OMEGA_OLLAMA_BASE_URL, 'http://host.docker.internal:11434');
     assert.equal(ollamaRes.config.customBaseUrl, 'http://host.docker.internal:11434/v1');
 
     const backToGroq = await orchestrator.reapplyAiConfig({
@@ -495,6 +499,7 @@ test('reapplyAiConfig soporta Ollama local sin API key y luego permite volver a 
     assert.equal(backToGroq.ok, true);
     assert.equal(backToGroq.config.customConfigured, false);
     assert.equal(backToGroq.config.activeProvider, 'groq');
+    assert.equal(backToGroq.config.sovereignLocal, false);
   } finally {
     fs.rmSync(composeDir, { recursive: true, force: true });
     fs.rmSync(userDataDir, { recursive: true, force: true });

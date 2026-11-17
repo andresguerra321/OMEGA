@@ -84,9 +84,16 @@ public class AuditLogService {
     @Transactional(readOnly = true)
     public ChainVerificationResult verifyTenantChain(UUID tenantId) {
         List<AuditLogEntity> entries = auditLogRepository.findAllByTenantIdOrderByChainSeqAsc(tenantId);
+        return verifyEntries(tenantId, entries);
+    }
+
+    public ChainVerificationResult verifyEntries(UUID tenantId, List<AuditLogEntity> entries) {
         String expectedPrev = GENESIS_HASH;
         for (int i = 0; i < entries.size(); i++) {
             AuditLogEntity e = entries.get(i);
+            if (!tenantId.equals(e.getTenantId())) {
+                return new ChainVerificationResult(false, i, entries.size(), e.getId(), "Registro fuera del tenant verificado");
+            }
             if (!expectedPrev.equals(e.getPreviousHash())) {
                 return new ChainVerificationResult(false, i, entries.size(), e.getId(), "Ruptura en previous_hash");
             }
@@ -108,7 +115,7 @@ public class AuditLogService {
         return new ChainVerificationResult(true, entries.size(), entries.size(), null, "Cadena íntegra");
     }
 
-    static String computeChainHash(
+    public static String computeChainHash(
             String previousHash,
             UUID tenantId,
             UUID actorUserId,

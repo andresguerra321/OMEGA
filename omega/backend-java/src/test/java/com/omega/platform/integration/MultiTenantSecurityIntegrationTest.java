@@ -159,6 +159,12 @@ class MultiTenantSecurityIntegrationTest {
                 .andExpect(status().isNotFound());
 
         // 7. Client in SAME Tenant A without ACL grant gets 403; once granted READ, gets 200
+        mockMvc.perform(get("/api/v1/expedientes/{id}/export/json", expedienteAId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAdminB))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/expedientes/{id}/export/pdf", expedienteAId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenClientA))
+                .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/expedientes/{id}", expedienteAId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenClientA))
                 .andExpect(status().isForbidden());
@@ -189,6 +195,18 @@ class MultiTenantSecurityIntegrationTest {
                 true,
                 DocumentStatus.INDEXED
         ));
+
+        mockMvc.perform(get("/api/v1/expedientes/{id}/export/json", expedienteAId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenClientA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chainOfCustody.status").value("CHAIN_VALID"))
+                .andExpect(jsonPath("$.evidence[0].sha256Hash").value("a".repeat(64)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
+        mockMvc.perform(get("/api/v1/expedientes/{id}/export/pdf", expedienteAId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenClientA))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Disposition", org.hamcrest.Matchers.containsString("attachment")));
 
         float[] vector = new float[1536];
         vector[0] = 0.85f;

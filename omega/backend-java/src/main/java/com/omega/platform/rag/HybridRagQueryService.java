@@ -1,5 +1,6 @@
 package com.omega.platform.rag;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.ingest.AsyncDocumentProcessor;
@@ -203,7 +204,7 @@ public class HybridRagQueryService {
             }
         }
 
-        String answer = answerGenerator.generateGroundedAnswer(request.question(), ranked);
+        String answer = answerGenerator.generateGroundedAnswer(request.question(), ranked, request.analysisContext());
         List<RagCitationDto> citations = ranked.stream()
                 .map(c -> new RagCitationDto(
                         c.documentId(),
@@ -265,8 +266,12 @@ public class HybridRagQueryService {
 
     public record RagQueryRequest(
             @NotBlank @Size(min = 2, max = 2000) String question,
-            @Min(1) @Max(20) Integer topK
+            @Min(1) @Max(20) Integer topK,
+            @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext
     ) {
+        public RagQueryRequest(String question, Integer topK) {
+            this(question, topK, null);
+        }
     }
 
     public record DocumentReindexNotice(

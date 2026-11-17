@@ -16,6 +16,8 @@ import org.springframework.web.client.RestClient;
  */
 @Configuration
 public class RestClientConfig {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SovereignModePolicy sovereignPolicy;
 
     public static final String INTERNAL_TOKEN_HEADER = "X-Internal-Service-Token";
     private static final String DEV_INTERNAL_TOKEN_MARKER = "omega-dev-internal-service-token";
@@ -43,17 +45,43 @@ public class RestClientConfig {
                 .baseUrl(properties.forensicWorker().baseUrl())
                 .defaultHeader(INTERNAL_TOKEN_HEADER, internalToken)
                 .requestFactory(factory)
+                .requestInterceptor((request, body, execution) -> {
+                    if (sovereignPolicy != null) sovereignPolicy.checkWorkerRequest(request.getURI());
+                    return execution.execute(request, body);
+                })
                 .build();
     }
 
     @Bean
-    public RestClient openAiRestClient(OmegaProperties properties) {
+    public RestClient hostWorkerRestClient(OmegaProperties properties, Environment environment) {
+        String baseUrl = environment.getProperty("OMEGA_HOST_WORKER_URL", properties.forensicWorker().baseUrl());
+        String token = environment.getProperty("OMEGA_HOST_INTERNAL_SERVICE_TOKEN", properties.security().internalServiceToken());
+        if (token == null || token.length() < 32) {
+            throw new IllegalStateException("El token del sensor de equipo debe tener al menos 32 caracteres");
+        }
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(10));
+        factory.setConnectTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(180));
+        return RestClient.builder().baseUrl(baseUrl).defaultHeader(INTERNAL_TOKEN_HEADER, token)
+                .requestFactory(factory).requestInterceptor((request, body, execution) -> {
+                    if (sovereignPolicy != null) sovereignPolicy.checkWorkerRequest(request.getURI());
+                    return execution.execute(request, body);
+                }).build();
+    }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "omega.ai.provider", havingValue = "openai", matchIfMissing = true)
+    public RestClient openAiRestClient(OmegaProperties properties) {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofSeconds(60));
 
         return RestClient.builder()
                 .baseUrl(properties.rag().openAiBaseUrl())
+                .defaultHeader("User-Agent", "OMEGA-CTI-Core/1.0")
                 .requestFactory(factory)
                 .build();
     }

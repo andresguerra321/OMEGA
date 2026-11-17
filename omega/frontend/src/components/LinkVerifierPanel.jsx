@@ -11,6 +11,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { lookupExternalReputation, verifySuspiciousLink } from '../lib/api';
+import { InfrastructureBadges, EmergencyGuidance } from './ContainmentPanel';
 import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
@@ -20,11 +21,11 @@ import {
 } from './PanelStatePrimitives';
 
 function getVerdictPresentation(result) {
-  if (result.risk_level === 'HIGH') {
+  if (['HIGH', 'CRITICAL'].includes(result.risk_level)) {
     return {
       dotColor: 'bg-[#FF453A] shadow-[0_0_10px_rgba(255,69,58,0.55)]',
       titleColor: 'text-[#FF6961]',
-      headline: 'Peligroso — Infraestructura Spyware',
+      headline: 'Riesgo elevado — Revisa la evidencia y evita abrirlo',
     };
   }
   if (result.risk_level === 'MEDIUM') {
@@ -37,7 +38,7 @@ function getVerdictPresentation(result) {
   return {
     dotColor: 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.45)]',
     titleColor: 'text-[#F2F2F4]',
-    headline: 'Seguro / Sin registros',
+    headline: 'Sin coincidencias conocidas · Mantén precaución',
   };
 }
 
@@ -53,6 +54,7 @@ export function LinkVerifierPanel({
   const [urlInput, setUrlInput] = useState(initialUrl || '');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activeProbe, setActiveProbe] = useState(false);
   const [error, setError] = useState('');
   const [traceLoading, setTraceLoading] = useState(false);
   const [traceResult, setTraceResult] = useState(null);
@@ -124,12 +126,28 @@ export function LinkVerifierPanel({
       setTraceError('');
       setFinalCheckResult(null);
       try {
-        const data = await verifySuspiciousLink(validation.value);
+        const data = await verifySuspiciousLink(validation.value, null, activeProbe);
         let reputation = null;
-        if (data?.host) {
-          reputation = await lookupExternalReputation(data.host).catch(() => null);
+        const repTarget = data?.normalized_url || data?.host;
+        if (repTarget) {
+          reputation = await lookupExternalReputation(repTarget).catch(() => null);
         }
-        const enriched = reputation ? { ...data, external_reputation: reputation } : data;
+        const repMatches = Array.isArray(reputation?.local_cti_matches) ? reputation.local_cti_matches : [];
+        const mergedMatches = [
+          ...(Array.isArray(data?.cti_matches) ? data.cti_matches : []),
+          ...repMatches.filter(
+            (rm) => !(data?.cti_matches || []).some((cm) => cm.ioc_value === rm.ioc_value)
+          ),
+        ];
+        const vtMalicious = Number(reputation?.virustotal?.malicious || 0);
+        const upgradedRisk = data?.risk_level === 'CRITICAL' ? 'CRITICAL'
+          : mergedMatches.length > 0 || vtMalicious > 0 ? 'HIGH' : data?.risk_level;
+        const enriched = {
+          ...data,
+          risk_level: upgradedRisk,
+          cti_matches: mergedMatches,
+          ...(reputation ? { external_reputation: reputation } : {}),
+        };
         setResult(enriched);
         onLinkVerified?.(enriched);
       } catch (err) {
@@ -149,6 +167,7 @@ export function LinkVerifierPanel({
       try {
         const trace = await window.omegaDesktop.inspectLinkEphemeral(result.normalized_url);
         setTraceResult(trace);
+        onLinkVerified?.({ ...result, trace_result: trace });
         if (trace?.final_url && trace.final_url !== result.normalized_url) {
           try {
             const destCheck = await verifySuspiciousLink(trace.final_url);
@@ -205,7 +224,7 @@ export function LinkVerifierPanel({
             result.risk_level === 'HIGH' ? 'alert' : result.risk_level === 'SAFE' ? 'clean' : 'info';
           const bannerMsg = traceResult
             ? `Trazado efímero en RAM completado (${traceResult.redirects?.length || 0} salto(s), 0 JS, 0 imágenes) · Destino: ${finalCheckResult?.risk_level || result.risk_level}.`
-            : `Inspección pasiva completada (0 conexiones HTTP) · Nivel ${result.risk_level} · ${ctiMatches.length} coincidencia(s) CTI y ${heuristics.length} alerta(s) estructural(es).`;
+            : `${result.infrastructure_intelligence?.activeProbeRequested ? 'Comparación HTTP solicitada' : 'Inspección pasiva completada (sin contactar al destino)'} · Nivel ${result.risk_level} · ${ctiMatches.length} coincidencia(s) CTI y ${heuristics.length} alerta(s) estructural(es).`;
           return (
             <ActionConfirmationBanner
               tone={bannerTone}
@@ -242,6 +261,32 @@ export function LinkVerifierPanel({
                 <button
                   type="button"
                   onClick={() => {
+                    const owasp = Array.isArray(result.owasp_findings) ? result.owasp_findings : [];
+                    const vt = result.external_reputation?.virustotal;
+                    const telemetryLines = [
+                      `URL analizada: ${result.normalized_url}`,
+                      `Host: ${result.host} | Dominio raíz: ${result.root_domain || result.host} | Esquema: ${result.scheme || 'N/D'}`,
+                      traceResult?.final_url && traceResult.final_url !== result.normalized_url
+                        ? `Destino tras redirecciones (Aislado sin JS): ${traceResult.final_url}`
+                        : '',
+                      `Nivel de riesgo: ${result.risk_level} — ${result.verdict}`,
+                      result.recommendation ? `Recomendación: ${result.recommendation}` : '',
+                      `Certificados CT (crt.sh): ${result.passive_ct_certificates ?? 'N/D'}`,
+                      vt && vt.status === 'ok'
+                        ? `VirusTotal / Reputación: ${vt.malicious || 0} maliciosos, ${vt.suspicious || 0} sospechosos`
+                        : '',
+                      ctiMatches.length > 0
+                        ? `Coincidencias CTI (${ctiMatches.length}): ${ctiMatches.slice(0, 5).map((m) => `${m.ioc_value} [${m.spyware_family || m.campaign || 'CTI'}: ${m.context || ''}]`).join(' ; ')}`
+                        : 'Coincidencias CTI: 0',
+                      owasp.length > 0
+                        ? `Reglas OWASP activadas: ${owasp.map((f) => `[${f.rule_id} ${f.severity}] ${f.title}: ${f.detail}`).join(' ; ')}`
+                        : '',
+                      heuristics.length > 0
+                        ? `Alertas estructurales: ${heuristics.join(' ; ')}`
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
                     const prompt = [
                       `Evalúa este enlace inspeccionado pasivamente en OMEGA:`,
                       `- URL / Host: ${result.normalized_url} (host: ${result.host})`,
@@ -250,11 +295,14 @@ export function LinkVerifierPanel({
                         : '',
                       `- Nivel de riesgo: ${result.risk_level} — ${result.verdict}`,
                       `- Coincidencias CTI: ${ctiMatches.length}`,
-                      `¿Existe campaña o infraestructura de spyware asociada a este dominio o patrón en los reportes indexados?`,
+                      `¿Qué tiene de maliciosa esta web y existe campaña o infraestructura asociada?`,
                     ]
                       .filter(Boolean)
                       .join('\n');
-                    onAskInChat(prompt);
+                    onAskInChat(prompt, {
+                      analysisContext: telemetryLines,
+                      pinnedContext: `${result.host} (${result.risk_level})`,
+                    });
                   }}
                   className="shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
                 >
@@ -262,10 +310,10 @@ export function LinkVerifierPanel({
                 </button>
               )}
 
-              {onAuditDomain && (result.root_domain || result.host) && (
+              {onAuditDomain && (result.host || result.root_domain) && (
                 <button
                   type="button"
-                  onClick={() => onAuditDomain(result.root_domain || result.host)}
+                  onClick={() => onAuditDomain(result.host || result.root_domain)}
                   className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.65)] active:scale-[0.97] transition-all cursor-pointer"
                 >
                   <Globe className="h-3 w-3 text-[#2F6FED]" />
@@ -291,6 +339,8 @@ export function LinkVerifierPanel({
           <p className="mt-3 text-[12px] text-[#9A9AA2] break-words">
             {result.privacy_notice}
           </p>
+          <InfrastructureBadges result={result} />
+          {['HIGH', 'CRITICAL'].includes(result.risk_level) && <EmergencyGuidance mobile />}
         </section>
 
         {/* Desglose Agrupado en 3 datos */}
@@ -437,13 +487,12 @@ export function LinkVerifierPanel({
 
                 {finalCheckResult && (
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium shrink-0 ${
-                      finalCheckResult.risk_level === 'HIGH'
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium shrink-0 ${finalCheckResult.risk_level === 'HIGH'
                         ? 'border-[#FF453A]/40 bg-[#FF453A]/12 text-[#FF6961]'
                         : finalCheckResult.risk_level === 'MEDIUM'
                           ? 'border-[#FF9F0A]/40 bg-[#FF9F0A]/12 text-[#FFD60A]'
                           : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#30D158]'
-                    }`}
+                      }`}
                   >
                     {finalCheckResult.risk_level === 'SAFE' ? (
                       <ShieldCheck className="h-3.5 w-3.5" />
@@ -558,6 +607,11 @@ export function LinkVerifierPanel({
             <span>Verificar</span>
           </button>
         </form>
+
+        <label className="mt-3 flex items-start gap-2 text-sm text-[#B7B7C0]">
+          <input type="checkbox" checked={activeProbe} disabled={loading} onChange={event => setActiveProbe(event.target.checked)} />
+          Comparar respuestas móvil y genérica. Esto contactará al sitio y puede revelar la IP del servicio. No ejecuta JavaScript ni envía cookies.
+        </label>
 
         {error && (
           <PanelErrorBanner

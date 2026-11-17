@@ -1,4 +1,4 @@
-"""Microservicio Forense Stateless OMEGA (Zero-Disk / In-RAM Only).
+"""Worker forense OMEGA; análisis en RAM y contención nativa opcional con bóveda cifrada.
 
 Aislado exclusivamente en la red privada Docker; autentica todas las llamadas
 mediante el encabezado compartido `X-Internal-Service-Token` emitido por backend-java.
@@ -11,10 +11,14 @@ import gc
 import hmac
 import os
 import sys
+import subprocess
+import psutil
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from cryptography.exceptions import InvalidTag
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -22,23 +26,49 @@ from deep_forensics import build_adb_artifacts_in_ram, extract_ios_manifest_targ
 from detection_engineering import generate_mvt_triage_script, generate_yara_for_campaign
 from forensic_engine import analyze_forensic_payload
 from host_forensics import run_host_live_audit
+from persistence_auditor import audit_persistence
+from host_runtime import host_scope
+from realtime_watcher import watcher
 from ios_backup_crypto import decrypt_binary_artifacts_in_ram, unlock_encrypted_ios_backup_in_ram
 from link_verifier import inspect_suspicious_link
+from urllib.parse import urlparse
+from containment_engine import engine as containment_engine
+from evasion_intelligence import inspect_evasion
 from owasp_rules import scan_artifacts_with_owasp
 from schemas import (
     IocRawRequest,
     IocVerifyResponse,
     LinkCheckRequest,
     LiveDeviceSnapshot,
+    MobileUsbAuditRequest,
     PcLiveSnapshot,
+    RealtimeToggleRequest,
+    HostIocSyncRequest,
+    PersistenceAuditResponse,
+    ContainmentRequest,
 )
 from triage_orchestrator import run_parallel_forensic_triage
+from usb_device_connector import (
+    get_usb_audit_job,
+    list_connected_devices,
+    start_usb_audit_job,
+)
 from yara_engine import get_yara_engine_status, scan_artifacts_with_yara
 
 MAX_SINGLE_UPLOAD_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 128 * 1024 * 1024
 
+
+@asynccontextmanager
+async def lifespan(_app):
+    watcher.start(enabled=os.getenv('OMEGA_REALTIME_ENABLED', 'false').lower() == 'true')
+    try:
+        yield
+    finally:
+        await asyncio.to_thread(watcher.stop)
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Omega Stateless Forensic Worker",
     description="Worker forense interno en RAM (MVT, YARA, iOS crypto, correlación temporal y verificación pasiva de enlaces).",
     version="1.0.0",
@@ -64,7 +94,75 @@ async def verify_internal_service_token(request: Request, call_next):
             content={"detail": "Acceso denegado: X-Internal-Service-Token ausente o inválido."},
         )
 
+    if request.url.path.startswith(('/api/host/', '/api/containment/')):
+        owner = os.getenv('OMEGA_HOST_OWNER_TENANT_ID', '').strip()
+        if not owner:
+            return JSONResponse(status_code=503, content={'detail': 'Configura OMEGA_HOST_OWNER_TENANT_ID para vincular este sensor a un único tenant.'})
+        supplied = request.headers.get('X-Host-Tenant', '')
+        if not hmac.compare_digest(supplied, owner):
+            return JSONResponse(status_code=403, content={'detail': 'Este sensor pertenece a otro tenant.'})
     return await call_next(request)
+
+
+@app.post('/api/containment/execute')
+def execute_containment_endpoint(payload: ContainmentRequest, request: Request):
+    try:
+        return containment_engine.execute_containment(payload.actionType, payload.target,
+                owner=request.headers['X-Host-Tenant'], dry_run=payload.dryRun, preview_token=payload.previewToken,
+                actor_user_id=request.headers.get('X-Host-Actor'))
+    except (ValueError, KeyError, psutil.Error) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        raise HTTPException(status_code=503, detail='El sensor no pudo acceder al almacén seguro, a la bóveda o a los permisos requeridos.') from exc
+
+
+@app.post('/api/containment/rollback/{action_id}')
+def rollback_containment_endpoint(action_id: str, request: Request):
+    try:
+        return containment_engine.rollback_containment(action_id, owner=request.headers['X-Host-Tenant'])
+    except (ValueError, FileNotFoundError, InvalidTag) as exc:
+        raise HTTPException(status_code=409, detail='No se pudo autenticar o localizar el diario de esta acción.') from exc
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        raise HTTPException(status_code=503, detail='No se pudo acceder a la bóveda para restaurar.') from exc
+
+
+@app.get('/api/containment/history')
+def containment_history(request: Request):
+    return {'actions': containment_engine.history(request.headers['X-Host-Tenant'])}
+
+
+@app.get('/api/host/realtime/status')
+def host_realtime_status():
+    return watcher.status()
+
+
+@app.post('/api/host/realtime/toggle')
+def host_realtime_toggle(payload: RealtimeToggleRequest):
+    try:
+        return watcher.toggle(payload.enabled)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post('/api/host/iocs/sync')
+def host_iocs_sync(payload: HostIocSyncRequest):
+    watcher.replace_iocs([row.model_dump() for row in payload.indicators])
+    return watcher.status()
+
+
+@app.post('/api/host/persistence/audit', response_model=PersistenceAuditResponse)
+def host_persistence_audit():
+    if host_scope() != 'native-host':
+        raise HTTPException(status_code=409, detail='Esta auditoría requiere un sensor nativo fuera de Docker.')
+    try:
+        report = audit_persistence(ioc_lookup=watcher.lookup_iocs)
+        status = watcher.status()
+        if not status['catalogLoaded'] or status['catalogError']:
+            report['limitations'].append('Catálogo CTI no disponible o desactualizado para este sensor.')
+            report['complete'] = False
+        return report
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 async def _read_bounded_upload(upload: UploadFile, current_total: int = 0) -> bytes:
@@ -89,7 +187,7 @@ def health_check():
     return {
         "status": "ok",
         "service": "omega-forensic-worker",
-        "mode": "stateless-ram-only",
+        "mode": "native-containment-persistent-vault" if host_scope() == 'native-host' and os.getenv('OMEGA_CONTAINMENT_ENABLED', '').lower() == 'true' else "stateless-ram-only",
         "yara": get_yara_engine_status(),
     }
 
@@ -308,6 +406,43 @@ def campaign_mvt_script(campaign_id: str):
 @app.post("/api/link/verify")
 def verify_link_endpoint(payload: LinkCheckRequest):
     try:
-        return inspect_suspicious_link(payload.url)
+        return inspect_suspicious_link(payload.url, active_probe=payload.activeProbe)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post('/api/link/infrastructure')
+def link_infrastructure(payload: LinkCheckRequest):
+    from link_verifier import _refang_url, _is_valid_domain_host
+    try:
+        normalized = _refang_url(payload.url)
+        parsed = urlparse(normalized)
+        host = (parsed.hostname or '').lower().rstrip('.').encode('idna').decode('ascii')
+        if parsed.username or parsed.password or not _is_valid_domain_host(host):
+            raise ValueError('Dominio no válido para inteligencia de infraestructura.')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return inspect_evasion(normalized, host, active_probe=payload.activeProbe)
+
+
+@app.get("/api/mobile/usb/devices")
+def list_mobile_usb_devices():
+    return list_connected_devices()
+
+
+@app.post("/api/mobile/usb/audit")
+def start_mobile_usb_audit(payload: MobileUsbAuditRequest):
+    return start_usb_audit_job(
+        platform=payload.platform,
+        device_id=payload.device_id,
+        backup_password=payload.backup_password,
+        async_mode=payload.async_mode,
+    )
+
+
+@app.get("/api/mobile/usb/audit/{job_id}")
+def get_mobile_usb_audit_status(job_id: str):
+    job = get_usb_audit_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Trabajo de auditoría USB no encontrado.")
+    return job

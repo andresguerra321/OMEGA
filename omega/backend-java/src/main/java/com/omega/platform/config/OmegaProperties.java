@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
@@ -16,7 +17,36 @@ public record OmegaProperties(
                 @Valid Ingest ingest,
                 @Valid Rag rag,
                 @Valid ForensicWorker forensicWorker,
-                @Valid Cti cti) {
+                @Valid Cti cti,
+                @Valid Ai ai) {
+
+        @ConstructorBinding
+        public OmegaProperties {
+                if (ai == null) ai = new Ai("openai", null);
+        }
+
+        public OmegaProperties(Security security, Ingest ingest, Rag rag, ForensicWorker forensicWorker, Cti cti) {
+                this(security, ingest, rag, forensicWorker, cti, new Ai("openai", null));
+        }
+
+        public record Ai(@Pattern(regexp = "openai|ollama") String provider, @Valid Ollama ollama) {
+                public Ai {
+                        if (provider == null) provider = "openai";
+                        if (ollama == null) ollama = new Ollama(null, null, null, null);
+                }
+
+                public boolean local() { return "ollama".equals(provider); }
+        }
+
+        public record Ollama(@NotBlank String baseUrl, @NotBlank String embedModel,
+                             @NotBlank String chatModel, @NotBlank String visionModel) {
+                public Ollama {
+                        if (baseUrl == null) baseUrl = "http://localhost:11434";
+                        if (embedModel == null) embedModel = "bge-m3";
+                        if (chatModel == null) chatModel = "qwen2.5:14b";
+                        if (visionModel == null) visionModel = "qwen2.5vl:7b";
+                }
+        }
 
         public record Security(
                         @NotBlank @Size(min = 32, message = "OMEGA_JWT_SECRET debe tener al menos 32 caracteres para HS256") String jwtSecret,

@@ -29,6 +29,7 @@ import {
   verifyMvtText,
 } from '../lib/api';
 import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
+import { MobileUsbAuditCard } from './MobileUsbAuditCard';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import {
@@ -37,39 +38,13 @@ import {
   validateUploadFile,
 } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
+import { ContainmentButton, EmergencyGuidance } from './ContainmentPanel';
 import {
   ActionConfirmationBanner,
   PanelEmptyState,
   PanelErrorBanner,
   PanelSkeleton,
 } from './PanelStatePrimitives';
-
-const SAMPLE_SAFARI_JSON = JSON.stringify(
-  [
-    {
-      timestamp: '2024-06-14T09:12:04Z',
-      url: 'https://www.reuters.com/world/',
-      domain: 'reuters.com',
-    },
-    {
-      timestamp: '2024-06-14T11:42:19Z',
-      url: 'https://free247downloads.com/cdn/v2/stage?t=98f1a',
-      domain: 'free247downloads.com',
-    },
-    {
-      timestamp: '2024-06-14T11:44:05Z',
-      url: 'https://updates-icloud-cdn.org/pkpass',
-      domain: 'updates-icloud-cdn.org',
-    },
-    {
-      timestamp: '2024-06-14T15:08:51Z',
-      url: 'https://citizenlab.ca/',
-      domain: 'citizenlab.ca',
-    },
-  ],
-  null,
-  2,
-);
 
 function dedupeMatches(rawMatches) {
   const seen = new Set();
@@ -83,6 +58,7 @@ function dedupeMatches(rawMatches) {
     list.push({
       id: `${list.length}-${val}`,
       ioc_value: val,
+      ioc_type: m.ioc_type,
       spyware_family: m.spyware_family || 'Sin clasificar',
       artifact_origin: m.artifact_origin || 'Volcado MVT',
       campaign: m.campaign || '',
@@ -753,14 +729,6 @@ export function MvtVerifierPanel({
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     });
-  }
-
-  async function handleRunSample(e) {
-    e.stopPropagation();
-    const sampleFile = new File([SAMPLE_SAFARI_JSON], 'safari_history.json', {
-      type: 'application/json',
-    });
-    await analyzeFiles([sampleFile]);
   }
 
   async function handleAnalyzeText(e) {
@@ -1460,6 +1428,12 @@ export function MvtVerifierPanel({
             Audita PC, Android o iPhone en RAM sin guardar archivos personales.
           </p>
         </header>
+
+        <MobileUsbAuditCard />
+        {result && (result.matchesCount > 0 || result.behavioralAnomalies?.some(item => ['HIGH', 'CRITICAL'].includes(item.severity))) && <div className="my-3">
+          <EmergencyGuidance mobile={deviceTab !== 'pc'} />
+          {(result.findings || []).slice(0, 3).map(finding => <ContainmentButton key={finding.id} finding={finding} />)}
+        </div>}
 
         {/* Disparador 1: Analizar dispositivo USB (Android + iPhone / iPad guiado) */}
         {(() => {
@@ -2182,15 +2156,6 @@ export function MvtVerifierPanel({
                   Soporta .tar.gz, .ips, .db, .zip y .json
                 </p>
               )}
-
-              <button
-                type="button"
-                disabled={isAnalyzing}
-                onClick={handleRunSample}
-                className="mt-3 rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] disabled:opacity-50 transition-all cursor-pointer"
-              >
-                Probar con muestra de ejemplo
-              </button>
             </div>
           ) : (
             <form onSubmit={handleAnalyzeText}>
@@ -2258,12 +2223,12 @@ export function MvtVerifierPanel({
               actionLabel={
                 deviceTab === 'pc' && hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot
                   ? 'Analizar esta computadora'
-                  : 'Probar con muestra de ejemplo'
+                  : undefined
               }
               onAction={
                 deviceTab === 'pc' && hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot
                   ? handlePcLiveAudit
-                  : handleRunSample
+                  : undefined
               }
               className="mt-4"
             />

@@ -144,7 +144,7 @@ public class SystemController {
 
         return new GovernanceResponse(
                 tenantId.toString(),
-                properties.rag().embeddingModel(),
+                properties.ai().local() ? "ollama:" + properties.ai().ollama().embedModel() : properties.rag().embeddingModel(),
                 auditChainValid,
                 new CorpusStats(
                         reports,
@@ -169,11 +169,14 @@ public class SystemController {
                 ),
                 catalogFreshness,
                 OS_SCOPE_NOTICE,
-                aiEngine
+                aiEngine,
+                properties.ai().provider(),
+                properties.ai().local()
         );
     }
 
     private AiEngineStatus resolveAiEngineStatus() {
+        if (properties.ai().local()) return new AiEngineStatus(true, "ollama", properties.ai().ollama().chatModel(), false, false, false, false, "");
         OmegaProperties.Rag rag = properties.rag();
         boolean customConfigured = rag.customChatBaseUrl() != null && !rag.customChatBaseUrl().isBlank();
         boolean omniConfigured = rag.omniRouteBaseUrl() != null && !rag.omniRouteBaseUrl().isBlank();
@@ -220,6 +223,10 @@ public class SystemController {
     ) {
         if (principal == null) {
             return new AiConnectionTestResponse(false, 0L, "", List.of(), "Sesión requerida para probar la conexión.");
+        }
+        if (properties.ai().local()) {
+            return new AiConnectionTestResponse(false, 0L, properties.ai().ollama().chatModel(), List.of(),
+                    "Modo Soberano Local activo. Las pruebas de endpoints configurables están deshabilitadas; la inferencia usa solo Ollama local.");
         }
         String provider = request == null || request.provider() == null ? "groq" : request.provider().trim().toLowerCase(Locale.ROOT);
         String resolvedUrl = resolveProbeBaseUrl(provider, request == null ? null : request.baseUrl());
@@ -468,7 +475,9 @@ public class SystemController {
             Map<String, String> guarantees,
             @JsonProperty("catalog_freshness") StixCatalogService.CatalogFreshnessDto catalogFreshness,
             @JsonProperty("os_scope_notice") String osScopeNotice,
-            @JsonProperty("ai_engine") AiEngineStatus aiEngine
+            @JsonProperty("ai_engine") AiEngineStatus aiEngine,
+            String aiProvider,
+            boolean airGappedMode
     ) {
         public GovernanceResponse(
                 String workspaceId,
@@ -479,7 +488,7 @@ public class SystemController {
                 List<IndexedSourceItem> indexedSources,
                 Map<String, String> guarantees
         ) {
-            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, null, OS_SCOPE_NOTICE, null);
+            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, null, OS_SCOPE_NOTICE, null, "openai", false);
         }
 
         public GovernanceResponse(
@@ -493,7 +502,7 @@ public class SystemController {
                 StixCatalogService.CatalogFreshnessDto catalogFreshness,
                 String osScopeNotice
         ) {
-            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, catalogFreshness, osScopeNotice, null);
+            this(workspaceId, embeddingModel, auditChainValid, corpusStats, tenantStats, indexedSources, guarantees, catalogFreshness, osScopeNotice, null, "openai", false);
         }
     }
 }

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+const REMARK_PLUGINS = [remarkGfm];
 
 const TECH_TOKEN_RE =
   /(\[\d+\]|\bCVE[-\u2010-\u2015\u2212]\d{4}[-\u2010-\u2015\u2212]\d{4,7}\b|\b[a-f0-9]{64}\b|\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ca|uk|xyz|top|info|me|co|gov|edu|online|site)\b)/gi;
@@ -59,7 +61,7 @@ function renderTechTokens(text, citationMap, onSelectCitation, keyPrefix = 't') 
   });
 }
 
-export function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
+function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
   if (!text) return null;
   const segments = String(text).split(INLINE_MD_RE);
 
@@ -132,9 +134,93 @@ export function MarkdownMessage({
   onSelectCitation,
   isTyping = false,
 }) {
-  const citationMap = new Map(citations.map((c) => [c.index, c]));
+  const selectCitationRef = useRef(onSelectCitation);
+  useEffect(() => {
+    selectCitationRef.current = onSelectCitation;
+  }, [onSelectCitation]);
+
+  const citationMap = useMemo(
+    () => new Map(citations.map((c) => [c.index, c])),
+    [citations]
+  );
+
+  const markdownComponents = useMemo(() => {
+    const enhance = (children) =>
+      processChildren(children, citationMap, (target) => selectCitationRef.current?.(target));
+    return {
+      h1: ({ children }) => (
+        <h1 className="border-b border-white/[0.08] pb-2 text-[20px] font-semibold leading-[1.3] tracking-[-0.02em] text-[#F2F2F4]">
+          {enhance(children)}
+        </h1>
+      ),
+      h2: ({ children }) => (
+        <h2 className="pt-2.5 text-[17px] font-semibold leading-[1.35] tracking-[-0.015em] text-[#F2F2F4]">
+          {enhance(children)}
+        </h2>
+      ),
+      h3: ({ children }) => (
+        <h3 className="pt-1.5 text-[13.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
+          {enhance(children)}
+        </h3>
+      ),
+      p: ({ children }) => (
+        <p className="text-[#F2F2F4]/90">{enhance(children)}</p>
+      ),
+      ul: ({ children }) => (
+        <ul className="space-y-2.5 pl-5 list-disc marker:text-[#2F6FED]">{children}</ul>
+      ),
+      ol: ({ children }) => (
+        <ol className="space-y-2.5 pl-5 list-decimal marker:text-[#2F6FED]">{children}</ol>
+      ),
+      li: ({ children }) => (
+        <li className="pl-1.5 text-[#F2F2F4]/90">{enhance(children)}</li>
+      ),
+      strong: ({ children }) => (
+        <strong className="font-semibold text-[#F2F2F4]">{enhance(children)}</strong>
+      ),
+      blockquote: ({ children }) => (
+        <blockquote className="apple-well my-2.5 rounded-[10px] py-3 px-4 text-[14.5px] leading-[1.65] text-[#F2F2F4]/85">
+          {enhance(children)}
+        </blockquote>
+      ),
+      table: ({ children }) => (
+        <div className="my-2 w-full overflow-x-auto rounded-[10px] border border-white/[0.08]">
+          <table className="w-full min-w-[420px] border-collapse text-left text-[13px] text-[#F2F2F4]/90">
+            {children}
+          </table>
+        </div>
+      ),
+      thead: ({ children }) => (
+        <thead className="border-b border-white/[0.08] bg-white/[0.04] text-[11px] font-medium uppercase tracking-wide text-[#9A9AA2]">
+          {children}
+        </thead>
+      ),
+      th: ({ children }) => (
+        <th className="px-3 py-2 font-medium">{enhance(children)}</th>
+      ),
+      td: ({ children }) => (
+        <td className="border-t border-white/[0.05] px-3 py-2 align-top">{enhance(children)}</td>
+      ),
+      pre: ({ children }) => (
+        <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-3.5 sm:p-4 text-[12.5px] leading-[1.6] text-[#F2F2F4]">
+          {children}
+        </pre>
+      ),
+      code: ({ className, children }) => {
+        const isBlock = Boolean(className?.startsWith('language-') || String(children || '').includes('\n'));
+        if (isBlock) {
+          return <code className={className}>{children}</code>;
+        }
+        return (
+          <code className="font-tech break-words rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F2F2F4]">
+            {children}
+          </code>
+        );
+      },
+    };
+  }, [citationMap]);
+
   const sanitized = (content || '').replace(/<br\s*\/?>/gi, '\n');
-  const enhance = (children) => processChildren(children, citationMap, onSelectCitation);
 
   return (
     <div
@@ -143,78 +229,8 @@ export function MarkdownMessage({
       }`}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({ children }) => (
-            <h1 className="border-b border-white/[0.08] pb-2 text-[20px] font-semibold leading-[1.3] tracking-[-0.02em] text-[#F2F2F4]">
-              {enhance(children)}
-            </h1>
-          ),
-          h2: ({ children }) => (
-            <h2 className="pt-2.5 text-[17px] font-semibold leading-[1.35] tracking-[-0.015em] text-[#F2F2F4]">
-              {enhance(children)}
-            </h2>
-          ),
-          h3: ({ children }) => (
-            <h3 className="pt-1.5 text-[13.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
-              {enhance(children)}
-            </h3>
-          ),
-          p: ({ children }) => (
-            <p className="text-[#F2F2F4]/90">{enhance(children)}</p>
-          ),
-          ul: ({ children }) => (
-            <ul className="space-y-2.5 pl-5 list-disc marker:text-[#2F6FED]">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="space-y-2.5 pl-5 list-decimal marker:text-[#2F6FED]">{children}</ol>
-          ),
-          li: ({ children }) => (
-            <li className="pl-1.5 text-[#F2F2F4]/90">{enhance(children)}</li>
-          ),
-          strong: ({ children }) => (
-            <strong className="font-semibold text-[#F2F2F4]">{enhance(children)}</strong>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="apple-well my-2.5 rounded-[10px] py-3 px-4 text-[14.5px] leading-[1.65] text-[#F2F2F4]/85">
-              {enhance(children)}
-            </blockquote>
-          ),
-          table: ({ children }) => (
-            <div className="my-2 w-full overflow-x-auto rounded-[10px] border border-white/[0.08]">
-              <table className="w-full min-w-[420px] border-collapse text-left text-[13px] text-[#F2F2F4]/90">
-                {children}
-              </table>
-            </div>
-          ),
-          thead: ({ children }) => (
-            <thead className="border-b border-white/[0.08] bg-white/[0.04] text-[11px] font-medium uppercase tracking-wide text-[#9A9AA2]">
-              {children}
-            </thead>
-          ),
-          th: ({ children }) => (
-            <th className="px-3 py-2 font-medium">{enhance(children)}</th>
-          ),
-          td: ({ children }) => (
-            <td className="border-t border-white/[0.05] px-3 py-2 align-top">{enhance(children)}</td>
-          ),
-          pre: ({ children }) => (
-            <pre className="apple-well font-tech overflow-x-auto rounded-[11px] p-3.5 sm:p-4 text-[12.5px] leading-[1.6] text-[#F2F2F4]">
-              {children}
-            </pre>
-          ),
-          code: ({ className, children }) => {
-            const isBlock = Boolean(className?.startsWith('language-') || String(children || '').includes('\n'));
-            if (isBlock) {
-              return <code className={className}>{children}</code>;
-            }
-            return (
-              <code className="font-tech break-words rounded-[5px] border border-white/[0.08] bg-white/[0.045] px-1.5 py-0.5 text-[12.5px] font-medium text-[#F2F2F4]">
-                {children}
-              </code>
-            );
-          },
-        }}
+        remarkPlugins={REMARK_PLUGINS}
+        components={markdownComponents}
       >
         {sanitized}
       </ReactMarkdown>

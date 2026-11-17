@@ -42,6 +42,8 @@ import org.w3c.dom.NodeList;
  */
 @Service
 public class CorpusDiscoveryService {
+    @Value("${omega.ai.provider:openai}")
+    private String aiProvider = "openai";
 
     private static final Logger log = LoggerFactory.getLogger(CorpusDiscoveryService.class);
     private static final int MAX_FEED_BYTES = 1024 * 1024;
@@ -93,6 +95,7 @@ public class CorpusDiscoveryService {
     }
 
     public int scanAllFeeds() {
+        if ("ollama".equals(aiProvider)) return 0;
         int discovered = 0;
         for (FeedSource feed : FEEDS) {
             discovered += scanSingleFeed(feed);
@@ -287,6 +290,7 @@ public class CorpusDiscoveryService {
     }
 
     private byte[] downloadBounded(String url) throws Exception {
+        if ("ollama".equals(aiProvider)) throw new IllegalStateException("Descarga externa deshabilitada en Modo Soberano Local.");
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(6))

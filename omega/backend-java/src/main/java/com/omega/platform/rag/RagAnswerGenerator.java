@@ -9,8 +9,16 @@ public interface RagAnswerGenerator {
 
     String generateGroundedAnswer(String question, List<RankedChunk> chunks);
 
+    default String generateGroundedAnswer(String question, List<RankedChunk> chunks, String analysisContext) {
+        return generateGroundedAnswer(question, chunks);
+    }
+
     default String generateGeneralAnswer(String question) {
         return null;
+    }
+
+    default String generateGeneralAnswer(String question, String analysisContext) {
+        return generateGeneralAnswer(question);
     }
 
     default String resolveActiveGeneratorModel() {

@@ -48,11 +48,41 @@ import {
 } from './PanelStatePrimitives';
 
 const CONFIG_SECTIONS = [
-  { id: 'cuenta', label: 'Cuenta y sesión', icon: Shield },
-  { id: 'ia', label: 'Motor de IA', icon: Sparkles },
-  { id: 'rag', label: 'Motor RAG', icon: Layers },
-  { id: 'permisos', label: 'Permisos y ética', icon: ShieldCheck },
-  { id: 'corpus', label: 'Corpus indexado', icon: Database },
+  {
+    id: 'cuenta',
+    group: 'CUENTA',
+    label: 'Mi perfil y sesión',
+    subtitle: 'Sesión aislada JWT, verificación 2FA y cadena de auditoría SHA-256.',
+    icon: Shield,
+  },
+  {
+    id: 'ia',
+    group: 'ESPACIO DE TRABAJO',
+    label: 'Motor de IA',
+    subtitle: 'Proveedor LLM activo (Groq, Ollama local, Gemini, OpenAI o router).',
+    icon: Sparkles,
+  },
+  {
+    id: 'rag',
+    group: 'ESPACIO DE TRABAJO',
+    label: 'Motor RAG',
+    subtitle: 'Profundidad de recuperación Top-K y prioridad de fuentes CTI.',
+    icon: Layers,
+  },
+  {
+    id: 'permisos',
+    group: 'ESPACIO DE TRABAJO',
+    label: 'Permisos y ética',
+    subtitle: 'Garantías defensivas, enlaces pasivos y consentimiento explícito.',
+    icon: ShieldCheck,
+  },
+  {
+    id: 'corpus',
+    group: 'ESPACIO DE TRABAJO',
+    label: 'Corpus indexado',
+    subtitle: 'Documentos e informes CTI verificados e ingesta web en memoria.',
+    icon: Database,
+  },
 ];
 
 const AI_PROVIDER_PRESETS = [
@@ -83,15 +113,15 @@ const AI_PROVIDER_PRESETS = [
     baseUrlEditable: true,
     keyRequired: false,
     keyPlaceholder: 'No requiere API key en Ollama local',
-    defaultModel: 'llama3.2',
-    suggestedModels: ['llama3.2', 'qwen2.5:7b', 'mistral', 'deepseek-r1:8b'],
+    defaultModel: 'qwen2.5:14b',
+    suggestedModels: ['qwen2.5:14b', 'llama3.2', 'qwen2.5:7b', 'mistral'],
     docsUrl: 'https://ollama.com',
     docsLabel: 'Ver modelos Ollama',
     summary: '100% local en tu PC, sin internet ni cuentas externas (requiere tener Ollama ejecutándose).',
     steps: [
-      'Abre Ollama en tu equipo y descarga un modelo (ej. ollama pull llama3.2).',
-      'Conserva http://host.docker.internal:11434/v1 (o la URL de tu servidor en red).',
-      'Pulsa Probar conexión para detectar tus modelos instalados y luego Guardar.',
+      'Prepara Ollama sin funciones cloud y descarga antes los modelos bge-m3, qwen2.5:14b y qwen2.5vl:7b.',
+      'Usa Ollama en este equipo. No se admiten servidores remotos en Modo Soberano.',
+      'Guardar activa los tres modelos locales y deshabilita consultas externas. Los documentos existentes requieren reindexación.',
     ],
   },
   {
@@ -510,14 +540,9 @@ export function SettingsPanel({
 
   function scrollToSection(id) {
     setActiveSection(id);
-    const map = {
-      cuenta: cuentaRef.current,
-      ia: iaRef.current,
-      rag: ragRef.current,
-      permisos: permisosRef.current,
-      corpus: corpusRef.current,
-    };
-    map[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   useEffect(() => {
@@ -797,35 +822,18 @@ export function SettingsPanel({
   const stats = effectiveGov.corpus_stats;
   const tenantStats = effectiveGov.tenant_stats || null;
   const sources = effectiveGov.indexed_sources || [];
+  const activeSectionMeta =
+    CONFIG_SECTIONS.find((sec) => sec.id === activeSection) || CONFIG_SECTIONS[0];
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* Barra superior segmentada (reemplaza cualquier menú lateral secundario) */}
-      <div className="shrink-0 border-b border-white/[0.08] bg-[#0A0A0C]/65 px-3.5 sm:px-8 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-        <nav
-          aria-label="Secciones de configuración"
-          className="apple-segmented flex items-center gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto max-w-full rounded-[11px] p-1"
-        >
-          {CONFIG_SECTIONS.map((sec) => {
-            const Icon = sec.icon;
-            const isActive = activeSection === sec.id;
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => scrollToSection(sec.id)}
-                className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] shrink-0 active:scale-[0.97] transition-all duration-150 cursor-pointer ${
-                  isActive
-                    ? 'apple-segmented-active'
-                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="whitespace-nowrap">{sec.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+      {/* Cabecera estilo referencia: Breadcrumb Ajustes > Sección + acciones */}
+      <div className="shrink-0 border-b border-white/[0.08] bg-[#0A0A0C]/65 px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[15px] sm:text-[17px]">
+          <span className="font-semibold tracking-[-0.02em] text-[#F2F2F4]">Ajustes</span>
+          <span className="text-[#7C7D87]">›</span>
+          <span className="text-[#9FA6B8] font-medium">{activeSectionMeta.label}</span>
+        </div>
 
         <div className="flex items-center justify-end gap-2.5 shrink-0">
           <button
@@ -852,12 +860,58 @@ export function SettingsPanel({
         </div>
       </div>
 
-      {/* Área Scrollable con despeje inferior para el Dock */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3.5 sm:px-8 py-5 sm:py-6">
-        <div className="animate-fade-up mx-auto max-w-[820px] space-y-8 pb-24">
-          <h1 className="text-[22px] sm:text-[24px] font-semibold tracking-[-0.025em] text-[#F2F2F4]">
-            Configuración del espacio de trabajo
-          </h1>
+      {/* Área Scrollable dividida en 2 columnas (Sidebar agrupado + Panel activo) */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+        <div className="animate-fade-up mx-auto max-w-[1060px] grid grid-cols-1 md:grid-cols-[215px_1fr] gap-6 lg:gap-10 pb-24">
+          {/* Columna izquierda: Navegación categorizada estilo referencia */}
+          <aside className="md:sticky md:top-0 md:self-start space-y-5">
+            {['CUENTA', 'ESPACIO DE TRABAJO'].map((groupName) => {
+              const items = CONFIG_SECTIONS.filter((sec) => sec.group === groupName);
+              return (
+                <div key={groupName} className="space-y-1">
+                  <div className="px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-[#7C7D87]">
+                    {groupName}
+                  </div>
+                  <div className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar">
+                    {items.map((sec) => {
+                      const Icon = sec.icon;
+                      const isActive = activeSection === sec.id;
+                      return (
+                        <button
+                          key={sec.id}
+                          type="button"
+                          onClick={() => scrollToSection(sec.id)}
+                          className={`w-full flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] text-left shrink-0 transition-all duration-150 cursor-pointer ${
+                            isActive
+                              ? 'bg-[#2F6FED]/15 text-[#F2F2F4] border border-[#2F6FED]/40 font-medium shadow-[0_0_18px_rgba(47,111,237,0.14)]'
+                              : 'border border-transparent text-[#9A9AA2] hover:text-[#F2F2F4] hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <Icon
+                            className={`h-4 w-4 shrink-0 ${
+                              isActive ? 'text-[#8BB2FF]' : 'text-[#7C7D87]'
+                            }`}
+                          />
+                          <span className="whitespace-nowrap">{sec.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </aside>
+
+          {/* Columna derecha: Contenido limpio de la sección seleccionada */}
+          <div className="min-w-0 space-y-6">
+            <div className="border-b border-white/[0.07] pb-4">
+              <h1 className="text-[19px] sm:text-[21px] font-semibold tracking-[-0.02em] text-[#F2F2F4]">
+                {activeSectionMeta.label}
+              </h1>
+              <p className="mt-1 text-[12.5px] text-[#9A9AA2]">
+                {activeSectionMeta.subtitle}
+              </p>
+            </div>
 
           {govError && (
             <PanelErrorBanner
@@ -883,7 +937,8 @@ export function SettingsPanel({
           )}
 
             {/* Bloque 1 — Cuenta Multi-Tenant JWT, Auditoría & Workspace */}
-            <section ref={cuentaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="0">
+            {activeSection === 'cuenta' && (
+            <section ref={cuentaRef} className="space-y-4">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Cuenta y espacio de trabajo
@@ -1173,9 +1228,15 @@ export function SettingsPanel({
                 </div>
               </div>
             </section>
+            )}
 
             {/* Bloque 2 — Motor de IA universal (Groq por defecto u Ollama / Gemini / OpenAI / API propia) */}
-            <section ref={iaRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="30">
+            {activeSection === 'ia' && (
+            <section ref={iaRef} className="space-y-4">
+              {gov?.airGappedMode === true && <div role="status" className="rounded-xl border border-[#30D158]/30 bg-[#30D158]/10 p-3 text-sm text-[#8AEBA1]">
+                <strong>Modo Soberano Local · Ningún dato sale de tu equipo</strong>
+                <p className="mt-1 text-xs">IA local y consultas externas deshabilitadas en OMEGA. Requiere servicios locales sin reenvío; el aislamiento físico de red depende de la configuración del equipo.</p>
+              </div>}
               {(() => {
                 const govAi = gov?.ai_engine || null;
                 const aiConfigured = Boolean(desktopAiConfig ? desktopAiConfig.configured : govAi?.configured);
@@ -1442,9 +1503,12 @@ export function SettingsPanel({
                 );
               })()}
             </section>
+            )}
 
             {/* Bloque 3 — Profundidad de Recuperación RAG */}
-            <section ref={ragRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="50">
+            {activeSection === 'rag' && (
+            <div className="space-y-6">
+            <section ref={ragRef} className="space-y-3">
               <div>
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Alcance de evidencia (<span className="font-tech">Top-K</span>)
@@ -1540,9 +1604,12 @@ export function SettingsPanel({
                 })}
               </div>
             </section>
+            </div>
+            )}
 
             {/* Bloque 4 — Permisos y Garantías Éticas */}
-            <section ref={permisosRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="120">
+            {activeSection === 'permisos' && (
+            <section ref={permisosRef} className="space-y-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
                   Privacidad y permisos
@@ -1625,9 +1692,11 @@ export function SettingsPanel({
                 </div>
               </div>
             </section>
+            )}
 
             {/* Bloque 5 — Trazabilidad del Corpus Indexado */}
-            <section ref={corpusRef} className="animate-on-scroll space-y-3 scroll-mt-6" data-delay="150">
+            {activeSection === 'corpus' && (
+            <section ref={corpusRef} className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 text-[#9A9AA2] shrink-0" />
@@ -1792,6 +1861,8 @@ export function SettingsPanel({
                 subtitle="Extrae IPs, dominios y CVEs de una URL técnica en memoria."
               />
             </section>
+            )}
+          </div>
         </div>
       </div>
     </div>

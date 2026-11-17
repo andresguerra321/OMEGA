@@ -6,7 +6,6 @@ import {
   Copy,
   Download,
   KeyRound,
-  Lock,
   Mail,
   ShieldCheck,
   Smartphone,
@@ -248,40 +247,60 @@ export function TwoFactorSettingsCard({ authSession }) {
   const currentMethod = status?.method || 'NONE';
 
   return (
-    <div className="pt-3 border-t border-white/[0.06] space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-[9px] bg-[#2F6FED]/15 border border-[#2F6FED]/35 flex items-center justify-center">
-            <ShieldCheck className="h-4 w-4 text-[#8BB2FF]" />
-          </div>
-          <div>
-            <div className="text-[13px] font-medium text-[#F2F2F4]">
+    <div className="pt-4 border-t border-white/[0.06] space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13.5px] font-semibold text-[#F2F2F4]">
               Verificación en dos pasos (2FA)
-            </div>
-            <div className="text-[11.5px] text-[#9A9AA2]">
-              Elige App Autenticadora (QR offline) o código de 6 dígitos al correo.
-            </div>
+            </span>
+            {mfaEnabled && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium border border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
+                {currentMethod === 'EMAIL' ? 'Correo electrónico' : 'App Autenticadora (TOTP)'}
+              </span>
+            )}
           </div>
+          <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
+            Mantén tu cuenta segura activando 2FA mediante código al correo o aplicación autenticadora (TOTP).
+          </p>
+          {mfaEnabled && (
+            <button
+              type="button"
+              onClick={() => openSetupWizard(currentMethod === 'EMAIL' ? 'EMAIL' : 'TOTP')}
+              className="text-[11.5px] font-medium text-[#6EA0FF] hover:text-white transition-colors cursor-pointer pt-0.5"
+            >
+              Cambiar método 2FA →
+            </button>
+          )}
         </div>
 
-        <span
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${
+        <button
+          type="button"
+          role="switch"
+          aria-checked={mfaEnabled}
+          aria-label="Activar o desactivar verificación en dos pasos"
+          onClick={() => {
+            if (mfaEnabled) {
+              setErrorMsg('');
+              setDisablePwd('');
+              setModalStep('disable');
+            } else {
+              openSetupWizard('TOTP');
+            }
+          }}
+          className={`relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer ${
             mfaEnabled
-              ? 'border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]'
-              : 'border-white/[0.10] bg-white/[0.04] text-[#9A9AA2]'
+              ? 'bg-[#2F6FED] border-[#6EA0FF]/60 shadow-[0_0_16px_rgba(47,111,237,0.45)]'
+              : 'bg-white/[0.08] border-white/[0.14] hover:bg-white/[0.14]'
           }`}
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              mfaEnabled ? 'bg-[#30D158]' : 'bg-[#7C7D87]'
+            className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+              mfaEnabled ? 'translate-x-5.5' : 'translate-x-0.5'
             }`}
           />
-          {mfaEnabled
-            ? currentMethod === 'EMAIL'
-              ? 'Activo · Correo electrónico'
-              : 'Activo · App Autenticadora'
-            : 'Desactivado'}
-        </span>
+        </button>
       </div>
 
       {infoMsg && !modalStep && (
@@ -289,32 +308,6 @@ export function TwoFactorSettingsCard({ authSession }) {
           {infoMsg}
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => openSetupWizard(currentMethod === 'EMAIL' ? 'EMAIL' : 'TOTP')}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[9px] bg-[#2F6FED]/18 hover:bg-[#2F6FED]/28 border border-[#2F6FED]/45 text-[12px] font-medium text-[#DCE6FF] transition-colors cursor-pointer"
-        >
-          <ShieldCheck className="h-3.5 w-3.5 text-[#8BB2FF]" />
-          <span>{mfaEnabled ? 'Cambiar método 2FA' : 'Configurar verificación 2FA'}</span>
-        </button>
-
-        {mfaEnabled && (
-          <button
-            type="button"
-            onClick={() => {
-              setErrorMsg('');
-              setDisablePwd('');
-              setModalStep('disable');
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[9px] bg-[#FF453A]/10 hover:bg-[#FF453A]/20 border border-[#FF453A]/30 text-[12px] font-medium text-[#FFB4AE] transition-colors cursor-pointer"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            <span>Desactivar 2FA</span>
-          </button>
-        )}
-      </div>
 
       {modalStep &&
         createPortal(

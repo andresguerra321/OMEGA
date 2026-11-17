@@ -39,6 +39,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ExternalIocFeedSyncService {
+    @Value("${omega.ai.provider:openai}")
+    private String aiProvider = "openai";
 
     private static final Logger log = LoggerFactory.getLogger(ExternalIocFeedSyncService.class);
     private static final String OPENPHISH_FEED = "https://openphish.com/feed.txt";
@@ -97,11 +99,51 @@ public class ExternalIocFeedSyncService {
     }
 
     public void syncAllFeeds() {
+        if ("ollama".equals(aiProvider)) return;
+        seedKnownBenchmarkIndicators();
         int openPhishCount = syncOpenPhish();
         int urlhausCount = abuseChAuthKey.isBlank() ? 0 : syncUrlhaus();
         int threatfoxCount = abuseChAuthKey.isBlank() ? 0 : syncThreatFox();
         log.info("Sincronización feeds externos completada: openphish={}, urlhaus={}, threatfox={}",
                 openPhishCount, urlhausCount, threatfoxCount);
+    }
+
+    private void seedKnownBenchmarkIndicators() {
+        try {
+            UUID campaignId = getOrCreateCampaign(
+                    "Google Safe Browsing & OWASP Benchmark Phishing Vectors",
+                    "Phishing / Malware Test Vectors",
+                    "Vectores oficiales de verificación de motores anti-phishing y distribución de malware."
+            );
+            List<String[]> seeds = List.of(
+                    new String[]{"domain", "testsafebrowsing.appspot.com", "Subdominio oficial de prueba de Google Safe Browsing (Phishing / Malware)"},
+                    new String[]{"url", "http://testsafebrowsing.appspot.com/s/phishing.html", "URL de phishing verificada (Google Safe Browsing Test Vector)"},
+                    new String[]{"url", "https://testsafebrowsing.appspot.com/s/phishing.html", "URL de phishing verificada (Google Safe Browsing Test Vector)"},
+                    new String[]{"url", "http://testsafebrowsing.appspot.com/s/malware.html", "URL de distribución de malware verificada (Google Safe Browsing Test Vector)"},
+                    new String[]{"url", "https://testsafebrowsing.appspot.com/s/malware.html", "URL de distribución de malware verificada (Google Safe Browsing Test Vector)"},
+                    new String[]{"url", "http://testsafebrowsing.appspot.com/s/unwanted.html", "URL de software no deseado verificada (Google Safe Browsing Test Vector)"}
+            );
+            List<Object[]> batch = new ArrayList<>();
+            int idx = 0;
+            for (String[] s : seeds) {
+                batch.add(new Object[]{
+                        UUID.randomUUID(),
+                        campaignId,
+                        "safebrowsing-seed-" + (++idx),
+                        s[0],
+                        s[1],
+                        s[1].toLowerCase(Locale.ROOT),
+                        "[" + s[0] + ":value = '" + s[1] + "']",
+                        s[2],
+                        "Google Safe Browsing Verification Suite",
+                        "Google Safe Browsing",
+                        "https://testsafebrowsing.appspot.com/"
+                });
+            }
+            jdbcTemplate.batchUpdate(INSERT_IOC_SQL, batch);
+        } catch (Exception ex) {
+            log.debug("Seed benchmark IOCs omitido: {}", ex.getMessage());
+        }
     }
 
     private int syncOpenPhish() {

@@ -36,6 +36,9 @@ public class PublicCorpusRagService {
     private static final Pattern TRACE_DUMP_NOISE = Pattern.compile("(?i)\\b(appendix\\s+[a-z]\\b|detailed traces per target|sms with link to)\\b");
     private static final Pattern EXPLANATORY_PROSE = Pattern.compile("(?i)\\b(is a surveillance|spyware|nso group|commercial surveillance|zero-click|infect|target|operates|mercenary|es un spyware|software esp[íi]a)\\b");
     private static final Pattern TRACE_INTENT = Pattern.compile("(?i)\\b(cve-\\d|ioc|sms|appendix|ap[eé]ndice|hash|dominio|domain|url|ip|traza|trace|indicador)\\b");
+    private static final Pattern CONVERSATIONAL_ONLY = Pattern.compile(
+            "(?i)^\\s*(hola|buenas|buenos\\s+d[ií]as|buenas\\s+tardes|buenas\\s+noches|hey|hi|hello|qu[eé]\\s+tal|c[oó]mo\\s+est[aá]s|qui[eé]n\\s+eres|qu[eé]\\s+eres|qu[eé]\\s+haces|ayuda)(\\s+[\\p{L}\\p{N}_-]+){0,4}[?!.]*\\s*$"
+    );
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final PublicSchemaSupport publicSchemaSupport;
@@ -60,7 +63,7 @@ public class PublicCorpusRagService {
     @Transactional
     public RagQueryResponse queryPublicCorpus(OmegaPrincipal principal, PublicCtiQueryRequest request) {
         int topK = request.topK() != null ? Math.max(1, Math.min(request.topK(), 20)) : 6;
-        String activeModel = properties.rag().embeddingModel();
+        String activeModel = properties.ai().local() ? "ollama:" + properties.ai().ollama().embedModel() : properties.rag().embeddingModel();
 
         if (!publicSchemaSupport.hasTable("public.document_chunks")
                 || !publicSchemaSupport.hasTable("public.reports")) {
@@ -74,8 +77,37 @@ public class PublicCorpusRagService {
             );
         }
 
-        String tsQuery = HybridRagSearchRepository.buildSanitizedOrTsQuery(request.question());
+        if (CONVERSATIONAL_ONLY.matcher(request.question()).matches()
+                && (request.analysisContext() == null || request.analysisContext().isBlank())) {
+            String greetingAnswer = answerGenerator.generateGeneralAnswer(request.question());
+            if (greetingAnswer != null && !greetingAnswer.isBlank()) {
+                return new RagQueryResponse(
+                        "GENERAL_MODE",
+                        answerGenerator.resolveActiveGeneratorModel(),
+                        greetingAnswer,
+                        List.of(),
+                        List.of(),
+                        List.of()
+                );
+            }
+        }
+
+        String searchInput = (request.analysisContext() != null && !request.analysisContext().isBlank())
+                ? request.question() + "\n" + request.analysisContext()
+                : request.question();
+        String tsQuery = HybridRagSearchRepository.buildSanitizedOrTsQuery(searchInput);
         if (tsQuery.isBlank()) {
+            String fallbackGeneral = answerGenerator.generateGeneralAnswer(request.question(), request.analysisContext());
+            if (fallbackGeneral != null && !fallbackGeneral.isBlank()) {
+                return new RagQueryResponse(
+                        "GENERAL_MODE",
+                        answerGenerator.resolveActiveGeneratorModel(),
+                        fallbackGeneral,
+                        List.of(),
+                        List.of(),
+                        List.of()
+                );
+            }
             return new RagQueryResponse(
                     "OK_EMPTY",
                     activeModel,
@@ -152,8 +184,8 @@ public class PublicCorpusRagService {
                 ))
                 .toList();
 
-        if (ranked.isEmpty() && Boolean.TRUE.equals(request.generalMode())) {
-            String generalAnswer = answerGenerator.generateGeneralAnswer(request.question());
+        if (ranked.isEmpty()) {
+            String generalAnswer = answerGenerator.generateGeneralAnswer(request.question(), request.analysisContext());
             if (generalAnswer != null && !generalAnswer.isBlank()) {
                 auditLogService.record(
                         principal.tenantId(),
@@ -175,12 +207,15 @@ public class PublicCorpusRagService {
         }
 
         String answer = ranked.isEmpty()
-                ? "No se encontraron pasajes verificados en los informes CTI públicos para esta consulta."
-                : answerGenerator.generateGroundedAnswer(request.question(), ranked);
+                ? (request.analysisContext() != null && !request.analysisContext().isBlank()
+                        ? answerGenerator.generateGroundedAnswer(request.question(), List.of(), request.analysisContext())
+                        : "No se encontraron pasajes verificados en los informes CTI públicos para esta consulta.")
+                : answerGenerator.generateGroundedAnswer(request.question(), ranked, request.analysisContext());
 
         String responseModel = ranked.isEmpty()
                 ? activeModel
-                : (answer.startsWith("Resumen extractivo sin síntesis LLM")
+                : ((answer.startsWith("Resumen extractivo sin síntesis LLM")
+                        || answer.startsWith("**Análisis técnico de la web / enlace inspeccionado en OMEGA:**"))
                         ? "omega-extractive-fallback"
                         : answerGenerator.resolveActiveGeneratorModel());
 
@@ -281,10 +316,15 @@ public class PublicCorpusRagService {
             @NotBlank @Size(min = 2, max = 2000) String question,
             @Min(1) @Max(20) Integer topK,
             @JsonProperty("source_filter") String sourceFilter,
-            @JsonProperty("general_mode") Boolean generalMode
+            @JsonProperty("general_mode") Boolean generalMode,
+            @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext
     ) {
         public PublicCtiQueryRequest(String question, Integer topK, String sourceFilter) {
-            this(question, topK, sourceFilter, false);
+            this(question, topK, sourceFilter, false, null);
+        }
+
+        public PublicCtiQueryRequest(String question, Integer topK, String sourceFilter, Boolean generalMode) {
+            this(question, topK, sourceFilter, generalMode, null);
         }
     }
 

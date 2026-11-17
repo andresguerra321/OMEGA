@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test:desktop": "node --test electron/dockerOrchestrator.test.js src/lib/validators.test.js src/lib/api.test.js",
+    "test:desktop": "node --test electron/dockerOrchestrator.test.js electron/windowsPcAudit.test.js src/lib/validators.test.js src/lib/api.test.js",
     "preview": "vite preview",
     "desktop:dev": "concurrently -k \"vite --port 5174 --strictPort\" \"wait-on http://localhost:5174 && node electron/launch.js http://localhost:5174\"",
     "desktop:start": "vite build && node electron/launch.js",

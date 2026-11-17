@@ -66,6 +66,13 @@ management:
       show-details: never
 
 omega:
+  ai:
+    provider: ${OMEGA_AI_PROVIDER:openai}
+    ollama:
+      base-url: ${OMEGA_OLLAMA_BASE_URL:http://localhost:11434}
+      embed-model: ${OMEGA_OLLAMA_EMBED_MODEL:bge-m3}
+      chat-model: ${OMEGA_OLLAMA_CHAT_MODEL:qwen2.5:14b}
+      vision-model: ${OMEGA_OLLAMA_VISION_MODEL:qwen2.5vl:7b}
   security:
     jwt-secret: ${OMEGA_JWT_SECRET:${JWT_SECRET:omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}}
     jwt-expiration-seconds: ${OMEGA_JWT_EXPIRATION_SECONDS:3600}

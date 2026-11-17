@@ -1,7 +1,7 @@
 """Contratos Pydantic del microservicio forense stateless OMEGA."""
 
-from typing import Any
-from pydantic import BaseModel, Field
+from typing import Any, Literal
+from pydantic import BaseModel, Field, StrictBool
 
 
 class IocMatchItem(BaseModel):
@@ -34,6 +34,14 @@ class IocRawRequest(BaseModel):
 
 class LinkCheckRequest(BaseModel):
     url: str = Field(..., min_length=4, max_length=2048)
+    activeProbe: StrictBool = False
+
+
+class ContainmentRequest(BaseModel):
+    actionType: Literal['BLOCK_NETWORK_INDICATOR', 'SUSPEND_OR_TERMINATE_PROCESS', 'QUARANTINE_PERSISTENCE_ITEM']
+    target: dict[str, Any]
+    dryRun: StrictBool = True
+    previewToken: str | None = Field(default=None, max_length=250000)
 
 
 class LiveDeviceSnapshot(BaseModel):
@@ -63,3 +71,55 @@ class PcLiveSnapshot(BaseModel):
     scheduled_tasks: list[dict[str, Any]] = Field(default_factory=list)
     startup_items: list[dict[str, Any]] = Field(default_factory=list)
     file_hashes: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class MobileUsbAuditRequest(BaseModel):
+    platform: str = Field(..., min_length=2, max_length=16)
+    device_id: str = Field(..., min_length=1, max_length=160)
+    backup_password: str | None = None
+    async_mode: bool = False
+
+
+
+class RealtimeToggleRequest(BaseModel):
+    enabled: bool
+
+
+class HostIocItem(BaseModel):
+    ioc_type: str = Field(max_length=40)
+    ioc_value: str = Field(max_length=2048)
+    source: str = Field(default='', max_length=2048)
+
+
+class HostIocSyncRequest(BaseModel):
+    indicators: list[HostIocItem] = Field(max_length=200000)
+
+
+class PersistenceFinding(BaseModel):
+    id: str
+    category: str
+    persistenceType: str
+    location: str
+    targetPath: str
+    sha256: str
+    signatureStatus: str
+    publisher: str = ''
+    severity: Literal['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+    userFriendlyTitle: str
+    userFriendlyExplanation: str
+    recommendedAction: str
+    evidence: dict[str, Any]
+    ctiMatches: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PersistenceAuditResponse(BaseModel):
+    scope: str
+    platform: str
+    hostname: str
+    collectedAt: str
+    findings: list[PersistenceFinding]
+    processes: list[dict[str, Any]] = Field(default_factory=list)
+    processFindings: list[dict[str, Any]] = Field(default_factory=list)
+    limitations: list[str]
+    complete: bool
+    notice: str

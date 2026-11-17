@@ -1,12 +1,15 @@
+import base64
 import json
 import logging
+import os
 import re
 import urllib.parse
 import urllib.request
 from urllib.parse import urlparse
 
 from cti_db import lookup_iocs_detailed
-from owasp_rules import evaluate_url_owasp
+from owasp_rules import SHARED_HOSTING_ROOTS, evaluate_url_owasp
+from evasion_intelligence import inspect_evasion
 
 logger = logging.getLogger(__name__)
 
@@ -80,30 +83,107 @@ def _get_root_domain(host: str) -> str | None:
     parts = host.lower().strip(".").split(".")
     if len(parts) < 3:
         return None
-    return ".".join(parts[-2:])
+    root = ".".join(parts[-2:])
+    if root in SHARED_HOSTING_ROOTS:
+        return host.lower().strip(".")
+    return root
+
+
+def _vt_url_id(url: str) -> str:
+    """Identificador compatible con vt-py (vt.url_id): Base64URL sin relleno '='."""
+    return base64.urlsafe_b64encode(url.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _passive_vt_url_check(normalized_url: str, host: str) -> list[dict]:
+    vt_key = (os.getenv("VIRUSTOTAL_API_KEY") or "").strip()
+    if not vt_key:
+        return []
+    matches: list[dict] = []
+    for path, ioc_type, val in [
+        (f"/urls/{_vt_url_id(normalized_url)}", "url", normalized_url),
+        (f"/domains/{urllib.parse.quote(host)}", "domain", host),
+    ]:
+        try:
+            req = urllib.request.Request(
+                f"https://www.virustotal.com/api/v3{path}",
+                headers={"x-apikey": vt_key, "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                stats = payload.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+                mal = int(stats.get("malicious") or 0)
+                susp = int(stats.get("suspicious") or 0)
+                if mal > 0 or susp >= 2:
+                    matches.append({
+                        "ioc_type": ioc_type,
+                        "ioc_value": val,
+                        "context": f"VirusTotal v3 (vt-py): {mal} motores maliciosos, {susp} sospechosos",
+                        "campaign": "VirusTotal Multi-Engine Reputation",
+                        "spyware_family": "Phishing / Malware",
+                        "source_report": "VirusTotal API v3",
+                        "organization": "VirusTotal",
+                        "source_url": "https://www.virustotal.com/",
+                    })
+                    break
+        except Exception:
+            continue
+    return matches
 
 
 def _passive_cert_count(domain: str) -> int | None:
-    """Consulta pasiva a crt.sh sin contactar el servidor del enlace sospechoso."""
+    """Consulta pasiva a Certificate Transparency con fallback multi-fuente (CertSpotter -> crt.sh -> HackerTarget)."""
+    q = urllib.parse.quote(domain)
+    # 1. CertSpotter CT API (rápida y estable incluso en dominios masivos como appspot.com)
     try:
-        q = urllib.parse.quote(domain)
         req = urllib.request.Request(
-            f"https://crt.sh/?q={q}&output=json",
+            f"https://api.certspotter.com/v1/issuances?domain={q}",
+            headers={"User-Agent": "Omega-CTI-Passive-Check/1.0", "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            if isinstance(data, list):
+                return len(data)
+    except Exception:
+        pass
+
+    # 2. crt.sh (excluyendo expirados para acelerar respuesta)
+    try:
+        req = urllib.request.Request(
+            f"https://crt.sh/?q={q}&output=json&exclude=expired",
             headers={"User-Agent": "Omega-CTI-Passive-Check/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=4) as resp:
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-            return len(data) if isinstance(data, list) else 0
+            if isinstance(data, list):
+                return len(data)
     except Exception as exc:
         logger.debug("Consulta pasiva crt.sh fallida para '%s': %s", domain, exc)
-        return None
+
+    # 3. Fallback pasivo HackerTarget hostsearch
+    try:
+        req = urllib.request.Request(
+            f"https://api.hackertarget.com/hostsearch/?q={q}",
+            headers={"User-Agent": "Omega-CTI-Passive-Check/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            text = resp.read().decode("utf-8", errors="ignore").strip()
+            if text and "error" not in text.lower() and "api count exceeded" not in text.lower():
+                lines = [ln for ln in text.splitlines() if "," in ln]
+                return len(lines)
+    except Exception:
+        pass
+
+    return None
 
 
-def inspect_suspicious_link(raw_url: str) -> dict:
-    """Evalúa un enlace sospechoso antes de abrirlo sin realizar peticiones al destino (RNF4, RNF7)."""
+def inspect_suspicious_link(raw_url: str, *, active_probe: bool = False) -> dict:
+    """Evalúa pasivamente; solo contacta al destino si se solicita active_probe."""
     normalized_url = _refang_url(raw_url)
     parsed = urlparse(normalized_url)
     host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.username or parsed.password:
+        raise ValueError('No se aceptan enlaces que incluyan credenciales.')
+    host = host.encode('idna').decode('ascii')
 
     if not host or (not _is_valid_domain_host(host) and not _is_valid_ipv4(host)):
         raise ValueError("Ingresa una URL, dominio con extensión (ej. ejemplo.org) o IPv4 válida.")
@@ -124,10 +204,30 @@ def inspect_suspicious_link(raw_url: str) -> dict:
     if len(parsed.query) > 90 or len(parsed.path) > 80:
         heuristics.append("Ruta o parámetros de consulta extensos (patrón habitual en enlaces de rastreo individualizado).")
 
-    # Búsqueda exacta en base local de IOCs indexados (URL completa, host y dominio raíz)
-    candidates = list({normalized_url.lower(), host, *([root_domain] if root_domain else [])})
+    # Búsqueda exacta y normalizada sobre la URL completa (http/https, con/sin slash), subdominio+ruta y host
+    lower_url = normalized_url.lower()
+    stripped_url = lower_url.rstrip("/")
+    alt_scheme_url = (
+        "https://" + stripped_url[len("http://"):]
+        if stripped_url.startswith("http://")
+        else ("http://" + stripped_url[len("https://"):] if stripped_url.startswith("https://") else stripped_url)
+    )
+    host_and_path = f"{host}{(parsed.path or '').lower().rstrip('/')}"
+    candidates = list({
+        lower_url,
+        stripped_url,
+        f"{stripped_url}/",
+        alt_scheme_url,
+        f"{alt_scheme_url}/",
+        host_and_path,
+        host,
+        *([root_domain] if root_domain else []),
+    })
 
     cti_matches = lookup_iocs_detailed(candidates)
+    vt_matches = _passive_vt_url_check(normalized_url, host)
+    if vt_matches:
+        cti_matches = cti_matches + vt_matches
 
     cert_records = _passive_cert_count(host) if not IPV4_HOST_RE.match(host) else None
     owasp_findings = evaluate_url_owasp(normalized_url, host, parsed, cert_records)
@@ -158,6 +258,12 @@ def inspect_suspicious_link(raw_url: str) -> dict:
         verdict = "Sin alertas OWASP ni coincidencias conocidas en la base CTI"
         recommendation = "Usa HTTPS y no aparece en reportes ni reglas OWASP actuales, pero mantén precaución si proviene de un remitente desconocido."
 
+    infrastructure = inspect_evasion(normalized_url, host, active_probe=active_probe)
+    levels = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2, 'CRITICAL': 3}
+    if levels[infrastructure['riskLevel']] > levels[risk_level]:
+        risk_level = infrastructure['riskLevel']
+        verdict = 'Riesgo elevado por señales de infraestructura y posible evasión; requiere verificación'
+        recommendation = 'Evita abrir el enlace desde tu teléfono y conserva la evidencia. Estas señales no atribuyen spyware ni confirman infección.'
     return {
         "normalized_url": normalized_url,
         "host": host,
@@ -171,6 +277,13 @@ def inspect_suspicious_link(raw_url: str) -> dict:
         "owasp_findings": owasp_findings,
         "passive_ct_certificates": cert_records,
         "cti_matches": cti_matches,
-        "privacy_notice": "Verificación 100% pasiva (CTI + OWASP + CT): Omega no realizó ninguna conexión al enlace ni almacenó la URL consultada (RNF4, RNF7).",
+        'domainAgeDays': infrastructure.get('domainAgeDays'),
+        'freshTlsCertificate': infrastructure.get('freshTlsCertificate'),
+        'cloakingDetected': infrastructure.get('cloakingDetected'),
+        'evasionRiskScore': infrastructure['evasionRiskScore'],
+        'evasionReasons': infrastructure['evasionReasons'],
+        'infrastructure_intelligence': infrastructure,
+        "privacy_notice": ('Se autorizó una comparación HTTP acotada: puede contactar al destino y revelar la IP del servicio, pero no ejecuta JavaScript ni envía cookies.' if active_probe else
+                           'Consulta pasiva a CTI, RDAP y CT: no se contactó el destino. Los proveedores de reputación pueden recibir el dominio o la URL consultada.'),
     }
 

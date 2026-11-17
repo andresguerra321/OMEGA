@@ -791,6 +791,7 @@ ipcMain.handle('omega:ios-read-backup-artifacts', async (_event, opts = {}) => {
 });
 
 ipcMain.handle('omega:open-external', async (_event, targetUrl) => {
+  assertDesktopExternalAccess();
   const raw = String(targetUrl || '').trim();
   if (!raw.startsWith('https://')) {
     throw new Error('Solo se permiten URLs HTTPS seguras.');
@@ -855,6 +856,7 @@ async function assertPublicHttpUrl(rawUrl) {
 
 // 4. Sandbox WebLoader volátil en RAM para seguir redirecciones sin JS, imágenes ni almacenamiento
 ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
+  assertDesktopExternalAccess();
   const safeTargetUrl = await assertPublicHttpUrl(targetUrl);
 
   // Sin prefijo 'persist:', Chromium mantiene cookies y caché estrictamente en RAM (RNF4)
@@ -974,6 +976,7 @@ ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
 // Instalador automático de ADB portátil (Google platform-tools)
 // =====================================================================
 ipcMain.handle('omega:adb-install-portable', async () => {
+  assertDesktopExternalAccess();
   const existing = await resolveAdbBinary();
   if (existing) {
     return { ok: true, adbPath: existing, alreadyInstalled: true };
@@ -1215,7 +1218,7 @@ $pwdMinLen = $null
 try {
   $netAcc = net accounts 2>$null
   foreach ($line in $netAcc) {
-    if ($line -match '(?:Minimum password length|Longitud m.nima de contrase.a)\s*:\s*(\d+)') {
+    if ($line -match '(?:Minimum password length|Longitud m.nima de contrase.a)\\s*:\\s*(\\d+)') {
       $pwdMinLen = [int]$Matches[1]
     }
   }
@@ -1424,6 +1427,12 @@ async function bootDockerAndOpenApp(opts = {}) {
 
 ipcMain.handle('omega:backend-status', () => getDockerOrchestrator().getState());
 
+function assertDesktopExternalAccess() {
+  if (getDockerOrchestrator().getAiEngineConfig().sovereignLocal) {
+    throw new Error('Acceso externo deshabilitado en Modo Soberano Local. No se ha enviado el destino.');
+  }
+}
+
 ipcMain.handle('omega:ai-config-get', () => ({
   ok: true,
   config: getDockerOrchestrator().getAiEngineConfig(),
@@ -1479,6 +1488,7 @@ async function createMainWindow() {
   appTransitionedToMain = false;
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (getDockerOrchestrator().getAiEngineConfig().sovereignLocal) return { action: 'deny' };
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url);
     }

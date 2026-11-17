@@ -230,6 +230,11 @@ public class MultimodalThreatQueryService {
 
         // 5. Nivel de riesgo y síntesis fundamentada
         String riskLevel = computeRiskLevel(stixMatches, linkChecks, vision.suspectedVector());
+        for (Map<String, Object> reputation : reputationHits) {
+            String level = String.valueOf(reputation.getOrDefault("riskLevel", "UNKNOWN"));
+            if ("CRITICAL".equals(level)) { riskLevel = "CRITICAL"; break; }
+            if ("HIGH".equals(level) && !"CRITICAL".equals(riskLevel)) { riskLevel = "HIGH"; }
+        }
         String answer = buildGroundedSynthesis(
                 vision,
                 ocrText,
@@ -307,6 +312,9 @@ public class MultimodalThreatQueryService {
             List<LinkVerifyResponse> linkChecks,
             String suspectedVector
     ) {
+        if (linkChecks.stream().anyMatch(l -> "CRITICAL".equalsIgnoreCase(l.riskLevel()))) {
+            return "CRITICAL";
+        }
         if (!stixMatches.isEmpty() || linkChecks.stream().anyMatch(l -> "HIGH".equalsIgnoreCase(l.riskLevel()))) {
             return "HIGH";
         }
@@ -349,6 +357,15 @@ public class MultimodalThreatQueryService {
             sb.append("- **Verificación pasiva de enlaces (OWASP + CTI):** ");
             for (LinkVerifyResponse lc : linkChecks) {
                 sb.append("[").append(lc.riskLevel()).append("] ").append(lc.verdict()).append("; ");
+                if (lc.domainAgeDays() != null) {
+                    sb.append(" Dominio registrado hace ").append(lc.domainAgeDays()).append(" días. ");
+                }
+                if (Boolean.TRUE.equals(lc.freshTlsCertificate())) {
+                    sb.append(" Certificado reciente (puede ser renovación legítima). ");
+                }
+                if (lc.evasionReasons() != null) {
+                    for (String reason : lc.evasionReasons()) sb.append(reason).append(" ");
+                }
             }
             sb.append("\n");
         }
@@ -367,7 +384,7 @@ public class MultimodalThreatQueryService {
             sb.append("- **Texto OCR extraído:** `").append(snippet.replace("\n", " ")).append("`\n");
         }
         sb.append("\n**Pasos forenses recomendados:**\n");
-        if ("HIGH".equals(riskLevel)) {
+        if ("HIGH".equals(riskLevel) || "CRITICAL".equals(riskLevel)) {
             sb.append("1. No interactúes ni abras los enlaces mostrados en la captura.\n");
             sb.append("2. Ejecuta una auditoría del equipo/dispositivo en la pestaña **Equipos** (USB Android/iOS o PC en vivo).\n");
             sb.append("3. Conserva esta evidencia de forma aislada y verifica conexiones de red activas.\n");

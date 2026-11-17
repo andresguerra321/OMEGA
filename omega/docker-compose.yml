@@ -99,7 +99,15 @@ services:
       OMEGA_INGEST_TMP_DIR: /tmp/omega_ingest
       TESSDATA_PREFIX: /usr/share/tesseract-ocr/4.00/tessdata
       OMEGA_FORENSIC_WORKER_URL: http://forensic-worker:8000
+      OMEGA_HOST_WORKER_URL: ${OMEGA_HOST_WORKER_URL:-http://forensic-worker:8000}
+      OMEGA_HOST_INTERNAL_SERVICE_TOKEN: ${OMEGA_HOST_INTERNAL_SERVICE_TOKEN:-${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}}
+      OMEGA_HOST_OWNER_TENANT_ID: ${OMEGA_HOST_OWNER_TENANT_ID:-}
       OMEGA_EMBEDDING_MODEL: ${OMEGA_EMBEDDING_MODEL:-text-embedding-3-small}
+      OMEGA_AI_PROVIDER: ${OMEGA_AI_PROVIDER:-openai}
+      OMEGA_OLLAMA_BASE_URL: ${OMEGA_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OMEGA_OLLAMA_EMBED_MODEL: ${OMEGA_OLLAMA_EMBED_MODEL:-bge-m3}
+      OMEGA_OLLAMA_CHAT_MODEL: ${OMEGA_OLLAMA_CHAT_MODEL:-qwen2.5:14b}
+      OMEGA_OLLAMA_VISION_MODEL: ${OMEGA_OLLAMA_VISION_MODEL:-qwen2.5vl:7b}
       OMEGA_STIX_CORPUS_DIR: /app/corpus_mvp/iocs
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}

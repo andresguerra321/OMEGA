@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Suspense, lazy, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { pageVariants, popVariants } from './lib/motion';
 import {
@@ -43,18 +43,40 @@ import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaLogo } from './components/OmegaLogo';
 import { OmegaLoader } from './components/OmegaLoader';
 import { SpatialNavPill } from './components/SpatialNavPill';
-import { SecurityPostureStage } from './components/SecurityPostureStage';
-import { CopilotDrawer } from './components/CopilotDrawer';
-import { ChatWorkspace } from './components/ChatWorkspace';
-import { CampaignsPanel } from './components/CampaignsPanel';
-import { MvtVerifierPanel } from './components/MvtVerifierPanel';
-import { OsintPanel } from './components/OsintPanel';
-import { LinkVerifierPanel } from './components/LinkVerifierPanel';
 import { AuthModulePanel } from './components/AuthModulePanel';
-import { SettingsPanel } from './components/SettingsPanel';
-import { AuthModal } from './components/AuthModal';
-import { OnboardingTourModal } from './components/OnboardingTourModal';
+import { HostProtectionPanel } from './components/HostProtectionPanel';
 import { sanitizeSearchInput, validateChatMessage, validateUploadFile } from './lib/validators';
+
+const SecurityPostureStage = lazy(() =>
+  import('./components/SecurityPostureStage').then((m) => ({ default: m.SecurityPostureStage }))
+);
+const CopilotDrawer = lazy(() =>
+  import('./components/CopilotDrawer').then((m) => ({ default: m.CopilotDrawer }))
+);
+const ChatWorkspace = lazy(() =>
+  import('./components/ChatWorkspace').then((m) => ({ default: m.ChatWorkspace }))
+);
+const CampaignsPanel = lazy(() =>
+  import('./components/CampaignsPanel').then((m) => ({ default: m.CampaignsPanel }))
+);
+const MvtVerifierPanel = lazy(() =>
+  import('./components/MvtVerifierPanel').then((m) => ({ default: m.MvtVerifierPanel }))
+);
+const OsintPanel = lazy(() =>
+  import('./components/OsintPanel').then((m) => ({ default: m.OsintPanel }))
+);
+const LinkVerifierPanel = lazy(() =>
+  import('./components/LinkVerifierPanel').then((m) => ({ default: m.LinkVerifierPanel }))
+);
+const SettingsPanel = lazy(() =>
+  import('./components/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
+);
+const AuthModal = lazy(() =>
+  import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
+);
+const OnboardingTourModal = lazy(() =>
+  import('./components/OnboardingTourModal').then((m) => ({ default: m.OnboardingTourModal }))
+);
 
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', subtitle: 'Estado en vivo y escudos', icon: Gauge },
@@ -65,98 +87,6 @@ const NAV_ITEMS = [
   { id: 'cuenta', label: 'Cuenta', subtitle: 'Registro, sesión y PDFs privados', icon: UserCheck },
   { id: 'ajustes', label: 'Ajustes', subtitle: 'Motor RAG, cuenta y permisos', icon: Settings },
 ];
-
-function buildInitialDemoSessions() {
-  const now = Date.now();
-  const hourMs = 60 * 60 * 1000;
-  return [
-    {
-      id: 'demo-forcedentry',
-      title: 'FORCEDENTRY · Explotación zero-click Pegasus',
-      updatedAt: new Date(now - 2 * hourMs).toISOString(),
-      context: { family: 'Pegasus (NSO Group)', os: 'iOS', cve: 'CVE-2021-30860' },
-      messages: [
-        {
-          role: 'user',
-          content: '¿Qué vulnerabilidades zero-click (CVEs) se documentan para Pegasus y qué mecanismos emplearon?',
-        },
-        {
-          role: 'assistant',
-          content:
-            'Los reportes forenses documentan cadenas zero-click de alta sofisticación desplegadas contra objetivos de alto perfil sin requerir interacción del usuario [1][2].\n\n- **Vector de explotación remota (FORCEDENTRY):** Se aprovechó una vulnerabilidad de desbordamiento de enteros en la biblioteca CoreGraphics (`CVE-2021-30860`), empaquetando archivos PDF maliciosos con extensión GIF en iMessage para evadir el sandbox BlastDoor [1].\n- **Escalamiento de privilegios:** Encadenada junto con `CVE-2021-31010` para lograr escape de la jaula de seguridad del sistema operativo y persistencia local [2].\n- **Cadena posterior BLASTPASS:** Detección de explotación zero-click en iOS 16 mediante adjuntos PassKit maliciosos conteniendo imágenes WebP manipuladas (`CVE-2023-41064`) [1].',
-          citations: [
-            {
-              index: 1,
-              title: 'FORCEDENTRY: NSO Group iMessage Zero-Click Exploit Captured in the Wild',
-              organization: 'Citizen Lab',
-              page: 3,
-              similarity: 0.914,
-              retrieval_method: 'Híbrido (Vector + Exacto)',
-              snippet:
-                'FORCEDENTRY targets Apple’s ImageIO library via maliciously crafted PDF files disguised as GIFs sent over iMessage, bypassing the BlastDoor sandbox introduced in iOS 14 (CVE-2021-30860).',
-              source_url:
-                'https://citizenlab.ca/2021/09/forcedentry-nso-group-imessage-zero-click-exploit-captured-in-the-wild/',
-            },
-            {
-              index: 2,
-              title: 'Buying Spying: Insights into Commercial Surveillance Vendors',
-              organization: 'Google TAG',
-              page: 20,
-              similarity: 0.876,
-              retrieval_method: 'Híbrido (Vector + Exacto)',
-              snippet:
-                'The recovered FORCEDENTRY exploit chain combined CVE-2021-30860 for initial remote code execution in CoreGraphics with CVE-2021-31010 for sandbox escape.',
-              source_url: 'https://blog.google/threat-analysis-group/',
-            },
-          ],
-          model: 'omega-hybrid-rrf',
-        },
-      ],
-    },
-    {
-      id: 'demo-predator',
-      title: 'Predator · Infraestructura y vectores 1-click',
-      updatedAt: new Date(now - 24 * hourMs).toISOString(),
-      context: { family: 'Predator (Intellexa)', os: null, cve: null },
-      messages: [
-        {
-          role: 'user',
-          content: '¿Qué sectores y regiones fueron objetivo en las campañas de Predator e Intellexa?',
-        },
-        {
-          role: 'assistant',
-          content:
-            'Las investigaciones de la alianza Intellexa detallan el despliegue del spyware Predator mediante ingeniería social y enlaces de 1-click [1][2].\n\n- **Sectores impactados:** Periodistas de investigación, miembros de la sociedad civil, activistas de derechos humanos y diplomáticos europeos [1].\n- **Infraestructura de comando y control (C2):** Redirecciones a través de dominios señuelo como `smscentro.com` y suplantación de servicios de mensajería para instalar el payload móvil [2].',
-          citations: [
-            {
-              index: 1,
-              title: 'Predator Files: Technical deep-dive into Intellexa Alliance surveillance products',
-              organization: 'Amnesty Tech',
-              page: 1,
-              similarity: 0.892,
-              retrieval_method: 'Híbrido (Vector + Exacto)',
-              snippet:
-                'The Predator Files investigation coordinated with EIC documents targeting of journalists, diplomats and elected officials across multiple regions using Intellexa Alliance commercial spyware.',
-              source_url: 'https://securitylab.amnesty.org/',
-            },
-            {
-              index: 2,
-              title: 'Protecting Android Users from 0-Day Attacks (Intellexa Predator & Cytrox)',
-              organization: 'Google TAG',
-              page: 3,
-              similarity: 0.854,
-              retrieval_method: 'Coincidencia Exacta',
-              snippet:
-                'One-click links delivered over SMS masqueraded as legitimate URL shorteners and regional news portals before triggering Chrome and Android kernel exploits.',
-              source_url: 'https://blog.google/threat-analysis-group/',
-            },
-          ],
-          model: 'omega-hybrid-rrf',
-        },
-      ],
-    },
-  ];
-}
 
 function formatRelativeTime(isoString) {
   if (!isoString) return 'Reciente';
@@ -214,6 +144,7 @@ export default function App() {
   const [pcAudit, setPcAudit] = useState(null);
   const [pcScannedAt, setPcScannedAt] = useState('');
   const [lastLinkResult, setLastLinkResult] = useState(null);
+  const [lastAnalysisContext, setLastAnalysisContext] = useState('');
   const [deviceInitialTab, setDeviceInitialTab] = useState('android');
   const [deviceNavKey, setDeviceNavKey] = useState(0);
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
@@ -228,7 +159,7 @@ export default function App() {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [pinnedCopilotContext, setPinnedCopilotContext] = useState('');
   const [sessionsMenuOpen, setSessionsMenuOpen] = useState(false);
-  const [sessions, setSessions] = useState(() => buildInitialDemoSessions());
+  const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
   const [loadingChat, setLoadingChat] = useState(false);
@@ -281,6 +212,7 @@ export default function App() {
     setPcAudit(null);
     setPcScannedAt('');
     setLastLinkResult(null);
+    setLastAnalysisContext('');
     setStageFeedback(null);
     setActiveExpedienteId('');
     setUsePrivateDocs(false);
@@ -308,6 +240,7 @@ export default function App() {
     setPcAudit(null);
     setPcScannedAt('');
     setLastLinkResult(null);
+    setLastAnalysisContext('');
     setStageFeedback(null);
     setActiveExpedienteId('');
     setUsePrivateDocs(false);
@@ -739,6 +672,7 @@ export default function App() {
             {
               expedienteId: targetExpedienteId,
               generalMode: generalChatMode,
+              analysisContext: options?.analysisContext ?? (lastAnalysisContext || null),
             },
           );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
@@ -752,6 +686,7 @@ export default function App() {
         reindexRequiredDocuments: res.reindexRequiredDocuments || [],
         model: res.model,
         analysis: res.analysis,
+        multimodal: res.multimodal || null,
         standaloneQuery: res.rewritten_query || res.standalone_query,
         sourceScope: effectiveScope,
         latency,
@@ -912,7 +847,7 @@ export default function App() {
           message:
             signals > 0
               ? `Auditoría de esta PC en RAM finalizada: ${signals} señal(es) requieren revisión.`
-              : 'Auditoría de esta PC en RAM finalizada: sin señales de spyware (0 bytes en disco).',
+              : 'Auditoría finalizada: sin coincidencias en las fuentes examinadas. Esto no descarta todas las amenazas.',
           actionLabel: 'Ver informe',
           actionNav: 'equipo',
         });
@@ -954,13 +889,56 @@ export default function App() {
     }
   }
 
+  function formatLinkTelemetryContext(res) {
+    if (!res) return '';
+    const ctiMatches = Array.isArray(res.cti_matches) ? res.cti_matches : [];
+    const heuristics = Array.isArray(res.heuristics) ? res.heuristics : [];
+    const owasp = Array.isArray(res.owasp_findings) ? res.owasp_findings : [];
+    const vt = res.external_reputation?.virustotal;
+    const abuse = res.external_reputation?.abuseipdb;
+    const trace = res.trace_result;
+    const lines = [
+      `URL analizada: ${res.normalized_url || res.host || 'N/D'}`,
+      `Host: ${res.host || 'N/D'} | Dominio raíz: ${res.root_domain || res.host || 'N/D'} | Esquema: ${res.scheme || 'N/D'}`,
+      `Nivel de riesgo: ${res.risk_level || 'N/D'} — ${res.verdict || ''}`,
+      res.recommendation ? `Recomendación: ${res.recommendation}` : '',
+      res.passive_ct_certificates !== null && res.passive_ct_certificates !== undefined
+        ? `Certificados CT (crt.sh/CertSpotter): ${res.passive_ct_certificates} registros`
+        : 'Certificados CT: N/D',
+      vt && vt.status === 'ok'
+        ? `VirusTotal / Reputación: ${vt.malicious || 0} maliciosos, ${vt.suspicious || 0} sospechosos`
+        : '',
+      abuse && abuse.status === 'ok'
+        ? `AbuseIPDB: Score ${abuse.abuse_confidence_score}% (${abuse.total_reports} reportes)`
+        : '',
+      ctiMatches.length > 0
+        ? `Coincidencias CTI (${ctiMatches.length}): ${ctiMatches.slice(0, 5).map((m) => `${m.ioc_value} [${m.spyware_family || m.campaign || 'CTI'}: ${m.context || ''}]`).join(' ; ')}`
+        : 'Coincidencias CTI: 0',
+      owasp.length > 0
+        ? `Reglas OWASP activadas (${owasp.length}): ${owasp.map((f) => `[${f.rule_id} ${f.severity}] ${f.title}: ${f.detail}`).join(' ; ')}`
+        : '',
+      heuristics.length > 0
+        ? `Alertas estructurales (${heuristics.length}): ${heuristics.join(' ; ')}`
+        : '',
+      trace?.final_url && trace.final_url !== res.normalized_url
+        ? `Destino tras redirecciones (sin JS): ${trace.final_url}`
+        : '',
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
   function handleLinkVerified(res) {
     setLastLinkResult(res);
+    const ctx = formatLinkTelemetryContext(res);
+    if (ctx) setLastAnalysisContext(ctx);
   }
 
   function handleOpenCopilot(opts = {}) {
     if (opts?.pinnedContext) {
       setPinnedCopilotContext(opts.pinnedContext);
+    }
+    if (opts?.analysisContext) {
+      setLastAnalysisContext(opts.analysisContext);
     }
     setSessionsMenuOpen(false);
     setIsCopilotOpen(true);
@@ -969,6 +947,7 @@ export default function App() {
       setSourceScope('Todas las fuentes');
       handleSend(opts.prompt, 'Todas las fuentes', {
         forceNewSession: Boolean(opts.forceNewSession || !currentSessionId),
+        analysisContext: opts?.analysisContext,
       });
     }
   }
@@ -976,6 +955,9 @@ export default function App() {
   function askInChat(promptText, opts = {}) {
     const cleanPrompt = String(promptText || '').trim();
     if (!cleanPrompt) return;
+    if (opts?.analysisContext) {
+      setLastAnalysisContext(opts.analysisContext);
+    }
     const firstLine = cleanPrompt
       .split('\n')[0]
       .replace(/^[#*\-\s]+/, '')
@@ -991,7 +973,10 @@ export default function App() {
       setPinnedCopilotContext(opts?.pinnedContext || firstLine);
       setIsCopilotOpen(true);
     }
-    handleSend(cleanPrompt, 'Todas las fuentes', { forceNewSession: true });
+    handleSend(cleanPrompt, 'Todas las fuentes', {
+      forceNewSession: true,
+      analysisContext: opts?.analysisContext,
+    });
   }
 
   const completeAuthenticationTransition = useCallback(
@@ -1115,6 +1100,14 @@ export default function App() {
         tabIndex={-1}
         className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text focus:outline-none"
       >
+        <HostProtectionPanel session={authSession} expanded={activeNav === 'equipo'} desktop={isDesktop} expedienteId={activeExpedienteId || null} />
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center">
+              <OmegaLoader />
+            </div>
+          }
+        >
         <AnimatePresence mode="wait" initial={false}>
         {isHome ? (
           <motion.div
@@ -1506,6 +1499,7 @@ export default function App() {
                     usePrivateDocs={usePrivateDocs}
                     onTogglePrivateDocs={(nextVal) => setUsePrivateDocs(Boolean(nextVal))}
                     privateDocs={expedienteDocs}
+                    activeExpedienteId={activeExpedienteId}
                     loadingDocs={loadingExpedientes}
                     uploadingPdf={uploadingPdf}
                     docNotice={expedienteNotice}
@@ -1530,6 +1524,7 @@ export default function App() {
                     onLogout={handleLogout}
                     govStats={govStats}
                     privateDocs={expedienteDocs}
+                    activeExpedienteId={activeExpedienteId}
                     loadingDocs={loadingExpedientes}
                     uploadingPdf={uploadingPdf}
                     docNotice={expedienteNotice}
@@ -1648,9 +1643,11 @@ export default function App() {
           </motion.div>
           )}
         </AnimatePresence>
+        </Suspense>
         </main>
 
       {/* Panel Deslizable No Destructivo de Copiloto */}
+      <Suspense fallback={null}>
       <CopilotDrawer
         isOpen={isCopilotOpen}
         onClose={() => setIsCopilotOpen(false)}
@@ -1833,6 +1830,7 @@ export default function App() {
         onOpenCopilot={handleOpenCopilot}
         authSession={authSession}
       />
+      </Suspense>
         </motion.div>
       )}
     </AnimatePresence>

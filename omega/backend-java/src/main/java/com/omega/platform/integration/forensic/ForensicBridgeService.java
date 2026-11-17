@@ -4,14 +4,25 @@ import com.omega.platform.cti.StixCatalogService;
 import com.omega.platform.ingest.InvalidDocumentException;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.LinkCheckRequest;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.LinkVerifyResponse;
+import com.omega.platform.integration.forensic.ForensicWorkerContracts.MobileUsbAuditWorkerRequest;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.ParallelTriageResponse;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.YaraRuleResponse;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.YaraScanResponse;
+import com.omega.platform.integration.forensic.ForensicWorkerContracts.PersistenceAuditResponse;
+import com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeStatus;
+import com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeToggleRequest;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
 import com.omega.platform.service.ResourceNotFoundException;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,30 +42,198 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Puente autenticado y auditado entre Spring Boot y el microservicio forense interno `omega/api`.
- * Ejecuta validación anti-Zip-Slip / anti-Bomba antes de delegar volcados al worker en RAM.
+ * Puente autenticado y auditado entre Spring Boot y el microservicio forense
+ * interno `omega/api`.
+ * Ejecuta validación anti-Zip-Slip / anti-Bomba antes de delegar volcados al
+ * worker en RAM.
  */
 @Service
 public class ForensicBridgeService {
 
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
-            new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE = new ParameterizedTypeReference<>() {
+    };
 
-    private static final String DEFAULT_OS_SCOPE_NOTICE =
-            "OMEGA analiza artefactos en espacio de usuario contra el catálogo CTI vigente; \"0 coincidencias\" no certifica ausencia de exploits zero-click en kernel/BlastDoor/CoreGraphics.";
+    private static final String DEFAULT_OS_SCOPE_NOTICE = "OMEGA analiza artefactos en espacio de usuario contra el catálogo CTI vigente; \"0 coincidencias\" no certifica ausencia de exploits zero-click en kernel/BlastDoor/CoreGraphics.";
 
     private final RestClient forensicWorkerRestClient;
     private final ArchiveSecurityValidator archiveSecurityValidator;
     private final ExpedienteAuthorizationService authorizationService;
     private final AuditLogService auditLogService;
     private final StixCatalogService stixCatalogService;
+    private RestClient hostWorkerRestClient;
+    private com.omega.platform.security.ContainmentAuthorizationService containmentAuthorization;
+    @Autowired(required = false)
+    private com.omega.platform.config.SovereignModePolicy sovereignPolicy;
+
+    @Autowired
+    public void setContainmentAuthorization(com.omega.platform.security.ContainmentAuthorizationService authorization) {
+        this.containmentAuthorization = authorization;
+    }
+
+    public Map<String, Object> containmentChallenge(OmegaPrincipal principal, String password) {
+        if (containmentAuthorization == null) throw new org.springframework.security.access.AccessDeniedException("Verificación sensible no configurada");
+        return containmentAuthorization.challenge(principal, password);
+    }
+
+    public Map<String, Object> executeContainment(OmegaPrincipal principal, ForensicWorkerContracts.ContainmentRequest request) {
+        if (request.expedienteId() != null) authorizationService.requireWriteAccess(principal, request.expedienteId());
+        if (sovereignPolicy != null && sovereignPolicy.enabled() && "BLOCK_NETWORK_INDICATOR".equals(request.actionType())) {
+            String indicator = String.valueOf(request.target().getOrDefault("indicator", ""));
+            if (!indicator.matches("[0-9a-fA-F:.]+")) throw new IllegalArgumentException("En modo local, selecciona una IP ya medida: no se resolverán dominios por DNS externo.");
+        }
+        if (!request.dryRun()) {
+            if (containmentAuthorization == null) throw new org.springframework.security.access.AccessDeniedException("Verificación sensible no configurada");
+            containmentAuthorization.authorize(principal, request.currentPassword(), request.challengeToken(), request.code());
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("actionType", request.actionType()); payload.put("target", request.target());
+        payload.put("dryRun", request.dryRun()); payload.put("previewToken", request.previewToken());
+        return containmentOperation(principal, "/api/containment/execute", payload, request.actionType(),
+                String.valueOf(request.target().getOrDefault("sha256", "")), request.dryRun(), request.expedienteId());
+    }
+
+    public Map<String, Object> rollbackContainment(OmegaPrincipal principal, String actionId, ForensicWorkerContracts.ContainmentCredentials credentials) {
+        UUID.fromString(actionId);
+        if (credentials.expedienteId() != null) authorizationService.requireWriteAccess(principal, credentials.expedienteId());
+        if (containmentAuthorization == null) throw new org.springframework.security.access.AccessDeniedException("Verificación sensible no configurada");
+        containmentAuthorization.authorize(principal, credentials.currentPassword(), credentials.challengeToken(), credentials.code());
+        return containmentOperation(principal, "/api/containment/rollback/" + actionId, Map.of(), "ROLLBACK", "", false, credentials.expedienteId());
+    }
+
+    private Map<String, Object> containmentOperation(OmegaPrincipal principal, String uri, Map<String, Object> payload,
+            String actionType, String targetHash, boolean dryRun, UUID expedienteId) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("actionType", actionType); meta.put("targetHash", targetHash); meta.put("dryRun", dryRun);
+        if (expedienteId != null) {
+            meta.put("expedienteId", expedienteId.toString());
+            meta.put("caseAssociationSource", "USER_SELECTED_CASE");
+        }
+        auditLogService.record(principal.tenantId(), principal.userId(), "CONTAINMENT_REQUESTED", "HOST_CONTAINMENT", "pending", meta);
+        try {
+            Map<String, Object> result = hostClient().post().uri(uri)
+                    .header("X-Host-Tenant", principal.tenantId().toString()).header("X-Host-Actor", principal.userId().toString())
+                    .contentType(MediaType.APPLICATION_JSON).body(payload).retrieve().body(MAP_TYPE);
+            if (result == null) throw new ForensicWorkerException("Respuesta de contención vacía", null);
+            meta.put("actionId", result.getOrDefault("actionId", "unknown"));
+            if (result.get("target") instanceof Map<?, ?> measured) {
+                if (measured.get("sha256") instanceof String sha && !sha.isBlank()) {
+                    meta.put("targetHash", sha);
+                    meta.put("targetHashKind", "FILE_SHA256");
+                } else {
+                    try {
+                        meta.put("targetHash", java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                                .digest(String.valueOf(measured).getBytes(StandardCharsets.UTF_8))));
+                        meta.put("targetHashKind", "TARGET_DESCRIPTION_SHA256");
+                    } catch (java.security.NoSuchAlgorithmException impossible) {
+                        throw new IllegalStateException("SHA-256 no disponible", impossible);
+                    }
+                }
+            }
+            meta.put("result", result.getOrDefault("status", "UNKNOWN"));
+            auditLogService.record(principal.tenantId(), principal.userId(), "ROLLBACK".equals(actionType) ? "CONTAINMENT_ROLLBACK" : "CONTAINMENT_RESULT",
+                    "HOST_CONTAINMENT", String.valueOf(meta.get("actionId")), meta);
+            return result;
+        } catch (RestClientException ex) {
+            meta.put("result", "WORKER_ERROR_CHECK_HISTORY");
+            auditLogService.record(principal.tenantId(), principal.userId(), "CONTAINMENT_ERROR", "HOST_CONTAINMENT", "unknown", meta);
+            throw translateWorkerException(ex, "contención del equipo; consulta el historial para confirmar el estado", false);
+        }
+    }
+
+    public Map<String, Object> containmentHistory(OmegaPrincipal principal) {
+        try {
+            return hostClient().get().uri("/api/containment/history").header("X-Host-Tenant", principal.tenantId().toString())
+                    .retrieve().body(MAP_TYPE);
+        } catch (RestClientException ex) {
+            throw translateWorkerException(ex, "historial de contención", false);
+        }
+    }
+    private long lastHostCatalogSync;
+    @org.springframework.beans.factory.annotation.Value("${OMEGA_HOST_OWNER_TENANT_ID:}")
+    private String hostOwnerTenantId = "";
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 10000)
+    public void refreshHostCatalogInBackground() {
+        if (hostOwnerTenantId.isBlank()) {
+            return;
+        }
+        try {
+            syncHostCatalog(UUID.fromString(hostOwnerTenantId));
+        } catch (RuntimeException ex) {
+            org.slf4j.LoggerFactory.getLogger(ForensicBridgeService.class)
+                    .warn("No se pudo actualizar el catálogo del sensor de equipo: {}", ex.getClass().getSimpleName());
+        }
+    }
+
+    @Autowired
+    public void setHostWorkerRestClient(@Qualifier("hostWorkerRestClient") RestClient client) {
+        this.hostWorkerRestClient = client;
+    }
+
+    private RestClient hostClient() {
+        return hostWorkerRestClient == null ? forensicWorkerRestClient : hostWorkerRestClient;
+    }
+
+    private synchronized void syncHostCatalog(UUID tenantId) {
+        if (stixCatalogService == null || (lastHostCatalogSync != 0 && System.nanoTime() - lastHostCatalogSync < Duration.ofSeconds(60).toNanos())) {
+            return;
+        }
+        try {
+            hostClient().post().uri("/api/host/iocs/sync")
+                    .header("X-Host-Tenant", tenantId.toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("indicators", stixCatalogService.hostIndicators())).retrieve().toBodilessEntity();
+            lastHostCatalogSync = System.nanoTime();
+        } catch (RestClientException ex) {
+            throw translateWorkerException(ex, "sincronización del catálogo del sensor", false);
+        }
+    }
+
+    public RealtimeStatus hostRealtimeStatus(OmegaPrincipal principal) {
+        syncHostCatalog(principal.tenantId());
+        try {
+            return hostClient().get().uri("/api/host/realtime/status")
+                    .header("X-Host-Tenant", principal.tenantId().toString()).retrieve().body(RealtimeStatus.class);
+        } catch (RestClientException ex) {
+            throw translateWorkerException(ex, "estado del sensor de equipo", false);
+        }
+    }
+
+    public RealtimeStatus toggleHostRealtime(OmegaPrincipal principal, boolean enabled) {
+        syncHostCatalog(principal.tenantId());
+        try {
+            RealtimeStatus response = hostClient().post().uri("/api/host/realtime/toggle")
+                    .header("X-Host-Tenant", principal.tenantId().toString()).contentType(MediaType.APPLICATION_JSON)
+                    .body(new RealtimeToggleRequest(enabled)).retrieve().body(RealtimeStatus.class);
+            auditLogService.record(principal.tenantId(), principal.userId(), "HOST_WATCH_TOGGLED", "HOST_SENSOR", "native-host", Map.of("enabled", enabled));
+            return response;
+        } catch (RestClientException ex) {
+            throw translateWorkerException(ex, "activar/pausar sensor de equipo", false);
+        }
+    }
+
+    public PersistenceAuditResponse auditHostPersistence(OmegaPrincipal principal) {
+        syncHostCatalog(principal.tenantId());
+        try {
+            PersistenceAuditResponse response = hostClient().post().uri("/api/host/persistence/audit")
+                    .header("X-Host-Tenant", principal.tenantId().toString()).contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of()).retrieve().body(PersistenceAuditResponse.class);
+            if (response == null) {
+                throw new ForensicWorkerException("Respuesta vacía de persistencia", null);
+            }
+            auditLogService.record(principal.tenantId(), principal.userId(), "HOST_PERSISTENCE_AUDITED", "HOST_SENSOR", response.hostname(),
+                    Map.of("findingCount", response.findings().size(), "complete", response.complete(), "scope", response.scope()));
+            return response;
+        } catch (RestClientException ex) {
+            throw translateWorkerException(ex, "auditoría de persistencia", false);
+        }
+    }
 
     public ForensicBridgeService(
             @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
             ArchiveSecurityValidator archiveSecurityValidator,
             ExpedienteAuthorizationService authorizationService,
-            AuditLogService auditLogService
-    ) {
+            AuditLogService auditLogService) {
         this(forensicWorkerRestClient, archiveSecurityValidator, authorizationService, auditLogService, null);
     }
 
@@ -64,8 +243,7 @@ public class ForensicBridgeService {
             ArchiveSecurityValidator archiveSecurityValidator,
             ExpedienteAuthorizationService authorizationService,
             AuditLogService auditLogService,
-            StixCatalogService stixCatalogService
-    ) {
+            StixCatalogService stixCatalogService) {
         this.forensicWorkerRestClient = forensicWorkerRestClient;
         this.archiveSecurityValidator = archiveSecurityValidator;
         this.authorizationService = authorizationService;
@@ -77,8 +255,7 @@ public class ForensicBridgeService {
     public ParallelTriageResponse runParallelTriage(
             OmegaPrincipal principal,
             UUID expedienteId,
-            List<MultipartFile> files
-    ) {
+            List<MultipartFile> files) {
         if (expedienteId != null) {
             authorizationService.requireWriteAccess(principal, expedienteId);
         }
@@ -89,8 +266,7 @@ public class ForensicBridgeService {
                 "/api/triage/parallel",
                 body,
                 ParallelTriageResponse.class,
-                "triage paralelo"
-        );
+                "triage paralelo");
         ParallelTriageResponse response = enrichParallelTriageResponse(rawResponse);
 
         Map<String, Object> meta = new LinkedHashMap<>();
@@ -108,23 +284,27 @@ public class ForensicBridgeService {
                 "FORENSIC_TRIAGE_EXECUTED",
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_TRIAGE",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
-                meta
-        );
+                meta);
         return response;
     }
 
     @Transactional
     public LinkVerifyResponse verifyLink(OmegaPrincipal principal, UUID expedienteId, String rawUrl) {
+        return verifyLink(principal, expedienteId, rawUrl, false);
+    }
+
+    @Transactional
+    public LinkVerifyResponse verifyLink(OmegaPrincipal principal, UUID expedienteId, String rawUrl, boolean activeProbe) {
         if (expedienteId != null) {
             authorizationService.requireReadAccess(principal, expedienteId);
         }
 
-        LinkVerifyResponse response = postJsonToWorker(
+        LinkVerifyResponse rawResponse = postJsonToWorker(
                 "/api/link/verify",
-                new LinkCheckRequest(rawUrl),
+                new LinkCheckRequest(rawUrl, activeProbe),
                 LinkVerifyResponse.class,
-                "verificación de enlace"
-        );
+                "verificación de enlace");
+        LinkVerifyResponse response = enrichLinkVerifyResponse(rawResponse);
 
         Map<String, Object> meta = new LinkedHashMap<>();
         if (expedienteId != null) {
@@ -140,17 +320,97 @@ public class ForensicBridgeService {
                 "FORENSIC_LINK_VERIFIED",
                 "LINK",
                 response.host(),
-                meta
-        );
+                meta);
         return response;
+    }
+
+    private LinkVerifyResponse enrichLinkVerifyResponse(LinkVerifyResponse raw) {
+        if (raw == null || raw.passiveCtCertificates() != null || raw.host() == null || raw.host().isBlank()) {
+            return raw;
+        }
+        String host = raw.host().trim().toLowerCase();
+        if (host.matches("^(?:\\d{1,3}\\.){3}\\d{1,3}$")) {
+            return raw;
+        }
+        Integer ctCount = probePassiveCtCount(host);
+        if (ctCount == null && raw.rootDomain() != null && !raw.rootDomain().equals(host)) {
+            ctCount = probePassiveCtCount(raw.rootDomain());
+        }
+        if (ctCount == null) {
+            return raw;
+        }
+        return new LinkVerifyResponse(
+                raw.normalizedUrl(),
+                raw.host(),
+                raw.rootDomain(),
+                raw.scheme(),
+                raw.path(),
+                raw.riskLevel(),
+                raw.verdict(),
+                raw.recommendation(),
+                raw.heuristics(),
+                ctCount,
+                raw.ctiMatches(),
+                raw.privacyNotice(), raw.domainAgeDays(), raw.freshTlsCertificate(), raw.cloakingDetected(),
+                raw.evasionRiskScore(), raw.evasionReasons(), raw.infrastructureIntelligence());
+    }
+
+    private Integer probePassiveCtCount(String domain) {
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        String encoded = URLEncoder.encode(domain, StandardCharsets.UTF_8);
+        // 1. CertSpotter CT API
+        try {
+            HttpRequest req = HttpRequest
+                    .newBuilder(URI.create("https://api.certspotter.com/v1/issuances?domain=" + encoded))
+                    .timeout(Duration.ofSeconds(3))
+                    .header("User-Agent", "Omega-CTI-Passive-Check/1.0")
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+            HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() == 200 && res.body() != null && res.body().trim().startsWith("[")) {
+                String body = res.body().trim();
+                if ("[]".equals(body)) {
+                    return 0;
+                }
+                int count = body.split("\"id\"\\s*:").length - 1;
+                if (count > 0) {
+                    return count;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        // 2. HackerTarget hostsearch fallback
+        try {
+            HttpRequest req = HttpRequest
+                    .newBuilder(URI.create("https://api.hackertarget.com/hostsearch/?q=" + encoded))
+                    .timeout(Duration.ofSeconds(3))
+                    .header("User-Agent", "Omega-CTI-Passive-Check/1.0")
+                    .GET()
+                    .build();
+            HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() == 200 && res.body() != null) {
+                String text = res.body().trim();
+                if (!text.isEmpty() && !text.toLowerCase().contains("error")
+                        && !text.toLowerCase().contains("api count exceeded")) {
+                    int lines = 0;
+                    for (String ln : text.split("\\R")) {
+                        if (ln.contains(","))
+                            lines++;
+                    }
+                    return lines;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     @Transactional
     public YaraScanResponse scanArtifactsYara(
             OmegaPrincipal principal,
             UUID expedienteId,
-            List<MultipartFile> files
-    ) {
+            List<MultipartFile> files) {
         if (expedienteId != null) {
             authorizationService.requireReadAccess(principal, expedienteId);
         }
@@ -161,8 +421,7 @@ public class ForensicBridgeService {
                 "/api/yara",
                 body,
                 YaraScanResponse.class,
-                "escaneo YARA"
-        );
+                "escaneo YARA");
 
         Map<String, Object> meta = new LinkedHashMap<>();
         if (expedienteId != null) {
@@ -177,8 +436,7 @@ public class ForensicBridgeService {
                 "FORENSIC_YARA_SCANNED",
                 expedienteId != null ? "EXPEDIENTE" : "YARA_SCAN",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
-                meta
-        );
+                meta);
         return response;
     }
 
@@ -188,16 +446,14 @@ public class ForensicBridgeService {
                 "/api/yara/{campaignId}",
                 campaignId,
                 YaraRuleResponse.class,
-                "regla YARA de campaña"
-        );
+                "regla YARA de campaña");
     }
 
     @Transactional
     public Map<String, Object> verifyIocFile(
             OmegaPrincipal principal,
             UUID expedienteId,
-            MultipartFile file
-    ) {
+            MultipartFile file) {
         if (expedienteId != null) {
             authorizationService.requireReadAccess(principal, expedienteId);
         }
@@ -208,8 +464,7 @@ public class ForensicBridgeService {
                 "/api/ioc/verify/file",
                 body,
                 "verificación IOC de archivo",
-                false
-        );
+                false);
 
         Map<String, Object> meta = baseAuditMeta(expedienteId);
         meta.put("detectedFormat", String.valueOf(response.getOrDefault("detected_format", "unknown")));
@@ -222,8 +477,7 @@ public class ForensicBridgeService {
                 "FORENSIC_IOC_FILE_VERIFIED",
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_IOC",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
-                meta
-        );
+                meta);
         return response;
     }
 
@@ -231,8 +485,7 @@ public class ForensicBridgeService {
     public Map<String, Object> verifyIocText(
             OmegaPrincipal principal,
             UUID expedienteId,
-            String indicatorsText
-    ) {
+            String indicatorsText) {
         if (expedienteId != null) {
             authorizationService.requireReadAccess(principal, expedienteId);
         }
@@ -241,8 +494,7 @@ public class ForensicBridgeService {
                 "/api/ioc/verify/text",
                 Map.of("indicators_text", indicatorsText),
                 "verificación IOC textual",
-                false
-        );
+                false);
 
         Map<String, Object> meta = baseAuditMeta(expedienteId);
         meta.put("analyzedIndicators", response.getOrDefault("analyzed_indicators", 0));
@@ -254,8 +506,7 @@ public class ForensicBridgeService {
                 "FORENSIC_IOC_TEXT_VERIFIED",
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_IOC",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
-                meta
-        );
+                meta);
         return response;
     }
 
@@ -263,8 +514,7 @@ public class ForensicBridgeService {
     public Map<String, Object> runLiveDeviceTriage(
             OmegaPrincipal principal,
             UUID expedienteId,
-            Map<String, Object> payload
-    ) {
+            Map<String, Object> payload) {
         if (expedienteId != null) {
             authorizationService.requireWriteAccess(principal, expedienteId);
         }
@@ -273,8 +523,7 @@ public class ForensicBridgeService {
                 "/api/triage/device-live",
                 payload,
                 "triage móvil en vivo",
-                true
-        );
+                true);
 
         Map<String, Object> meta = baseAuditMeta(expedienteId);
         meta.put("platform", String.valueOf(payload.getOrDefault("platform", "unknown")));
@@ -287,8 +536,7 @@ public class ForensicBridgeService {
                 "FORENSIC_DEVICE_LIVE_TRIAGED",
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_TRIAGE",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
-                meta
-        );
+                meta);
         return response;
     }
 
@@ -296,8 +544,7 @@ public class ForensicBridgeService {
     public Map<String, Object> runPcLiveTriage(
             OmegaPrincipal principal,
             UUID expedienteId,
-            Map<String, Object> payload
-    ) {
+            Map<String, Object> payload) {
         if (expedienteId != null) {
             authorizationService.requireWriteAccess(principal, expedienteId);
         }
@@ -306,8 +553,7 @@ public class ForensicBridgeService {
                 "/api/triage/pc-live",
                 payload,
                 "auditoría PC en vivo",
-                false
-        );
+                false);
 
         Map<String, Object> meta = baseAuditMeta(expedienteId);
         meta.put("platform", String.valueOf(payload.getOrDefault("platform", "win32")));
@@ -320,16 +566,14 @@ public class ForensicBridgeService {
                 "FORENSIC_PC_LIVE_TRIAGED",
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_TRIAGE",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
-                meta
-        );
+                meta);
         return response;
     }
 
     @Transactional
     public Map<String, Object> resolveIosManifestTargets(
             OmegaPrincipal principal,
-            MultipartFile manifest
-    ) {
+            MultipartFile manifest) {
         archiveSecurityValidator.validateUploads(List.of(manifest));
 
         MultiValueMap<String, Object> body = buildMultipartBody("manifest", List.of(manifest));
@@ -337,8 +581,7 @@ public class ForensicBridgeService {
                 "/api/triage/ios-manifest-targets",
                 body,
                 "resolución de Manifest.db iOS",
-                false
-        );
+                false);
 
         auditLogService.record(
                 principal.tenantId(),
@@ -346,8 +589,7 @@ public class ForensicBridgeService {
                 "FORENSIC_IOS_MANIFEST_PARSED",
                 "FORENSIC_IOS_BACKUP",
                 "ram-ephemeral",
-                Map.of("targetsCount", response.getOrDefault("targets_count", 0))
-        );
+                Map.of("targetsCount", response.getOrDefault("targets_count", 0)));
         return response;
     }
 
@@ -356,8 +598,7 @@ public class ForensicBridgeService {
             OmegaPrincipal principal,
             MultipartFile manifestPlist,
             MultipartFile manifestDb,
-            String password
-    ) {
+            String password) {
         archiveSecurityValidator.validateUploads(List.of(manifestPlist, manifestDb));
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -369,8 +610,7 @@ public class ForensicBridgeService {
                 "/api/triage/ios-manifest-decrypt",
                 body,
                 "descifrado de respaldo iOS",
-                true
-        );
+                true);
 
         auditLogService.record(
                 principal.tenantId(),
@@ -378,8 +618,7 @@ public class ForensicBridgeService {
                 "FORENSIC_IOS_MANIFEST_DECRYPTED",
                 "FORENSIC_IOS_BACKUP",
                 "ram-ephemeral",
-                Map.of("targetsCount", response.getOrDefault("targets_count", 0))
-        );
+                Map.of("targetsCount", response.getOrDefault("targets_count", 0)));
         return response;
     }
 
@@ -388,16 +627,14 @@ public class ForensicBridgeService {
         return getMapFromWorker(
                 "/api/campaigns/{campaignId}/mvt-script",
                 campaignId,
-                "script MVT de campaña"
-        );
+                "script MVT de campaña");
     }
 
     private <T> T postMultipartToWorker(
             String uri,
             MultiValueMap<String, Object> body,
             Class<T> responseType,
-            String operationName
-    ) {
+            String operationName) {
         try {
             T response = forensicWorkerRestClient.post()
                     .uri(uri)
@@ -418,8 +655,7 @@ public class ForensicBridgeService {
             String uri,
             MultiValueMap<String, Object> body,
             String operationName,
-            boolean treatUnauthorizedAsBadBackupPassword
-    ) {
+            boolean treatUnauthorizedAsBadBackupPassword) {
         try {
             Map<String, Object> response = forensicWorkerRestClient.post()
                     .uri(uri)
@@ -440,8 +676,7 @@ public class ForensicBridgeService {
             String uri,
             Object payload,
             Class<T> responseType,
-            String operationName
-    ) {
+            String operationName) {
         try {
             T response = forensicWorkerRestClient.post()
                     .uri(uri)
@@ -462,8 +697,7 @@ public class ForensicBridgeService {
             String uri,
             Object payload,
             String operationName,
-            boolean treatUnauthorizedAsBadBackupPassword
-    ) {
+            boolean treatUnauthorizedAsBadBackupPassword) {
         try {
             Map<String, Object> response = forensicWorkerRestClient.post()
                     .uri(uri)
@@ -513,18 +747,21 @@ public class ForensicBridgeService {
     private static RuntimeException translateWorkerException(
             RestClientException ex,
             String operationName,
-            boolean treatUnauthorizedAsBadBackupPassword
-    ) {
-        // Evita reenviar HTTP 401 de contraseña iOS incorrecta como 401 al SPA (cerraría el JWT del analista),
-        // preservando 502 fail-closed si el rechazo viene por X-Internal-Service-Token inválido.
+            boolean treatUnauthorizedAsBadBackupPassword) {
+        // Evita reenviar HTTP 401 de contraseña iOS incorrecta como 401 al SPA
+        // (cerraría el JWT del analista),
+        // preservando 502 fail-closed si el rechazo viene por X-Internal-Service-Token
+        // inválido.
         if (treatUnauthorizedAsBadBackupPassword && ex instanceof HttpClientErrorException.Unauthorized unauth) {
             String body = unauth.getResponseBodyAsString();
             if (body.contains("Contraseña incorrecta") || body.contains("INVALID_BACKUP_PASSWORD")) {
-                return new InvalidDocumentException("Contraseña incorrecta para la copia de seguridad encriptada de iOS.", ex);
+                return new InvalidDocumentException(
+                        "Contraseña incorrecta para la copia de seguridad encriptada de iOS.", ex);
             }
         }
         if (ex instanceof HttpClientErrorException.BadRequest badReq) {
-            return new InvalidDocumentException("Solicitud rechazada en " + operationName + ": " + badReq.getStatusText(), ex);
+            return new InvalidDocumentException(
+                    "Solicitud rechazada en " + operationName + ": " + badReq.getStatusText(), ex);
         }
         if (ex instanceof HttpClientErrorException.NotFound) {
             return new ResourceNotFoundException("Recurso no encontrado en " + operationName);
@@ -577,7 +814,8 @@ public class ForensicBridgeService {
 
     private ParallelTriageResponse enrichParallelTriageResponse(ParallelTriageResponse r) {
         Map<String, Object> freshness = r.catalogFreshness() != null ? r.catalogFreshness() : buildFreshnessMap();
-        String scope = (r.osScopeNotice() != null && !r.osScopeNotice().isBlank()) ? r.osScopeNotice() : DEFAULT_OS_SCOPE_NOTICE;
+        String scope = (r.osScopeNotice() != null && !r.osScopeNotice().isBlank()) ? r.osScopeNotice()
+                : DEFAULT_OS_SCOPE_NOTICE;
         List<Map<String, Object>> mitigations = r.platformMitigations() != null ? r.platformMitigations() : List.of();
         return new ParallelTriageResponse(
                 r.pipelineMode(),
@@ -603,8 +841,7 @@ public class ForensicBridgeService {
                 r.ephemeralNotice(),
                 freshness,
                 scope,
-                mitigations
-        );
+                mitigations);
     }
 
     private Map<String, Object> enrichOperationalBoundaryMetadata(Map<String, Object> rawResponse) {
@@ -636,5 +873,81 @@ public class ForensicBridgeService {
         String base = idx >= 0 ? norm.substring(idx + 1) : norm;
         base = base.replaceAll("[\\x00-\\x1f]", "").trim();
         return base.isBlank() ? "artifact.bin" : base;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> listMobileUsbDevices() {
+        try {
+            Map<String, Object> response = forensicWorkerRestClient.get()
+                    .uri("/api/mobile/usb/devices")
+                    .retrieve()
+                    .body(MAP_TYPE);
+            return response != null ? response : Map.of("status", "EMPTY", "devices", List.of());
+        } catch (RestClientException ex) {
+            throw translateWorkerException(ex, "detección USB móvil", false);
+        }
+    }
+
+    @Transactional
+    public Map<String, Object> startMobileUsbAudit(
+            OmegaPrincipal principal,
+            String platform,
+            String deviceId,
+            String backupPassword,
+            boolean asyncMode
+    ) {
+        MobileUsbAuditWorkerRequest req = new MobileUsbAuditWorkerRequest(
+                platform,
+                deviceId,
+                backupPassword,
+                asyncMode
+        );
+        Map<String, Object> response = postJsonToWorkerMap("/api/mobile/usb/audit", req, "auditoría USB móvil", true);
+        recordMobileUsbAuditIfCompleted(principal, response);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> getMobileUsbAuditJob(OmegaPrincipal principal, String jobId) {
+        Map<String, Object> response = getMapFromWorker(
+                "/api/mobile/usb/audit/{jobId}",
+                jobId,
+                "estado de auditoría USB móvil"
+        );
+        recordMobileUsbAuditIfCompleted(principal, response);
+        return response;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void recordMobileUsbAuditIfCompleted(OmegaPrincipal principal, Map<String, Object> jobResponse) {
+        if (principal == null || jobResponse == null) {
+            return;
+        }
+        String status = String.valueOf(jobResponse.getOrDefault("status", ""));
+        Object resultObj = jobResponse.get("result");
+        if (!"COMPLETED".equalsIgnoreCase(status) || !(resultObj instanceof Map<?, ?> rawResult)) {
+            return;
+        }
+        Map<String, Object> res = (Map<String, Object>) rawResult;
+        String platform = String.valueOf(res.getOrDefault("platform", "IOS"));
+        String modelHash = String.valueOf(res.getOrDefault("deviceModelHash", "unknown"));
+        int findingsCount = res.get("findingsCount") instanceof Number n ? n.intValue() : 0;
+        String riskLevel = String.valueOf(res.getOrDefault("riskLevel", "LOW"));
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("platform", platform);
+        meta.put("deviceModelHash", modelHash);
+        meta.put("findingsCount", findingsCount);
+        meta.put("riskLevel", riskLevel);
+        meta.put("zeroRetentionWiped", true);
+
+        auditLogService.record(
+                principal.tenantId(),
+                principal.userId(),
+                "FORENSIC_MOBILE_USB_AUDITED",
+                "MOBILE_USB",
+                modelHash,
+                meta
+        );
     }
 }

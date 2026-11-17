@@ -917,10 +917,14 @@ export class DockerOrchestrator {
     const customBase = String(dotEnv.CUSTOM_LLM_BASE_URL || '').trim();
     const customKey = String(dotEnv.CUSTOM_LLM_API_KEY || '').trim();
     const customModel = String(dotEnv.CUSTOM_LLM_MODEL || '').trim();
+    const sovereignLocal = String(process.env.OMEGA_AI_PROVIDER || dotEnv.OMEGA_AI_PROVIDER || 'openai') === 'ollama';
 
     let activeProvider = 'extractive';
     let activeModel = 'omega-extractive-fallback';
-    if (customBase) {
+    if (sovereignLocal) {
+      activeProvider = 'ollama';
+      activeModel = String(dotEnv.OMEGA_OLLAMA_CHAT_MODEL || 'qwen2.5:14b');
+    } else if (customBase) {
       activeProvider = customProvider || 'custom';
       activeModel = customModel || 'llama3.2';
     } else if (omniBase) {
@@ -935,7 +939,8 @@ export class DockerOrchestrator {
     }
 
     return {
-      configured: Boolean(customBase || groqKey || openAiKey || omniBase),
+      configured: Boolean(sovereignLocal || customBase || groqKey || openAiKey || omniBase),
+      sovereignLocal,
       activeProvider,
       activeModel,
       groqConfigured: Boolean(groqKey),
@@ -967,6 +972,18 @@ export class DockerOrchestrator {
 
     const existing = readDotEnv(composeRoot, this.userDataDir);
     const updates = {};
+    if (payload.customProvider === 'ollama') {
+      const localUrl = new URL(String(payload.customBaseUrl || 'http://host.docker.internal:11434').replace(/\/v1\/?$/, ''));
+      if (!['http:', 'https:'].includes(localUrl.protocol) || !['localhost', '127.0.0.1', '[::1]', 'host.docker.internal', 'ollama'].includes(localUrl.hostname)
+          || localUrl.username || localUrl.password || localUrl.search || localUrl.hash) {
+        return { ok: false, error: 'El Modo Soberano requiere Ollama en el equipo local.' };
+      }
+      updates.OMEGA_AI_PROVIDER = 'ollama';
+      updates.OMEGA_OLLAMA_BASE_URL = localUrl.toString().replace(/\/+$/, '');
+      updates.OMEGA_OLLAMA_CHAT_MODEL = sanitizeDotEnvValue(payload.customModel || 'qwen2.5:14b');
+    } else if (payload.clearCustomProvider || payload.customProvider) {
+      updates.OMEGA_AI_PROVIDER = 'openai';
+    }
 
     if (payload.clearGroqKey) {
       updates.GROQ_API_KEY = null;
