@@ -25,6 +25,7 @@ import {
   fetchSystemGovernance,
   fetchCurrentPrincipal,
   sendChatQuery,
+  sendMultimodalQuery,
   analyzePcLiveSnapshot,
   syncStixFeeds,
   getAuthSession,
@@ -722,17 +723,24 @@ export default function App() {
     const t0 = performance.now();
 
     try {
-      const res = await sendChatQuery(
-        query,
-        historyPayload,
-        topK,
-        effectiveScope,
-        pinnedContextPayload,
-        {
-          expedienteId: usePrivateDocs && activeExpedienteId ? activeExpedienteId : null,
-          generalMode: generalChatMode,
-        },
-      );
+      const targetExpedienteId = usePrivateDocs && activeExpedienteId ? activeExpedienteId : null;
+      const res = options?.imageFile
+        ? await sendMultimodalQuery({
+            expedienteId: targetExpedienteId,
+            imageFile: options.imageFile,
+            question: query,
+          })
+        : await sendChatQuery(
+            query,
+            historyPayload,
+            topK,
+            effectiveScope,
+            pinnedContextPayload,
+            {
+              expedienteId: targetExpedienteId,
+              generalMode: generalChatMode,
+            },
+          );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
         id: crypto.randomUUID(),

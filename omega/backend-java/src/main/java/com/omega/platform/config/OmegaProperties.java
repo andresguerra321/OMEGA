@@ -30,7 +30,16 @@ public record OmegaProperties(
         public record Ingest(
                         @NotBlank String tempDir,
                         @Positive long maxPdfBytes,
-                        @NotBlank String tesseractDataPath) {
+                        @NotBlank String tesseractDataPath,
+                        @Positive long maxImageBytes,
+                        @Positive int maxImageDimension) {
+                @ConstructorBinding
+                public Ingest {
+                }
+
+                public Ingest(String tempDir, long maxPdfBytes, String tesseractDataPath) {
+                        this(tempDir, maxPdfBytes, tesseractDataPath, 8_388_608L, 4096);
+                }
         }
 
     public record Rag(

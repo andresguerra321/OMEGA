@@ -23,12 +23,16 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  approveCorpusCandidate,
   createTenantUser,
   fetchApiHealth,
   fetchAuditLogs,
+  fetchCorpusDiscovery,
   fetchSystemGovernance,
   getWorkspaceId,
+  rejectCorpusCandidate,
   rotateWorkspaceId,
+  scanCorpusDiscovery,
   testAiEngineConnection,
   verifyAuditChain,
 } from '../lib/api';
@@ -324,6 +328,8 @@ export function SettingsPanel({
 }) {
   const [activeSection, setActiveSection] = useState(initialSection || 'cuenta');
   const [gov, setGov] = useState(null);
+  const [discoveryQueue, setDiscoveryQueue] = useState([]);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [workspaceId, setWorkspaceId] = useState(() => getWorkspaceId());
   const [auditVerification, setAuditVerification] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -1672,6 +1678,107 @@ export function SettingsPanel({
                         <span>Entrar</span>
                       </button>
                     )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-[13px] font-semibold text-[#F2F2F4]">
+                      Cola de descubrimiento CTI (RSS/Atom · Aprobación humana)
+                    </h3>
+                    <p className="text-[11.5px] text-[#9A9AA2]">
+                      Reportes nuevos detectados en Citizen Lab, Amnesty Security Lab y Google TAG pendientes de aprobación.
+                    </p>
+                  </div>
+                  {authSession && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={discoveryBusy}
+                        onClick={async () => {
+                          setDiscoveryBusy(true);
+                          try {
+                            const items = await fetchCorpusDiscovery('PENDING');
+                            setDiscoveryQueue(Array.isArray(items) ? items : []);
+                          } catch {} finally {
+                            setDiscoveryBusy(false);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] text-[#F2F2F4] hover:bg-white/[0.08] cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${discoveryBusy ? 'animate-spin' : ''}`} />
+                        <span>Cargar cola</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={discoveryBusy}
+                        onClick={async () => {
+                          setDiscoveryBusy(true);
+                          try {
+                            await scanCorpusDiscovery();
+                            const items = await fetchCorpusDiscovery('PENDING');
+                            setDiscoveryQueue(Array.isArray(items) ? items : []);
+                          } catch {} finally {
+                            setDiscoveryBusy(false);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-2.5 py-1.5 text-[11.5px] text-[#F2F2F4] hover:bg-[#2F6FED]/25 cursor-pointer disabled:opacity-50"
+                      >
+                        <Globe className="h-3 w-3 text-[#6EA0FF]" />
+                        <span>Buscar en RSS</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {discoveryQueue.length > 0 && (
+                  <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] max-h-60 overflow-y-auto">
+                    {discoveryQueue.map((item) => (
+                      <div key={item.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[12.5px] font-medium text-[#F2F2F4] truncate">{item.title}</div>
+                          <div className="text-[11px] text-[#9A9AA2] truncate">
+                            {item.source_name} · {item.source_url}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            disabled={discoveryBusy}
+                            onClick={async () => {
+                              setDiscoveryBusy(true);
+                              try {
+                                await approveCorpusCandidate(item.id);
+                                setDiscoveryQueue((q) => q.filter((x) => x.id !== item.id));
+                              } catch {} finally {
+                                setDiscoveryBusy(false);
+                              }
+                            }}
+                            className="rounded-[7px] border border-[#30D158]/40 bg-[#30D158]/12 px-2.5 py-1 text-[11px] font-medium text-[#30D158] hover:bg-[#30D158]/22 cursor-pointer"
+                          >
+                            Aprobar e indexar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={discoveryBusy}
+                            onClick={async () => {
+                              setDiscoveryBusy(true);
+                              try {
+                                await rejectCorpusCandidate(item.id);
+                                setDiscoveryQueue((q) => q.filter((x) => x.id !== item.id));
+                              } catch {} finally {
+                                setDiscoveryBusy(false);
+                              }
+                            }}
+                            className="rounded-[7px] border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#9A9AA2] hover:text-[#FFB4AE] cursor-pointer"
+                          >
+                            Rechazar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

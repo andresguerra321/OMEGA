@@ -584,6 +584,33 @@ export async function rejectCorpusCandidate(id) {
   return apiFetch(`/cti/discovery/${id}/reject`, { method: 'POST' });
 }
 
+export async function lookupExternalReputation(indicator) {
+  return apiFetch(`/cti/reputation?indicator=${encodeURIComponent(String(indicator || '').trim())}`);
+}
+
+export async function sendMultimodalQuery({ expedienteId = null, imageFile, question = '' }) {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  if (question && String(question).trim()) {
+    formData.append('question', String(question).trim());
+  }
+  const path = expedienteId
+    ? `/expedientes/${expedienteId}/query/multimodal`
+    : '/public/query/multimodal';
+  const res = await apiFetch(path, {
+    method: 'POST',
+    body: formData,
+  });
+  return {
+    status: 'OK',
+    answer: res?.answer || '',
+    citations: Array.isArray(res?.citations) ? res.citations : [],
+    warnings: [],
+    model: res?.vision_extraction?.providerModel || 'omega-multimodal',
+    multimodal: res,
+  };
+}
+
 // ---------- CTI Campañas, STIX y WebLoader ----------
 
 export async function fetchCampaigns() {

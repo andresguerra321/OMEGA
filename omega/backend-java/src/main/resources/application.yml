@@ -80,6 +80,8 @@ omega:
     temp-dir: ${OMEGA_INGEST_TMP_DIR:/tmp/omega_ingest}
     max-pdf-bytes: ${OMEGA_MAX_PDF_BYTES:26214400}
     tesseract-data-path: ${TESSDATA_PREFIX:/usr/share/tesseract-ocr/4.00/tessdata}
+    max-image-bytes: ${OMEGA_MAX_IMAGE_BYTES:8388608}
+    max-image-dimension: ${OMEGA_MAX_IMAGE_DIMENSION:4096}
   rag:
     embedding-provider: ${OMEGA_EMBEDDING_PROVIDER:openai}
     embedding-model: ${OMEGA_EMBEDDING_MODEL:text-embedding-3-small}

@@ -9,6 +9,7 @@ import {
   Plus,
   FileUp,
   FileText,
+  ImagePlus,
   CheckCircle2,
   Database,
   RefreshCw,
@@ -249,6 +250,8 @@ export function ChatWorkspace({
 }) {
   const [input, setInput] = useState('');
   const [iocPopoverOpen, setIocPopoverOpen] = useState(false);
+  const [attachedImage, setAttachedImage] = useState(null);
+  const imageInputRef = useRef(null);
   const [iocDraft, setIocDraft] = useState('');
   const [iocFeedback, setIocFeedback] = useState('');
   const [composerError, setComposerError] = useState('');
@@ -282,17 +285,30 @@ export function ChatWorkspace({
     return match ? match[0] : null;
   }, [input]);
 
+  function clearAttachedImage() {
+    if (attachedImage?.previewUrl) {
+      URL.revokeObjectURL(attachedImage.previewUrl);
+    }
+    setAttachedImage(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  }
+
   function submitQuery(rawPrompt) {
     if (loading) return;
-    const check = validateChatMessage(rawPrompt ?? input);
+    const effectiveRaw = rawPrompt ?? (input.trim() || (attachedImage ? 'Analiza esta captura en busca de indicadores maliciosos, phishing o spyware.' : ''));
+    const check = validateChatMessage(effectiveRaw);
     if (!check.valid) {
       setComposerError(check.error);
       return;
     }
     setComposerError('');
     setIocPopoverOpen(false);
-    onSendMessage(check.value, sourceScope);
-    if (!rawPrompt) setInput('');
+    const imgFile = !rawPrompt && attachedImage?.file ? attachedImage.file : null;
+    onSendMessage(check.value, sourceScope, imgFile ? { imageFile: imgFile } : undefined);
+    if (!rawPrompt) {
+      setInput('');
+      clearAttachedImage();
+    }
   }
 
   function handleKeyDown(e) {
@@ -589,6 +605,38 @@ export function ChatWorkspace({
           >
             <FileUp className="h-3.5 w-3.5 text-[#2F6FED]" />
             <span>{uploadingPdf ? 'Extrayendo...' : 'Adjuntar PDF'}</span>
+          </button>
+
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (file.size > 8 * 1024 * 1024) {
+                setComposerError('La imagen supera el máximo de 8 MB.');
+                return;
+              }
+              if (attachedImage?.previewUrl) URL.revokeObjectURL(attachedImage.previewUrl);
+              setAttachedImage({
+                file,
+                name: file.name,
+                previewUrl: URL.createObjectURL(file),
+              });
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            title="Analizar captura de pantalla en RAM (Zero-Retention multimodal)"
+            className={`inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] active:scale-[0.96] transition-all duration-150 cursor-pointer ${
+              compact ? 'px-2.5 py-1 text-[11.5px]' : 'px-2.5 py-1.5 text-[11.5px]'
+            }`}
+          >
+            <ImagePlus className="h-3.5 w-3.5 text-[#6EA0FF]" />
+            <span>Imagen</span>
           </button>
 
           <button
@@ -985,6 +1033,28 @@ export function ChatWorkspace({
                   <p role="alert" className="motion-safe:animate-fade-up px-1.5 pt-1.5 text-[12px] text-[#FFB4AE]">
                     {composerError}
                   </p>
+                )}
+
+                {attachedImage && (
+                  <div className="mt-2 flex items-center gap-2.5 rounded-[10px] border border-[#2F6FED]/35 bg-[#2F6FED]/10 px-2.5 py-1.5">
+                    <img
+                      src={attachedImage.previewUrl}
+                      alt="Vista previa en memoria"
+                      className="h-10 w-10 rounded-[6px] object-cover border border-white/15"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-medium text-[#F2F2F4] truncate">{attachedImage.name}</div>
+                      <div className="text-[10.5px] text-[#9FA6B8]">Análisis multimodal en RAM (Zero-Retention)</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearAttachedImage}
+                      aria-label="Quitar imagen"
+                      className="p-1 text-[#9FA6B8] hover:text-white cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 )}
 
                 {renderComposerControls(true)}

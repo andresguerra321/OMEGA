@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Smartphone,
 } from 'lucide-react';
-import { verifySuspiciousLink } from '../lib/api';
+import { lookupExternalReputation, verifySuspiciousLink } from '../lib/api';
 import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
@@ -125,8 +125,13 @@ export function LinkVerifierPanel({
       setFinalCheckResult(null);
       try {
         const data = await verifySuspiciousLink(validation.value);
-        setResult(data);
-        onLinkVerified?.(data);
+        let reputation = null;
+        if (data?.host) {
+          reputation = await lookupExternalReputation(data.host).catch(() => null);
+        }
+        const enriched = reputation ? { ...data, external_reputation: reputation } : data;
+        setResult(enriched);
+        onLinkVerified?.(enriched);
       } catch (err) {
         setError(err?.message || 'No se pudo inspeccionar el enlace.');
       } finally {
@@ -316,6 +321,30 @@ export function LinkVerifierPanel({
             </div>
           </div>
         </section>
+
+        {result.external_reputation && (
+          <section className="apple-group rounded-[13px] p-4 space-y-2">
+            <div className="text-[12.5px] font-semibold text-[#F2F2F4]">
+              Reputación externa (VirusTotal / AbuseIPDB)
+            </div>
+            <div className="flex flex-wrap gap-3 text-[12px] text-[#C2C7D6]">
+              <span>
+                VirusTotal:{' '}
+                {result.external_reputation.virustotal?.status === 'ok'
+                  ? `${result.external_reputation.virustotal.malicious} maliciosos / ${result.external_reputation.virustotal.suspicious} sospechosos`
+                  : result.external_reputation.virustotal?.message || result.external_reputation.virustotal?.status || 'N/D'}
+              </span>
+              {result.external_reputation.abuseipdb?.status && result.external_reputation.abuseipdb.status !== 'skipped' && (
+                <span>
+                  AbuseIPDB:{' '}
+                  {result.external_reputation.abuseipdb.status === 'ok'
+                    ? `Score ${result.external_reputation.abuseipdb.abuse_confidence_score}% (${result.external_reputation.abuseipdb.total_reports} reportes)`
+                    : result.external_reputation.abuseipdb.message || result.external_reputation.abuseipdb.status}
+                </span>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Alertas estructurales */}
         {heuristics.length > 0 && (
