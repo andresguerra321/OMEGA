@@ -47,6 +47,9 @@ public class RestClientConfig {
                 .requestFactory(factory)
                 .requestInterceptor((request, body, execution) -> {
                     if (sovereignPolicy != null) sovereignPolicy.checkWorkerRequest(request.getURI());
+                    if (environment.getProperty("OMEGA_REQUIRE_HMAC", Boolean.class, false)) {
+                        return SensorHmac.interceptor(internalToken).intercept(request, body, execution);
+                    }
                     return execution.execute(request, body);
                 })
                 .build();
@@ -54,6 +57,11 @@ public class RestClientConfig {
 
     @Bean
     public RestClient hostWorkerRestClient(OmegaProperties properties, Environment environment) {
+        String nativeEndpoint = environment.getProperty("OMEGA_HOST_SOCKET", "");
+        if (!nativeEndpoint.isBlank()) {
+            return RestClient.builder().baseUrl("http://sensor")
+                    .requestFactory(new LocalSensorRequestFactory(nativeEndpoint)).build();
+        }
         String baseUrl = environment.getProperty("OMEGA_HOST_WORKER_URL", properties.forensicWorker().baseUrl());
         String token = environment.getProperty("OMEGA_HOST_INTERNAL_SERVICE_TOKEN", properties.security().internalServiceToken());
         if (token == null || token.length() < 32) {
@@ -65,6 +73,9 @@ public class RestClientConfig {
         return RestClient.builder().baseUrl(baseUrl).defaultHeader(INTERNAL_TOKEN_HEADER, token)
                 .requestFactory(factory).requestInterceptor((request, body, execution) -> {
                     if (sovereignPolicy != null) sovereignPolicy.checkWorkerRequest(request.getURI());
+                    if (environment.getProperty("OMEGA_REQUIRE_HMAC", Boolean.class, false)) {
+                        return SensorHmac.interceptor(token).intercept(request, body, execution);
+                    }
                     return execution.execute(request, body);
                 }).build();
     }

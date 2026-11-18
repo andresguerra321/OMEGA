@@ -1,7 +1,7 @@
 {
   "name": "omega-desktop",
   "private": true,
-  "version": "1.9.0",
+  "version": "1.10.0",
   "productName": "OMEGA",
   "description": "OMEGA — Plataforma Defensiva de Cyber Threat Intelligence",
   "author": "OMEGA",
@@ -11,18 +11,20 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test:desktop": "node --test electron/dockerOrchestrator.test.js electron/windowsPcAudit.test.js src/lib/validators.test.js src/lib/api.test.js",
+    "test:desktop": "node --test electron/*.test.js src/lib/*.test.js src/components/*.test.js",
     "preview": "vite preview",
     "desktop:dev": "concurrently -k \"vite --port 5174 --strictPort\" \"wait-on http://localhost:5174 && node electron/launch.js http://localhost:5174\"",
     "desktop:start": "vite build && node electron/launch.js",
     "desktop:pack": "vite build && electron-builder --dir",
-    "desktop:dist": "vite build && electron-builder --win nsis portable"
+    "desktop:dist": "vite build && electron-builder --win nsis portable",
+    "test": "node --test electron/*.test.js src/lib/*.test.js src/components/*.test.js"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@fontsource/sora": "^5.3.0",
     "@tailwindcss/vite": "^4.3.5",
+    "dompurify": "^3.4.18",
     "framer-motion": "^14.14.0",
     "lucide-react": "^1.72.0",
     "qrcode": "^1.5.4",
@@ -40,6 +42,7 @@
     "concurrently": "^10.0.7",
     "electron": "^45.3.1",
     "electron-builder": "^26.18.0",
+    "jsdom": "^31.0.1",
     "oxlint": "^1.90.0",
     "vite": "^8.3.6",
     "wait-on": "^9.5.1"
@@ -75,7 +78,6 @@
           "docker-compose.prod.yml",
           ".env.example",
           "db/init.sql",
-          "corpus_mvp/iocs/**/*",
           "api/**/*",
           "backend-java/**/*",
           "!**/.env",
@@ -86,15 +88,23 @@
           "!**/.venv/**",
           "!**/venv/**",
           "!**/__pycache__/**",
+          "!**/.pytest*/**",
+          "!**/*.log",
           "!**/*.pyc",
           "!**/target/**",
           "!**/node_modules/**",
-          "!**/tests/**",
-          "!**/.git/**"
+          "!**/.git/**",
+          "rag_engine/**/*",
+          "integrity-manifest.json",
+          "integrity-manifest.sig",
+          "corpus_mvp/**/*"
         ]
       }
     ],
     "win": {
+      "signExts": [
+        "!omega-sensor.exe"
+      ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": true,
       "target": [
@@ -123,6 +133,7 @@
     },
     "portable": {
       "artifactName": "OMEGA-Portable-${version}-${arch}.exe"
-    }
+    },
+    "beforePack": "electron/packageDesktop.cjs"
   }
 }

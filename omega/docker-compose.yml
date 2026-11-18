@@ -1,8 +1,12 @@
+x-omega-labels: &omega-labels
+  io.omega.managed: "true"
+
 services:
   # 1. PostgreSQL 16 + pgvector + tsvector híbrido (aislado en red privada)
   postgres:
     image: pgvector/pgvector:pg16
     container_name: omega_postgres
+    labels: *omega-labels
     restart: unless-stopped
     env_file:
       - path: .env
@@ -33,6 +37,10 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: omega_forensic_worker
+    labels:
+      <<: *omega-labels
+      io.omega.version: ${OMEGA_DESKTOP_VERSION:-development}
+      io.omega.release: ${OMEGA_DESKTOP_RELEASE_ID:-development}
     restart: unless-stopped
     env_file:
       - path: .env
@@ -43,7 +51,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
       POSTGRES_DB: ${POSTGRES_DB:-omega_cti}
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un secreto efimero en RAM para iniciar los servicios}
+      OMEGA_REQUIRE_HMAC: "true"
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-}
       OMNIROUTE_BASE_URL: ${OMNIROUTE_BASE_URL:-}
@@ -70,8 +79,7 @@ services:
         [
           "CMD",
           "python",
-          "-c",
-          "import os, urllib.request; req = urllib.request.Request('http://127.0.0.1:8000/api/health', headers={'X-Internal-Service-Token': os.environ['INTERNAL_SERVICE_TOKEN']}); urllib.request.urlopen(req, timeout=3)",
+          "healthcheck.py",
         ]
       interval: 3s
       timeout: 4s
@@ -85,6 +93,10 @@ services:
       context: ./backend-java
       dockerfile: Dockerfile
     container_name: omega_backend_java
+    labels:
+      <<: *omega-labels
+      io.omega.version: ${OMEGA_DESKTOP_VERSION:-development}
+      io.omega.release: ${OMEGA_DESKTOP_RELEASE_ID:-development}
     restart: unless-stopped
     env_file:
       - path: .env
@@ -95,12 +107,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
       OMEGA_JWT_SECRET: ${OMEGA_JWT_SECRET:-omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}
       OMEGA_COOKIE_SECURE: ${OMEGA_COOKIE_SECURE:-false}
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un secreto efimero en RAM para iniciar los servicios}
+      OMEGA_REQUIRE_HMAC: "true"
       OMEGA_INGEST_TMP_DIR: /tmp/omega_ingest
       TESSDATA_PREFIX: /usr/share/tesseract-ocr/4.00/tessdata
       OMEGA_FORENSIC_WORKER_URL: http://forensic-worker:8000
       OMEGA_HOST_WORKER_URL: ${OMEGA_HOST_WORKER_URL:-http://forensic-worker:8000}
-      OMEGA_HOST_INTERNAL_SERVICE_TOKEN: ${OMEGA_HOST_INTERNAL_SERVICE_TOKEN:-${INTERNAL_SERVICE_TOKEN:-omega-dev-internal-service-token-change-in-prod}}
+      OMEGA_HOST_INTERNAL_SERVICE_TOKEN: ${OMEGA_HOST_INTERNAL_SERVICE_TOKEN:-${INTERNAL_SERVICE_TOKEN:?Define un secreto efimero en RAM para iniciar los servicios}}
       OMEGA_HOST_OWNER_TENANT_ID: ${OMEGA_HOST_OWNER_TENANT_ID:-}
       OMEGA_EMBEDDING_MODEL: ${OMEGA_EMBEDDING_MODEL:-text-embedding-3-small}
       OMEGA_AI_PROVIDER: ${OMEGA_AI_PROVIDER:-openai}
@@ -134,7 +147,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${JAVA_BACKEND_PORT:-8080}:8080"
+      - "127.0.0.1:${JAVA_BACKEND_PORT:-8080}:8080"
     # Directorio temporal volátil estrictamente en RAM sin ejecución (Zero-Retention; uid=10001 = usuario no-root omega)
     tmpfs:
       - /tmp/omega_ingest:rw,noexec,nosuid,nodev,size=512m,mode=0700,uid=10001,gid=10001
@@ -163,6 +176,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: omega_frontend
+    labels: *omega-labels
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-5173}:80"
@@ -177,6 +191,7 @@ services:
     profiles: ["omniroute"]
     image: ghcr.io/diegosouzapw/omniroute:latest
     container_name: omega_omniroute
+    labels: *omega-labels
     restart: unless-stopped
     ports:
       - "127.0.0.1:${OMNIROUTE_PORT:-20128}:20128"
@@ -210,4 +225,5 @@ networks:
 
 volumes:
   omega_pgdata:
+    name: ${OMEGA_PG_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-omega}_omega_pgdata}
   omniroute_data:

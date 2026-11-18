@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import logging
 import os
@@ -9,7 +10,16 @@ from urllib.parse import urlparse
 
 from cti_db import lookup_iocs_detailed
 from owasp_rules import SHARED_HOSTING_ROOTS, evaluate_url_owasp
-from evasion_intelligence import inspect_evasion
+from evasion_intelligence import inspect_evasion, safe_http_get, resolve_public
+
+
+def pinned_urlopen(request, timeout=None):
+    """Provider fetches use the same public-IP pinning as active probes; no redirects."""
+    result = safe_http_get(request.full_url, 'Omega-CTI-Passive-Check/1.0',
+                           limit=2 * 1024 * 1024, redirects=0, headers=dict(request.header_items()))
+    if not 200 <= result['status'] < 300 or result['truncated']:
+        raise ValueError('Respuesta de reputación inválida o demasiado grande')
+    return io.BytesIO(result['body'])
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +118,7 @@ def _passive_vt_url_check(normalized_url: str, host: str) -> list[dict]:
                 f"https://www.virustotal.com/api/v3{path}",
                 headers={"x-apikey": vt_key, "Accept": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=4) as resp:
+            with pinned_urlopen(req, timeout=4) as resp:
                 payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
                 stats = payload.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
                 mal = int(stats.get("malicious") or 0)
@@ -139,7 +149,7 @@ def _passive_cert_count(domain: str) -> int | None:
             f"https://api.certspotter.com/v1/issuances?domain={q}",
             headers={"User-Agent": "Omega-CTI-Passive-Check/1.0", "Accept": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with pinned_urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
             if isinstance(data, list):
                 return len(data)
@@ -152,7 +162,7 @@ def _passive_cert_count(domain: str) -> int | None:
             f"https://crt.sh/?q={q}&output=json&exclude=expired",
             headers={"User-Agent": "Omega-CTI-Passive-Check/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
+        with pinned_urlopen(req, timeout=3.5) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
             if isinstance(data, list):
                 return len(data)
@@ -165,7 +175,7 @@ def _passive_cert_count(domain: str) -> int | None:
             f"https://api.hackertarget.com/hostsearch/?q={q}",
             headers={"User-Agent": "Omega-CTI-Passive-Check/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with pinned_urlopen(req, timeout=3) as resp:
             text = resp.read().decode("utf-8", errors="ignore").strip()
             if text and "error" not in text.lower() and "api count exceeded" not in text.lower():
                 lines = [ln for ln in text.splitlines() if "," in ln]

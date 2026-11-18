@@ -33,18 +33,30 @@ function shouldIncludeCredentials() {
 }
 
 function resolveApiOrigin() {
+  if (typeof window !== 'undefined' && (window.location?.protocol === 'file:' || window.omegaDesktop?.isDesktop)) {
+    const raw = new URLSearchParams(window.location?.search || '').get('omegaBackendPort');
+    const port = /^\d{4,5}$/.test(raw || '') && Number(raw) >= 1024 && Number(raw) <= 65535 ? Number(raw) : 8080;
+    return `http://127.0.0.1:${port}`;
+  }
   const envOrigin = import.meta?.env?.VITE_API_ORIGIN;
   if (envOrigin) {
     return String(envOrigin).replace(/\/+$/, '');
-  }
-  if (typeof window !== 'undefined' && window.location?.protocol === 'file:') {
-    return 'http://127.0.0.1:8080';
   }
   return '';
 }
 
 const API_ORIGIN = resolveApiOrigin();
 const API_V1 = `${API_ORIGIN}/api/v1`;
+
+export async function prepareDesktopHostSensor() {
+  const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
+  if (!bridge?.prepareHostSensor) return { ready: true };
+  const session = getAuthSession();
+  if (!session?.accessToken || session.role !== 'ADMIN') throw new Error('Inicia sesión como administrador para proteger esta computadora.');
+  const result = await bridge.prepareHostSensor({ accessToken: session.accessToken });
+  if (!result?.ready) throw new Error(result?.message || 'No se pudo preparar la protección. Pulsa Reintentar.');
+  return result;
+}
 
 export function getHostRealtimeStatus() {
   return apiFetch('/forensics/host/realtime/status');

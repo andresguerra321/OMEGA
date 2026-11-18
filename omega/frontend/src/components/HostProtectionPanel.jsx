@@ -1,6 +1,6 @@
 import { containmentCandidate } from '../lib/containment';
 import { useEffect, useRef, useState } from 'react';
-import { getHostRealtimeStatus, toggleHostRealtime, auditHostPersistence } from '../lib/api';
+import { prepareDesktopHostSensor, getHostRealtimeStatus, toggleHostRealtime, auditHostPersistence } from '../lib/api';
 import { ContainmentPanel, ContainmentButton, EmergencyGuidance } from './ContainmentPanel';
 
 const GROUPS = [
@@ -37,6 +37,9 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
   const [busy, setBusy] = useState(false);
   const [auditing, setAuditing] = useState(false);
   const [report, setReport] = useState(null);
+  const [preparing, setPreparing] = useState(true);
+  const [setupFailed, setSetupFailed] = useState(false);
+  const [setupAttempt, setSetupAttempt] = useState(0);
   const revision = useRef(0);
 
   useEffect(() => {
@@ -53,9 +56,15 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
         if (!disposed) timer = setTimeout(poll, 5000);
       }
     }
-    poll();
+    setPreparing(true);
+    setSetupFailed(false);
+    prepareDesktopHostSensor().then(() => {
+      if (!disposed) { setPreparing(false); void poll(); }
+    }).catch(err => {
+      if (!disposed) { setPreparing(false); setSetupFailed(true); setSensorError(err.message); }
+    });
     return () => { disposed = true; clearTimeout(timer); };
-  }, []);
+  }, [setupAttempt]);
 
   async function toggle() {
     setBusy(true);
@@ -77,7 +86,7 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
 
   const alerts = status?.alerts || [];
   const native = status?.scope === 'native-host';
-  const label = sensorError ? 'Sensor no disponible' : !status ? 'Comprobando vigilancia…'
+  const label = preparing ? 'Preparando la protección de tu computadora…' : sensorError ? 'Protección pendiente' : !status ? 'Comprobando vigilancia…'
     : !native ? 'Vigilancia del equipo no disponible'
       : status.active ? (status.dnsCoverage === 'cache-no-pid' ? 'Vigilancia activa' : 'Vigilancia activa · cobertura parcial') : status.enabled ? 'Vigilancia con cobertura incompleta' : 'Pausada';
   const grouped = {
@@ -99,7 +108,9 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
       </div>
     </div>
     {error && <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p>}
+    {preparing && <p className="mt-1 text-xs text-[#B7B7C0]">OMEGA está preparando todo. Windows puede pedirte permiso para activar la protección del equipo.</p>}
     {sensorError && <p role="alert" className="mt-2 text-sm text-amber-300">{sensorError}</p>}
+    {setupFailed && <button type="button" onClick={() => { setSensorError(''); setSetupAttempt(value => value + 1); }} className="mt-2 rounded border border-white/20 px-3 py-1 text-xs">Reintentar preparación</button>}
     {status && !native && <p className="mt-1 text-xs text-[#B7B7C0]">El servicio está aislado en un contenedor y no observa esta computadora. Conecta un sensor nativo para activar la vigilancia del equipo.</p>}
     {alerts.length > 0 && <div role="alert" className="mt-2 rounded border border-red-400/40 bg-red-500/10 p-2 text-sm">
       {alerts.at(-1).userFriendlyTitle}. {alerts.length} alerta(s) conservadas en esta sesión del sensor. La alerta no bloquea tráfico por sí sola; consulta las acciones aplicadas en el historial.

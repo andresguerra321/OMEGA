@@ -333,7 +333,7 @@ class NativeFirewall:
 
 class ContainmentEngine:
     def __init__(self, root=None, *, key_provider=secure_os_key, firewall=None):
-        self.root = Path(root) if root else Path.home() / '.omega/quarantine'
+        self.root = Path(root) if root else Path(os.environ.get('OMEGA_CONTAINMENT_DIR') or Path.home() / '.omega/quarantine')
         self.key_provider = key_provider
         self.firewall = firewall or NativeFirewall()
 

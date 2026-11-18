@@ -14,6 +14,7 @@ import plistlib
 import re
 import secrets
 import sqlite3
+from sqlite_safety import harden_connection
 import struct
 import threading
 import time
@@ -90,6 +91,7 @@ def _open_sqlite_in_ram(db_bytes: bytes) -> sqlite3.Connection:
         conn.close()
         raise RuntimeError("Este intérprete Python/SQLite no soporta sqlite3.deserialize en RAM.")
     conn.deserialize(db_bytes)
+    harden_connection(conn)
     return conn
 
 

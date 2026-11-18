@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import sqlite3
+from sqlite_safety import harden_connection
 from typing import Any
 from cti_db import fetch_yara_iocs, lookup_ioc_families
 
@@ -286,6 +287,8 @@ def inspect_ios_manifest_db(filename: str, raw_bytes: bytes) -> list[dict[str, A
     try:
         conn = sqlite3.connect(":memory:")
         conn.deserialize(raw_bytes)
+        harden_connection(conn)
+        harden_connection(conn)
         cur = conn.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Files';")
         if not cur.fetchone():
@@ -363,6 +366,8 @@ def extract_ios_manifest_targets(raw_bytes: bytes, limit: int = 35) -> dict[str,
     try:
         conn = sqlite3.connect(":memory:")
         conn.deserialize(raw_bytes)
+        harden_connection(conn)
+        harden_connection(conn)
         cur = conn.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Files';")
         if not cur.fetchone():

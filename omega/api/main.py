@@ -9,9 +9,13 @@ from __future__ import annotations
 import asyncio
 import gc
 import hmac
+import hashlib
+import logging
 import os
 import sys
 import subprocess
+import zipfile
+import tarfile
 import psutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,6 +23,9 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from cryptography.exceptions import InvalidTag
+import local_auth
+from local_auth import signature
+from self_integrity import verify_release, IntegrityError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -27,7 +34,7 @@ from detection_engineering import generate_mvt_triage_script, generate_yara_for_
 from forensic_engine import analyze_forensic_payload
 from host_forensics import run_host_live_audit
 from persistence_auditor import audit_persistence
-from host_runtime import host_scope
+from host_runtime import host_scope, application_root
 from realtime_watcher import watcher
 from ios_backup_crypto import decrypt_binary_artifacts_in_ram, unlock_encrypted_ios_backup_in_ram
 from link_verifier import inspect_suspicious_link
@@ -61,7 +68,16 @@ MAX_TOTAL_UPLOAD_BYTES = 128 * 1024 * 1024
 
 @asynccontextmanager
 async def lifespan(_app):
-    watcher.start(enabled=os.getenv('OMEGA_REALTIME_ENABLED', 'false').lower() == 'true')
+    try:
+        verify_release(application_root())
+        _app.state.integrity_ok = True
+        _app.state.release_id = hashlib.sha256((application_root() / 'integrity-manifest.json').read_bytes()).hexdigest()
+    except IntegrityError:
+        _app.state.integrity_ok = False
+        logging.getLogger(__name__).critical('INTEGRIDAD COMPROMETIDA: vigilancia y operaciones privilegiadas bloqueadas')
+        if os.getenv('OMEGA_NATIVE_SENSOR') == '1':
+            raise
+    watcher.start(enabled=_app.state.integrity_ok and os.getenv('OMEGA_REALTIME_ENABLED', 'false').lower() == 'true')
     try:
         yield
     finally:
@@ -80,6 +96,30 @@ app = FastAPI(
 
 @app.middleware("http")
 async def verify_internal_service_token(request: Request, call_next):
+    authenticator = local_auth.ACTIVE
+    if authenticator is None and os.getenv('OMEGA_REQUIRE_HMAC', 'false').lower() == 'true':
+        token = os.getenv('INTERNAL_SERVICE_TOKEN', '').strip()
+        if not token:
+            return JSONResponse(status_code=503, content={'detail': 'INTERNAL_SERVICE_TOKEN no configurado'})
+        secret = hashlib.sha256(token.encode()).hexdigest()
+        if getattr(app.state, 'container_auth_key', None) != secret:
+            app.state.container_auth = local_auth.LocalAuthenticator(secret)
+            app.state.container_auth_key = secret
+        authenticator = app.state.container_auth
+    if authenticator is not None:
+        body = await request.body()
+        target = request.url.path + (('?' + request.url.query) if request.url.query else '')
+        if not authenticator.verify(request.method, target, request.headers, body):
+            return JSONResponse(status_code=401, content={'detail': 'Firma HMAC inválida o nonce repetido'})
+        response = await call_next_with_tenant(request, call_next)
+        content = b''.join([chunk async for chunk in response.body_iterator]) if hasattr(response, 'body_iterator') else response.body
+        from starlette.responses import Response
+        stamp, nonce = request.headers['x-omega-time'], request.headers['x-omega-nonce']
+        headers = dict(response.headers)
+        headers['x-omega-signature'] = signature(authenticator.secret, 'response', str(response.status_code), target, stamp, nonce, content)
+        return Response(content, status_code=response.status_code, headers=headers, media_type=response.media_type)
+    if os.getenv('OMEGA_NATIVE_SENSOR') == '1':
+        return JSONResponse(status_code=503, content={'detail': 'Bootstrap efímero requerido'})
     expected_token = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
     if not expected_token:
         return JSONResponse(
@@ -94,6 +134,10 @@ async def verify_internal_service_token(request: Request, call_next):
             content={"detail": "Acceso denegado: X-Internal-Service-Token ausente o inválido."},
         )
 
+    return await call_next_with_tenant(request, call_next)
+
+
+async def call_next_with_tenant(request, call_next):
     if request.url.path.startswith(('/api/host/', '/api/containment/')):
         owner = os.getenv('OMEGA_HOST_OWNER_TENANT_ID', '').strip()
         if not owner:
@@ -106,6 +150,8 @@ async def verify_internal_service_token(request: Request, call_next):
 
 @app.post('/api/containment/execute')
 def execute_containment_endpoint(payload: ContainmentRequest, request: Request):
+    if not getattr(app.state, 'integrity_ok', False):
+        raise HTTPException(status_code=503, detail='Integridad no verificada: contención bloqueada')
     try:
         return containment_engine.execute_containment(payload.actionType, payload.target,
                 owner=request.headers['X-Host-Tenant'], dry_run=payload.dryRun, preview_token=payload.previewToken,
@@ -118,6 +164,8 @@ def execute_containment_endpoint(payload: ContainmentRequest, request: Request):
 
 @app.post('/api/containment/rollback/{action_id}')
 def rollback_containment_endpoint(action_id: str, request: Request):
+    if not getattr(app.state, 'integrity_ok', False):
+        raise HTTPException(status_code=503, detail='Integridad no verificada: contención bloqueada')
     try:
         return containment_engine.rollback_containment(action_id, owner=request.headers['X-Host-Tenant'])
     except (ValueError, FileNotFoundError, InvalidTag) as exc:
@@ -138,6 +186,8 @@ def host_realtime_status():
 
 @app.post('/api/host/realtime/toggle')
 def host_realtime_toggle(payload: RealtimeToggleRequest):
+    if payload.enabled and not getattr(app.state, 'integrity_ok', False):
+        raise HTTPException(status_code=503, detail='Integridad no verificada: vigilancia bloqueada')
     try:
         return watcher.toggle(payload.enabled)
     except ValueError as exc:
@@ -186,6 +236,8 @@ async def _read_bounded_upload(upload: UploadFile, current_total: int = 0) -> by
 def health_check():
     return {
         "status": "ok",
+        "integrity_verified": getattr(app.state, 'integrity_ok', False),
+        "releaseId": getattr(app.state, 'release_id', None),
         "service": "omega-forensic-worker",
         "mode": "native-containment-persistent-vault" if host_scope() == 'native-host' and os.getenv('OMEGA_CONTAINMENT_ENABLED', '').lower() == 'true' else "stateless-ram-only",
         "yara": get_yara_engine_status(),
@@ -220,6 +272,8 @@ async def parallel_forensic_triage(files: list[UploadFile] = File(...)):
             artifacts.append({"filename": f.filename or "artifact.bin", "bytes": content})
 
         return await run_parallel_forensic_triage(artifacts)
+    except (ValueError, zipfile.BadZipFile, tarfile.TarError) as exc:
+        raise HTTPException(status_code=400, detail='Archivo forense rechazado: estructura o expansión insegura.') from exc
     finally:
         for art in artifacts:
             art["bytes"] = b""

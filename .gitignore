@@ -50,4 +50,5 @@ graphify-out/
 .pytest_cache/
 .pytest-phase1*/
 .pytest-phase*/
+.pytest-review*/
 

@@ -30,6 +30,89 @@ function createTempComposeDir({ withProd = true, envContent = 'POSTGRES_PASSWORD
   return dir;
 }
 
+function emptyEnvironment({ env }) {
+  const { OMEGA_DATABASE_PASSWORD_KNOWN, ...values } = env;
+  return { env: { ...values, COMPOSE_PROJECT_NAME: 'omega', JAVA_BACKEND_PORT: values.JAVA_BACKEND_PORT || '8080' },
+    backendPort: Number(values.JAVA_BACKEND_PORT || 8080), project: 'omega', volumeName: 'omega_omega_pgdata',
+    containers: [], canReuse: false, versionMismatch: false };
+}
+function existingEnvironment(input) {
+  return { ...emptyEnvironment(input), canReuse: true,
+    containers: ['postgres', 'forensic-worker', 'backend-java'].map(service => ({ service, state: 'running', id: service })) };
+}
+
+function startupFixture(t, overrides = {}) {
+  const composeDir = createTempComposeDir();
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-preflight-integration-'));
+  t.after(() => { fs.rmSync(composeDir, { recursive: true, force: true }); fs.rmSync(userDataDir, { recursive: true, force: true }); });
+  const calls = [];
+  const healthy = ['postgres', 'forensic-worker', 'backend-java'].map(Service => JSON.stringify({ Service, State: 'running', Health: 'healthy' })).join('\n');
+  const orchestrator = new DockerOrchestrator({ userDataDir, electronDir: path.join(composeDir, 'frontend/electron'),
+    findComposeRootFn: () => composeDir, checkDockerFn: async () => {}, preflightFn: emptyEnvironment,
+    probeHttpHealthFn: async () => ({ healthy: true, statusCode: 200 }), sleepFn: async () => {},
+    runCommandFn: async (args, options) => { calls.push({ args, options }); return { code: 0, stdout: args.includes('ps') ? healthy : '', stderr: '' }; }, ...overrides });
+  return { orchestrator, calls, healthy };
+}
+
+test('an unrelated UP actuator response cannot make OMEGA skip its own startup', async t => {
+  const { orchestrator, calls } = startupFixture(t);
+  const result = await orchestrator.start();
+  assert.equal(result.alreadyRunning, false);
+  assert.ok(calls.some(call => call.args.includes('up')));
+});
+
+test('partial startup leaves the pre-existing database running when the desktop closes', async t => {
+  const { orchestrator, calls } = startupFixture(t, { preflightFn: input => ({ ...emptyEnvironment(input), containers: [{ service: 'postgres', id: 'owned-postgres', state: 'running' }] }) });
+  assert.equal((await orchestrator.start()).ok, true);
+  await orchestrator.shutdownStack();
+  const stop = calls.find(call => call.args.includes('stop')).args;
+  assert.ok(stop.includes('forensic-worker') && stop.includes('backend-java'));
+  assert.ok(!stop.includes('postgres') && !stop.includes('down') && !stop.includes('-v'));
+});
+
+test('an ambiguous preflight stops before any compose mutation', async t => {
+  const { orchestrator, calls } = startupFixture(t, { preflightFn: async () => { throw Object.assign(new Error('foreign installation'), { code: 'CONTAINER_NAME_CONFLICT' }); } });
+  const result = await orchestrator.start();
+  assert.equal(result.errorCode, 'CONTAINER_NAME_CONFLICT');
+  assert.equal(calls.length, 0);
+  assert.equal(orchestrator.shouldStopOnQuit(), false);
+});
+
+test('a late container conflict never triggers forced removal or an orphan cleanup', async t => {
+  const { orchestrator, calls } = startupFixture(t);
+  const original = orchestrator.runCommandFn;
+  orchestrator.runCommandFn = async (args, options) => {
+    const result = await original(args, options);
+    return args.includes('up') ? { code: 1, stdout: '', stderr: 'Conflict: container name already in use' } : result;
+  };
+  assert.equal((await orchestrator.start()).errorCode, 'COMPOSE_UP_FAILED');
+  assert.equal(calls.filter(call => call.args.includes('up')).length, 1);
+  assert.ok(calls.every(call => !call.args.includes('rm') && !call.args.includes('down') && !call.args.includes('--remove-orphans')));
+});
+
+test('AI reconfiguration keeps the automatically selected port and persistent volume', async t => {
+  const { orchestrator, calls } = startupFixture(t, { preflightFn: input => ({ ...emptyEnvironment(input), backendPort: 8089,
+    volumeName: 'saved_database', env: { ...input.env, COMPOSE_PROJECT_NAME: 'omega', OMEGA_PG_VOLUME_NAME: 'saved_database', JAVA_BACKEND_PORT: '8089' } }) });
+  assert.equal((await orchestrator.start()).ok, true);
+  assert.equal((await orchestrator.reapplyAiConfig({ groqModel: 'test-model' })).ok, true);
+  const reload = calls.filter(call => call.args.includes('up')).at(-1);
+  assert.equal(reload.options.env.JAVA_BACKEND_PORT, '8089');
+  assert.equal(reload.options.env.OMEGA_PG_VOLUME_NAME, 'saved_database');
+});
+
+test('readiness waits for every healthcheck even when HTTP is already UP', async t => {
+  const { orchestrator, healthy } = startupFixture(t);
+  const original = orchestrator.runCommandFn;
+  let polls = 0;
+  orchestrator.runCommandFn = async (args, options) => {
+    const result = await original(args, options);
+    if (args.includes('ps') && ++polls <= 2) return { ...result, stdout: healthy.replace('"Service":"forensic-worker","State":"running","Health":"healthy"', '"Service":"forensic-worker","State":"running","Health":"starting"') };
+    return result;
+  };
+  assert.equal((await orchestrator.start()).ok, true);
+  assert.ok(polls >= 3);
+});
+
 test('parseDotEnvContent y loadOrCreateDesktopSecrets respetan .env existente y persisten secretos faltantes', () => {
   const composeDir = createTempComposeDir({
     envContent: '# comentario\nPOSTGRES_PASSWORD="mi_pg_clave"\nJAVA_BACKEND_PORT=8089\n',
@@ -82,7 +165,7 @@ test('parseComposePsOutput y buildComposeArgs manejan NDJSON/JSON y override pro
   }
 });
 
-test('DockerOrchestrator no toma ownership ni ejecuta down si el backend ya estaba UP', async () => {
+test('DockerOrchestrator no detiene una instalacion existente cuya identidad y salud ya se verificaron', async () => {
   const composeDir = createTempComposeDir();
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-orch-ext-'));
   const dockerCalls = [];
@@ -90,13 +173,12 @@ test('DockerOrchestrator no toma ownership ni ejecuta down si el backend ya esta
 
   try {
     const orchestrator = new DockerOrchestrator({
+      preflightFn: existingEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,
       probeHttpHealthFn: async () => ({ healthy: true, statusCode: 200 }),
-      checkDockerFn: async () => {
-        throw new Error('No debe exigir docker info si salud ya está UP');
-      },
+      checkDockerFn: async () => {},
       runCommandFn: async (args) => {
         dockerCalls.push(args);
         return { code: 0, stdout: '', stderr: '' };
@@ -125,6 +207,7 @@ test('DockerOrchestrator reporta error accionable si Docker Desktop está apagad
 
   try {
     const orchestrator = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,
@@ -148,7 +231,7 @@ test('DockerOrchestrator reporta error accionable si Docker Desktop está apagad
   }
 });
 
-test('DockerOrchestrator levanta servicios backend, espera healthchecks y ejecuta down sin -v al cerrar', async () => {
+test('DockerOrchestrator inicia servicios, espera salud y solo detiene los que inicio', async () => {
   const composeDir = createTempComposeDir({ withProd: true });
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-orch-full-'));
   const dockerCalls = [];
@@ -157,6 +240,7 @@ test('DockerOrchestrator levanta servicios backend, espera healthchecks y ejecut
 
   try {
     const orchestrator = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,
@@ -167,6 +251,7 @@ test('DockerOrchestrator levanta servicios backend, espera healthchecks y ejecut
         if (healthPollCount >= 3) return { healthy: true, statusCode: 200 };
         return { healthy: false, statusCode: 0 };
       },
+      runtimeEnvOverrides: { OMEGA_HOST_WORKER_URL: 'http://host.docker.internal:12345', OMEGA_HOST_INTERNAL_SERVICE_TOKEN: 'relay-key-in-memory' },
       runCommandFn: async (args, opts) => {
         dockerCalls.push({ args, env: opts?.env });
         if (args.includes('up')) {
@@ -183,7 +268,7 @@ test('DockerOrchestrator levanta servicios backend, espera healthchecks y ejecut
             stdout: [
               '{"Service":"postgres","State":"running","Health":"healthy"}',
               '{"Service":"forensic-worker","State":"running","Health":"healthy"}',
-              '{"Service":"backend-java","State":"running","Health":"starting"}',
+              '{"Service":"backend-java","State":"running","Health":"healthy"}',
             ].join('\n'),
             stderr: '',
           };
@@ -208,10 +293,12 @@ test('DockerOrchestrator levanta servicios backend, espera healthchecks y ejecut
     assert.equal(upCall.args.some((a) => a.endsWith('docker-compose.prod.yml')), true);
     assert.ok(upCall.env.INTERNAL_SERVICE_TOKEN.length >= 64);
     assert.ok(upCall.env.OMEGA_JWT_SECRET.length >= 64);
+    assert.equal(upCall.env.OMEGA_HOST_WORKER_URL, 'http://host.docker.internal:12345');
+    assert.equal(upCall.env.OMEGA_HOST_INTERNAL_SERVICE_TOKEN, 'relay-key-in-memory');
 
     const stopRes = await orchestrator.shutdownStack();
     assert.equal(stopRes.stopped, true);
-    const downCall = dockerCalls.find((c) => c.args.includes('down'));
+    const downCall = dockerCalls.find((c) => c.args.includes('stop'));
     assert.ok(downCall);
     assert.equal(downCall.args.includes('-v'), false);
     assert.equal(downCall.args.includes('--volumes'), false);
@@ -263,6 +350,7 @@ test('DockerOrchestrator falla rápido con logs si un servicio entra en bucle re
 
   try {
     const orchestrator = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,
@@ -293,10 +381,14 @@ test('DockerOrchestrator falla rápido con logs si un servicio entra en bucle re
       },
     });
 
+    const commands = [];
+    const runner = orchestrator.runCommandFn;
+    orchestrator.runCommandFn = (...args) => { commands.push(args[0]); return runner(...args); };
     const res = await orchestrator.start();
     assert.equal(res.ok, false);
-    assert.equal(res.errorCode, 'SERVICE_UNHEALTHY');
+    assert.equal(res.errorCode, 'DATABASE_AUTH_FAILED');
     assert.match(orchestrator.getState().detail, /password authentication failed/i);
+    assert.ok(commands.every(args => !args.includes('down') && !args.includes('-v') && !args.includes('rm')));
   } finally {
     fs.rmSync(composeDir, { recursive: true, force: true });
     fs.rmSync(userDataDir, { recursive: true, force: true });
@@ -313,9 +405,11 @@ test('DockerOrchestrator reutiliza servicios cuando coincide la versión y recon
 
     // Caso 1: misma versión 1.4.0 con backend ya UP -> sigue adelante sin reconstruir
     const sameVer = new DockerOrchestrator({
+      preflightFn: existingEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       appVersion: '1.4.0',
+      checkDockerFn: async () => {},
       findComposeRootFn: () => composeDir,
       probeHttpHealthFn: async () => ({ healthy: true, statusCode: 200 }),
       runCommandFn: async (args) => {
@@ -333,6 +427,7 @@ test('DockerOrchestrator reutiliza servicios cuando coincide la versión y recon
     dockerCalls.length = 0;
     let probeCalls = 0;
     const upgraded = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       appVersion: '1.5.0',
@@ -384,6 +479,7 @@ test('DockerOrchestrator activa perfil omniroute automáticamente cuando OMNIROU
       'OMNIROUTE_BASE_URL=http://omniroute:20128/v1\nOMNIROUTE_MODEL=auto\n',
     );
     const orchestrator = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,
@@ -437,6 +533,7 @@ test('reapplyAiConfig persiste clave Groq en userData/.env y recarga backend-jav
   const dockerCalls = [];
   try {
     const orchestrator = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,
@@ -468,6 +565,7 @@ test('reapplyAiConfig soporta Ollama local sin API key y luego permite volver a 
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-ollama-ud-'));
   try {
     const orchestrator = new DockerOrchestrator({
+      preflightFn: emptyEnvironment,
       userDataDir,
       electronDir: path.join(composeDir, 'frontend', 'electron'),
       findComposeRootFn: () => composeDir,

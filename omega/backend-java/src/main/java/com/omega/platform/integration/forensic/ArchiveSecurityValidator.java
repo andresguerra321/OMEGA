@@ -11,6 +11,9 @@ import java.util.Locale;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import org.apache.commons.compress.archivers.zip.ZipFile;
+import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -62,7 +65,9 @@ public class ArchiveSecurityValidator {
         if (isZip(bytes, lowerName)) {
             validateZipStream(bytes);
         } else if (isGzip(bytes, lowerName)) {
-            validateGzipStream(bytes);
+            validateGzipStream(bytes, lowerName.endsWith(".tar.gz") || lowerName.endsWith(".tgz"));
+        } else if (lowerName.endsWith(".tar")) {
+            validateTarStream(new ByteArrayInputStream(bytes));
         }
     }
 
@@ -71,6 +76,24 @@ public class ArchiveSecurityValidator {
         long totalUncompressed = 0;
         byte[] buffer = new byte[8192];
 
+        // Central directory retains UNIX file modes, which ZipInputStream discards.
+        try (ZipFile archive = ZipFile.builder().setSeekableByteChannel(new SeekableInMemoryByteChannel(zipBytes)).get()) {
+            var entries = archive.getEntries();
+            while (entries.hasMoreElements()) {
+                var entry = entries.nextElement();
+                verifySafeEntryName(entry.getName());
+                if (entry.isUnixSymlink() || entry.getGeneralPurposeBit().usesEncryption()
+                        || (entry.getUnixMode() & 0170000) != 0 && (entry.getUnixMode() & 0170000) != 0100000
+                            && (entry.getUnixMode() & 0170000) != 0040000) {
+                    throw new UnsafeDocumentException("Archivo ZIP bloqueado: enlace o entrada especial.");
+                }
+                if (entry.getSize() > Math.max(1, entry.getCompressedSize()) * 100L) {
+                    throw new UnsafeDocumentException("Archivo ZIP bloqueado por bomba de descompresión (ratio).");
+                }
+            }
+        } catch (IOException ex) {
+            throw new InvalidDocumentException("Directorio ZIP corrupto.", ex);
+        }
         try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
@@ -85,7 +108,8 @@ public class ArchiveSecurityValidator {
                 while ((read = zis.read(buffer)) != -1) {
                     entryBytes += read;
                     totalUncompressed += read;
-                    if (entryBytes > MAX_SINGLE_UNCOMPRESSED_BYTES || totalUncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                    if (entryBytes > MAX_SINGLE_UNCOMPRESSED_BYTES || totalUncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES
+                            || totalUncompressed > Math.max(1, zipBytes.length) * 100L) {
                         throw new UnsafeDocumentException("Archivo ZIP bloqueado por sospecha de bomba de descompresión.");
                     }
                 }
@@ -97,7 +121,7 @@ public class ArchiveSecurityValidator {
         }
     }
 
-    private void validateGzipStream(byte[] gzBytes) {
+    private void validateGzipStream(byte[] gzBytes, boolean tar) {
         long totalUncompressed = 0;
         byte[] buffer = new byte[8192];
 
@@ -108,11 +132,45 @@ public class ArchiveSecurityValidator {
                 if (totalUncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES) {
                     throw new UnsafeDocumentException("Archivo GZIP/TGZ bloqueado por exceder el límite de expansión en RAM.");
                 }
+                if (totalUncompressed > Math.max(1, gzBytes.length) * 100L) {
+                    throw new UnsafeDocumentException("Archivo GZIP bloqueado por ratio de expansión.");
+                }
             }
         } catch (UnsafeDocumentException ex) {
             throw ex;
         } catch (IOException ex) {
             throw new InvalidDocumentException("Flujo GZIP corrupto o ilegible.", ex);
+        }
+        if (tar) {
+            try {
+                validateTarStream(new GZIPInputStream(new ByteArrayInputStream(gzBytes)));
+            } catch (IOException ex) {
+                throw new InvalidDocumentException("TAR/GZIP inválido.", ex);
+            }
+        }
+    }
+
+    private void validateTarStream(InputStream input) {
+        long total = 0;
+        int count = 0;
+        byte[] buffer = new byte[8192];
+        try (TarArchiveInputStream tar = new TarArchiveInputStream(input)) {
+            org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
+            while ((entry = tar.getNextEntry()) != null) {
+                verifySafeEntryName(entry.getName());
+                if (++count > MAX_ZIP_ENTRIES || !entry.isFile() && !entry.isDirectory()
+                        || entry.isSymbolicLink() || entry.isLink() || entry.isSparse()
+                        || entry.getSize() < 0 || entry.getSize() > MAX_SINGLE_UNCOMPRESSED_BYTES) {
+                    throw new UnsafeDocumentException("Archivo TAR bloqueado: enlace, entrada especial o límite excedido.");
+                }
+                int read;
+                while ((read = tar.read(buffer)) != -1) {
+                    total += read;
+                    if (total > MAX_TOTAL_UNCOMPRESSED_BYTES) throw new UnsafeDocumentException("Bomba TAR bloqueada.");
+                }
+            }
+        } catch (IOException ex) {
+            throw new InvalidDocumentException("Archivo TAR corrupto.", ex);
         }
     }
 
@@ -121,6 +179,10 @@ public class ArchiveSecurityValidator {
             throw new UnsafeDocumentException("Entrada ZIP sin nombre detectada.");
         }
         String normalizedSlashes = rawName.replace('\\', '/');
+        String[] parts = normalizedSlashes.split("/", -1);
+        if (parts.length > 16 || rawName.indexOf(0) >= 0 || java.util.Arrays.asList(parts).contains("..")) {
+            throw new UnsafeDocumentException("Zip Slip bloqueado: traversal o profundidad excesiva.");
+        }
         if (normalizedSlashes.startsWith("/") || normalizedSlashes.contains(":")) {
             throw new UnsafeDocumentException("Zip Slip bloqueado: ruta absoluta en entrada '" + rawName + "'.");
         }

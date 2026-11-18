@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.1.0
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: omega/frontend/package-lock.json
       - uses: actions/setup-python@v7.1.0
@@ -49,6 +49,11 @@ jobs:
       - name: Verify CTI and PDF Corpus SHA-256 Manifests
         working-directory: .
         run: python omega/rag_engine/corpus_integrity.py
+
+      - name: Prepare Self-contained Sensor Build Tools
+        run: |
+          python -m pip install -r ../scripts/desktop-build-requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Sensor build dependencies failed' }
 
       - name: Install Dependencies and Run Checks
         run: |
@@ -65,6 +70,7 @@ jobs:
 
       - name: Package with Conditional Authenticode or Developer ID and Notarization
         env:
+          OMEGA_INTEGRITY_SIGNING_KEY: ${{ secrets.OMEGA_INTEGRITY_SIGNING_KEY }}
           BUILD_TARGETS: ${{ matrix.targets }}
           CSC_LINK: ${{ runner.os == 'Windows' && (secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK) && (secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD) && (secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK) || runner.os == 'macOS' && secrets.APPLE_CSC_LINK && secrets.APPLE_ID && secrets.APPLE_APP_SPECIFIC_PASSWORD && secrets.APPLE_TEAM_ID && secrets.APPLE_CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && (secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD) || runner.os == 'macOS' && secrets.APPLE_CSC_KEY_PASSWORD || '' }}

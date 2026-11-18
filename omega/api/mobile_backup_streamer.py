@@ -20,7 +20,7 @@ from typing import Any, Callable, Iterator
 
 from cti_db import lookup_iocs_detailed
 from ios_backup_crypto import SUSPICIOUS_MANIFEST_SUBSTRS
-from sqlite_safety import safe_identifier
+from sqlite_safety import safe_identifier, open_readonly
 from temporal_correlator import correlate_temporal_chains
 from triage_orchestrator import _collect_tokens, run_parallel_forensic_triage
 
@@ -71,7 +71,7 @@ def snapshot_sqlite_with_wal(
     if consolidated_db.exists():
         consolidated_db.unlink()
 
-    src_conn = sqlite3.connect(str(staged_db), timeout=10.0)
+    src_conn = open_readonly(staged_db)
     dst_conn = sqlite3.connect(str(consolidated_db), timeout=10.0)
     try:
         src_conn.backup(dst_conn, pages=500)
@@ -108,7 +108,7 @@ def stream_manifest_targets(
 
     try:
         snap_db = snapshot_sqlite_with_wal(manifest_db_path, work_dir)
-        conn = sqlite3.connect(str(snap_db))
+        conn = open_readonly(snap_db)
         try:
             cur = conn.cursor()
             cur.execute(
@@ -197,7 +197,7 @@ def iter_sqlite_chunks(
 
     try:
         snap_db = snapshot_sqlite_with_wal(db_path, work_dir)
-        conn = sqlite3.connect(str(snap_db))
+        conn = open_readonly(snap_db)
         try:
             cur = conn.cursor()
             tables = [

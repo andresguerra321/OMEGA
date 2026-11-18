@@ -6,10 +6,34 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from release_integrity import generate, openssl_path
+from release_integrity import generate, openssl_path, sign_source_tree
 
 
 class ReleaseIntegrityTest(unittest.TestCase):
+    def test_source_tree_manifest_embeds_public_anchor_and_detects_corpus_tampering(self):
+        import base64
+        import json
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'api').mkdir()
+            (root / 'frontend/electron').mkdir(parents=True)
+            (root / 'corpus_mvp').mkdir()
+            (root / 'api/self_integrity.py').write_text("TRUSTED_PUBLIC_KEY = ''\n")
+            (root / 'frontend/electron/securityHardening.js').write_text("export const TRUSTED_PUBLIC_KEY = '';\n")
+            (root / 'corpus_mvp/ioc.stix2').write_bytes(b'original')
+            key = Ed25519PrivateKey.generate()
+            pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+            manifest = sign_source_tree(root, pem)
+            raw = manifest.read_bytes()
+            key.public_key().verify(base64.b64decode((root / 'integrity-manifest.sig').read_bytes()), raw)
+            public = base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
+            self.assertIn(public, (root / 'api/self_integrity.py').read_text())
+            self.assertIn(public, (root / 'frontend/electron/securityHardening.js').read_text())
+            self.assertEqual(json.loads(raw)['files']['corpus_mvp/ioc.stix2'], hashlib.sha256(b'original').hexdigest())
+            self.assertFalse(any(b'PRIVATE KEY' in item.read_bytes() for item in root.rglob('*') if item.is_file()))
+
     def test_all_installer_formats_are_hashed_but_not_unpacked_executables(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'RELEASE_SIGNING_KEY': ''}):
             root = Path(directory)

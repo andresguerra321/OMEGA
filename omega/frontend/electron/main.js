@@ -2,20 +2,41 @@ import { createRequire } from 'node:module';
 import { execFile } from 'node:child_process';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import net from 'node:net';
 import os from 'node:os';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DockerOrchestrator } from './dockerOrchestrator.js';
+import { pathToFileURL } from 'node:url';
+import { SECURE_WEB_PREFERENCES, httpsUrl, allowedNavigation, assertTrustedIpcSender, validateIpc, verifyRelease, encryptedStorage } from './securityHardening.js';
+import { connectHostSensor } from './hostSensor.js';
+import { createHostRelay } from './hostRelay.js';
+import { createDesktopSensorSetup } from './desktopSensorSetup.js';
 
 const require = createRequire(import.meta.url);
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } = require('electron');
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SQLITE_MAGIC = Buffer.from('SQLite format 3\0', 'ascii');
+let hostSensor = null;
+let hostRelay = null;
+let desktopSensorSetup = null;
+let desktopReleaseId = null;
+let integrityVerified = false;
+const approvedAdbPaths = new Set();
+const rendererLocations = [pathToFileURL(path.join(__dirname, 'splash.html')).href,
+  pathToFileURL(path.join(__dirname, '../dist/index.html')).href];
+if (!app.isPackaged && process.env.OMEGA_RENDERER_URL) rendererLocations.push(process.env.OMEGA_RENDERER_URL);
+const registerIpc = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = (channel, handler) => registerIpc(channel, (event, ...args) => {
+  assertTrustedIpcSender(event, mainWindow, rendererLocations);
+  validateIpc(channel, args);
+  return handler(event, ...args);
+});
 
 function normalizeAdbCandidate(rawPath) {
   if (!rawPath || typeof rawPath !== 'string') return null;
@@ -48,6 +69,9 @@ async function isRunnableBinary(binPath, args = ['version']) {
 }
 
 async function resolveAdbBinary(customPath = '') {
+  if (customPath && !approvedAdbPaths.has(path.resolve(customPath))) {
+    throw new Error('Selecciona el ejecutable ADB mediante el diálogo nativo antes de utilizarlo.');
+  }
   const custom = normalizeAdbCandidate(customPath);
   if (custom && (await isRunnableBinary(custom, ['version']))) {
     return custom;
@@ -196,6 +220,7 @@ ipcMain.handle('omega:adb-pick-binary', async () => {
     return { canceled: false, valid: false, error: 'El archivo seleccionado no es válido.' };
   }
   try {
+    approvedAdbPaths.add(chosen);
     const { stdout } = await execFileAsync(chosen, ['version'], { timeout: 3000 });
     return {
       canceled: false,
@@ -793,7 +818,7 @@ ipcMain.handle('omega:ios-read-backup-artifacts', async (_event, opts = {}) => {
 ipcMain.handle('omega:open-external', async (_event, targetUrl) => {
   assertDesktopExternalAccess();
   const raw = String(targetUrl || '').trim();
-  if (!raw.startsWith('https://')) {
+  if (!httpsUrl(raw)) {
     throw new Error('Solo se permiten URLs HTTPS seguras.');
   }
   await shell.openExternal(raw);
@@ -864,6 +889,7 @@ ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
   const sandboxWin = new BrowserWindow({
     show: false,
     webPreferences: {
+      ...SECURE_WEB_PREFERENCES,
       partition,
       javascript: false,
       images: false,
@@ -872,6 +898,7 @@ ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      webSecurity: true,
       autoplayPolicy: 'user-gesture-required',
     },
   });
@@ -885,6 +912,7 @@ ipcMain.handle('omega:ephemeral-link-inspect', async (_event, targetUrl) => {
   ses.setPermissionRequestHandler((_wc, _perm, callback) => callback(false));
   ses.on('will-download', (event) => event.preventDefault());
   sandboxWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  sandboxWin.webContents.on('will-navigate', (event) => event.preventDefault());
 
   ses.webRequest.onBeforeRequest((details, callback) => {
     try {
@@ -979,6 +1007,7 @@ ipcMain.handle('omega:adb-install-portable', async () => {
   assertDesktopExternalAccess();
   const existing = await resolveAdbBinary();
   if (existing) {
+    if (path.isAbsolute(existing)) approvedAdbPaths.add(path.resolve(existing));
     return { ok: true, adbPath: existing, alreadyInstalled: true };
   }
 
@@ -1036,6 +1065,7 @@ ipcMain.handle('omega:adb-install-portable', async () => {
     if (!runnable) {
       throw new Error('El binario ADB descargado no pudo ejecutarse en este equipo.');
     }
+    approvedAdbPaths.add(path.resolve(adbBin));
     return { ok: true, adbPath: adbBin, alreadyInstalled: false };
   } catch (err) {
     return {
@@ -1378,6 +1408,8 @@ function getDockerOrchestrator() {
       userDataDir: app.getPath('userData'),
       electronDir: __dirname,
       appVersion: app.getVersion(),
+      secretStorage: encryptedStorage(safeStorage),
+      runtimeEnvOverrides: hostRelay ? { ...hostRelay.environment, OMEGA_DESKTOP_RELEASE_ID: desktopReleaseId } : {},
       onStateChange: (snapshot) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('omega:backend-status-event', snapshot);
@@ -1391,12 +1423,15 @@ function getDockerOrchestrator() {
 async function loadMainRenderer(win) {
   if (!win || win.isDestroyed() || appTransitionedToMain) return;
   appTransitionedToMain = true;
-  const rendererUrl = process.env.OMEGA_RENDERER_URL;
+  const rendererUrl = !app.isPackaged && process.env.OMEGA_RENDERER_URL;
+  const backendPort = String(getDockerOrchestrator().getState().backendPort);
   if (rendererUrl) {
-    await win.loadURL(rendererUrl);
+    const location = new URL(rendererUrl);
+    location.searchParams.set('omegaBackendPort', backendPort);
+    await win.loadURL(location.href);
     return;
   }
-  await win.loadFile(path.join(__dirname, '../dist/index.html'));
+  await win.loadFile(path.join(__dirname, '../dist/index.html'), { query: { omegaBackendPort: backendPort } });
 }
 
 async function bootDockerAndOpenApp(opts = {}) {
@@ -1426,6 +1461,12 @@ async function bootDockerAndOpenApp(opts = {}) {
 }
 
 ipcMain.handle('omega:backend-status', () => getDockerOrchestrator().getState());
+
+ipcMain.handle('omega:host-prepare', async (event, payload) => {
+  if (!desktopSensorSetup) return { ready: true, managed: false };
+  try { return await desktopSensorSetup.ensure(payload.accessToken); }
+  catch (error) { return { ready: false, message: error.message }; }
+});
 
 function assertDesktopExternalAccess() {
   if (getDockerOrchestrator().getAiEngineConfig().sovereignLocal) {
@@ -1461,6 +1502,51 @@ ipcMain.handle('omega:backend-skip', async () => {
 });
 
 async function createMainWindow() {
+  const root = app.isPackaged ? path.join(process.resourcesPath, 'omega') : path.resolve(__dirname, '../..');
+  const releaseKey = app.isPackaged ? require('../package.json').omegaIntegrityPublicKey : undefined;
+  const verifyDesktop = directory => verifyRelease(directory, releaseKey);
+  try {
+    verifyDesktop(root);
+    desktopReleaseId = createHash('sha256').update(fs.readFileSync(path.join(root, 'integrity-manifest.json'))).digest('hex');
+    integrityVerified = true;
+  } catch (error) {
+    integrityVerified = false;
+    dialog.showErrorBox('ALERTA CRÍTICA: integridad comprometida', `${error.message}. El sensor privilegiado está bloqueado.`);
+    if (app.isPackaged || process.env.OMEGA_START_HOST_SENSOR === '1' || process.env.OMEGA_HOST_SOCKET) {
+      app.quit();
+      return;
+    }
+  }
+  if (app.isPackaged && process.platform === 'win32' && integrityVerified) {
+    hostRelay = await createHostRelay();
+    desktopSensorSetup = createDesktopSensorSetup({ root, run: execFileAsync, verify: verifyDesktop,
+      bind: (tenant, sensor) => hostRelay.bind(tenant, sensor),
+      authenticate: async (token) => {
+        const port = Number(getDockerOrchestrator().activeChildEnv?.JAVA_BACKEND_PORT || process.env.JAVA_BACKEND_PORT || 8080);
+        if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Puerto local de OMEGA inválido');
+        const response = await fetch(`http://127.0.0.1:${port}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000), redirect: 'error',
+        });
+        if (!response.ok) throw new Error('Inicia sesión de nuevo para preparar la protección de esta computadora.');
+        return response.json();
+      },
+    });
+  }
+  if (integrityVerified && (process.env.OMEGA_START_HOST_SENSOR === '1' || process.env.OMEGA_HOST_SOCKET)) {
+    try {
+      let userSid = process.env.OMEGA_SENSOR_USER_SID;
+      if (process.platform === 'win32' && !userSid) {
+        const { stdout } = await execFileAsync('whoami.exe', ['/user', '/fo', 'csv', '/nh'], { windowsHide: true });
+        userSid = stdout.match(/S-1-5-(?:\d+-)*\d+/)?.[0];
+      }
+      hostSensor = await connectHostSensor({ root, tenant: process.env.OMEGA_HOST_OWNER_TENANT_ID,
+        endpoint: process.env.OMEGA_HOST_SOCKET, python: process.env.OMEGA_SENSOR_PYTHON || 'python', userSid });
+    } catch (error) {
+      dialog.showErrorBox('Sensor bloqueado', error.message);
+      app.quit();
+      return;
+    }
+  }
   const appIcon = resolveAppIconPath();
   const win = new BrowserWindow({
     width: 1380,
@@ -1477,20 +1563,27 @@ async function createMainWindow() {
       height: 40,
     },
     webPreferences: {
+      ...SECURE_WEB_PREFERENCES,
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
     },
   });
 
   mainWindow = win;
   appTransitionedToMain = false;
 
+  const blockNavigation = (event, url) => {
+    if (!allowedNavigation(url, rendererLocations)) event.preventDefault();
+  };
+  win.webContents.on('will-navigate', blockNavigation);
+  win.webContents.on('will-redirect', blockNavigation);
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (getDockerOrchestrator().getAiEngineConfig().sovereignLocal) return { action: 'deny' };
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      shell.openExternal(url);
+    if (httpsUrl(url)) {
+      void shell.openExternal(httpsUrl(url)).catch(() => {});
     }
     return { action: 'deny' };
   });
@@ -1551,6 +1644,8 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', (event) => {
+  void hostRelay?.close();
+  hostSensor?.close();
   const orchestrator = dockerOrchestrator;
   if (isQuitting || !orchestrator || !orchestrator.shouldStopOnQuit()) {
     isQuitting = true;

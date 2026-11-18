@@ -6,8 +6,41 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import base64
+import json
 
 INSTALLERS = {'.exe', '.msi', '.dmg', '.appimage', '.deb'}
+
+
+def sign_source_tree(root: Path, private_key_pem: bytes):
+    """Called on the staged release, with a CI/offline Ed25519 key (never generated here)."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    import importlib.util
+    # Never execute Python from the staged tree before authenticating/signing it.
+    spec = importlib.util.spec_from_file_location('_omega_release_inventory', Path(__file__).resolve().parents[1] / 'api/self_integrity.py')
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    inventory = verifier.inventory
+    private = serialization.load_pem_private_key(private_key_pem, password=None)
+    if not isinstance(private, Ed25519PrivateKey):
+        raise ValueError('La clave de integridad debe ser Ed25519')
+    public = base64.b64encode(private.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
+    # Embed the trust anchor before hashing Python source. Never read a key supplied with a manifest.
+    import re
+    for filename in ('api/self_integrity.py', 'frontend/electron/securityHardening.js'):
+        target = root / filename
+        source = target.read_text(encoding='utf-8')
+        source, count = re.subn(r"TRUSTED_PUBLIC_KEY = '[^']*'", f"TRUSTED_PUBLIC_KEY = '{public}'", source)
+        if count != 1:
+            raise ValueError('No se encontró el ancla de confianza única')
+        target.write_text(source, encoding='utf-8', newline='\n')
+    raw = json.dumps({'version': 1, 'files': inventory(root)}, sort_keys=True, separators=(',', ':')).encode()
+    (root / 'integrity-manifest.json').write_bytes(raw)
+    (root / 'integrity-manifest.sig').write_bytes(base64.b64encode(private.sign(raw)))
+    private.public_key().verify(private.sign(raw), raw)
+    return root / 'integrity-manifest.json'
 
 
 def openssl_path():
@@ -68,8 +101,17 @@ def generate(source: Path, output: Path, recursive=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--source', type=Path, required=True)
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--source', type=Path)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--source-tree', type=Path, help='Firmar árbol preparado usando OMEGA_INTEGRITY_SIGNING_KEY en RAM')
     parser.add_argument('--recursive', action='store_true')
     arguments = parser.parse_args()
-    generate(arguments.source, arguments.output, arguments.recursive)
+    if arguments.source_tree:
+        material = os.environ.pop('OMEGA_INTEGRITY_SIGNING_KEY', '')
+        if not material:
+            parser.error('Falta OMEGA_INTEGRITY_SIGNING_KEY (PEM Ed25519)')
+        sign_source_tree(arguments.source_tree, material.replace('\\n', '\n').encode())
+    elif arguments.source and arguments.output:
+        generate(arguments.source, arguments.output, arguments.recursive)
+    else:
+        parser.error('Usa --source-tree o --source y --output')

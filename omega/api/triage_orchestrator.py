@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sqlite3
+from sqlite_safety import harden_connection
 from urllib.parse import urlparse
 
 from behavioral_forensics import run_behavioral_forensics, unpack_forensic_archives_in_ram
@@ -132,6 +133,7 @@ def _worker_a_messaging_sqlite(artifacts: list[dict]) -> dict:
             try:
                 mem_conn = sqlite3.connect(":memory:")
                 mem_conn.deserialize(raw_bytes)
+                harden_connection(mem_conn)
                 cur = mem_conn.cursor()
                 cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
                 tables = [r[0] for r in cur.fetchall()]
@@ -436,6 +438,7 @@ def _inject_decoded_kernel_telemetries(expanded_artifacts: list[dict]) -> list[d
 
 async def run_parallel_forensic_triage(artifacts: list[dict]) -> dict:
     """Capa 2 unificada: desempaqueta en RAM y ejecuta CTI, conductual, kernel/Manifest.db y YARA."""
+    # The shared unpacker validates every entry before any worker sees its content.
     expanded_artifacts = await asyncio.to_thread(unpack_forensic_archives_in_ram, artifacts)
 
     try:

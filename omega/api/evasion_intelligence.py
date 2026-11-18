@@ -82,7 +82,7 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
         self.address = address
 
     def connect(self):
-        raw = socket.create_connection((self.address, self.port), self.timeout)
+        raw = connect_pinned(self.address, self.port, self.timeout)
         try:
             self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
         except Exception:
@@ -90,7 +90,27 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
             raise
 
 
-def safe_http_get(url: str, user_agent: str, *, limit=MAX_BODY, redirects=3) -> dict:
+def connect_pinned(address, port, timeout):
+    sock = socket.socket(socket.AF_INET6 if ':' in address else socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(timeout)
+        sock.connect((address, port))
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host, address, port, timeout):
+        super().__init__(host, port, timeout=timeout)
+        self.address = address
+
+    def connect(self):
+        self.sock = connect_pinned(self.address, self.port, self.timeout)
+
+
+def safe_http_get(url: str, user_agent: str, *, limit=MAX_BODY, redirects=3, headers=None) -> dict:
     chain, deadline = [], time.monotonic() + 8
     for _ in range(redirects + 1):
         parsed = urlsplit(url)
@@ -107,20 +127,21 @@ def safe_http_get(url: str, user_agent: str, *, limit=MAX_BODY, redirects=3) -> 
         if parsed.scheme == 'https':
             connection = PinnedHTTPSConnection(host, address, port, remaining)
         else:
-            connection = http.client.HTTPConnection(address, port, timeout=remaining)
+            connection = PinnedHTTPConnection(host, address, port, remaining)
         try:
             connection.connect()
             connection.sock = _DeadlineSocket(connection.sock, deadline)
             path = quote(parsed.path or '/', safe='/:%@!$&\'()*+,;=-._~')
             if parsed.query:
                 path += '?' + quote(parsed.query, safe='=&%/:?@!$\'()*+,;~-._')
-            connection.request('GET', path, headers={'Host': host, 'User-Agent': user_agent,
+            connection.request('GET', path, headers={**(headers or {}), 'Host': host, 'User-Agent': user_agent,
                                                     'Accept': 'text/html,application/json;q=0.9,*/*;q=0.1',
                                                     'Accept-Encoding': 'identity', 'Connection': 'close'})
             response = connection.getresponse()
             chain.append({'host': host, 'status': response.status})
             location = response.getheader('Location')
             if response.status in (301, 302, 303, 307, 308) and location:
+                headers = None  # Never forward provider credentials across a redirect.
                 url = urljoin(url, location)
                 continue  # All redirect destinations are resolved, validated and pinned again.
             chunks, size = [], 0

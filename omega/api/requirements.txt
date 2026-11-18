@@ -11,3 +11,4 @@ psutil>=6.1.0
 cryptography>=44.0.0
 keyring>=25.6.0
 tldextract>=5.1.0
+pywin32>=308; sys_platform == "win32"

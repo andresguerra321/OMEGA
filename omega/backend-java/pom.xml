@@ -23,9 +23,15 @@
         <jjwt.version>0.12.6</jjwt.version>
         <pdfbox.version>3.0.3</pdfbox.version>
         <tess4j.version>5.13.0</tess4j.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.28.0</version>
+        </dependency>
         <!-- Spring Boot Core Web, Security, Validation & Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

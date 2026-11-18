@@ -44,6 +44,20 @@ def test_dns_and_omega_server_addresses_are_protected(engine, monkeypatch):
             engine.execute_containment('BLOCK_NETWORK_INDICATOR', {'indicator': value}, owner='tenant')
 
 
+def test_container_rejects_quarantine_and_rollback_before_touching_the_vault(tmp_path, monkeypatch):
+    monkeypatch.setattr(containment, 'host_scope', lambda: 'container')
+    monkeypatch.setenv('OMEGA_CONTAINMENT_ENABLED', 'true')
+    service = containment.ContainmentEngine(tmp_path / 'vault',
+        key_provider=lambda _: pytest.fail('Container must not access quarantine keys'))
+    monkeypatch.setattr(service, '_prepare_root', lambda: pytest.fail('Container must not create a vault'))
+    monkeypatch.setattr(service, '_read_record', lambda *args: pytest.fail('Container must not read recovery journals'))
+    with pytest.raises(ValueError, match='sensor nativo'):
+        service.execute_containment('QUARANTINE_PERSISTENCE_ITEM', {}, owner='tenant')
+    with pytest.raises(ValueError, match='equipo nativo'):
+        service.rollback_containment(str(uuid.uuid4()), owner='tenant')
+    assert not service.root.exists()
+
+
 @pytest.mark.parametrize('name', ['System', 'csrss.exe', 'lsass.exe', 'wininit.exe', 'svchost.exe', 'launchd', 'WindowServer', 'kernel_task', 'systemd', 'init', 'sshd'])
 def test_critical_process_is_never_suspended(engine, monkeypatch, name):
     class Process:
@@ -314,7 +328,7 @@ def test_redirect_to_private_host_is_revalidated_before_second_connection(monkey
         def request(self, *a, **kw): pass
         def getresponse(self): return SimpleNamespace(status=302, getheader=lambda _: 'http://127.0.0.1/admin')
         def close(self): pass
-    monkeypatch.setattr(evasion.http.client, 'HTTPConnection', Connection)
+    monkeypatch.setattr(evasion, 'PinnedHTTPConnection', Connection)
     with pytest.raises(ValueError, match='privados'):
         evasion.safe_http_get('http://example.com', 'fixture')
     assert len(calls) == 1

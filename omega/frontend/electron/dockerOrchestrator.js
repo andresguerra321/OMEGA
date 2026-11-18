@@ -4,11 +4,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { inspectDesktopEnvironment } from './dockerPreflight.js';
 
 const execFileAsync = promisify(execFile);
 
 export const BACKEND_SERVICES = ['postgres', 'forensic-worker', 'backend-java'];
 const DEFAULT_SECRETS_FILENAME = 'omega-desktop-secrets.json';
+const runtimeSecrets = new Map();
 const DEFAULT_RUNTIME_STATE_FILENAME = 'omega-desktop-state.json';
 const HEALTHCHECK_POLL_MS = 1000;
 const STARTUP_TIMEOUT_MS = 180_000;
@@ -82,10 +84,51 @@ function readDotEnvFile(envPath) {
   }
 }
 
-export function readDotEnv(composeRoot, userDataDir = null) {
+const sensitiveEnvKey = (key) => /(?:API_KEY|TOKEN|SECRET|PASSWORD)$/.test(key);
+
+function readProtectedEnv(userDataDir, storage) {
+  const file = path.join(userDataDir, 'omega-protected-env.json');
+  return fs.existsSync(file) ? JSON.parse(storage.decrypt(JSON.parse(fs.readFileSync(file, 'utf8')).ciphertext)) : {};
+}
+
+function writeProtectedEnv(userDataDir, storage, values) {
+  fs.mkdirSync(userDataDir, { recursive: true });
+  atomicPrivateWrite(path.join(userDataDir, 'omega-protected-env.json'), JSON.stringify({ version: 1,
+    ciphertext: storage.encrypt(JSON.stringify(values)) }));
+}
+
+function atomicPrivateWrite(file, content) {
+  const temporary = `${file}.${crypto.randomBytes(8).toString('hex')}.tmp`;
+  try {
+    fs.writeFileSync(temporary, content, { mode: 0o600, flag: 'wx' });
+    fs.renameSync(temporary, file);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
+}
+
+export function readDotEnv(composeRoot, userDataDir = null, storage = null) {
   const baseEnv = composeRoot ? readDotEnvFile(path.join(composeRoot, '.env')) : {};
   const userEnv = userDataDir ? readDotEnvFile(path.join(userDataDir, '.env')) : {};
-  return { ...baseEnv, ...userEnv };
+  const merged = { ...baseEnv, ...userEnv };
+  if (!storage || !userDataDir) return merged;
+  const protectedValues = readProtectedEnv(userDataDir, storage);
+  const removals = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (!sensitiveEnvKey(key)) continue;
+    if (key !== 'INTERNAL_SERVICE_TOKEN') protectedValues[key] = value;
+    removals[key] = null;
+  }
+  delete protectedValues.INTERNAL_SERVICE_TOKEN;
+  if (Object.keys(removals).length) {
+    writeProtectedEnv(userDataDir, storage, protectedValues);
+    for (const directory of [composeRoot, userDataDir].filter(Boolean)) {
+      const file = path.join(directory, '.env');
+      if (fs.existsSync(file) && !writeDotEnvUpdates(file, removals)) throw new Error('No se pudieron retirar credenciales heredadas de .env');
+    }
+  }
+  delete merged.INTERNAL_SERVICE_TOKEN;
+  return { ...merged, ...protectedValues };
 }
 
 export function resolveComposeEnvFilePath(composeRoot, userDataDir = null) {
@@ -182,63 +225,45 @@ export function findComposeRoot(electronDir, processEnv = process.env, resources
   return null;
 }
 
-export function loadOrCreateDesktopSecrets(userDataDir, dotEnv = {}, processEnv = process.env) {
-  const secretKeys = [
-    'INTERNAL_SERVICE_TOKEN',
-    'OMEGA_JWT_SECRET',
-    'POSTGRES_PASSWORD',
-  ];
-
+export function loadOrCreateDesktopSecrets(userDataDir, dotEnv = {}, processEnv = process.env, storage = null, { persist = true } = {}) {
   const secretsPath = userDataDir ? path.join(userDataDir, DEFAULT_SECRETS_FILENAME) : null;
-  let stored = {};
-  let updated = false;
-  if (secretsPath && fs.existsSync(secretsPath)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
-      if (parsed && typeof parsed === 'object') {
-        stored = parsed;
+  const cacheKey = userDataDir || '<volatile>';
+  let stored = runtimeSecrets.get(cacheKey);
+  if (!stored) {
+    stored = {};
+    if (secretsPath && fs.existsSync(secretsPath)) {
+      const raw = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+      if (raw.version === 2) {
+        if (!storage) throw new Error('Se requiere el almac?n seguro del sistema');
+        stored = JSON.parse(storage.decrypt(raw.ciphertext));
+      } else {
+        if (!storage) throw new Error('Migra los secretos existentes con safeStorage');
+        // Migrate only durable database/JWT keys; discard the legacy IPC credential.
+        for (const key of ['POSTGRES_PASSWORD', 'OMEGA_JWT_SECRET']) {
+          if (typeof raw[key] === 'string') stored[key] = raw[key];
+        }
       }
-    } catch {
-      stored = {};
     }
+    stored.INTERNAL_SERVICE_TOKEN = crypto.randomBytes(32).toString('hex');
+    runtimeSecrets.set(cacheKey, stored);
   }
-
-  // OMEGA_BOOTSTRAP_SECRET no debe autogenerarse en Desktop: bloquearía Crear cuenta con una clave desconocida
-  if (Object.prototype.hasOwnProperty.call(stored, 'OMEGA_BOOTSTRAP_SECRET')) {
-    delete stored.OMEGA_BOOTSTRAP_SECRET;
-    updated = true;
-  }
-
-  const generatedEnv = {};
-  for (const key of secretKeys) {
-    const fromEnv = processEnv?.[key] || dotEnv?.[key];
-    if (fromEnv && String(fromEnv).trim()) {
-      continue;
-    }
-    if (!stored[key] || typeof stored[key] !== 'string' || stored[key].length < 32) {
+  const generatedEnv = { INTERNAL_SERVICE_TOKEN: stored.INTERNAL_SERVICE_TOKEN };
+  const databasePasswordKnown = Boolean(processEnv.POSTGRES_PASSWORD || dotEnv.POSTGRES_PASSWORD ||
+    (stored.POSTGRES_PASSWORD && !stored.databasePasswordGenerated));
+  for (const key of ['OMEGA_JWT_SECRET', 'POSTGRES_PASSWORD']) {
+    if (processEnv?.[key] || dotEnv?.[key]) continue;
+    if (!stored[key]) {
       stored[key] = crypto.randomBytes(32).toString('hex');
-      updated = true;
+      if (key === 'POSTGRES_PASSWORD') stored.databasePasswordGenerated = true;
     }
     generatedEnv[key] = stored[key];
   }
-
-  if (updated && secretsPath) {
-    try {
-      fs.mkdirSync(path.dirname(secretsPath), { recursive: true });
-      fs.writeFileSync(secretsPath, `${JSON.stringify(stored, null, 2)}\n`, {
-        encoding: 'utf8',
-        mode: 0o600,
-      });
-    } catch {
-      // No bloquear arranque si userData es de solo lectura; el secreto sigue vivo en memoria
-    }
+  if (persist && storage && secretsPath) {
+    const { INTERNAL_SERVICE_TOKEN: _ephemeral, ...durable } = stored;
+    fs.mkdirSync(path.dirname(secretsPath), { recursive: true });
+    atomicPrivateWrite(secretsPath, JSON.stringify({ version: 2, ciphertext: storage.encrypt(JSON.stringify(durable)) }));
   }
-
-  return {
-    envOverrides: generatedEnv,
-    secretsPath,
-    generatedKeys: Object.keys(generatedEnv),
-  };
+  return { envOverrides: generatedEnv, secretsPath, generatedKeys: Object.keys(generatedEnv), databasePasswordKnown };
 }
 
 export function parseComposePsOutput(stdout) {
@@ -352,9 +377,9 @@ export function probeBackendHttpHealth(port = 8080, timeoutMs = 2000) {
   });
 }
 
-async function defaultCheckDocker() {
+export async function checkDockerAvailability(run = execFileAsync) {
   try {
-    await execFileAsync('docker', ['--version'], { timeout: 4000, windowsHide: true });
+    await run('docker', ['--version'], { timeout: 4000, windowsHide: true });
   } catch (err) {
     if (err?.code === 'ENOENT') {
       const error = new Error('Docker CLI no está instalado en este equipo.');
@@ -367,11 +392,15 @@ async function defaultCheckDocker() {
   }
 
   try {
-    await execFileAsync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+    const result = await run('docker', ['info', '--format', '{{.OSType}}'], {
       timeout: 15000,
       windowsHide: true,
     });
+    if (result.stdout.trim() !== 'linux') {
+      throw Object.assign(new Error('OMEGA necesita el modo Linux containers de Docker Desktop. Cambia ese modo y pulsa Reintentar.'), { code: 'DOCKER_WRONG_ENGINE' });
+    }
   } catch (err) {
+    if (err.code === 'DOCKER_WRONG_ENGINE') throw err;
     const error = new Error(
       'Docker Desktop o el daemon de Docker no está ejecutándose. Ábrelo y vuelve a intentarlo.',
     );
@@ -379,16 +408,19 @@ async function defaultCheckDocker() {
     error.detail = err?.stderr ? String(err.stderr).trim() : err?.message;
     throw error;
   }
+  try { await run('docker', ['compose', 'version', '--short'], { timeout: 5000, windowsHide: true }); }
+  catch { throw Object.assign(new Error('Docker Compose no está disponible. Actualiza Docker Desktop y pulsa Reintentar.'), { code: 'DOCKER_COMPOSE_MISSING' }); }
 }
 
-function defaultRunCommand(args, { cwd, env, timeoutMs = 120_000, onLine } = {}) {
+function defaultRunCommand(args, { cwd, env, timeoutMs = 120_000, onLine, inputText } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', args, {
       cwd,
       env,
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [inputText === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     });
+    if (inputText !== undefined) { child.stdin.on('error', () => {}); child.stdin.end(inputText); }
 
     let stdout = '';
     let stderr = '';
@@ -459,15 +491,22 @@ export class DockerOrchestrator {
     electronDir,
     onStateChange,
     probeHttpHealthFn = probeBackendHttpHealth,
-    checkDockerFn = defaultCheckDocker,
+    checkDockerFn = checkDockerAvailability,
     runCommandFn = defaultRunCommand,
     sleepFn = defaultSleep,
     findComposeRootFn = findComposeRoot,
     appVersion = null,
+    secretStorage = null,
+    runtimeEnvOverrides = {},
+    preflightFn = inspectDesktopEnvironment,
     startupTimeoutMs = STARTUP_TIMEOUT_MS,
     pollIntervalMs = HEALTHCHECK_POLL_MS,
   }) {
     this.userDataDir = userDataDir;
+    this.secretStorage = secretStorage;
+    this.runtimeEnvOverrides = runtimeEnvOverrides;
+    this.preflightFn = preflightFn;
+    this.servicesStarted = [];
     this.electronDir = electronDir;
     this.appVersion = appVersion ? String(appVersion).trim() : null;
     this.onStateChange = typeof onStateChange === 'function' ? onStateChange : () => {};
@@ -506,6 +545,7 @@ export class DockerOrchestrator {
 
   getState() {
     return {
+      backendPort: Number(this.activeChildEnv?.JAVA_BACKEND_PORT || 8080),
       ...this.state,
       services: { ...this.state.services },
       logLines: [...this.state.logLines],
@@ -542,7 +582,7 @@ export class DockerOrchestrator {
       const args = buildComposeArgs(composeRoot, {
         prodMode,
         envFilePath: this.activeEnvFilePath,
-        subArgs: ['ps', '--format', 'json', ...BACKEND_SERVICES],
+        subArgs: ['ps', '--all', '--format', 'json', ...BACKEND_SERVICES],
       });
       const res = await this.runCommandFn(args, {
         cwd: composeRoot,
@@ -593,12 +633,12 @@ export class DockerOrchestrator {
 
   async #executeStart() {
     const composeRoot = this.findComposeRootFn(this.electronDir);
-    const dotEnv = readDotEnv(composeRoot, this.userDataDir);
+    const dotEnv = readDotEnv(composeRoot, this.userDataDir, this.secretStorage);
     const envFilePath = resolveComposeEnvFilePath(composeRoot, this.userDataDir);
-    const javaPort = Number(process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080);
+    let javaPort = Number(process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080);
     const runtimeState = readRuntimeState(this.userDataDir);
     const previousVersion = runtimeState?.lastVersion ? String(runtimeState.lastVersion).trim() : null;
-    const isAppUpgrade = Boolean(this.appVersion && previousVersion && previousVersion !== this.appVersion);
+    let isAppUpgrade = Boolean(this.appVersion && previousVersion && previousVersion !== this.appVersion);
 
     this.#updateState({
       phase: 'checking_existing',
@@ -612,36 +652,6 @@ export class DockerOrchestrator {
       services: createInitialServicesMap(false),
       logLines: [],
     });
-
-    // 1. Si backend-java ya responde /actuator/health UP y no hubo cambio de versión,
-    // seguimos adelante sin reiniciar ni asumir ownership de los contenedores.
-    const preHealth = await this.probeHttpHealthFn(javaPort, 2000);
-    if (preHealth.healthy && !isAppUpgrade) {
-      this.startedByElectron = false;
-      this.activeComposeRoot = composeRoot;
-      const psSnapshot = composeRoot
-        ? await this.#inspectComposePs(composeRoot, this.prodMode, process.env)
-        : null;
-      const readyServices = psSnapshot || createInitialServicesMap(true);
-      readyServices['backend-java'] = {
-        ...readyServices['backend-java'],
-        state: 'running',
-        health: 'healthy',
-        running: true,
-        healthy: true,
-      };
-      if (this.appVersion) {
-        writeRuntimeState(this.userDataDir, { lastVersion: this.appVersion });
-      }
-      this.#updateState({
-        phase: 'ready',
-        message: 'Servicios de OMEGA activos.',
-        detail: 'Se reutilizó la sesión de contenedores ya iniciada.',
-        alreadyRunning: true,
-        services: readyServices,
-      });
-      return { ok: true, alreadyRunning: true, startedByElectron: false, upgraded: false };
-    }
 
     if (!composeRoot) {
       this.#updateState({
@@ -666,10 +676,7 @@ export class DockerOrchestrator {
       this.#updateState({
         phase: 'error',
         message: err?.message || 'Docker no está disponible.',
-        detail:
-          err?.code === 'DOCKER_CLI_MISSING'
-            ? 'Instala Docker Desktop y reinicia el asistente o ejecuta el modo local sin contenedores.'
-            : 'Inicia Docker Desktop y espera unos segundos antes de pulsar Reintentar.',
+        detail: err?.message || 'Inicia Docker Desktop y espera unos segundos antes de pulsar Reintentar.',
         errorCode: err?.code || 'DOCKER_DAEMON_DOWN',
         canRetry: true,
       });
@@ -681,8 +688,9 @@ export class DockerOrchestrator {
     }
 
     // 3. Preparar secretos criptográficos en userData (sin alterar .env existente)
-    const secretsResult = loadOrCreateDesktopSecrets(this.userDataDir, dotEnv, process.env);
+    const secretsResult = loadOrCreateDesktopSecrets(this.userDataDir, dotEnv, process.env, this.secretStorage, { persist: false });
     this.secretValues = [
+      ...Object.values(this.runtimeEnvOverrides),
       ...Object.values(secretsResult.envOverrides),
       dotEnv.POSTGRES_PASSWORD,
       dotEnv.INTERNAL_SERVICE_TOKEN,
@@ -694,11 +702,59 @@ export class DockerOrchestrator {
       dotEnv.CUSTOM_LLM_API_KEY,
     ].filter(Boolean);
 
-    const childEnv = {
+    let childEnv = {
       ...dotEnv,
       ...process.env,
       ...secretsResult.envOverrides,
+      ...this.runtimeEnvOverrides,
     };
+
+    let inspected;
+    try {
+      inspected = await this.preflightFn({ env: { ...childEnv,
+        OMEGA_DESKTOP_VERSION: this.appVersion || '', OMEGA_DATABASE_PASSWORD_KNOWN: secretsResult.databasePasswordKnown },
+        run: this.runCommandFn, runtimeState });
+    } catch (error) {
+      this.#updateState({ phase: 'error', message: error.message, detail: error.message,
+        errorCode: error.code || 'DOCKER_INSPECTION_FAILED', canRetry: true });
+      return { ok: false, errorCode: error.code || 'DOCKER_INSPECTION_FAILED' };
+    }
+    childEnv = inspected.env;
+    javaPort = inspected.backendPort;
+    isAppUpgrade ||= inspected.versionMismatch;
+    this.secretValues.push(childEnv.POSTGRES_PASSWORD, childEnv.OMEGA_JWT_SECRET);
+    this.activeComposeRoot = composeRoot;
+    this.activeEnvFilePath = envFilePath;
+    this.activeChildEnv = childEnv;
+    const cached = runtimeSecrets.get(this.userDataDir || '<volatile>');
+    cached.POSTGRES_PASSWORD = childEnv.POSTGRES_PASSWORD;
+    cached.OMEGA_JWT_SECRET = childEnv.OMEGA_JWT_SECRET;
+    cached.databasePasswordGenerated = false;
+    if (this.secretStorage && (inspected.recoveredDatabase || inspected.recoveredGateway)) {
+      writeProtectedEnv(this.userDataDir, this.secretStorage, {
+        ...readProtectedEnv(this.userDataDir, this.secretStorage), ...inspected.recoveredDatabase, ...inspected.recoveredGateway,
+      });
+    }
+    loadOrCreateDesktopSecrets(this.userDataDir, childEnv, {}, this.secretStorage);
+    writeRuntimeState(this.userDataDir, { composeProject: inspected.project,
+      databaseVolume: inspected.volumeName, backendPort: javaPort });
+    const preHealth = await this.probeHttpHealthFn(javaPort, 2000);
+    if (inspected.canReuse && preHealth.healthy && !isAppUpgrade && Object.keys(this.runtimeEnvOverrides).length === 0) {
+      this.startedByElectron = this.servicesStarted.length > 0;
+      if (this.appVersion) writeRuntimeState(this.userDataDir, { lastVersion: this.appVersion });
+      this.#updateState({ phase: 'ready', message: 'Servicios de OMEGA activos.',
+        detail: 'Se comprobó y reutilizó tu instalación existente.', alreadyRunning: true,
+        services: createInitialServicesMap(true) });
+      return { ok: true, alreadyRunning: true, startedByElectron: this.startedByElectron, upgraded: false };
+    }
+    if (this.aborted) return { ok: false, aborted: true };
+    for (const container of inspected.containers.filter(item => item.state === 'paused')) {
+      const resumed = await this.runCommandFn(['unpause', container.id], { env: childEnv, timeoutMs: 15000 });
+      if (resumed.code !== 0) {
+        this.#updateState({ phase: 'error', message: 'No se pudo reanudar un servicio de OMEGA.', errorCode: 'CONTAINER_PAUSED', canRetry: true });
+        return { ok: false, errorCode: 'CONTAINER_PAUSED' };
+      }
+    }
 
     const wantsOmniRoute =
       String(childEnv.OMNIROUTE_ENABLED || '').toLowerCase() === 'true' ||
@@ -718,9 +774,10 @@ export class DockerOrchestrator {
 
     // Determinar si alguno de los servicios backend ya estaba corriendo antes de invocar up -d
     const prePs = await this.#inspectComposePs(composeRoot, this.prodMode, childEnv);
-    const allAlreadyRunning =
-      prePs != null && BACKEND_SERVICES.every((svc) => prePs[svc]?.running);
-    this.startedByElectron = !allAlreadyRunning;
+    const requestedServices = wantsOmniRoute ? [...BACKEND_SERVICES, 'omniroute'] : BACKEND_SERVICES;
+    const alreadyRunning = new Set(inspected.containers.filter(item => item.state === 'running').map(item => item.service));
+    this.servicesStarted = [...new Set([...this.servicesStarted, ...requestedServices.filter(service => !alreadyRunning.has(service))])];
+    this.startedByElectron = this.servicesStarted.length > 0;
 
     this.#updateState({
       phase: 'starting_containers',
@@ -737,8 +794,8 @@ export class DockerOrchestrator {
     });
 
     const upSubArgs = isAppUpgrade
-      ? ['up', '-d', '--remove-orphans', '--build', ...BACKEND_SERVICES]
-      : ['up', '-d', '--remove-orphans', ...BACKEND_SERVICES];
+      ? ['up', '-d', '--build', ...requestedServices]
+      : ['up', '-d', ...requestedServices];
 
     const upArgs = buildComposeArgs(composeRoot, {
       prodMode: this.prodMode,
@@ -746,7 +803,7 @@ export class DockerOrchestrator {
       subArgs: upSubArgs,
     });
 
-    let upResult = await this.runCommandFn(upArgs, {
+    const upResult = await this.runCommandFn(upArgs, {
       cwd: composeRoot,
       env: childEnv,
       timeoutMs: isAppUpgrade ? 600_000 : 180_000,
@@ -756,28 +813,6 @@ export class DockerOrchestrator {
       stderr: err?.message || String(err),
       stdout: '',
     }));
-
-    if (upResult.code !== 0 && !this.aborted) {
-      const errText = `${upResult.stderr || ''} ${upResult.stdout || ''}`;
-      if (/already in use|conflict/i.test(errText)) {
-        this.#pushLog('Detectado conflicto con contenedores previos de OMEGA; limpiando y reintentando…');
-        await execFileAsync(
-          'docker',
-          ['rm', '-f', 'omega_postgres', 'omega_forensic_worker', 'omega_backend_java', 'omega_frontend', 'omega_omniroute'],
-          { timeout: 15_000 },
-        ).catch(() => {});
-        upResult = await this.runCommandFn(upArgs, {
-          cwd: composeRoot,
-          env: childEnv,
-          timeoutMs: isAppUpgrade ? 600_000 : 180_000,
-          onLine: (line) => this.#pushLog(line),
-        }).catch((err) => ({
-          code: 1,
-          stderr: err?.message || String(err),
-          stdout: '',
-        }));
-      }
-    }
 
     if (this.aborted) {
       return { ok: false, aborted: true };
@@ -799,7 +834,7 @@ export class DockerOrchestrator {
     return this.#waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded: isAppUpgrade });
   }
 
-  async #waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded = false, passwordResetAttempted = false } = {}) {
+  async #waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded = false } = {}) {
     const deadline = Date.now() + this.startupTimeoutMs;
 
     while (!this.aborted && Date.now() < deadline) {
@@ -816,41 +851,21 @@ export class DockerOrchestrator {
         );
         if (failedSvc) {
           const tail = await this.#collectFailureTail(composeRoot, this.prodMode, childEnv, failedSvc);
-          if (
-            !passwordResetAttempted &&
-            failedSvc === 'backend-java' &&
-            /password authentication failed for user/i.test(tail || '')
-          ) {
-            this.#pushLog('Credenciales de volumen PostgreSQL desactualizadas; reinicializando volumen limpio…');
-            const downArgs = buildComposeArgs(composeRoot, {
-              prodMode: this.prodMode,
-              envFilePath: this.activeEnvFilePath,
-              subArgs: ['down', '-v', '--remove-orphans'],
-            });
-            await this.runCommandFn(downArgs, { cwd: composeRoot, env: childEnv, timeoutMs: 30_000 }).catch(() => {});
-            const retryUpArgs = buildComposeArgs(composeRoot, {
-              prodMode: this.prodMode,
-              envFilePath: this.activeEnvFilePath,
-              subArgs: ['up', '-d', '--remove-orphans', ...BACKEND_SERVICES],
-            });
-            const retryUp = await this.runCommandFn(retryUpArgs, { cwd: composeRoot, env: childEnv, timeoutMs: 180_000 }).catch(() => ({ code: 1 }));
-            if (retryUp.code === 0) {
-              return this.#waitForHealthchecks(composeRoot, childEnv, javaPort, { upgraded, passwordResetAttempted: true });
-            }
-          }
+          const credentialFailure = /password authentication failed for user/i.test(tail);
+          const errorCode = credentialFailure ? 'DATABASE_AUTH_FAILED' : 'SERVICE_UNHEALTHY';
           this.#updateState({
             phase: 'error',
-            message: `El servicio "${failedSvc}" falló durante el arranque.`,
+            message: credentialFailure ? 'No se pudo autenticar la base existente. Tus datos están intactos.' : `El servicio "${failedSvc}" falló durante el arranque.`,
             detail: tail || `Estado reportado: ${psMap[failedSvc].state} (${psMap[failedSvc].health}).`,
-            errorCode: 'SERVICE_UNHEALTHY',
+            errorCode,
             canRetry: true,
             services: psMap,
           });
-          return { ok: false, errorCode: 'SERVICE_UNHEALTHY' };
+          return { ok: false, errorCode };
         }
       }
 
-      if (httpProbe.healthy) {
+      if (httpProbe.healthy && psMap && BACKEND_SERVICES.every(service => psMap[service]?.healthy)) {
         const finalServices = psMap || createInitialServicesMap(true);
         finalServices['backend-java'] = {
           ...finalServices['backend-java'],
@@ -907,7 +922,7 @@ export class DockerOrchestrator {
 
   getAiEngineConfig() {
     const composeRoot = this.findComposeRootFn(this.electronDir);
-    const dotEnv = readDotEnv(composeRoot, this.userDataDir);
+    const dotEnv = readDotEnv(composeRoot, this.userDataDir, this.secretStorage);
     const groqKey = String(dotEnv.GROQ_API_KEY || '').trim();
     const openAiKey = String(dotEnv.OPENAI_API_KEY || '').trim();
     const omniBase = String(dotEnv.OMNIROUTE_BASE_URL || '').trim();
@@ -970,7 +985,7 @@ export class DockerOrchestrator {
       return { ok: false, error: 'No se encontró la carpeta de Docker Compose de OMEGA.' };
     }
 
-    const existing = readDotEnv(composeRoot, this.userDataDir);
+    const existing = readDotEnv(composeRoot, this.userDataDir, this.secretStorage);
     const updates = {};
     if (payload.customProvider === 'ollama') {
       const localUrl = new URL(String(payload.customBaseUrl || 'http://host.docker.internal:11434').replace(/\/v1\/?$/, ''));
@@ -1056,10 +1071,21 @@ export class DockerOrchestrator {
     }
 
     const userEnvPath = this.userDataDir ? path.join(this.userDataDir, '.env') : null;
-    const wroteUserEnv = userEnvPath ? writeDotEnvUpdates(userEnvPath, updates) : false;
+    const diskUpdates = { ...updates };
+    if (this.secretStorage && this.userDataDir) {
+      const protectedValues = readProtectedEnv(this.userDataDir, this.secretStorage);
+      for (const [key, value] of Object.entries(updates)) {
+        if (!sensitiveEnvKey(key)) continue;
+        if (value === null) delete protectedValues[key];
+        else protectedValues[key] = value;
+        diskUpdates[key] = null;
+      }
+      writeProtectedEnv(this.userDataDir, this.secretStorage, protectedValues);
+    }
+    const wroteUserEnv = userEnvPath ? writeDotEnvUpdates(userEnvPath, diskUpdates) : false;
     const repoEnvPath = path.join(composeRoot, '.env');
     if (fs.existsSync(repoEnvPath)) {
-      writeDotEnvUpdates(repoEnvPath, updates);
+      writeDotEnvUpdates(repoEnvPath, diskUpdates);
     }
 
     if (!wroteUserEnv && !fs.existsSync(repoEnvPath)) {
@@ -1077,17 +1103,25 @@ export class DockerOrchestrator {
       };
     }
 
-    const dotEnv = readDotEnv(composeRoot, this.userDataDir);
+    const dotEnv = readDotEnv(composeRoot, this.userDataDir, this.secretStorage);
     const envFilePath = resolveComposeEnvFilePath(composeRoot, this.userDataDir);
-    const secretsResult = loadOrCreateDesktopSecrets(this.userDataDir, dotEnv, process.env);
+    const secretsResult = loadOrCreateDesktopSecrets(this.userDataDir, dotEnv, process.env, this.secretStorage);
+    const selected = readRuntimeState(this.userDataDir);
+    const project = this.activeChildEnv?.COMPOSE_PROJECT_NAME || selected.composeProject || process.env.COMPOSE_PROJECT_NAME || dotEnv.COMPOSE_PROJECT_NAME || 'omega';
     const childEnv = {
       ...dotEnv,
       ...process.env,
       ...secretsResult.envOverrides,
+      COMPOSE_PROJECT_NAME: project,
+      OMEGA_PG_VOLUME_NAME: this.activeChildEnv?.OMEGA_PG_VOLUME_NAME || selected.databaseVolume || `${project}_omega_pgdata`,
+      JAVA_BACKEND_PORT: String(this.activeChildEnv?.JAVA_BACKEND_PORT || selected.backendPort || process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080),
+      OMEGA_DESKTOP_VERSION: this.appVersion || '',
+      ...this.runtimeEnvOverrides,
     };
     const wantsOmni =
       Boolean(dotEnv.OMNIROUTE_BASE_URL && String(dotEnv.OMNIROUTE_BASE_URL).includes('omniroute:20128'));
-    const servicesToApply = wantsOmni ? ['backend-java', 'omniroute'] : ['backend-java'];
+    // Rotate both HMAC peers together when adopting an already-running stack.
+    const servicesToApply = wantsOmni ? ['forensic-worker', 'backend-java', 'omniroute'] : ['forensic-worker', 'backend-java'];
     if (wantsOmni) {
       const profiles = String(childEnv.COMPOSE_PROFILES || '')
         .split(',')
@@ -1117,7 +1151,8 @@ export class DockerOrchestrator {
       };
     }
 
-    const javaPort = Number(process.env.JAVA_BACKEND_PORT || dotEnv.JAVA_BACKEND_PORT || 8080);
+    this.activeChildEnv = childEnv;
+    const javaPort = Number(childEnv.JAVA_BACKEND_PORT);
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {
       const probe = await this.probeHttpHealthFn(javaPort, 2000);
@@ -1152,7 +1187,7 @@ export class DockerOrchestrator {
       const args = buildComposeArgs(composeRoot, {
         prodMode,
         envFilePath,
-        subArgs: ['down'],
+        subArgs: ['stop', ...this.servicesStarted],
       });
       try {
         const res = await this.runCommandFn(args, {

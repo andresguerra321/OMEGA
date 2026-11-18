@@ -1,6 +1,12 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import DOMPurify from 'dompurify';
+
+function safeHttps(value) {
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; }
+  catch { return ''; }
+}
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -84,7 +90,7 @@ function formatTextWithTechAndCitations(text, citationMap, onSelectCitation) {
       return (
         <a
           key={`a-${sIdx}`}
-          href={linkMatch[2]}
+          href={safeHttps(linkMatch[2]) || undefined}
           target="_blank"
           rel="noreferrer"
           className="text-[#F2F2F4] underline decoration-[#2F6FED] underline-offset-2 hover:text-white"
@@ -148,6 +154,10 @@ export function MarkdownMessage({
     const enhance = (children) =>
       processChildren(children, citationMap, (target) => selectCitationRef.current?.(target));
     return {
+      a: ({ href, children }) => safeHttps(href)
+        ? <a href={safeHttps(href)} target="_blank" rel="noopener noreferrer">{children}</a>
+        : <span>{children}</span>,
+      img: ({ alt }) => <span>{alt || ''}</span>,
       h1: ({ children }) => (
         <h1 className="border-b border-white/[0.08] pb-2 text-[20px] font-semibold leading-[1.3] tracking-[-0.02em] text-[#F2F2F4]">
           {enhance(children)}
@@ -220,7 +230,9 @@ export function MarkdownMessage({
     };
   }, [citationMap]);
 
-  const sanitized = (content || '').replace(/<br\s*\/?>/gi, '\n');
+  const sanitized = DOMPurify.sanitize(String(content || '').replace(/<br\s*\/?>/gi, '\n'), {
+    ALLOWED_TAGS: [], ALLOWED_ATTR: [],
+  });
 
   return (
     <div
@@ -229,6 +241,8 @@ export function MarkdownMessage({
       }`}
     >
       <ReactMarkdown
+        skipHtml
+        urlTransform={(url) => safeHttps(url)}
         remarkPlugins={REMARK_PLUGINS}
         components={markdownComponents}
       >

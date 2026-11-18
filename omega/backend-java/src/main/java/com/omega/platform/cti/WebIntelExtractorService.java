@@ -279,6 +279,11 @@ public class WebIntelExtractorService {
             if ((b0 & 0xFE) == 0xFC || b0 == 0xFF) {
                 return false;
             }
+            int prefix = ((bytes[0] & 0xff) << 8) | (bytes[1] & 0xff);
+            int subnet = ((bytes[2] & 0xff) << 8) | (bytes[3] & 0xff);
+            // Global unicast only; exclude documentation, transition and IETF special-use space.
+            return (b0 & 0xe0) == 0x20 && prefix != 0x2002 && prefix != 0x3fff
+                    && !(prefix == 0x2001 && (subnet < 0x0200 || subnet == 0x0db8));
         }
         return true;
     }

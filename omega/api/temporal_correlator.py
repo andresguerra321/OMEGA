@@ -15,6 +15,7 @@ import logging
 import plistlib
 import re
 import sqlite3
+from sqlite_safety import harden_connection
 from typing import Any
 
 from sqlite_safety import safe_identifier
@@ -132,6 +133,7 @@ def _extract_sqlite_timeline(raw_bytes: bytes, filename: str) -> list[dict[str, 
 
     try:
         conn.deserialize(raw_bytes)
+        harden_connection(conn)
         tables = {
             str(r[0]).lower(): str(r[0])
             for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()

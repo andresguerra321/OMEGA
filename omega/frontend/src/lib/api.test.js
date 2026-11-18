@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+test('desktop follows the selected local backend port and rejects injected origins', async () => {
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  try {
+    for (const [index, search, port] of [[1, '?omegaBackendPort=8087', 8087], [2, '?omegaBackendPort=8080%40evil.example', 8080]]) {
+      globalThis.window = { location: { protocol: 'file:', search } };
+      let requested;
+      globalThis.fetch = async url => { requested = url; return { ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({}) }; };
+      const api = await import(`./api.js?port-check=${index}`);
+      await api.getHostRealtimeStatus();
+      assert.equal(requested, `http://127.0.0.1:${port}/api/v1/forensics/host/realtime/status`);
+    }
+  } finally { globalThis.window = previousWindow; globalThis.fetch = previousFetch; }
+});
+
 function installMockBrowserEnvironment({ seedLegacy = true } = {}) {
   const lsStore = new Map();
   const ssStore = new Map();

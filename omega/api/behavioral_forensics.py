@@ -12,8 +12,10 @@ import logging
 import posixpath
 import re
 import sqlite3
+from sqlite_safety import harden_connection
 import tarfile
 import zipfile
+from archive_safety import validate_archive
 from typing import Any
 
 from sqlite_safety import safe_identifier
@@ -213,6 +215,7 @@ def unpack_forensic_archives_in_ram(artifacts: list[dict]) -> list[dict]:
         filename = str(item.get("filename") or "artifact")
         raw_bytes = item.get("bytes") or b""
         lower = filename.lower()
+        validate_archive(filename, raw_bytes)
 
         if lower.endswith((".tar.gz", ".tgz", ".tar")):
             members = _extract_tar_in_ram(filename, raw_bytes, budget)
@@ -394,6 +397,7 @@ def _inspect_sqlite_behavioral(filename: str, raw_bytes: bytes) -> list[dict[str
     conn = sqlite3.connect(":memory:")
     try:
         conn.deserialize(raw_bytes)
+        harden_connection(conn)
         tables = _get_table_map(conn)
         findings: list[dict[str, Any]] = []
         findings.extend(_inspect_datausage_sqlite(conn, tables, filename))
