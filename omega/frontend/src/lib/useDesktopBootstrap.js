@@ -15,7 +15,9 @@ export function useDesktopBootstrap({ intervalMs = 2000 } = {}) {
   const announced = useRef(false);
 
   const apply = useCallback((next) => {
-    if (!next) return;
+    if (!next?.state) {
+      next = { state: 'error', message: 'No se pudo consultar el inicio de OMEGA. Intenta de nuevo.' };
+    }
     setStatus(next);
     if (next.state === 'ready' && !announced.current) {
       announced.current = true;
@@ -34,7 +36,7 @@ export function useDesktopBootstrap({ intervalMs = 2000 } = {}) {
       try {
         next = await getBootstrapStatus();
       } catch {
-        next = null;
+        next = { state: 'error', message: 'No se pudo consultar el inicio de OMEGA. Intenta de nuevo.' };
       }
       if (cancelled) return;
       apply(next);
@@ -52,6 +54,8 @@ export function useDesktopBootstrap({ intervalMs = 2000 } = {}) {
     setRetrying(true);
     try {
       apply(await retrySelfHostedBootstrap());
+    } catch {
+      apply({ state: 'error', message: 'No se pudo reiniciar OMEGA. Abre Docker Desktop e intenta de nuevo.' });
     } finally {
       setRetrying(false);
     }
@@ -61,7 +65,8 @@ export function useDesktopBootstrap({ intervalMs = 2000 } = {}) {
     status,
     retry,
     retrying,
-    pending: status ? PENDING_STATES.has(status.state) : false,
+    blocking: isDesktopApp() && status?.state !== 'ready',
+    pending: isDesktopApp() && (!status || PENDING_STATES.has(status.state)),
     failed: status?.state === 'error',
   };
 }

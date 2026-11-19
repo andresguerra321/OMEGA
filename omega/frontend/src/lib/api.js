@@ -72,7 +72,8 @@ const API_ORIGIN = resolveApiOrigin();
 const API_V1 = `${API_ORIGIN}/api/v1`;
 
 export async function prepareDesktopHostSensor() {
-  return { ready: true };
+  const status = await getHostRealtimeStatus();
+  return { ready: status?.scope === 'native-host', status };
 }
 
 export function getHostRealtimeStatus() {
@@ -680,13 +681,16 @@ export async function getExpedienteDocument(expedienteId, documentId) {
 
 export async function sendChatQuery(
   query,
-  _history = [],
+  history = [],
   topK = 6,
   sourceFilter = 'Todas las fuentes',
   _pinnedContext = null,
   options = {},
 ) {
   const expedienteId = options?.expedienteId || null;
+  const conversationHistory = (Array.isArray(history) ? history : [])
+    .filter(turn => ['user', 'assistant'].includes(turn?.role) && typeof turn.content === 'string' && turn.content.trim())
+    .slice(-6).map(turn => ({ role: turn.role, content: turn.content.slice(0, 4000) }));
   const analysisContext =
     typeof options?.analysisContext === 'string' && options.analysisContext.trim()
       ? options.analysisContext.trim().slice(0, 4000)
@@ -697,6 +701,7 @@ export async function sendChatQuery(
       body: {
         question: query,
         topK,
+        history: conversationHistory,
         ...(analysisContext ? { analysis_context: analysisContext } : {}),
       },
     });
@@ -708,6 +713,7 @@ export async function sendChatQuery(
     body: {
       question: query,
       topK,
+      history: conversationHistory,
       source_filter: sourceFilter || null,
       general_mode: Boolean(options?.generalMode),
       ...(analysisContext ? { analysis_context: analysisContext } : {}),
@@ -981,7 +987,7 @@ export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sen
       deviceUid,
       hostname: hostname || 'equipo-omega',
       osPlatform: osPlatform || 'web',
-      sensorVersion: sensorVersion || '2.0.7',
+      sensorVersion: sensorVersion || '2.0.8',
     },
   });
 }

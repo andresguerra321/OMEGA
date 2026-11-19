@@ -247,6 +247,10 @@ public class SystemController {
                 .build();
 
         long startNs = System.nanoTime();
+        // A model list can succeed even when inference is unavailable or the model was removed.
+        if (!model.isBlank()) {
+            return runFallbackChatPing(probeClient, resolvedUrl, apiKey, model, provider, startNs);
+        }
         try {
             ModelsListResponse modelsResp = probeClient.get()
                     .uri("/models")
@@ -303,7 +307,7 @@ public class SystemController {
             long startNs
     ) {
         try {
-            probeClient.post()
+            Map<?, ?> response = probeClient.post()
                     .uri("/chat/completions")
                     .headers(h -> {
                         if (!apiKey.isBlank()) {
@@ -313,11 +317,18 @@ public class SystemController {
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
                             "model", model,
-                            "max_tokens", 8,
-                            "messages", List.of(Map.of("role", "user", "content", "ok"))
+                            "max_tokens", 128,
+                            "messages", List.of(Map.of("role", "user", "content", "Responde solamente OK."))
                     ))
                     .retrieve()
-                    .toBodilessEntity();
+                    .body(Map.class);
+            if (response == null || !(response.get("choices") instanceof List<?> choices) || choices.isEmpty()
+                    || !(choices.get(0) instanceof Map<?, ?> choice)
+                    || !(choice.get("message") instanceof Map<?, ?> message)
+                    || !(message.get("content") instanceof String content) || content.isBlank()) {
+                return new AiConnectionTestResponse(false, 0L, resolvedUrl, List.of(),
+                        "El proveedor respondió, pero el modelo no generó texto. Revisa el modelo o la cuota.");
+            }
             long latencyMs = Math.max(1L, (System.nanoTime() - startNs) / 1_000_000L);
             return new AiConnectionTestResponse(
                     true,

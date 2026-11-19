@@ -58,8 +58,16 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
     }
     setPreparing(true);
     setSetupFailed(false);
-    prepareDesktopHostSensor().then(() => {
-      if (!disposed) { setPreparing(false); void poll(); }
+    prepareDesktopHostSensor().then((prepared) => {
+      if (!disposed) {
+        setPreparing(false);
+        if (prepared?.status) {
+          setStatus(prepared.status);
+          timer = setTimeout(poll, 5000);
+        } else {
+          void poll();
+        }
+      }
     }).catch(err => {
       if (!disposed) { setPreparing(false); setSetupFailed(true); setSensorError(err.message); }
     });
@@ -97,7 +105,7 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
     BROWSER: (report?.findings || []).filter(f => f.category === 'BROWSER'),
     NETWORK: alerts,
   };
-  return <section aria-label="Protección activa en segundo plano" className={`relative z-40 shrink-0 border-b border-white/10 bg-[#101116] px-4 py-2 text-[#F2F2F4] ${desktop ? 'pr-36' : ''}`}>
+  return <section aria-label="Protección de esta computadora" className={`relative z-40 shrink-0 border-b border-white/10 bg-[#101116] px-4 py-2 text-[#F2F2F4] ${desktop ? 'pr-36' : ''}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p role="status" className="text-sm"><span className={`mr-2 inline-block h-2 w-2 rounded-full ${status?.active && !sensorError ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />{label}
         {status?.hostname && <span className="ml-2 text-xs text-[#9A9AA2]">{status.hostname} · {status.indicatorCount} indicadores</span>}
@@ -108,10 +116,10 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
       </div>
     </div>
     {error && <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p>}
-    {preparing && <p className="mt-1 text-xs text-[#B7B7C0]">OMEGA está preparando todo. Windows puede pedirte permiso para activar la protección del equipo.</p>}
+    {preparing && <p className="mt-1 text-xs text-[#B7B7C0]">Comprobando la conexión con el sensor de esta computadora.</p>}
     {sensorError && <p role="alert" className="mt-2 text-sm text-amber-300">{sensorError}</p>}
     {setupFailed && <button type="button" onClick={() => { setSensorError(''); setSetupAttempt(value => value + 1); }} className="mt-2 rounded border border-white/20 px-3 py-1 text-xs">Reintentar preparación</button>}
-    {status && !native && <p className="mt-1 text-xs text-[#B7B7C0]">El servicio está aislado en un contenedor y no observa esta computadora. Conecta un sensor nativo para activar la vigilancia del equipo.</p>}
+    {status && !native && <p className="mt-1 text-xs text-[#B7B7C0]">{status.notice || 'El servicio está aislado en un contenedor y no observa esta computadora. Conecta un sensor nativo para activar la vigilancia del equipo.'}</p>}
     {alerts.length > 0 && <div role="alert" className="mt-2 rounded border border-red-400/40 bg-red-500/10 p-2 text-sm">
       {alerts.at(-1).userFriendlyTitle}. {alerts.length} alerta(s) conservadas en esta sesión del sensor. La alerta no bloquea tráfico por sí sola; consulta las acciones aplicadas en el historial.
     </div>}

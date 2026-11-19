@@ -201,7 +201,8 @@ class OpenAiRagAnswerGeneratorTest {
 
         String answer = generator.generateGroundedAnswer("pero que tiene esta web de maliciosa", List.of(), telemetry);
         assertThat(answer)
-                .contains("Análisis técnico de la web / enlace inspeccionado en OMEGA")
+                .contains("Resumen extractivo sin síntesis LLM")
+                .doesNotContain("Correlación con reportes")
                 .contains("testsafebrowsing.appspot.com")
                 .contains("OWASP-A02-NO-TLS");
     }

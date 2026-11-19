@@ -39,7 +39,8 @@ import {
 } from './lib/api';
 import { collectNativeHostSnapshot, isDesktopApp } from './lib/desktopBridge';
 import { useDesktopBootstrap } from './lib/useDesktopBootstrap';
-import { DesktopBootstrapBanner } from './components/DesktopBootstrapBanner';
+import { DesktopStartupGate } from './components/DesktopStartupGate';
+import { AiSetupGate } from './components/AiSetupGate';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaLogo } from './components/OmegaLogo';
@@ -158,6 +159,7 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [newAccountSetup, setNewAccountSetup] = useState(false);
   const [activeExpedienteId, setActiveExpedienteId] = useState('');
   const [usePrivateDocs, setUsePrivateDocs] = useState(false);
   const [expedienteDocs, setExpedienteDocs] = useState([]);
@@ -293,7 +295,7 @@ export default function App() {
   }, [activeExpedienteId]);
 
   useEffect(() => {
-    if (!verifyingSession) return undefined;
+    if (!verifyingSession || desktopBootstrap.blocking) return undefined;
     let cancelled = false;
     const hadInMemorySession = isAuthenticated();
     const isHttpOrigin = typeof window !== 'undefined' && window.location?.protocol !== 'file:';
@@ -336,7 +338,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [verifyingSession]);
+  }, [verifyingSession, desktopBootstrap.blocking]);
 
   useEffect(() => {
     const onAuthChanged = (e) => {
@@ -926,7 +928,7 @@ export default function App() {
         if (enterRunIdRef.current !== runId) return;
         setEnteringWorkspace(false);
         if (meta?.isNewAccount) {
-          setOnboardingOpen(true);
+          setNewAccountSetup(true);
         } else {
           requestAnimationFrame(() => workspaceMainRef.current?.focus({ preventScroll: true }));
         }
@@ -962,8 +964,10 @@ export default function App() {
         : 'screen-workspace';
 
   return (
-    <>
-    <DesktopBootstrapBanner bootstrap={desktopBootstrap} />
+    <DesktopStartupGate bootstrap={desktopBootstrap}>
+    <AiSetupGate key={authSession?.userId || 'signed-out'} accountId={authSession?.userId} authSession={authSession} enabled={isSignedIn && !enteringWorkspace && !verifyingSession}
+      forceSetup={newAccountSetup} onLogout={handleLogout}
+      onComplete={() => { setNewAccountSetup(false); void refreshSystemTelemetry(); }}>
     <AnimatePresence mode="wait" initial={false}>
       {verifyingSession || enteringWorkspace ? (
         <motion.div
@@ -1632,6 +1636,7 @@ export default function App() {
         </motion.div>
       )}
     </AnimatePresence>
-    </>
+    </AiSetupGate>
+    </DesktopStartupGate>
   );
 }

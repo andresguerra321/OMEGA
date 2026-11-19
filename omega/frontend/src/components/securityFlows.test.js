@@ -101,6 +101,17 @@ test('container scope disables host surveillance and persistence audit', async (
   assert.match(container.textContent, /no observa esta computadora/);
 });
 
+test('an unavailable sensor is displayed without claiming preparation or protection succeeded', async () => {
+  api.prepareDesktopHostSensor = async () => ({ ready: false, status: {
+    scope: 'container', active: false, enabled: false, alerts: [], notice: 'Sensor nativo no conectado',
+  } });
+  await render(HostProtectionPanel, { session: { role: 'ADMIN', tenantId: 'owner', email: 'owner@example.org' } });
+  await settle(() => container.textContent.includes('Sensor nativo no conectado'));
+  assert.equal(button('Activar vigilancia').disabled, true);
+  assert.equal(container.querySelector('[role="alert"]'), null);
+  assert.equal(container.textContent.includes('Vigilancia activa'), false);
+});
+
 test('sensor failure removes host actions and exposes the actual error', async () => {
   api.getHostRealtimeStatus = async () => { throw new Error('Sensor identity rejected'); };
   await render(HostProtectionPanel, { session: { role: 'ADMIN', tenantId: 'owner' }, expanded: true });

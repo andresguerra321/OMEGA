@@ -83,6 +83,9 @@ def test_pc_host_clean_verdict_avoids_absolute_immunity_claims(monkeypatch):
         "scheduled_tasks": [],
         "startup_items": [],
         "file_hashes": [],
+        "collection_status": {section: "available" for section in (
+            "processes", "tcp_connections", "wmi_subscriptions", "scheduled_tasks", "startup_items", "defender", "firewall", "uac"
+        )},
     }
 
     res = host_forensics.run_host_live_audit(snapshot)

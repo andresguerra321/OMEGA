@@ -27,7 +27,7 @@ function formatSecretGroups(secret) {
     ?.join(' ') || '';
 }
 
-export function TwoFactorSettingsCard({ authSession }) {
+export function TwoFactorSettingsCard({ authSession, required = false, onReadyChange }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -42,6 +42,7 @@ export function TwoFactorSettingsCard({ authSession }) {
   const [backupCodes, setBackupCodes] = useState([]);
   const [activatedMethod, setActivatedMethod] = useState('TOTP');
   const [copiedKey, setCopiedKey] = useState('');
+  const [statusAttempt, setStatusAttempt] = useState(0);
   const otpRefs = useRef([]);
 
   useEffect(() => {
@@ -52,12 +53,16 @@ export function TwoFactorSettingsCard({ authSession }) {
         if (!cancelled && res) setStatus(res);
       })
       .catch(() => {
-        // Silent fallback if gateway is warming up
+        if (!cancelled && required) setErrorMsg('No se pudo comprobar la protección de tu cuenta. Intenta de nuevo.');
       });
     return () => {
       cancelled = true;
     };
-  }, [authSession]);
+  }, [authSession, required, statusAttempt]);
+
+  useEffect(() => {
+    onReadyChange?.(Boolean(status?.mfaEnabled && !modalStep && !loading));
+  }, [status?.mfaEnabled, modalStep, loading, onReadyChange]);
 
   function openSetupWizard(initialMethod = 'TOTP') {
     setErrorMsg('');
@@ -69,7 +74,9 @@ export function TwoFactorSettingsCard({ authSession }) {
   }
 
   function closeModal() {
+    if (required && modalStep === 'codes') return;
     setModalStep(null);
+    setBackupCodes([]);
     setTotpSetup(null);
     setCodeInput('');
     setDisablePwd('');
@@ -264,7 +271,7 @@ export function TwoFactorSettingsCard({ authSession }) {
           <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
             Mantén tu cuenta segura activando 2FA mediante código al correo o aplicación autenticadora (TOTP).
           </p>
-          {mfaEnabled && (
+          {mfaEnabled && !required && (
             <button
               type="button"
               onClick={() => openSetupWizard(currentMethod === 'EMAIL' ? 'EMAIL' : 'TOTP')}
@@ -278,6 +285,7 @@ export function TwoFactorSettingsCard({ authSession }) {
         <button
           type="button"
           role="switch"
+          disabled={loading || (required && (!status || mfaEnabled))}
           aria-checked={mfaEnabled}
           aria-label="Activar o desactivar verificación en dos pasos"
           onClick={() => {
@@ -303,6 +311,11 @@ export function TwoFactorSettingsCard({ authSession }) {
         </button>
       </div>
 
+      {required && errorMsg && !modalStep && <div role="alert" className="space-y-2 text-sm text-ink-primary">
+        <p>{errorMsg}</p>
+        <button type="button" onClick={() => { setErrorMsg(''); setStatusAttempt(value => value + 1); }} className="underline underline-offset-4">Reintentar comprobación</button>
+      </div>}
+
       {infoMsg && !modalStep && (
         <div className="rounded-[9px] border border-[#30D158]/35 bg-[#30D158]/10 px-3 py-2 text-[12px] text-[#CFFAD9]">
           {infoMsg}
@@ -321,7 +334,7 @@ export function TwoFactorSettingsCard({ authSession }) {
               <button
                 type="button"
                 aria-label="Cerrar"
-                disabled={loading}
+                disabled={loading || (required && modalStep === 'codes')}
                 onClick={closeModal}
                 className="absolute top-4 right-4 h-8 w-8 rounded-[9px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.10] flex items-center justify-center text-[#9A9AA2] hover:text-white transition-colors cursor-pointer"
               >
@@ -588,7 +601,7 @@ export function TwoFactorSettingsCard({ authSession }) {
                       onClick={() => setModalStep('success')}
                       className="h-9 px-4 rounded-[9px] bg-[#2F6FED] hover:brightness-110 text-[12.5px] font-medium text-white cursor-pointer"
                     >
-                      Continuar
+                      {required ? 'Ya guardé los códigos' : 'Continuar'}
                     </button>
                   </div>
                 </div>

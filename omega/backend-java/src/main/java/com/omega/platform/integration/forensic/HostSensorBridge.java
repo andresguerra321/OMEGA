@@ -9,6 +9,7 @@ import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
 import java.time.Duration;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,10 +65,28 @@ public class HostSensorBridge {
             return;
         }
         try {
+            if (!"native-host".equals(hostScope())) {
+                return;
+            }
             syncHostCatalog(UUID.fromString(hostOwnerTenantId));
         } catch (RuntimeException ex) {
             LoggerFactory.getLogger(HostSensorBridge.class)
                     .warn("No se pudo actualizar el catálogo del sensor de equipo: {}", ex.getClass().getSimpleName());
+        }
+    }
+
+    private String hostScope() {
+        try {
+            Map<?, ?> health = hostClient().get().uri("/api/health").retrieve().body(Map.class);
+            return health != null && health.get("scope") instanceof String scope ? scope : "unavailable";
+        } catch (RestClientException ex) {
+            throw new ForensicWorkerException("No se pudo comprobar la conexión con el sensor de esta computadora.", ex);
+        }
+    }
+
+    private void requireNativeHost() {
+        if (!"native-host".equals(hostScope())) {
+            throw new ForensicWorkerException("Esta operación requiere conectar un sensor nativo de la computadora.", null);
         }
     }
 
@@ -90,6 +109,13 @@ public class HostSensorBridge {
     }
 
     public RealtimeStatus hostRealtimeStatus(OmegaPrincipal principal) {
+        String scope = hostScope();
+        if (!"native-host".equals(scope)) {
+            return new RealtimeStatus(false, false, false, "unavailable", scope, null, null, 0,
+                    null, 0, false, null, null, null, "unavailable", List.of(), 0,
+                    Map.of("blocking", false, "eventBasedCapture", false),
+                    "No hay un sensor nativo conectado a esta computadora. El worker de Docker analiza los archivos enviados, pero no vigila el equipo.");
+        }
         syncHostCatalog(principal.tenantId());
         try {
             RealtimeStatus status = hostClient().get().uri("/api/host/realtime/status")
@@ -127,6 +153,7 @@ public class HostSensorBridge {
     }
 
     public RealtimeStatus toggleHostRealtime(OmegaPrincipal principal, boolean enabled) {
+        requireNativeHost();
         syncHostCatalog(principal.tenantId());
         try {
             RealtimeStatus response = hostClient().post().uri("/api/host/realtime/toggle")
@@ -149,6 +176,7 @@ public class HostSensorBridge {
     }
 
     public PersistenceAuditResponse auditHostPersistence(OmegaPrincipal principal) {
+        requireNativeHost();
         syncHostCatalog(principal.tenantId());
         try {
             PersistenceAuditResponse response = hostClient().post().uri("/api/host/persistence/audit")

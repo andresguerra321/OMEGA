@@ -6,6 +6,8 @@ import com.omega.platform.rag.HybridRagQueryService.RagCitationDto;
 import com.omega.platform.rag.HybridRagQueryService.RagQueryResponse;
 import com.omega.platform.rag.HybridRagSearchRepository;
 import com.omega.platform.rag.RagAnswerGenerator;
+import com.omega.platform.rag.RagConversation;
+import jakarta.validation.Valid;
 import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
@@ -62,6 +64,8 @@ public class PublicCorpusRagService {
 
     @Transactional
     public RagQueryResponse queryPublicCorpus(OmegaPrincipal principal, PublicCtiQueryRequest request) {
+        String generationQuestion = RagConversation.generationQuestion(request.question(), request.history());
+        String retrievalQuestion = RagConversation.retrievalQuestion(request.question(), request.history());
         int topK = request.topK() != null ? Math.max(1, Math.min(request.topK(), 20)) : 6;
         String activeModel = properties.ai().local() ? "ollama:" + properties.ai().ollama().embedModel() : properties.rag().embeddingModel();
 
@@ -79,7 +83,7 @@ public class PublicCorpusRagService {
 
         if (CONVERSATIONAL_ONLY.matcher(request.question()).matches()
                 && (request.analysisContext() == null || request.analysisContext().isBlank())) {
-            String greetingAnswer = answerGenerator.generateGeneralAnswer(request.question());
+            String greetingAnswer = answerGenerator.generateGeneralAnswer(generationQuestion);
             if (greetingAnswer != null && !greetingAnswer.isBlank()) {
                 return new RagQueryResponse(
                         "GENERAL_MODE",
@@ -93,11 +97,11 @@ public class PublicCorpusRagService {
         }
 
         String searchInput = (request.analysisContext() != null && !request.analysisContext().isBlank())
-                ? request.question() + "\n" + request.analysisContext()
-                : request.question();
+                ? retrievalQuestion + "\n" + request.analysisContext()
+                : retrievalQuestion;
         String tsQuery = HybridRagSearchRepository.buildSanitizedOrTsQuery(searchInput);
         if (tsQuery.isBlank()) {
-            String fallbackGeneral = answerGenerator.generateGeneralAnswer(request.question(), request.analysisContext());
+            String fallbackGeneral = answerGenerator.generateGeneralAnswer(generationQuestion, request.analysisContext());
             if (fallbackGeneral != null && !fallbackGeneral.isBlank()) {
                 return new RagQueryResponse(
                         "GENERAL_MODE",
@@ -165,7 +169,7 @@ public class PublicCorpusRagService {
                 )
         );
 
-        List<PublicChunkRow> reranked = rerankCandidates(request.question(), rows, topK);
+        List<PublicChunkRow> reranked = rerankCandidates(retrievalQuestion, rows, topK);
 
         List<RankedChunk> ranked = reranked.stream()
                 .map(r -> new RankedChunk(
@@ -185,7 +189,7 @@ public class PublicCorpusRagService {
                 .toList();
 
         if (ranked.isEmpty()) {
-            String generalAnswer = answerGenerator.generateGeneralAnswer(request.question(), request.analysisContext());
+            String generalAnswer = answerGenerator.generateGeneralAnswer(generationQuestion, request.analysisContext());
             if (generalAnswer != null && !generalAnswer.isBlank()) {
                 auditLogService.record(
                         principal.tenantId(),
@@ -208,16 +212,12 @@ public class PublicCorpusRagService {
 
         String answer = ranked.isEmpty()
                 ? (request.analysisContext() != null && !request.analysisContext().isBlank()
-                        ? answerGenerator.generateGroundedAnswer(request.question(), List.of(), request.analysisContext())
+                        ? answerGenerator.generateGroundedAnswer(generationQuestion, List.of(), request.analysisContext())
                         : "No se encontraron pasajes verificados en los informes CTI públicos para esta consulta.")
-                : answerGenerator.generateGroundedAnswer(request.question(), ranked, request.analysisContext());
+                : answerGenerator.generateGroundedAnswer(generationQuestion, ranked, request.analysisContext());
 
-        String responseModel = ranked.isEmpty()
-                ? activeModel
-                : ((answer.startsWith("Resumen extractivo sin síntesis LLM")
-                        || answer.startsWith("**Análisis técnico de la web / enlace inspeccionado en OMEGA:**"))
-                        ? "omega-extractive-fallback"
-                        : answerGenerator.resolveActiveGeneratorModel());
+        String responseModel = answer.startsWith("Resumen extractivo sin síntesis LLM")
+                ? "omega-extractive-fallback" : answerGenerator.resolveActiveGeneratorModel();
 
         List<RagCitationDto> citations = ranked.stream()
                 .map(c -> new RagCitationDto(
@@ -317,8 +317,12 @@ public class PublicCorpusRagService {
             @Min(1) @Max(20) Integer topK,
             @JsonProperty("source_filter") String sourceFilter,
             @JsonProperty("general_mode") Boolean generalMode,
-            @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext
+            @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext,
+            @Valid @Size(max = 6) List<RagConversation.Turn> history
     ) {
+        public PublicCtiQueryRequest(String question, Integer topK, String sourceFilter, Boolean generalMode, String analysisContext) {
+            this(question, topK, sourceFilter, generalMode, analysisContext, List.of());
+        }
         public PublicCtiQueryRequest(String question, Integer topK, String sourceFilter) {
             this(question, topK, sourceFilter, false, null);
         }

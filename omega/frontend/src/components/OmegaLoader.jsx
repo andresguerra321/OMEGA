@@ -36,6 +36,43 @@ function drawConicTrailRing(ctx, cx, cy, radius, lineWidth, startAngle, maxAlpha
   ctx.restore();
 }
 
+function drawStartupRing(ctx, canvas, time) {
+  const size = canvas.getBoundingClientRect().width || 300;
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const pixels = Math.round(size * ratio);
+  if (canvas.width !== pixels || canvas.height !== pixels) {
+    canvas.width = pixels;
+    canvas.height = pixels;
+  }
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  const color = getComputedStyle(canvas).getPropertyValue('--color-cobalt').trim() || '#2F6FED';
+  const tilt = 0.45 + Math.sin(time * 0.65) * 0.4;
+  const dots = [];
+  for (let ring = 0; ring < 6; ring += 1) {
+    const tube = (ring / 6) * Math.PI * 2;
+    for (let index = 0; index < 40; index += 1) {
+      const angle = (index / 40) * Math.PI * 2 + time * 0.28 + ring * 0.025;
+      const radius = size * (0.235 + 0.045 * Math.cos(tube));
+      const x = radius * Math.cos(angle);
+      const y = radius * Math.sin(angle);
+      const z = size * 0.045 * Math.sin(tube);
+      const vertical = y * Math.cos(tilt) - z * Math.sin(tilt);
+      const depth = y * Math.sin(tilt) + z * Math.cos(tilt);
+      const perspective = size / (size + depth);
+      dots.push({ x: size / 2 + x * perspective, y: size / 2 + vertical * perspective, depth, perspective });
+    }
+  }
+  ctx.fillStyle = color;
+  dots.sort((first, second) => second.depth - first.depth).forEach((dot) => {
+    ctx.globalAlpha = Math.max(0.3, Math.min(1, 0.72 - dot.depth / size));
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, 1.25 * dot.perspective, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
 function drawEclipseFrame(ctx, canvas, tSec) {
   const rect = canvas.getBoundingClientRect();
   const cssSize = Math.max(180, Math.min(rect.width || 320, rect.height || 320));
@@ -184,42 +221,44 @@ export function OmegaLoader({
   steps = DEFAULT_STEPS,
   label = 'Iniciando OMEGA',
   stepIntervalMs = 1400,
+  variant = 'eclipse',
 }) {
   const [stepIdx, setStepIdx] = useState(0);
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    if (steps.length < 2) return undefined;
+    if (variant === 'startup' || steps.length < 2) return undefined;
     const timer = setInterval(() => {
       setStepIdx((i) => Math.min(i + 1, steps.length - 1));
     }, stepIntervalMs);
     return () => clearInterval(timer);
-  }, [steps, stepIntervalMs]);
+  }, [steps, stepIntervalMs, variant]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
+    const drawFrame = variant === 'startup' ? drawStartupRing : drawEclipseFrame;
 
     const prefersReduced =
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
     if (prefersReduced) {
-      drawEclipseFrame(ctx, canvas, 0);
+      drawFrame(ctx, canvas, 0);
       return undefined;
     }
 
     let rafId = 0;
     const start = performance.now();
     const tick = (now) => {
-      drawEclipseFrame(ctx, canvas, (now - start) / 1000);
+      drawFrame(ctx, canvas, (now - start) / 1000);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, []);
+  }, [variant]);
 
   return (
     <motion.div
@@ -235,7 +274,7 @@ export function OmegaLoader({
         <canvas ref={canvasRef} className="h-full w-full block" aria-hidden="true" />
       </div>
 
-      <div className="flex flex-col items-center gap-2">
+      {variant !== 'startup' && <div className="flex flex-col items-center gap-2">
         <span className="font-display text-[13px] font-semibold tracking-[0.44em] text-[#F2F2F4] pl-[0.44em]">
           OMEGA
         </span>
@@ -253,7 +292,7 @@ export function OmegaLoader({
             </motion.span>
           </AnimatePresence>
         </div>
-      </div>
+      </div>}
     </motion.div>
   );
 }

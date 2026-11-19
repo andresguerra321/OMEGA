@@ -32,6 +32,7 @@ export function normalizeParallelResult(res, files = [], customSourceLabel = '')
   }
   const findings = dedupeMatches(allMatches);
   const fileNames = files.map((f) => f.name).join(', ');
+  const emptyClean = res.diagnosis?.verdict_code === 'CLEAN' && !(res.total_indicators_analyzed > 0);
 
   return {
     sourceLabel: customSourceLabel || fileNames || 'volcado_mvt',
@@ -42,9 +43,10 @@ export function normalizeParallelResult(res, files = [], customSourceLabel = '')
     yaraHits: res.yara_hits || [],
     timeline: res.timeline || [],
     timelineSummary: res.timeline_summary || null,
-    verdictCode: res.diagnosis?.verdict_code || (findings.length > 0 ? 'DETECTED' : 'CLEAN'),
-    verdictLabel: res.diagnosis?.verdict_label || '',
-    rationale: res.diagnosis?.rationale || '',
+    coverageGaps: res.coverage_gaps || [],
+    verdictCode: emptyClean ? 'INCOMPLETE' : res.diagnosis?.verdict_code || (findings.length > 0 ? 'DETECTED' : (res.total_indicators_analyzed > 0 ? 'CLEAN' : 'INCOMPLETE')),
+    verdictLabel: emptyClean ? 'Análisis incompleto · no se evaluaron indicadores' : res.diagnosis?.verdict_label || '',
+    rationale: emptyClean ? 'No se evaluaron indicadores. Este resultado no permite concluir que el análisis haya terminado sin hallazgos.' : res.diagnosis?.rationale || '',
     recommendedActions: res.diagnosis?.recommended_actions || [],
     catalogFreshness: res.catalog_freshness || null,
     osScopeNotice: res.os_scope_notice || '',
@@ -61,7 +63,7 @@ export function normalizeManualResult(res) {
     matchesCount: findings.length,
     behavioralAnomalies: [],
     yaraHits: [],
-    verdictCode: findings.length > 0 ? 'DETECTED' : 'CLEAN',
+    verdictCode: findings.length > 0 ? 'DETECTED' : (res.analyzed_indicators > 0 ? 'CLEAN' : 'INCOMPLETE'),
     verdictLabel: '',
     rationale: '',
     catalogFreshness: res.catalog_freshness || null,
@@ -96,7 +98,7 @@ export function buildForensicMarkdownReport(result, hardeningReport) {
   const lines = [
     '# OMEGA · Verificación de Integridad del Dispositivo',
     `- **Origen:** \`${result.sourceLabel}\``,
-    `- **Artefactos evaluados:** ${result.filesAnalyzed || 1}`,
+    `- **Artefactos evaluados:** ${result.filesAnalyzed ?? 1}`,
     `- **Indicadores evaluados:** ${result.analyzedCount}`,
     `- **Coincidencias CTI:** ${result.matchesCount}`,
     `- **Corte del catálogo CTI:** ${cutoffDate} (PR review + SHA-256)`,

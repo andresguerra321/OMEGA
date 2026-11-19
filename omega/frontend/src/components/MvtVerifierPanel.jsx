@@ -542,6 +542,7 @@ export function MvtVerifierPanel({
   // --- ESTADO 2: RESULTADO ---
   if (result) {
     const hasMatches = result.matchesCount > 0;
+    const incomplete = result.verdictCode === 'INCOMPLETE' || result.coverageGaps?.length > 0;
     const behavioralAnomalies = result.behavioralAnomalies || [];
     const yaraHits = result.yaraHits || [];
     const abuseAlerts = hardeningReport?.abuse_alerts || [];
@@ -640,11 +641,11 @@ export function MvtVerifierPanel({
         {(() => {
           const resultKey = `${result.sourceLabel}|${result.analyzedCount}|${result.verdictCode}`;
           if (dismissedResultKey === resultKey) return null;
-          const bannerTone = isCriticalOverall ? 'alert' : hasAnyThreatSignal ? 'info' : 'clean';
+          const bannerTone = isCriticalOverall ? 'alert' : (hasAnyThreatSignal || incomplete) ? 'info' : 'clean';
           return (
             <ActionConfirmationBanner
               tone={bannerTone}
-              message={`Revisión en RAM completada (${result.analyzedCount} indicadores · ${result.matchesCount} coincidencia(s) CTI · ${yaraHits.length} YARA · ${behavioralAnomalies.length} anomalía(s) · 0 bytes en disco).`}
+              message={incomplete ? `Revisión incompleta: faltan datos de ${result.coverageGaps?.join(', ') || 'la captura del equipo'}. Los resultados disponibles no permiten completar el análisis.` : `Revisión en RAM completada (${result.analyzedCount} indicadores · ${result.matchesCount} coincidencia(s) CTI · ${yaraHits.length} YARA · ${behavioralAnomalies.length} anomalía(s) · 0 bytes en disco).`}
               onDismiss={() => setDismissedResultKey(resultKey)}
             />
           );
@@ -666,7 +667,7 @@ export function MvtVerifierPanel({
           <div className="omega-glass-panel rounded-[15px] p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                {!hasAnyThreatSignal ? (
+                {!hasAnyThreatSignal && !incomplete ? (
                   <ShieldCheck className="h-5 w-5 text-[#30D158] shrink-0" />
                 ) : (
                   <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictDot}`} />
@@ -680,7 +681,7 @@ export function MvtVerifierPanel({
                   className={`font-tech shrink-0 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium ${
                     isCriticalOverall
                       ? 'border-[#FF453A]/35 bg-[#FF453A]/12 text-[#FF6961]'
-                      : hasAnyThreatSignal
+                      : hasAnyThreatSignal || incomplete
                         ? 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]'
                         : 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]'
                   }`}

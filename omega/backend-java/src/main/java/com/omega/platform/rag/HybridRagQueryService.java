@@ -14,6 +14,7 @@ import com.omega.platform.service.AuditLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -83,6 +84,7 @@ public class HybridRagQueryService {
             }
         }
         String activeModel = embeddingProvider.modelName();
+        String retrievalQuestion = RagConversation.retrievalQuestion(request.question(), request.history());
         int topK = request.topK() == null ? 6 : Math.max(1, Math.min(request.topK(), 20));
 
         List<DocumentEntity> docs = documentRepository
@@ -180,17 +182,17 @@ public class HybridRagQueryService {
             ranked = searchRepository.searchLexicalOnly(
                     principal.tenantId(),
                     expedienteId,
-                    request.question(),
+                    retrievalQuestion,
                     lexicalModels,
                     topK
             );
         } else {
             try {
-                float[] queryVector = embeddingProvider.embedQuery(request.question().trim());
+                float[] queryVector = embeddingProvider.embedQuery(retrievalQuestion.trim());
                 ranked = searchRepository.searchHybrid(
                         principal.tenantId(),
                         expedienteId,
-                        request.question(),
+                        retrievalQuestion,
                         queryVector,
                         activeModel,
                         topK
@@ -201,7 +203,7 @@ public class HybridRagQueryService {
                             searchRepository.searchLexicalOnly(
                                     principal.tenantId(),
                                     expedienteId,
-                                    request.question(),
+                                    retrievalQuestion,
                                     List.of(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL),
                                     topK
                             ),
@@ -216,14 +218,14 @@ public class HybridRagQueryService {
                 ranked = searchRepository.searchLexicalOnly(
                         principal.tenantId(),
                         expedienteId,
-                        request.question(),
+                        retrievalQuestion,
                         lexicalModels,
                         topK
                 );
             }
         }
 
-        String answer = answerGenerator.generateGroundedAnswer(request.question(), ranked, request.analysisContext());
+        String answer = answerGenerator.generateGroundedAnswer(RagConversation.generationQuestion(request.question(), request.history()), ranked, request.analysisContext());
         List<RagCitationDto> citations = ranked.stream()
                 .map(c -> new RagCitationDto(
                         c.documentId(),
@@ -257,7 +259,9 @@ public class HybridRagQueryService {
         String status = lexicalDegraded
                 ? "DEGRADED_LEXICAL"
                 : (reindexNotices.isEmpty() ? "OK" : "PARTIAL_REINDEX_REQUIRED");
-        return new RagQueryResponse(status, activeModel, answer, warnings, reindexNotices, citations);
+        String responseModel = answer.startsWith("Resumen extractivo sin síntesis LLM")
+                ? "omega-extractive-fallback" : answerGenerator.resolveActiveGeneratorModel();
+        return new RagQueryResponse(status, responseModel, answer, warnings, reindexNotices, citations);
     }
 
     private static List<RankedChunk> mergeLexicalFallbackHits(
@@ -286,8 +290,12 @@ public class HybridRagQueryService {
     public record RagQueryRequest(
             @NotBlank @Size(min = 2, max = 2000) String question,
             @Min(1) @Max(20) Integer topK,
-            @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext
+            @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext,
+            @Valid @Size(max = 6) List<RagConversation.Turn> history
     ) {
+        public RagQueryRequest(String question, Integer topK, String analysisContext) {
+            this(question, topK, analysisContext, List.of());
+        }
         public RagQueryRequest(String question, Integer topK) {
             this(question, topK, null);
         }

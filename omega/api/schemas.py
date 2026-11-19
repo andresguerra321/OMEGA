@@ -71,6 +71,8 @@ class PcLiveSnapshot(BaseModel):
     scheduled_tasks: list[dict[str, Any]] = Field(default_factory=list)
     startup_items: list[dict[str, Any]] = Field(default_factory=list)
     file_hashes: list[dict[str, Any]] = Field(default_factory=list)
+    collection_status: dict[str, str] = Field(default_factory=dict)
+    collection_errors: list[str] = Field(default_factory=list)
 
 
 class MobileUsbAuditRequest(BaseModel):

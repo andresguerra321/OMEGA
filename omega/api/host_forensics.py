@@ -492,6 +492,16 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
     scheduled_tasks = payload.get("scheduled_tasks") or []
     startup_items = payload.get("startup_items") or []
     file_hashes = payload.get("file_hashes") or []
+    collection_status = payload.get("collection_status") or {}
+    required_sections = ["processes", "tcp_connections", "scheduled_tasks", "startup_items"]
+    if platform_name == "win32":
+        required_sections.extend(["wmi_subscriptions", "defender", "firewall", "uac"])
+    coverage_gaps = [section for section in required_sections if collection_status.get(section) != "available"]
+    if not processes and "processes" not in coverage_gaps:
+        coverage_gaps.append("processes")
+    catalog_freshness = get_catalog_freshness()
+    if catalog_freshness.get("db_online") is False:
+        coverage_gaps.append("catalog_lookup")
 
     hardening_checks = _evaluate_host_posture(platform_name, host)
     abuse_alerts: list[dict[str, Any]] = []
@@ -721,13 +731,25 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
             "Activa Windows Defender, Firewall y SmartScreen si alguno aparece desactivado.",
             "Verifica que las tareas programadas o entradas de inicio listadas pertenezcan a programas que tú instalaste.",
         ]
+    elif coverage_gaps:
+        verdict_code = "INCOMPLETE"
+        verdict_label = "Análisis incompleto · faltan datos del equipo"
+        rationale = (
+            f"Se recibieron {len(processes)} procesos y {len(live_sockets)} conexiones públicas. "
+            "No se pudo verificar toda la cobertura: " + ", ".join(coverage_gaps) + ". "
+            "Los datos ausentes no se interpretan como ausencia de amenazas."
+        )
+        recommended_actions = [
+            "Vuelve a ejecutar el análisis con el sensor actualizado y revisa las secciones sin datos.",
+            "Si Windows deniega una consulta, revisa los permisos del usuario; no desactives tus protecciones.",
+        ]
     else:
         verdict_code = "CLEAN"
         freshness = get_catalog_freshness()
         verdict_label, clean_rationale = format_clean_verdict_texts(freshness.get("catalog_cutoff_date"))
         rationale = (
-            f"Se auditaron {len(live_sockets)} conexiones públicas salientes, procesos activos, tareas programadas y "
-            f"suscripciones WMI sin detectar persistencia oculta. {clean_rationale}"
+            f"Se revisaron {len(live_sockets)} conexiones públicas, {len(processes)} procesos, "
+            f"{len(scheduled_tasks)} tareas y {len(wmi_subscriptions)} suscripciones WMI. {clean_rationale}"
         )
         recommended_actions = [
             "Mantener actualizados Windows Update / macOS y navegadores (ninguna app en espacio de usuario detiene 0-clicks de kernel).",
@@ -735,7 +757,6 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
         ]
 
     # Reutilizar metadata de frescura para todos los veredictos
-    catalog_freshness = get_catalog_freshness()
     mitigations = get_platform_mitigations(platform_name)
 
     # Ordena sockets poniendo los de red activa / match primero
@@ -743,6 +764,9 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "ram_only": True,
+        "collection_status": collection_status,
+        "collection_errors": payload.get("collection_errors") or [],
+        "coverage_gaps": coverage_gaps,
         "platform": platform_name,
         "device_summary": {
             "platform": "pc",
@@ -761,8 +785,9 @@ def run_host_live_audit(payload: dict[str, Any]) -> dict[str, Any]:
         "os_scope_notice": OS_SCOPE_LIMITATION_NOTICE,
         "platform_mitigations": mitigations,
         "triage": {
-            "total_files": 4,
-            "total_indicators_analyzed": len(external_ips) + len(proc_names) + len(sha256_candidates) + len(wmi_subscriptions),
+            "total_files": sum(bool(items) for items in [tcp_connections, processes, wmi_subscriptions, scheduled_tasks, startup_items]),
+            "coverage_gaps": coverage_gaps,
+            "total_indicators_analyzed": len(external_ips) + len(proc_names) + len(sha256_candidates) + len(wmi_subscriptions) + len(scheduled_tasks) + len(startup_items),
             "total_matches": len(cti_matches),
             "behavioral_anomalies": behavioral_anomalies,
             "yara_hits": yara_hits,

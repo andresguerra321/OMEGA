@@ -1,6 +1,7 @@
 mod hmac_auth;
 mod infostealer;
 mod telemetry;
+mod windows_audit;
 
 use std::env;
 use std::thread;

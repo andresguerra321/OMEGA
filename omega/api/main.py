@@ -239,6 +239,7 @@ def health_check():
         "integrity_verified": getattr(app.state, 'integrity_ok', False),
         "releaseId": getattr(app.state, 'release_id', None),
         "service": "omega-forensic-worker",
+        "scope": host_scope(),
         "mode": "native-containment-persistent-vault" if host_scope() == 'native-host' and os.getenv('OMEGA_CONTAINMENT_ENABLED', '').lower() == 'true' else "stateless-ram-only",
         "yara": get_yara_engine_status(),
     }

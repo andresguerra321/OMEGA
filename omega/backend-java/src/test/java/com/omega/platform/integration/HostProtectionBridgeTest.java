@@ -36,6 +36,9 @@ class HostProtectionBridgeTest {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://host.test")
                 .defaultHeader("X-Internal-Service-Token", "private-test-token");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://host.test/api/health"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"scope\":\"native-host\",\"integrity_verified\":true}", MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://host.test/api/host/realtime/status"))
                 .andExpect(header("X-Host-Tenant", principal.tenantId().toString()))
                 .andExpect(header("X-Internal-Service-Token", "private-test-token"))
@@ -55,6 +58,9 @@ class HostProtectionBridgeTest {
     void toggleIsExplicitAndAudited() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://host.test");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://host.test/api/health"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"scope\":\"native-host\",\"integrity_verified\":true}", MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://host.test/api/host/realtime/toggle"))
                 .andExpect(method(HttpMethod.POST)).andExpect(content().json("{\"enabled\":false}"))
                 .andExpect(header("X-Host-Tenant", principal.tenantId().toString()))
@@ -68,6 +74,9 @@ class HostProtectionBridgeTest {
     void persistencePreservesHashesAndHumanExplanation() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://host.test");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://host.test/api/health"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"scope\":\"native-host\",\"integrity_verified\":true}", MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://host.test/api/host/persistence/audit"))
                 .andExpect(method(HttpMethod.POST)).andExpect(header("X-Host-Tenant", principal.tenantId().toString()))
                 .andRespond(withSuccess("""

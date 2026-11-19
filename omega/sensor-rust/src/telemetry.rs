@@ -11,10 +11,21 @@ pub struct ProcessTelemetry {
     pub exe_path: String,
     pub memory_kb: u64,
     pub suspicious_location: bool,
+    pub command_line: String,
+    pub signature_status: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct HostTelemetrySnapshot {
+    pub platform: &'static str,
+    pub host: serde_json::Value,
+    pub processes: Vec<ProcessTelemetry>,
+    pub tcp_connections: Vec<serde_json::Value>,
+    pub wmi_subscriptions: Vec<serde_json::Value>,
+    pub scheduled_tasks: Vec<serde_json::Value>,
+    pub startup_items: Vec<serde_json::Value>,
+    pub collection_status: serde_json::Value,
+    pub collection_errors: Vec<serde_json::Value>,
     pub sensor: &'static str,
     pub sensor_version: &'static str,
     pub captured_at: String,
@@ -44,6 +55,7 @@ pub fn collect_snapshot() -> HostTelemetrySnapshot {
     sys.refresh_processes(ProcessesToUpdate::All);
 
     let mut suspicious_processes = Vec::new();
+    let mut processes = Vec::new();
     let mut infostealer_alerts = Vec::new();
     let mut process_count = 0usize;
 
@@ -62,6 +74,15 @@ pub fn collect_snapshot() -> HostTelemetrySnapshot {
             .collect();
 
         let suspicious_location = !exe_path.is_empty() && is_volatile_exec_path(&exe_path);
+        processes.push(ProcessTelemetry {
+            pid: pid_u32,
+            name: name.clone(),
+            exe_path: exe_path.clone(),
+            memory_kb: process.memory() / 1024,
+            suspicious_location,
+            command_line: cmdline.join(" "),
+            signature_status: "Unknown",
+        });
         if suspicious_location {
             suspicious_processes.push(ProcessTelemetry {
                 pid: pid_u32,
@@ -69,22 +90,55 @@ pub fn collect_snapshot() -> HostTelemetrySnapshot {
                 exe_path: exe_path.clone(),
                 memory_kb: process.memory() / 1024,
                 suspicious_location: true,
+                command_line: cmdline.join(" "),
+                signature_status: "Unknown",
             });
         }
 
         // En fase 9 base, los procesos desde rutas volátiles o sin ruta verificada se evalúan como no firmados
         let assumed_signed = !suspicious_location && !exe_path.is_empty();
-        let alerts = evaluate_cmdline_for_infostealer(
-            pid_u32,
-            &name,
-            &exe_path,
-            &cmdline,
-            assumed_signed,
-        );
+        let alerts =
+            evaluate_cmdline_for_infostealer(pid_u32, &name, &exe_path, &cmdline, assumed_signed);
         infostealer_alerts.extend(alerts);
     }
 
+    let audit = crate::windows_audit::collect();
+    let mut host = audit
+        .get("host")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    host["hostname"] = serde_json::json!(System::host_name().unwrap_or_default());
+    host["os_version"] = serde_json::json!(System::os_version().unwrap_or_default());
+    let mut collection_status = audit
+        .get("collection_status")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    collection_status["processes"] = serde_json::json!(if processes.is_empty() {
+        "unavailable"
+    } else {
+        "available"
+    });
+    let items = |key| {
+        audit
+            .get(key)
+            .and_then(|value| value.as_array())
+            .cloned()
+            .unwrap_or_default()
+    };
     HostTelemetrySnapshot {
+        platform: match std::env::consts::OS {
+            "windows" => "win32",
+            "macos" => "darwin",
+            other => other,
+        },
+        host,
+        processes,
+        tcp_connections: items("tcp_connections"),
+        wmi_subscriptions: items("wmi_subscriptions"),
+        scheduled_tasks: items("scheduled_tasks"),
+        startup_items: items("startup_items"),
+        collection_status,
+        collection_errors: items("collection_errors"),
         sensor: "omega-sensor-rust",
         sensor_version: env!("CARGO_PKG_VERSION"),
         captured_at: Utc::now().to_rfc3339(),
