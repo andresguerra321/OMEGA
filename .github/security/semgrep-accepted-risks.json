@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "accepted_risks": [
+    {
+      "check_id": "java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket",
+      "path": "omega/backend-java/src/main/java/com/omega/platform/cti/WebIntelExtractorService.java",
+      "classification": "FALSE_POSITIVE_FOR_HTTPS_AND_INTENTIONAL_HTTP_INSPECTION",
+      "severity": "WARNING",
+      "reviewed_at": "2026-11-18",
+      "justification": "La línea 352 instancia Socket(Proxy.NO_PROXY) vinculado explícitamente a una IP pública validada (anti-DNS-rebinding SSRF). Cuando el esquema es https:// (líneas 359-363) actualiza inmediatamente a SSLSocket con SNI y verificación de hostname HTTPS antes de transmitir datos. El socket plano solo permanece sin TLS cuando el analista inspecciona explícitamente una URL http:// en el extractor CTI."
+    }
+  ]
+}

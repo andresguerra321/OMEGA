@@ -11,13 +11,14 @@ on:
   workflow_dispatch:
     inputs:
       enforcement_mode:
-        description: 'Modo de control Semgrep: observe (línea base) o enforce (bloquea ERROR)'
+        description: 'Modo de control Semgrep: enforce-new-error (por defecto), enforce-all-error u observe'
         required: false
-        default: 'observe'
+        default: 'enforce-new-error'
         type: choice
         options:
+          - enforce-new-error
+          - enforce-all-error
           - observe
-          - enforce
 
 permissions:
   contents: read
@@ -49,18 +50,18 @@ jobs:
             build-mode: none
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 21 (for Java CodeQL manual build)
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: 'temurin'
           java-version: '21'
           cache: 'maven'
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -72,7 +73,7 @@ jobs:
         run: mvn -B -DskipTests compile
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -84,15 +85,15 @@ jobs:
       contents: read
       security-events: write
     env:
-      ENFORCEMENT_MODE: ${{ inputs.enforcement_mode || 'observe' }}
+      ENFORCEMENT_MODE: ${{ inputs.enforcement_mode || 'enforce-new-error' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Python for Semgrep CLI
-        uses: actions/setup-python@v7.1.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
 
@@ -103,13 +104,7 @@ jobs:
         id: semgrep_scan
         run: |
           set -o pipefail
-          EXTRA_ARGS=()
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ -n "${GITHUB_BASE_SHA:-}" ]; then
-            echo "Modo PR: escaneo completo con contexto de baseline ${GITHUB_BASE_SHA}"
-          fi
-
-          # Ejecutar escaneo multi-lenguaje + reglas personalizadas de OMEGA
-          # --sarif-output y --json-output se generan siempre para trazabilidad y GitHub Code Scanning
+          SEMGREP_RC=0
           semgrep scan \
             --config p/owasp-top-ten \
             --config p/java \
@@ -126,7 +121,6 @@ jobs:
             --severity ERROR \
             omega/ .github/workflows/ || SEMGREP_RC=$?
 
-          SEMGREP_RC=${SEMGREP_RC:-0}
           echo "exit_code=${SEMGREP_RC}" >> "$GITHUB_OUTPUT"
 
           # Fallar inmediatamente si Semgrep tuvo un error de ejecución (exit code >= 2)
@@ -135,65 +129,26 @@ jobs:
             exit "${SEMGREP_RC}"
           fi
 
-      - name: Summarize Semgrep Findings & Evaluate Gate
+      - name: Evaluate Semgrep Security Gate (Baseline + Accepted Risks)
         id: evaluate_gate
         run: |
-          python - <<'PY'
-          import json
-          import os
-          from collections import Counter
-          from pathlib import Path
-
-          data = json.loads(Path("omega-semgrep.json").read_text(encoding="utf-8"))
-          results = data.get("results", [])
-          errors = data.get("errors", [])
-          sev_counts = Counter(r.get("extra", {}).get("severity", "UNKNOWN").upper() for r in results)
-
-          summary_lines = [
-              "## Semgrep SAST Summary (OMEGA)",
-              "",
-              f"- **Modo de control:** `{os.environ.get('ENFORCEMENT_MODE', 'observe')}`",
-              f"- **Total hallazgos:** `{len(results)}`",
-              f"- **ERROR (High/Critical):** `{sev_counts.get('ERROR', 0)}`",
-              f"- **WARNING (Medium):** `{sev_counts.get('WARNING', 0)}`",
-              f"- **Errores de parseo/scanner:** `{len(errors)}`",
-              "",
-          ]
-          if results:
-              summary_lines.append("### Top hallazgos (máx. 20)")
-              summary_lines.append("| Severidad | Regla | Archivo | Línea |")
-              summary_lines.append("| :--- | :--- | :--- | ---: |")
-              for item in results[:20]:
-                  sev = item.get("extra", {}).get("severity", "UNKNOWN")
-                  rule = item.get("check_id", "")
-                  path = item.get("path", "")
-                  line = item.get("start", {}).get("line", 0)
-                  summary_lines.append(f"| `{sev}` | `{rule}` | `{path}` | {line} |")
-
-          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-          if summary_path:
-              with open(summary_path, "a", encoding="utf-8") as fh:
-                  fh.write("\n".join(summary_lines) + "\n")
-
-          print("\n".join(summary_lines))
-
-          mode = os.environ.get("ENFORCEMENT_MODE", "observe")
-          if mode == "enforce" and sev_counts.get("ERROR", 0) > 0:
-              raise SystemExit(
-                  f"Enforcement gate failed: {sev_counts['ERROR']} finding(s) with severity ERROR."
-              )
-          PY
+          python .github/scripts/evaluate_semgrep_gate.py \
+            --report omega-semgrep.json \
+            --exit-code "${{ steps.semgrep_scan.outputs.exit_code }}" \
+            --accepted-risks .github/security/semgrep-accepted-risks.json \
+            --baseline .github/security/semgrep-baseline.json \
+            --mode "${ENFORCEMENT_MODE}"
 
       - name: Upload Semgrep SARIF to GitHub Code Scanning
         if: always() && hashFiles('omega-semgrep.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           sarif_file: omega-semgrep.sarif
           category: semgrep-omega
 
       - name: Upload Semgrep Reports as Artifact
         if: always() && hashFiles('omega-semgrep.sarif') != ''
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: omega-semgrep-sast-report
           path: |

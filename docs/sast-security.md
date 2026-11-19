@@ -41,16 +41,30 @@ Definido en [`.github/workflows/sast-security.yml`](../.github/workflows/sast-se
 
 ---
 
-## 4. Estrategia de adopción progresiva (Observación → Enforcement)
+## 4. Estrategia de hallazgos, línea base y enforcement progresivo
 
-1. **Etapa inicial — Observación (`observe`, valor por defecto actual):**
-   - Ejecuta CodeQL y Semgrep completos en cada PR y push a `main`.
-   - Publica todos los hallazgos en **Security → Code scanning**, en el *Step Summary* del workflow y como artifact SARIF/JSON.
-   - **No bloquea el merge** por deuda preexistente sin triar, pero **sí falla** si ocurre un error técnico de ejecución del scanner (código de salida `>= 2` en Semgrep o fallo de compilación Maven en CodeQL).
-2. **Etapa de control — Enforcement (`enforce`):**
-   - Una vez revisada y clasificada la línea base inicial de alertas en `main`:
-     - Cambiar el default de `ENFORCEMENT_MODE` a `enforce` (o usar `--baseline-commit` en PRs para bloquear exclusivamente hallazgos **nuevos** de severidad `ERROR` / High-Critical).
-     - Activar el check requerido `CodeQL` y `Semgrep SAST` en las reglas de protección de la rama `main`.
+### Resultados de línea base y remediación (antes vs. después)
+
+En la ejecución inicial de Semgrep sobre `omega/` y `.github/workflows/` (run [`44434707108`](https://github.com/andresguerra321/OMEGA/actions/runs/44434707108)) se registraron **36 hallazgos totales** (`1 ERROR`, `35 WARNING`) y `6` advertencias de parseo:
+
+| Hallazgo inicial | Severidad | Clasificación | Estado / Decisión |
+| :--- | :--- | :--- | :--- |
+| `dockerfile.security.missing-user` (`omega/frontend/Dockerfile:14`) | `ERROR` (High) | **Vulnerabilidad real de configuración** (Nginx ejecutándose como `root`) | **Corregido:** migrado a `nginxinc/nginx-unprivileged:1.27-alpine` (`USER 101`, puerto interno `8080`, `docker-compose.yml` actualizado a `:8080`). |
+| `generic.nginx.security.request-host-used` (`omega/frontend/nginx.conf:13,19`) | `WARNING` (Medium) | **Riesgo de Host Header Injection en proxy interno** (`$host` reenviado sin control a `backend-java`) | **Corregido:** fijado `proxy_set_header Host backend-java:8080;` y añadido `server_tokens off;`. |
+| `yaml.github-actions.security.github-actions-mutable-action-tag` (32 ocurrencias en `.github/workflows/*.yml`) | `WARNING` (Medium) | **Riesgo de cadena de suministro** (tags mutables `@v4`/`@v7`) | **Corregido:** todas las acciones de los 4 workflows fijadas a **SHAs de commit completos de 40 caracteres**, con actualizaciones semanales vía [`.github/dependabot.yml`](../.github/dependabot.yml). |
+| `java.lang.security.audit.crypto.unencrypted-socket` (`WebIntelExtractorService.java:352`) | `WARNING` (Medium) | **Falso positivo para HTTPS / comportamiento esperado para HTTP CTI** | **Riesgo aceptado y documentado** en [`.github/security/semgrep-accepted-risks.json`](../.github/security/semgrep-accepted-risks.json): el socket `Proxy.NO_PROXY` implementa *IP pinning* anti-DNS-rebinding SSRF y actualiza inmediatamente a `SSLSocket` con SNI cuando el esquema es `https://`. |
+| `PartialParsing` (`OnboardingTourModal.jsx:518`) | Error de parseo JS | Texto `&` sin entidad en JSX | **Corregido** (`&` → `y`), eliminando el error de parseo JS. |
+
+### Política de enforcement implementada
+
+Evaluada por [`.github/scripts/evaluate_semgrep_gate.py`](../.github/scripts/evaluate_semgrep_gate.py):
+
+1. **Bloqueo ante fallos del escáner:** códigos de salida `>= 2` o errores fatales del motor Semgrep fallan el pipeline inmediatamente (nunca se interpretan como verde).
+2. **Riesgos aceptados explícitos ([`semgrep-accepted-risks.json`](../.github/security/semgrep-accepted-risks.json)):** solo se excluyen del bloqueo entradas auditadas por par exacto `(check_id, path)` con clasificación, fecha y justificación técnica, manteniéndolas visibles en el *Step Summary*.
+3. **Línea base diferencial ([`semgrep-baseline.json`](../.github/security/semgrep-baseline.json)):** distingue deuda preexistente de hallazgos nuevos.
+4. **Modo por defecto (`enforce-new-error`):** bloquea automáticamente cualquier PR o push a `main` que introduzca un hallazgo nuevo de severidad `ERROR` (High/Critical), sin bloquear deuda aceptada ni preexistente. Se mantiene soporte manual (`workflow_dispatch`) para `enforce-all-error` y `observe`.
+
+> La activación de reglas obligatorias (*Required status checks*) en la protección de rama de `main` permanece bajo aprobación manual del mantenedor del repositorio.
 
 ---
 
