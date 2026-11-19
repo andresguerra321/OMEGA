@@ -19,6 +19,7 @@ import psutil
 from cti_db import load_host_iocs
 from host_forensics import inspect_process_identity, sha256_file, verify_binary_signature
 from host_runtime import host_scope, powershell, run_command
+from infostealer_shield import scan_infostealer_activity
 
 
 def normalize_domain(value: str) -> str:
@@ -277,6 +278,25 @@ class RealtimeWatcher:
                 self._alert('DNS_IOC', 'HIGH', 'Se encontró un dominio del catálogo de amenazas en los registros DNS',
                             'La entrada puede proceder de una consulta anterior. La caché o el log no permiten atribuirla de forma fiable a un proceso.',
                             {'indicator': domain, 'pid': None, 'dnsSource': dns_mode, 'cti': index['domain'][domain], 'catalogVersion': index_version})
+        try:
+            for finding in scan_infostealer_activity():
+                self._alert(
+                    finding['category'],
+                    finding['severity'],
+                    finding['userFriendlyTitle'],
+                    finding['detail'],
+                    {
+                        'indicator': finding['sensitivePath'],
+                        'pid': finding['pid'],
+                        'name': finding['processName'],
+                        'exe_path': finding['exePath'],
+                        'signatureStatus': finding['signatureStatus'],
+                        'targetKind': finding['targetKind'],
+                        'catalogVersion': index_version,
+                    },
+                )
+        except Exception:
+            pass
         with self._lock:
             if index_version != self._index_version or self._stop.is_set() or not self._enabled:
                 return  # A newer feed must re-evaluate all observations on the next pass.

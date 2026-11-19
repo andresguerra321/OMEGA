@@ -56,6 +56,82 @@ def _default_run_cmd(cmd: list[str], timeout_sec: int = 30) -> tuple[int, str, s
         return 1, "", str(exc)
 
 
+def resolve_portable_tool(tool_name: str, which_fn: WhichResolver | None = None) -> str | None:
+    """Busca primero binarios portables empaquetados (libimobiledevice / platform-tools) antes del PATH del SO."""
+    exe_suffix = ".exe" if os.name == "nt" else ""
+    base_roots: list[Path] = []
+    env_tools = (os.getenv("OMEGA_PORTABLE_TOOLS_DIR") or "").strip()
+    if env_tools:
+        base_roots.append(Path(env_tools))
+    module_root = Path(__file__).resolve().parent
+    base_roots.extend(
+        [
+            module_root / "tools",
+            module_root.parent / "tools",
+            module_root.parent / "frontend" / "resources" / "tools",
+        ]
+    )
+    subfolders = ("", "platform-tools", "libimobiledevice", "bin")
+    for root in base_roots:
+        if not root.exists():
+            continue
+        for sub in subfolders:
+            cand = (root / sub / f"{tool_name}{exe_suffix}") if sub else (root / f"{tool_name}{exe_suffix}")
+            if cand.is_file():
+                return str(cand)
+    fallback = which_fn or shutil.which
+    return fallback(tool_name)
+
+
+_BENIGN_ANDROID_ACCESSIBILITY_PREFIXES = (
+    "com.google.android.marvin.talkback/",
+    "com.google.android.accessibility.",
+    "com.android.talkback/",
+    "com.samsung.android.accessibility.",
+)
+
+
+def analyze_android_accessibility_and_mdm(
+    accessibility_raw: str,
+    device_policy_raw: str,
+) -> list[dict[str, Any]]:
+    """Detecta servicios de Accesibilidad abusivos y administradores MDM no estándar en Android."""
+    anomalies: list[dict[str, Any]] = []
+    cleaned_acc = (accessibility_raw or "").strip()
+    if cleaned_acc and cleaned_acc.lower() not in ("null", "none"):
+        for service in [s.strip() for s in cleaned_acc.split(":") if s.strip()]:
+            low = service.lower()
+            if not any(low.startswith(prefix) for prefix in _BENIGN_ANDROID_ACCESSIBILITY_PREFIXES):
+                anomalies.append(
+                    {
+                        "severity": "HIGH",
+                        "category": "ANDROID_ABUSIVE_ACCESSIBILITY_SERVICE",
+                        "artifact": "settings/enabled_accessibility_services",
+                        "indicator": service,
+                        "detail": (
+                            f"Servicio de Accesibilidad activo de terceros ({service}). "
+                            "El spyware y stalkerware en Android abusa de Accesibilidad para leer pantalla, OTPs y mensajes."
+                        ),
+                    }
+                )
+
+    for line in (device_policy_raw or "").splitlines():
+        stripped = line.strip()
+        low = stripped.lower()
+        if any(marker in low for marker in ("device owner:", "profile owner", "admin=componentinfo{")):
+            if not any(benign in low for benign in ("com.google.android.gms", "com.android.managedprovisioning")):
+                anomalies.append(
+                    {
+                        "severity": "MEDIUM",
+                        "category": "ANDROID_DEVICE_ADMIN_OR_MDM",
+                        "artifact": "dumpsys/device_policy",
+                        "indicator": stripped[:180],
+                        "detail": "Administrador de dispositivo / perfil MDM activo; verifica si fue autorizado por tu organización.",
+                    }
+                )
+    return anomalies
+
+
 def _secure_wipe_directory(target_dir: Path) -> bool:
     """Sobrescribe con ceros los archivos temporales y elimina por completo el árbol `target_dir`."""
     if not target_dir.exists():
@@ -88,7 +164,7 @@ def list_connected_devices(
 ) -> dict[str, Any]:
     """Detecta teléfonos iOS y Android conectados por USB y su estado de confianza/emparejamiento."""
     runner = run_cmd or _default_run_cmd
-    resolver = which_fn or shutil.which
+    resolver: WhichResolver = which_fn if which_fn is not None else (lambda name: resolve_portable_tool(name))
 
     devices: list[dict[str, Any]] = []
     tooling: dict[str, dict[str, Any]] = {}
@@ -252,7 +328,7 @@ def run_usb_triage(
 ) -> dict[str, Any]:
     """Ejecuta extracción USB + MVT + streaming SQLite/WAL y garantiza el borrado Zero-Retention."""
     runner = run_cmd or _default_run_cmd
-    resolver = which_fn or shutil.which
+    resolver: WhichResolver = which_fn if which_fn is not None else (lambda name: resolve_portable_tool(name))
     ioc_lookup = lookup_fn or lookup_iocs_detailed
     norm_platform = (platform or "IOS").strip().upper()
     model_hash = hashlib.sha256(f"{norm_platform}:{device_id}".encode("utf-8")).hexdigest()[:16]
@@ -296,13 +372,19 @@ def run_usb_triage(
                 runner([mvt_ios_bin, "check-backup", "-o", str(mvt_out), str(temp_dir)], 120)
         else:
             adb_bin = resolver("adb")
+            android_deep_anomalies: list[dict[str, Any]] = []
             if adb_bin:
                 _, pkg_out, _ = runner([adb_bin, "-s", device_id, "shell", "pm", "list", "packages", "-f"], 20)
                 if pkg_out:
                     (temp_dir / "packages.txt").write_text(pkg_out, encoding="utf-8")
+                _, acc_out, _ = runner(
+                    [adb_bin, "-s", device_id, "shell", "settings", "get", "secure", "enabled_accessibility_services"],
+                    15,
+                )
                 _, dump_out, _ = runner([adb_bin, "-s", device_id, "shell", "dumpsys", "device_policy"], 20)
                 if dump_out:
                     (temp_dir / "device_policy.txt").write_text(dump_out, encoding="utf-8")
+                android_deep_anomalies = analyze_android_accessibility_and_mdm(acc_out, dump_out)
                 runner([adb_bin, "-s", device_id, "bugreport", str(temp_dir / "bugreport.zip")], 90)
 
             mvt_android_bin = resolver("mvt-android")
@@ -315,7 +397,9 @@ def run_usb_triage(
         stream_res = stream_backup_directory(temp_dir, batch_size=1000, lookup_fn=ioc_lookup)
 
         cti_matches = stream_res.get("cti_matches", [])
-        anomalies = stream_res.get("behavioral_anomalies", [])
+        anomalies = list(stream_res.get("behavioral_anomalies", []))
+        if norm_platform != "IOS" and "android_deep_anomalies" in locals():
+            anomalies.extend(android_deep_anomalies)
         findings_count = len(cti_matches) + len(anomalies)
 
         if cti_matches or any(a.get("severity") == "CRITICAL" for a in anomalies):

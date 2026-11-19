@@ -63,24 +63,44 @@ public class ExternalIocFeedSyncService {
     private final ObjectMapper objectMapper;
     private final boolean syncEnabled;
     private final String abuseChAuthKey;
+    private final String signedFeedUrl;
+    private final String signedFeedSigUrl;
+    private final SignedFeedVerifier signedFeedVerifier;
     private final HttpClient httpClient;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ExternalIocFeedSyncService(
             CampaignRepository campaignRepository,
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
             @Value("${OMEGA_EXTERNAL_IOC_SYNC_ENABLED:true}") boolean syncEnabled,
-            @Value("${ABUSECH_AUTH_KEY:}") String abuseChAuthKey
+            @Value("${ABUSECH_AUTH_KEY:}") String abuseChAuthKey,
+            @Value("${OMEGA_SIGNED_CTI_FEED_URL:}") String signedFeedUrl,
+            @Value("${OMEGA_SIGNED_CTI_FEED_SIG_URL:}") String signedFeedSigUrl,
+            SignedFeedVerifier signedFeedVerifier
     ) {
         this.campaignRepository = campaignRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.syncEnabled = syncEnabled;
         this.abuseChAuthKey = abuseChAuthKey == null ? "" : abuseChAuthKey.trim();
+        this.signedFeedUrl = signedFeedUrl == null ? "" : signedFeedUrl.trim();
+        this.signedFeedSigUrl = signedFeedSigUrl == null ? "" : signedFeedSigUrl.trim();
+        this.signedFeedVerifier = signedFeedVerifier;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(6))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
+    }
+
+    public ExternalIocFeedSyncService(
+            CampaignRepository campaignRepository,
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            boolean syncEnabled,
+            String abuseChAuthKey
+    ) {
+        this(campaignRepository, jdbcTemplate, objectMapper, syncEnabled, abuseChAuthKey, "", "", new SignedFeedVerifier(""));
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -104,8 +124,92 @@ public class ExternalIocFeedSyncService {
         int openPhishCount = syncOpenPhish();
         int urlhausCount = abuseChAuthKey.isBlank() ? 0 : syncUrlhaus();
         int threatfoxCount = abuseChAuthKey.isBlank() ? 0 : syncThreatFox();
-        log.info("Sincronización feeds externos completada: openphish={}, urlhaus={}, threatfox={}",
-                openPhishCount, urlhausCount, threatfoxCount);
+        int signedCount = syncSignedInvestigationsFeed();
+        log.info("Sincronización feeds externos completada: openphish={}, urlhaus={}, threatfox={}, signed_ed25519={}",
+                openPhishCount, urlhausCount, threatfoxCount, signedCount);
+    }
+
+    public int syncSignedInvestigationsFeed() {
+        if (signedFeedUrl.isBlank() || signedFeedSigUrl.isBlank() || signedFeedVerifier == null
+                || !signedFeedVerifier.isSignatureVerificationEnforced()) {
+            return 0;
+        }
+        try {
+            byte[] payload = fetchBoundedBytes(signedFeedUrl);
+            byte[] sigBytes = fetchBoundedBytes(signedFeedSigUrl);
+            String sigBase64 = new String(sigBytes, StandardCharsets.UTF_8).trim();
+            if (!signedFeedVerifier.verify(payload, sigBase64)) {
+                log.warn("Feed CTI firmado rechazado por verificación Ed25519 fallida: {}", signedFeedUrl);
+                return 0;
+            }
+            return ingestSignedStixOrJsonFeed(payload, signedFeedUrl);
+        } catch (Exception ex) {
+            log.warn("Error sincronizando feed CTI firmado Ed25519: {}", ex.getMessage());
+            return 0;
+        }
+    }
+
+    int ingestSignedStixOrJsonFeed(byte[] verifiedPayload, String sourceUrl) throws IOException {
+        JsonNode root = objectMapper.readTree(verifiedPayload);
+        JsonNode items = root.has("indicators") ? root.get("indicators") : root.get("objects");
+        if (items == null || !items.isArray()) {
+            return 0;
+        }
+        UUID campaignId = getOrCreateCampaign(
+                "Amnesty Tech & Citizen Lab Signed Live Feed",
+                "Spyware / Mercenary Surveillance (Ed25519 Verified)",
+                "Indicadores sincronizados diariamente con verificación criptográfica Ed25519."
+        );
+        int inserted = 0;
+        for (JsonNode node : items) {
+            if (inserted >= MAX_IOCS_PER_FEED) break;
+            String value = node.path("ioc_value").asText(node.path("value").asText("")).trim().toLowerCase(Locale.ROOT);
+            String type = node.path("ioc_type").asText(node.path("type").asText("domain")).trim().toLowerCase(Locale.ROOT);
+            if (value.isBlank() || value.length() > 512) continue;
+            String context = node.path("context").asText("Indicador verificado por firma Ed25519");
+            String org = node.path("organization").asText("Amnesty Tech / Citizen Lab");
+            int updated = jdbcTemplate.update(
+                    INSERT_IOC_SQL,
+                    UUID.randomUUID(),
+                    campaignId,
+                    "signed-ed25519-" + UUID.nameUUIDFromBytes((type + ":" + value).getBytes(StandardCharsets.UTF_8)),
+                    type,
+                    value,
+                    value,
+                    "[" + type + ":value = '" + value.replace("'", "") + "']",
+                    context,
+                    "Signed CTI Feed (Ed25519)",
+                    org,
+                    sourceUrl
+            );
+            inserted += updated;
+        }
+        return inserted;
+    }
+
+    private byte[] fetchBoundedBytes(String url) throws IOException, InterruptedException {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(10))
+                .header("User-Agent", "OMEGA-CTI-SignedFeed/1.0")
+                .GET()
+                .build();
+        HttpResponse<InputStream> res = httpClient.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        if (res.statusCode() != 200) {
+            throw new IOException("HTTP " + res.statusCode() + " consultando " + url);
+        }
+        try (InputStream in = res.body(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int total = 0;
+            int read;
+            while ((read = in.read(buf)) != -1) {
+                total += read;
+                if (total > MAX_FEED_BYTES) {
+                    throw new IOException("El feed firmado excede MAX_FEED_BYTES");
+                }
+                out.write(buf, 0, read);
+            }
+            return out.toByteArray();
+        }
     }
 
     private void seedKnownBenchmarkIndicators() {

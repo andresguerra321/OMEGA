@@ -240,8 +240,13 @@ class CorpusDbClient:
         wrapped = f"SELECT COALESCE(json_agg(t), '[]'::json) FROM ({sql}) t;"
         if not self._use_docker_exec:
             import psycopg
-            dsn = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
-            with psycopg.connect(dsn) as conn:
+            with psycopg.connect(
+                host=self.host,
+                port=self.port,
+                dbname=self.db,
+                user=self.user,
+                password=self.password,
+            ) as conn:
                 with conn.cursor() as cur:
                     cur.execute(wrapped)
                     row = cur.fetchone()

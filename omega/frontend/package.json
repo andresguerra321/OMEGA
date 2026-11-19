@@ -17,6 +17,9 @@
     "desktop:start": "vite build && node electron/launch.js",
     "desktop:pack": "vite build && electron-builder --dir",
     "desktop:dist": "vite build && electron-builder --win nsis portable",
+    "sensor:build": "cargo build --release --manifest-path ../sensor-rust/Cargo.toml",
+    "tauri:dev": "npx @tauri-apps/cli@2 dev",
+    "tauri:build": "powershell -ExecutionPolicy Bypass -File ../scripts/build-tauri-windows.ps1",
     "test": "node --test electron/*.test.js src/lib/*.test.js src/components/*.test.js"
   },
   "dependencies": {

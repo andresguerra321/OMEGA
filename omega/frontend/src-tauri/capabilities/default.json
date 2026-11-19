@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Least-privilege capability for OMEGA Security Tauri v2 shell",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "binaries/omega-sensor",
+          "sidecar": true,
+          "args": ["--once"]
+        }
+      ]
+    }
+  ]
+}

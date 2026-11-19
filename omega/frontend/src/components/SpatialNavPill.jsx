@@ -42,6 +42,8 @@ function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat, au
   return null;
 }
 
+const SHIELD_MODE_NAV_IDS = new Set(['inicio', 'equipo', 'exposicion', 'cuenta', 'ajustes']);
+
 export function SpatialNavPill({
   activeNav,
   onSelectNav,
@@ -51,15 +53,19 @@ export function SpatialNavPill({
   isLoadingChat = false,
   authConnected = false,
   compact = false,
+  technicalMode = true,
 }) {
   const pillId = useId();
+  const visibleItems = technicalMode
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((item) => SHIELD_MODE_NAV_IDS.has(item.id) || item.id === activeNav);
   return (
     <nav
       aria-label="Navegación espacial OMEGA"
       className={`roam-pill-nav inline-flex items-center rounded-[14px] p-1 select-none ${compact ? 'gap-0.5' : 'gap-1'
         }`}
     >
-      {NAV_ITEMS.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = item.icon;
         const isActive = activeNav === item.id;
         const ledClass = getLedClass(item.id, {

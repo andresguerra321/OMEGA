@@ -52,3 +52,10 @@ graphify-out/
 .pytest-phase*/
 .pytest-review*/
 
+# Rust / Tauri v2 build artifacts
+omega/sensor-rust/target/
+omega/frontend/src-tauri/target/
+omega/frontend/src-tauri/binaries/
+omega/frontend/src-tauri/gen/
+
+

@@ -60,3 +60,16 @@ jobs:
           name: omega-java-sbom
           path: omega/backend-java/target/omega-backend-sbom.json
           retention-days: 30
+
+  vice-security-audit:
+    name: Static Secrets & Config Audit (VICE)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run VICE local audit on omega/
+        env:
+          VICE_ACCEPT_TERMS: '1'
+        run: npx --yes vice-security audit omega --ci --min-score 90

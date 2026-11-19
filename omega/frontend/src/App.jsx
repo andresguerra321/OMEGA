@@ -44,8 +44,16 @@ import { OmegaLogo } from './components/OmegaLogo';
 import { OmegaLoader } from './components/OmegaLoader';
 import { SpatialNavPill } from './components/SpatialNavPill';
 import { AuthModulePanel } from './components/AuthModulePanel';
+import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { HostProtectionPanel } from './components/HostProtectionPanel';
-import { sanitizeSearchInput, validateChatMessage, validateUploadFile } from './lib/validators';
+import { SaasFleetCard } from './components/SaasFleetCard';
+import {
+  formatClockTime,
+  formatLinkTelemetryContext,
+  formatRelativeTime,
+  getSmoothDelayMs,
+} from './lib/telemetryContext';
+import { validateChatMessage, validateUploadFile } from './lib/validators';
 
 const SecurityPostureStage = lazy(() =>
   import('./components/SecurityPostureStage').then((m) => ({ default: m.SecurityPostureStage }))
@@ -88,26 +96,6 @@ const NAV_ITEMS = [
   { id: 'ajustes', label: 'Ajustes', subtitle: 'Motor RAG, cuenta y permisos', icon: Settings },
 ];
 
-function formatRelativeTime(isoString) {
-  if (!isoString) return 'Reciente';
-  const ts = new Date(isoString).getTime();
-  const diffHours = Math.floor((Date.now() - ts) / (1000 * 60 * 60));
-  if (diffHours < 1) return 'Hace momentos';
-  if (diffHours === 1) return 'Hace 1 h';
-  if (diffHours < 24) return `Hace ${diffHours} h`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays === 1) return 'Ayer';
-  return `Hace ${diffDays} d`;
-}
-
-function formatClockTime(date = new Date()) {
-  try {
-    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return 'ahora';
-  }
-}
-
 const BOOT_LOADER_STEPS = [
   'Verificando sesión',
   'Contactando el servicio local',
@@ -119,16 +107,6 @@ const LOGIN_LOADER_STEPS = [
   'Cargando espacio de trabajo',
   'Abriendo cabina OMEGA',
 ];
-
-function getSmoothDelayMs(targetMs) {
-  if (
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-  ) {
-    return 0;
-  }
-  return targetMs;
-}
 
 export default function App() {
   const [activeNav, setActiveNav] = useState('inicio');
@@ -889,44 +867,6 @@ export default function App() {
     }
   }
 
-  function formatLinkTelemetryContext(res) {
-    if (!res) return '';
-    const ctiMatches = Array.isArray(res.cti_matches) ? res.cti_matches : [];
-    const heuristics = Array.isArray(res.heuristics) ? res.heuristics : [];
-    const owasp = Array.isArray(res.owasp_findings) ? res.owasp_findings : [];
-    const vt = res.external_reputation?.virustotal;
-    const abuse = res.external_reputation?.abuseipdb;
-    const trace = res.trace_result;
-    const lines = [
-      `URL analizada: ${res.normalized_url || res.host || 'N/D'}`,
-      `Host: ${res.host || 'N/D'} | Dominio raíz: ${res.root_domain || res.host || 'N/D'} | Esquema: ${res.scheme || 'N/D'}`,
-      `Nivel de riesgo: ${res.risk_level || 'N/D'} — ${res.verdict || ''}`,
-      res.recommendation ? `Recomendación: ${res.recommendation}` : '',
-      res.passive_ct_certificates !== null && res.passive_ct_certificates !== undefined
-        ? `Certificados CT (crt.sh/CertSpotter): ${res.passive_ct_certificates} registros`
-        : 'Certificados CT: N/D',
-      vt && vt.status === 'ok'
-        ? `VirusTotal / Reputación: ${vt.malicious || 0} maliciosos, ${vt.suspicious || 0} sospechosos`
-        : '',
-      abuse && abuse.status === 'ok'
-        ? `AbuseIPDB: Score ${abuse.abuse_confidence_score}% (${abuse.total_reports} reportes)`
-        : '',
-      ctiMatches.length > 0
-        ? `Coincidencias CTI (${ctiMatches.length}): ${ctiMatches.slice(0, 5).map((m) => `${m.ioc_value} [${m.spyware_family || m.campaign || 'CTI'}: ${m.context || ''}]`).join(' ; ')}`
-        : 'Coincidencias CTI: 0',
-      owasp.length > 0
-        ? `Reglas OWASP activadas (${owasp.length}): ${owasp.map((f) => `[${f.rule_id} ${f.severity}] ${f.title}: ${f.detail}`).join(' ; ')}`
-        : '',
-      heuristics.length > 0
-        ? `Alertas estructurales (${heuristics.length}): ${heuristics.join(' ; ')}`
-        : '',
-      trace?.final_url && trace.final_url !== res.normalized_url
-        ? `Destino tras redirecciones (sin JS): ${trace.final_url}`
-        : '',
-    ];
-    return lines.filter(Boolean).join('\n');
-  }
-
   function handleLinkVerified(res) {
     setLastLinkResult(res);
     const ctx = formatLinkTelemetryContext(res);
@@ -1204,6 +1144,7 @@ export default function App() {
                   apiOnline={apiOnline}
                   isLoadingChat={loadingChat}
                   authConnected={Boolean(authSession)}
+                  technicalMode={technicalMode}
                 />
               </div>
 
@@ -1211,30 +1152,32 @@ export default function App() {
               <div className={`titlebar-no-drag relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
                 <div
                   role="group"
-                  aria-label="Nivel de detalle"
+                  aria-label="Modo de experiencia OMEGA"
                   className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
                 >
                   <button
                     type="button"
                     onClick={() => setTechnicalMode(false)}
+                    title="Modo Escudo: 3 flujos guiados en lenguaje natural para protección diaria"
                     className={`px-2 py-1 rounded-[6px] text-[11px] font-medium transition-all cursor-pointer ${
                       !technicalMode
                         ? 'apple-segmented-active'
                         : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                     }`}
                   >
-                    Simple
+                    Escudo
                   </button>
                   <button
                     type="button"
                     onClick={() => setTechnicalMode(true)}
+                    title="Modo Laboratorio: STIX, OSINT, RAG documental, expedientes y dictamen PDF"
                     className={`px-2 py-1 rounded-[6px] text-[11px] font-medium transition-all cursor-pointer ${
                       technicalMode
                         ? 'apple-segmented-active'
                         : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                     }`}
                   >
-                    Técnico
+                    Laboratorio
                   </button>
                 </div>
 
@@ -1514,36 +1457,39 @@ export default function App() {
                     onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
                   />
                 ) : activeNav === 'cuenta' ? (
-                  <AuthModulePanel
-                    authSession={authSession}
-                    onAuthenticated={(session) => {
-                      setAuthSession(session);
-                      void refreshSystemTelemetry();
-                      void refreshPrivateWorkspace();
-                    }}
-                    onLogout={handleLogout}
-                    govStats={govStats}
-                    privateDocs={expedienteDocs}
-                    activeExpedienteId={activeExpedienteId}
-                    loadingDocs={loadingExpedientes}
-                    uploadingPdf={uploadingPdf}
-                    docNotice={expedienteNotice}
-                    docError={expedienteError}
-                    onDismissDocBanner={() => {
-                      setExpedienteNotice('');
-                      setExpedienteError('');
-                    }}
-                    onUploadPdf={handleUploadExpedientePdf}
-                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
-                    onOpenChat={(preferPrivate) => {
-                      if (preferPrivate && activeExpedienteId) {
-                        setUsePrivateDocs(true);
-                      }
-                      handleNavigate('preguntar');
-                    }}
-                    onOpenSettings={() => handleNavigate('ajustes')}
-                    onOpenAuth={openAuthModal}
-                  />
+                  <div className="flex-1 min-h-0 overflow-y-auto">
+                    <AuthModulePanel
+                      authSession={authSession}
+                      onAuthenticated={(session) => {
+                        setAuthSession(session);
+                        void refreshSystemTelemetry();
+                        void refreshPrivateWorkspace();
+                      }}
+                      onLogout={handleLogout}
+                      govStats={govStats}
+                      privateDocs={expedienteDocs}
+                      activeExpedienteId={activeExpedienteId}
+                      loadingDocs={loadingExpedientes}
+                      uploadingPdf={uploadingPdf}
+                      docNotice={expedienteNotice}
+                      docError={expedienteError}
+                      onDismissDocBanner={() => {
+                        setExpedienteNotice('');
+                        setExpedienteError('');
+                      }}
+                      onUploadPdf={handleUploadExpedientePdf}
+                      onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                      onOpenChat={(preferPrivate) => {
+                        if (preferPrivate && activeExpedienteId) {
+                          setUsePrivateDocs(true);
+                        }
+                        handleNavigate('preguntar');
+                      }}
+                      onOpenSettings={() => handleNavigate('ajustes')}
+                      onOpenAuth={openAuthModal}
+                    />
+                    <SaasFleetCard authSession={authSession} />
+                  </div>
                 ) : activeNav === 'amenazas' ? (
                   <CampaignsPanel
                     onAskInChat={askInChat}
@@ -1676,141 +1622,24 @@ export default function App() {
       />
 
       {/* Paleta Spotlight (⌘K) */}
-      {commandOpen && (
-        <div
-          onClick={() => setCommandOpen(false)}
-          className="fixed inset-0 z-50 bg-[#0A0A0C]/72 flex items-start justify-center pt-[14vh] px-4"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="apple-modal-in omega-glass-panel w-full max-w-[540px] rounded-[16px] overflow-hidden"
-          >
-            <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3.5">
-              <Search strokeWidth={1.7} className="h-[18px] w-[18px] text-[#9A9AA2] shrink-0" />
-              <input
-                type="text"
-                autoFocus
-                value={commandQuery}
-                onChange={(e) => setCommandQuery(sanitizeSearchInput(e.target.value))}
-                maxLength={120}
-                placeholder="Ir a módulo, herramienta o conversación reciente..."
-                className="flex-1 bg-transparent text-[14.5px] tracking-[-0.01em] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
-              />
-              <span className="font-tech rounded-[5px] bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-[10.5px] text-[#9A9AA2]">
-                ESC
-              </span>
-            </div>
-
-            <div className="max-h-[460px] overflow-y-auto p-2 pb-2.5 space-y-1">
-              <p className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9A9AA2]">
-                Instrumentos y módulos
-              </p>
-              {NAV_ITEMS.filter(
-                (item) =>
-                  item.label.toLowerCase().includes(commandQuery.toLowerCase()) ||
-                  (item.subtitle || '').toLowerCase().includes(commandQuery.toLowerCase())
-              ).map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      handleNavigate(item.id);
-                      setCommandOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors duration-150 cursor-pointer"
-                  >
-                    <span className="inline-flex items-center gap-3">
-                      <Icon strokeWidth={1.7} className="h-4 w-4 text-[#2F6FED]" />
-                      <span className="font-medium tracking-[-0.01em]">{item.label}</span>
-                    </span>
-                    <span className="text-[11.5px] text-[#9A9AA2]">{item.subtitle}</span>
-                  </button>
-                );
-              })}
-
-              <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9A9AA2]">
-                Acciones rápidas
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCopilotOpen(true);
-                  setCommandOpen(false);
-                }}
-                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
-              >
-                <span className="inline-flex items-center gap-3">
-                  <Sparkles className="h-4 w-4 text-[#2F6FED]" />
-                  <span>Abrir Copiloto lateral</span>
-                </span>
-                <span className="font-tech text-[11px] text-[#9A9AA2]">⌘J</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTechnicalMode((v) => !v);
-                  setCommandOpen(false);
-                }}
-                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
-              >
-                <span className="inline-flex items-center gap-3">
-                  <Gauge className="h-4 w-4 text-[#2F6FED]" />
-                  <span>
-                    Cambiar a modo {technicalMode ? 'Simple (lenguaje claro)' : 'Técnico'}
-                  </span>
-                </span>
-                <span className="text-[11.5px] text-[#9A9AA2]">Vista actual</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCommandOpen(false);
-                  setOnboardingOpen(true);
-                }}
-                className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
-              >
-                <span className="inline-flex items-center gap-3">
-                  <BookOpen className="h-4 w-4 text-[#6FA0FF]" />
-                  <span>Abrir guía interactiva de primeros pasos</span>
-                </span>
-                <span className="text-[11.5px] text-[#9A9AA2]">Tutorial</span>
-              </button>
-
-              {sessions.length > 0 && (
-                <>
-                  <p className="px-2.5 pt-2.5 pb-0.5 text-[11px] font-semibold tracking-[0.02em] text-[#9A9AA2]">
-                    Investigaciones recientes
-                  </p>
-                  {sessions
-                    .filter((s) =>
-                      s.title.toLowerCase().includes(commandQuery.toLowerCase())
-                    )
-                    .slice(0, 5)
-                    .map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setCurrentSessionId(s.id);
-                          setSelectedCitation(null);
-                          setActiveNav('preguntar');
-                          setCommandOpen(false);
-                        }}
-                        className="w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[12.5px] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4] transition-colors duration-150 cursor-pointer"
-                      >
-                        <MessageSquare strokeWidth={1.65} className="h-3.5 w-3.5 text-[#9A9AA2] shrink-0" />
-                        <span className="truncate">{s.title}</span>
-                      </button>
-                    ))}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <CommandPaletteModal
+        isOpen={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        commandQuery={commandQuery}
+        onChangeQuery={setCommandQuery}
+        navItems={NAV_ITEMS}
+        onNavigate={handleNavigate}
+        onOpenCopilot={() => setIsCopilotOpen(true)}
+        technicalMode={technicalMode}
+        onToggleTechnicalMode={() => setTechnicalMode((v) => !v)}
+        onOpenOnboarding={() => setOnboardingOpen(true)}
+        sessions={sessions}
+        onSelectSession={(sessionId) => {
+          setCurrentSessionId(sessionId);
+          setSelectedCitation(null);
+          setActiveNav('preguntar');
+        }}
+      />
 
       <AuthModal
         isOpen={authModalOpen}

@@ -1,0 +1,20 @@
+[package]
+name = "omega-sensor"
+version = "2.0.0"
+edition = "2021"
+description = "OMEGA native host telemetry and Anti-Infostealer resident sensor (Rust)"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+hex = "0.4"
+hmac = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sysinfo = "0.31"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

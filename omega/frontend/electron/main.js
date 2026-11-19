@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DockerOrchestrator } from './dockerOrchestrator.js';
+import { DEPLOYMENT_MODES, probeCloudBackendHealth, resolveDeploymentConfig } from './deploymentMode.js';
 import { pathToFileURL } from 'node:url';
 import { SECURE_WEB_PREFERENCES, httpsUrl, allowedNavigation, assertTrustedIpcSender, validateIpc, verifyRelease, encryptedStorage } from './securityHardening.js';
 import { connectHostSensor } from './hostSensor.js';
@@ -1420,21 +1421,58 @@ function getDockerOrchestrator() {
   return dockerOrchestrator;
 }
 
+function getDeploymentConfig() {
+  return resolveDeploymentConfig({
+    env: process.env,
+    userDataDir: app.getPath('userData'),
+  });
+}
+
 async function loadMainRenderer(win) {
   if (!win || win.isDestroyed() || appTransitionedToMain) return;
   appTransitionedToMain = true;
+  const deploy = getDeploymentConfig();
   const rendererUrl = !app.isPackaged && process.env.OMEGA_RENDERER_URL;
-  const backendPort = String(getDockerOrchestrator().getState().backendPort);
+  const query = {};
+  if (deploy.mode === DEPLOYMENT_MODES.CLOUD_MANAGED && deploy.cloudApiUrl) {
+    query.omegaCloudOrigin = deploy.cloudApiUrl;
+    query.omegaDeploymentMode = DEPLOYMENT_MODES.CLOUD_MANAGED;
+  } else {
+    query.omegaBackendPort = String(getDockerOrchestrator().getState().backendPort);
+    query.omegaDeploymentMode = DEPLOYMENT_MODES.SELF_HOSTED;
+  }
   if (rendererUrl) {
     const location = new URL(rendererUrl);
-    location.searchParams.set('omegaBackendPort', backendPort);
+    Object.entries(query).forEach(([k, v]) => location.searchParams.set(k, v));
     await win.loadURL(location.href);
     return;
   }
-  await win.loadFile(path.join(__dirname, '../dist/index.html'), { query: { omegaBackendPort: backendPort } });
+  await win.loadFile(path.join(__dirname, '../dist/index.html'), { query });
 }
 
 async function bootDockerAndOpenApp(opts = {}) {
+  const deploy = getDeploymentConfig();
+  if (deploy.mode === DEPLOYMENT_MODES.CLOUD_MANAGED && deploy.cloudApiUrl) {
+    console.info(`[OMEGA Desktop] Modo CLOUD_MANAGED activo (${deploy.cloudApiUrl}); omitiendo Docker Desktop.`);
+    const health = await probeCloudBackendHealth(deploy.cloudApiUrl);
+    const snapshot = {
+      phase: health.ok ? 'ready' : 'error',
+      mode: DEPLOYMENT_MODES.CLOUD_MANAGED,
+      requiresDocker: false,
+      cloudApiUrl: deploy.cloudApiUrl,
+      message: health.ok
+        ? 'Conectado a OMEGA Cloud (HTTPS)'
+        : health.error || 'No se pudo conectar a OMEGA Cloud.',
+    };
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('omega:backend-status-event', snapshot);
+      if (health.ok && !isQuitting && !shutdownInProgress) {
+        await loadMainRenderer(mainWindow);
+      }
+    }
+    return health;
+  }
+
   console.info('[OMEGA Desktop] Iniciando verificación/arranque de servicios Docker...');
   const result = await getDockerOrchestrator().start(opts);
   console.info(
@@ -1460,7 +1498,23 @@ async function bootDockerAndOpenApp(opts = {}) {
   return result;
 }
 
-ipcMain.handle('omega:backend-status', () => getDockerOrchestrator().getState());
+ipcMain.handle('omega:backend-status', () => {
+  const deploy = getDeploymentConfig();
+  if (deploy.mode === DEPLOYMENT_MODES.CLOUD_MANAGED && deploy.cloudApiUrl) {
+    return {
+      phase: 'ready',
+      mode: DEPLOYMENT_MODES.CLOUD_MANAGED,
+      requiresDocker: false,
+      cloudApiUrl: deploy.cloudApiUrl,
+      message: 'Conectado a OMEGA Cloud (HTTPS)',
+    };
+  }
+  return {
+    ...getDockerOrchestrator().getState(),
+    mode: DEPLOYMENT_MODES.SELF_HOSTED,
+    requiresDocker: true,
+  };
+});
 
 ipcMain.handle('omega:host-prepare', async (event, payload) => {
   if (!desktopSensorSetup) return { ready: true, managed: false };

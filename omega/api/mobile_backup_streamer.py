@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import plistlib
+import re
 import shutil
 import sqlite3
+import tarfile
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -351,4 +354,186 @@ def stream_backup_directory(
         for item in small_artifacts_for_timeline:
             item["bytes"] = b""
         small_artifacts_for_timeline.clear()
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Fase 7: Analizadores profundos de iOS sysdiagnose (.tar.gz) y artefactos
+# ---------------------------------------------------------------------------
+
+_SHUTDOWN_VOLATILE_RE = re.compile(
+    r"(/private/var/tmp/[^\s,;]+|/private/var/db/[^\s,;]+|/tmp/[^\s,;]+)",
+    re.IGNORECASE,
+)
+_KNOWN_PEGASUS_BINARIES = {"roleaccountd", "bh", "pcsd", "gatekeeperd", "assistd", "otapredownloadd"}
+_ZEROCLICK_CRASH_PROCS = ("imtranscoderagent", "blastdoor", "webcontent", "imageio", "coregraphics")
+_MAX_SYSDIAGNOSE_MEMBER_BYTES = 256 * 1024 * 1024
+
+
+def analyze_shutdown_log(text: str, artifact_label: str = "shutdown.log") -> list[dict[str, Any]]:
+    """Detecta procesos ejecutados desde rutas volátiles o binarios asociados a Pegasus en shutdown.log."""
+    anomalies: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for line in (text or "").splitlines():
+        low = line.lower()
+        for match in _SHUTDOWN_VOLATILE_RE.finditer(line):
+            volatile_path = match.group(1)
+            key = f"volatile:{volatile_path.lower()}"
+            if key in seen:
+                continue
+            seen.add(key)
+            anomalies.append(
+                {
+                    "severity": "CRITICAL",
+                    "category": "SYSDIAGNOSE_SHUTDOWN_VOLATILE_PATH",
+                    "artifact": artifact_label,
+                    "indicator": volatile_path,
+                    "detail": (
+                        f"Proceso registrado en {artifact_label} ejecutándose desde ruta volátil "
+                        f"({volatile_path}), patrón documentado por Amnesty Tech en infecciones Pegasus."
+                    ),
+                }
+            )
+        for proc_name in _KNOWN_PEGASUS_BINARIES:
+            if re.search(rf"\b{re.escape(proc_name)}\b", low) and ("/private/var/" in low or "client" in low or "pid" in low):
+                key = f"proc:{proc_name}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                anomalies.append(
+                    {
+                        "severity": "HIGH",
+                        "category": "SYSDIAGNOSE_SUSPICIOUS_PROCESS",
+                        "artifact": artifact_label,
+                        "indicator": proc_name,
+                        "detail": f"Referencia al proceso sospechoso '{proc_name}' en {artifact_label}; requiere correlación temporal.",
+                    }
+                )
+    return anomalies
+
+
+def analyze_mobileconfig_profile(raw_bytes: bytes, artifact_label: str = "profile.mobileconfig") -> list[dict[str, Any]]:
+    """Inspecciona perfiles MDM / certificados raíz / VPN forzados en archivos .mobileconfig."""
+    anomalies: list[dict[str, Any]] = []
+    try:
+        # Extraer el bloque XML plist si el perfil está firmado en CMS/DER
+        start = raw_bytes.find(b"<?xml")
+        end = raw_bytes.rfind(b"</plist>")
+        payload_bytes = raw_bytes[start : end + len(b"</plist>")] if start != -1 and end != -1 else raw_bytes
+        parsed = plistlib.loads(payload_bytes)
+    except Exception:
+        return anomalies
+
+    payloads = parsed.get("PayloadContent") if isinstance(parsed, dict) else None
+    if not isinstance(payloads, list):
+        return anomalies
+
+    risky_types = {
+        "com.apple.security.root": ("CRITICAL", "Certificado raíz confiable instalado vía perfil (riesgo MitM TLS)."),
+        "com.apple.mdm": ("HIGH", "Perfil de administración remota MDM detectado; verifica si pertenece a tu organización."),
+        "com.apple.vpn.managed": ("MEDIUM", "Perfil VPN gestionado detectado; revisa el servidor remoto configurado."),
+        "com.apple.proxy.http.global": ("HIGH", "Proxy HTTP global forzado en el dispositivo (posible interceptación de tráfico)."),
+    }
+    for item in payloads:
+        if not isinstance(item, dict):
+            continue
+        p_type = str(item.get("PayloadType") or "").strip().lower()
+        if p_type in risky_types:
+            sev, desc = risky_types[p_type]
+            ident = str(item.get("PayloadIdentifier") or item.get("PayloadDisplayName") or p_type)
+            anomalies.append(
+                {
+                    "severity": sev,
+                    "category": "IOS_MDM_OR_ROOT_PROFILE",
+                    "artifact": artifact_label,
+                    "indicator": ident,
+                    "detail": f"{desc} ({p_type})",
+                }
+            )
+    return anomalies
+
+
+def analyze_ips_crash_log(text: str, artifact_label: str = "crash.ips") -> list[dict[str, Any]]:
+    """Detecta señales de exploits zero-click en logs de fallo .ips (BlastDoor/ImageIO/WebContent)."""
+    low = (text or "").lower()
+    anomalies: list[dict[str, Any]] = []
+    matched_proc = next((p for p in _ZEROCLICK_CRASH_PROCS if p in low), None)
+    has_volatile = bool(_SHUTDOWN_VOLATILE_RE.search(text or ""))
+    has_mem_corrupt = any(
+        sig in low for sig in ("exc_bad_access", "sigsegv", "sigbus", "pac failure", "codesigning")
+    )
+    if matched_proc and (has_volatile or has_mem_corrupt):
+        anomalies.append(
+            {
+                "severity": "HIGH" if has_volatile else "MEDIUM",
+                "category": "IOS_ZEROCLICK_CRASH_INDICATOR",
+                "artifact": artifact_label,
+                "indicator": matched_proc,
+                "detail": (
+                    f"Fallo de memoria/proceso en '{matched_proc}' dentro de {artifact_label}"
+                    + (" con referencia a ruta volátil." if has_volatile else "; correlacionar con ventana de SMS/iMessage.")
+                ),
+            }
+        )
+    return anomalies
+
+
+def stream_sysdiagnose_archive(
+    archive_path: Path | str,
+    *,
+    batch_size: int = 1000,
+    lookup_fn: Callable[[list[str]], list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    """Extrae y analiza en streaming un archivo `sysdiagnose_*.tar.gz` con protección anti-Zip-Slip y purga Zero-Retention."""
+    src = Path(archive_path)
+    if not src.exists():
+        raise FileNotFoundError(f"Archivo sysdiagnose no encontrado: {src}")
+
+    work_dir = Path(tempfile.mkdtemp(prefix="omega_sysdiag_"))
+    extracted_count = 0
+    deep_anomalies: list[dict[str, Any]] = []
+
+    try:
+        with tarfile.open(src, mode="r:*") as tf:
+            for member in tf.getmembers():
+                if not member.isfile() or member.issym() or member.islnk():
+                    continue
+                if member.size < 0 or member.size > _MAX_SYSDIAGNOSE_MEMBER_BYTES:
+                    continue
+                norm_name = member.name.replace("\\", "/").lstrip("/")
+                if ".." in norm_name.split("/"):
+                    continue
+                if not _matches_critical_artifact(norm_name.lower()):
+                    continue
+
+                safe_rel = Path(*[part for part in norm_name.split("/") if part and part not in (".", "..")])
+                dest_path = (work_dir / safe_rel).resolve()
+                if not str(dest_path).startswith(str(work_dir.resolve())):
+                    continue
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                extracted = tf.extractfile(member)
+                if extracted is None:
+                    continue
+                with extracted, dest_path.open("wb") as out_fh:
+                    shutil.copyfileobj(extracted, out_fh, length=256 * 1024)
+                extracted_count += 1
+
+                low_name = safe_rel.name.lower()
+                if low_name == "shutdown.log":
+                    deep_anomalies.extend(
+                        analyze_shutdown_log(dest_path.read_text(encoding="utf-8", errors="ignore"), str(safe_rel))
+                    )
+                elif low_name.endswith(".mobileconfig"):
+                    deep_anomalies.extend(analyze_mobileconfig_profile(dest_path.read_bytes(), str(safe_rel)))
+                elif low_name.endswith((".ips", ".crash")):
+                    deep_anomalies.extend(
+                        analyze_ips_crash_log(dest_path.read_text(encoding="utf-8", errors="ignore"), str(safe_rel))
+                    )
+
+        stream_res = stream_backup_directory(work_dir, batch_size=batch_size, lookup_fn=lookup_fn)
+        combined_anomalies = list(stream_res.get("behavioral_anomalies", [])) + deep_anomalies
+        stream_res["behavioral_anomalies"] = combined_anomalies
+        stream_res["sysdiagnose_artifacts_extracted"] = extracted_count
+        return stream_res
+    finally:
         shutil.rmtree(work_dir, ignore_errors=True)

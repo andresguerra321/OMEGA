@@ -28,14 +28,15 @@ class OpenAiEmbeddingProviderTest {
     void batchesInputsRetriesTransientFailuresAndValidatesDimensions() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://api.openai.com/v1");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        OpenAiEmbeddingProvider provider = new OpenAiEmbeddingProvider(builder.build(), testProps("sk-test-key", 2, 1));
+        String dummyApiKey = "example-test-key";
+        OpenAiEmbeddingProvider provider = new OpenAiEmbeddingProvider(builder.build(), testProps(dummyApiKey, 2, 1));
 
         String vec4 = IntStream.range(0, 4).mapToObj(i -> "0.25").collect(Collectors.joining(","));
 
         // Lote 1 (2 textos): falla transitoriamente 500 y luego responde HTTP 200
         server.expect(times(1), requestTo("https://api.openai.com/v1/embeddings"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sk-test-key"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + dummyApiKey))
                 .andExpect(jsonPath("$.input.length()").value(2))
                 .andRespond(withServerError());
 

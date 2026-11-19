@@ -61,10 +61,12 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OMEGA_STIX_MANIFEST_PATH: /app/corpus_mvp/iocs/stix_manifest.json
+      OMEGA_CONTAINMENT_DIR: /var/lib/omega/quarantine
     volumes:
       - ./corpus_mvp/iocs:/app/corpus_mvp/iocs:ro
       - ./corpus_mvp/pdfs:/app/corpus_mvp/pdfs:ro
       - ./corpus_mvp/corpus_manifest.json:/app/corpus_mvp/corpus_manifest.json:ro
+      - omega_quarantine_vault:/var/lib/omega/quarantine
     expose:
       - "8000"
     networks:
@@ -226,4 +228,5 @@ networks:
 volumes:
   omega_pgdata:
     name: ${OMEGA_PG_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-omega}_omega_pgdata}
+  omega_quarantine_vault:
   omniroute_data:

@@ -168,6 +168,7 @@ def sensor(monkeypatch):
     watcher._enabled = True
     monkeypatch.setattr(realtime, 'collect_connections', lambda: [])
     monkeypatch.setattr(realtime, 'collect_dns', lambda: (set(), 'cache-no-pid'))
+    monkeypatch.setattr(realtime, 'scan_infostealer_activity', lambda: [])
     monkeypatch.setattr(realtime, 'process_metadata', lambda pid: {'pid': pid, 'name': 'fixture', 'exe_path': '', 'signature': {'status': 'Unknown', 'publisher': ''}})
     watcher.replace_iocs([{'ioc_type': 'domain', 'ioc_value': 'c2.example'}, {'ioc_type': 'ip', 'ioc_value': '203.0.113.9'}])
     return watcher

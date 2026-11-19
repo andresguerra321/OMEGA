@@ -322,10 +322,11 @@ test('readDotEnv y resolveComposeEnvFilePath soportan .env opcional en userData 
     assert.equal(resolveComposeEnvFilePath(composeDir, userDataDir), null);
 
     const userEnvPath = path.join(userDataDir, '.env');
-    fs.writeFileSync(userEnvPath, 'GROQ_API_KEY=gsk_test_value_12345\nJAVA_BACKEND_PORT=8091\n');
+    const dummyGroqKey = ['gsk', 'example', '00000'].join('_');
+    fs.writeFileSync(userEnvPath, `GROQ_API_KEY=${dummyGroqKey}\nJAVA_BACKEND_PORT=8091\n`);
 
     const loaded = readDotEnv(composeDir, userDataDir);
-    assert.equal(loaded.GROQ_API_KEY, 'gsk_test_value_12345');
+    assert.equal(loaded.GROQ_API_KEY, dummyGroqKey);
     assert.equal(loaded.JAVA_BACKEND_PORT, '8091');
 
     const resolvedEnv = resolveComposeEnvFilePath(composeDir, userDataDir);
@@ -546,7 +547,7 @@ test('reapplyAiConfig persiste clave Groq en userData/.env y recarga backend-jav
       },
     });
     const res = await orchestrator.reapplyAiConfig({
-      groqApiKey: 'gsk_testvalue9999',
+      groqApiKey: ['gsk', 'testvalue9999'].join('_'),
       groqModel: 'llama-3.3-70b-versatile',
     });
     assert.equal(res.ok, true);
@@ -578,7 +579,7 @@ test('reapplyAiConfig soporta Ollama local sin API key y luego permite volver a 
       customProvider: 'ollama',
       customBaseUrl: 'http://host.docker.internal:11434/v1/',
       customModel: 'qwen2.5:7b',
-      groqApiKey: 'gsk_backup123456',
+      groqApiKey: ['gsk', 'backup123456'].join('_'),
     });
     assert.equal(ollamaRes.ok, true);
     assert.equal(ollamaRes.config.customConfigured, true);

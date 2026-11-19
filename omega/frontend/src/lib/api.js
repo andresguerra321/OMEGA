@@ -34,7 +34,19 @@ function shouldIncludeCredentials() {
 
 function resolveApiOrigin() {
   if (typeof window !== 'undefined' && (window.location?.protocol === 'file:' || window.omegaDesktop?.isDesktop)) {
-    const raw = new URLSearchParams(window.location?.search || '').get('omegaBackendPort');
+    const params = new URLSearchParams(window.location?.search || '');
+    const rawCloud = params.get('omegaCloudOrigin');
+    if (rawCloud) {
+      try {
+        const parsed = new URL(rawCloud);
+        if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) {
+          return parsed.origin;
+        }
+      } catch {
+        // Ignore invalid cloud origin and fall back to local port
+      }
+    }
+    const raw = params.get('omegaBackendPort');
     const port = /^\d{4,5}$/.test(raw || '') && Number(raw) >= 1024 && Number(raw) <= 65535 ? Number(raw) : 8080;
     return `http://127.0.0.1:${port}`;
   }
@@ -944,4 +956,47 @@ export async function fetchApiHealth() {
   } catch {
     return { status: 'down' };
   }
+}
+
+// ---------- Capa Comercial SaaS, Flota de Dispositivos y Alertas (Fase 8) ----------
+
+export async function fetchSaasSummary() {
+  return apiFetch('/saas/summary');
+}
+
+export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sensorVersion } = {}) {
+  return apiFetch('/saas/devices/heartbeat', {
+    method: 'POST',
+    body: {
+      deviceUid,
+      hostname: hostname || 'equipo-omega',
+      osPlatform: osPlatform || 'web',
+      sensorVersion: sensorVersion || '1.10.1',
+    },
+  });
+}
+
+export async function revokeFleetDevice(deviceId) {
+  return apiFetch(`/saas/devices/${encodeURIComponent(deviceId)}/revoke`, {
+    method: 'POST',
+  });
+}
+
+export async function updateSubscriptionPlan(planCode) {
+  return apiFetch('/saas/subscription', {
+    method: 'PUT',
+    body: { planCode },
+  });
+}
+
+export async function dispatchTestAlert({ severity = 'HIGH', title, message, webhookUrl } = {}) {
+  return apiFetch('/saas/alerts/dispatch', {
+    method: 'POST',
+    body: {
+      severity,
+      title: title || 'Prueba de alerta OMEGA',
+      message: message || 'Verificación de canal externo de alertas críticas.',
+      webhookUrl: webhookUrl || '',
+    },
+  });
 }
