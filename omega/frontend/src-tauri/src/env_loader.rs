@@ -81,7 +81,9 @@ pub fn parse_dotenv_str(raw: &str) -> BTreeMap<String, String> {
         } else if let Some(rest) = val_trimmed.strip_prefix('\'') {
             rest.split('\'').next().unwrap_or("").to_string()
         } else {
-            strip_unquoted_inline_comment(val_trimmed).trim().to_string()
+            strip_unquoted_inline_comment(val_trimmed)
+                .trim()
+                .to_string()
         };
         let clean = sanitize_env_value(&parsed);
         if clean.is_empty() {
@@ -93,11 +95,35 @@ pub fn parse_dotenv_str(raw: &str) -> BTreeMap<String, String> {
     vars
 }
 
-fn load_dotenv_file(path: &Path) -> BTreeMap<String, String> {
+pub fn load_dotenv_file(path: &Path) -> BTreeMap<String, String> {
     match std::fs::read_to_string(path) {
         Ok(content) => parse_dotenv_str(&content),
         Err(_) => BTreeMap::new(),
     }
+}
+
+pub fn save_dotenv_file(path: &Path, values: &BTreeMap<String, String>) -> Result<(), String> {
+    let mut text = String::new();
+    for (key, value) in values {
+        if !is_valid_env_key(key) {
+            continue;
+        }
+        let escaped = sanitize_env_value(value)
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
+        text.push_str(&format!("{key}=\"{escaped}\"\n"));
+    }
+    let temporary = path.with_extension("env.tmp");
+    std::fs::write(&temporary, text)
+        .map_err(|e| format!("No se pudo guardar configuración local: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&temporary, path)
+        .map_err(|e| format!("No se pudo aplicar configuración local: {e}"))
 }
 
 fn push_env_candidates_from_ancestors(start: &Path, out: &mut Vec<PathBuf>) {
@@ -123,9 +149,13 @@ pub fn discover_env_file_with_hints(
     exe_dir: Option<&Path>,
     home_dir: Option<&Path>,
     explicit_override: Option<&Path>,
+    saved_env_file: Option<&Path>,
 ) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(p) = explicit_override {
+        candidates.push(p.to_path_buf());
+    }
+    if let Some(p) = saved_env_file {
         candidates.push(p.to_path_buf());
     }
     if let Some(compose) = compose_file {
@@ -157,6 +187,7 @@ pub fn find_env_file(
     compose_file: Option<&Path>,
     app_data_dir: &Path,
     docker_working_dir: Option<&Path>,
+    saved_env_file: Option<&Path>,
 ) -> Option<PathBuf> {
     let explicit = std::env::var_os("OMEGA_ENV_FILE")
         .filter(|v| !v.is_empty())
@@ -172,10 +203,23 @@ pub fn find_env_file(
         compose_file,
         app_data_dir,
         docker_working_dir,
-        cwd.as_deref(),
-        exe_dir.as_deref(),
-        home.as_deref(),
+        if cfg!(debug_assertions) {
+            cwd.as_deref()
+        } else {
+            None
+        },
+        if cfg!(debug_assertions) {
+            exe_dir.as_deref()
+        } else {
+            None
+        },
+        if cfg!(debug_assertions) {
+            home.as_deref()
+        } else {
+            None
+        },
         explicit.as_deref(),
+        saved_env_file,
     )
 }
 
@@ -209,12 +253,12 @@ pub fn merge_bootstrap_envs(
         .map(|s| s.len() >= 32)
         .unwrap_or(false);
     if !has_valid_jwt {
-        merged.insert("OMEGA_JWT_SECRET".to_string(), default_jwt_secret.to_string());
+        merged.insert(
+            "OMEGA_JWT_SECRET".to_string(),
+            default_jwt_secret.to_string(),
+        );
     }
 
-    merged
-        .entry("OMEGA_LOCAL_ACCESS_ENABLED".to_string())
-        .or_insert_with(|| "true".to_string());
     merged.insert("OMEGA_DESKTOP_VERSION".to_string(), app_version.to_string());
     merged.insert(
         "OMEGA_DESKTOP_RELEASE_ID".to_string(),
@@ -232,7 +276,13 @@ pub fn compute_env_fingerprint(envs: &[(String, String)]) -> String {
     let mut h1: u64 = 0xcbf29ce484222325;
     let mut h2: u64 = 0x84222325cbf29ce4;
     for (k, v) in envs {
-        for &byte in k.as_bytes().iter().chain(b"=").chain(v.as_bytes()).chain(b"\0") {
+        for &byte in k
+            .as_bytes()
+            .iter()
+            .chain(b"=")
+            .chain(v.as_bytes())
+            .chain(b"\0")
+        {
             h1 ^= u64::from(byte);
             h1 = h1.wrapping_mul(0x100000001b3);
             h2 = h2.wrapping_mul(0x100000001b3);
@@ -247,6 +297,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn persisted_installation_preserves_password_special_characters() {
+        let path = std::env::temp_dir().join(format!("omega-env-{}.env", std::process::id()));
+        let values = BTreeMap::from([
+            (
+                "POSTGRES_PASSWORD".into(),
+                "quotes\"slashes\\hash#and$dollar".into(),
+            ),
+            ("OMEGA_SMTP_HOST".into(), "".into()),
+        ]);
+        save_dotenv_file(&path, &values).unwrap();
+        let loaded = load_dotenv_file(&path);
+        assert_eq!(
+            loaded.get("POSTGRES_PASSWORD"),
+            values.get("POSTGRES_PASSWORD")
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn parses_dotenv_with_quotes_exports_comments_and_ignores_empty() {
         let raw = "\u{feff}# comentario inicial\n\
             GROQ_API_KEY=gsk_test_123 # inline comment\n\
@@ -255,7 +324,10 @@ mod tests {
             OMNIROUTE_BASE_URL=\n\
             INVALID-KEY=ignored\n";
         let parsed = parse_dotenv_str(raw);
-        assert_eq!(parsed.get("GROQ_API_KEY").map(String::as_str), Some("gsk_test_123"));
+        assert_eq!(
+            parsed.get("GROQ_API_KEY").map(String::as_str),
+            Some("gsk_test_123")
+        );
         assert_eq!(
             parsed.get("GROQ_MODEL").map(String::as_str),
             Some("openai/gpt-oss-120b")
@@ -294,9 +366,9 @@ mod tests {
         assert!(merged_base
             .iter()
             .any(|(k, v)| k == "OMEGA_SMTP_HOST" && v == "smtp.gmail.com"));
-        assert!(merged_base
+        assert!(!merged_base
             .iter()
-            .any(|(k, v)| k == "OMEGA_LOCAL_ACCESS_ENABLED" && v == "true"));
+            .any(|(k, _)| k == "OMEGA_LOCAL_ACCESS_ENABLED"));
 
         let mut custom_cfg = StoredDesktopConfig::default();
         custom_cfg.groq_api_key = "gsk_from_ui".to_string();
@@ -336,8 +408,21 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         assert_eq!(found, Some(env_path.clone()));
+
+        let persisted = discover_env_file_with_hints(
+            None,
+            &app_data,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&env_path),
+        );
+        assert_eq!(persisted, Some(env_path));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

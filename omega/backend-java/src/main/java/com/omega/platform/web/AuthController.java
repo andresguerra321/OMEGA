@@ -55,6 +55,7 @@ public class AuthController {
     private final SessionCookieHelper sessionCookieHelper;
     private final PasswordResetService passwordResetService;
     private final TwoFactorService twoFactorService;
+    private final com.omega.platform.security.LoginRateLimiter recoveryLimiter = new com.omega.platform.security.LoginRateLimiter();
     private final boolean smtpConfigured;
 
     public AuthController(AuthService authService, OmegaProperties properties) {
@@ -109,7 +110,7 @@ public class AuthController {
                 false,
                 PASSKEYS_ROADMAP_NOTE,
                 smtpConfigured,
-                properties.security().localInstantAccess());
+                properties.security().hasConfiguredLocalOperator());
     }
 
     public record AuthConfigResponse(
@@ -145,6 +146,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @org.springframework.transaction.annotation.Transactional
     @ResponseStatus(HttpStatus.CREATED)
     public AuthTokenResponse registerAccount(
             @Valid @RequestBody RegisterAccountRequest request,
@@ -152,11 +154,15 @@ public class AuthController {
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
         AuthTokenResponse response = authService.registerAccount(request, bootstrapSecret);
+        if (passwordResetService != null) {
+            response = response.withRecoveryKey(passwordResetService.createRecoveryKey(response.userId(), request.password()).get("recoveryKey"));
+        }
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
         return response;
     }
 
     @PostMapping("/tenants/register")
+    @org.springframework.transaction.annotation.Transactional
     @ResponseStatus(HttpStatus.CREATED)
     public AuthTokenResponse registerTenant(
             @Valid @RequestBody RegisterTenantRequest request,
@@ -164,6 +170,9 @@ public class AuthController {
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
         AuthTokenResponse response = authService.registerTenant(request, bootstrapSecret);
+        if (passwordResetService != null) {
+            response = response.withRecoveryKey(passwordResetService.createRecoveryKey(response.userId(), request.adminPassword()).get("recoveryKey"));
+        }
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
         return response;
     }
@@ -182,7 +191,7 @@ public class AuthController {
     public AuthTokenResponse localSession(
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
-        if (!properties.security().localInstantAccess()) {
+        if (!properties.security().hasConfiguredLocalOperator()) {
             throw new AccessDeniedException("El acceso local sin cuenta está deshabilitado");
         }
         String forwardedFor = httpServletRequest.getHeader("X-Forwarded-For");
@@ -224,19 +233,37 @@ public class AuthController {
     }
 
     @PostMapping("/password-reset/request")
-    public PasswordResetResponse requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
+    public PasswordResetResponse requestPasswordReset(@Valid @RequestBody PasswordResetRequest request, HttpServletRequest httpRequest) {
+        recoveryLimiter.assertAllowed(httpRequest.getRemoteAddr(), request.email());
+        recoveryLimiter.recordFailure(httpRequest.getRemoteAddr(), request.email());
         if (passwordResetService == null) {
             throw new IllegalStateException("Servicio de recuperación no inicializado.");
         }
         return passwordResetService.requestReset(request);
     }
 
+    @PostMapping("/recovery-key")
+    public Map<String, String> createRecoveryKey(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @Valid @RequestBody MfaDisableRequest request) {
+        return passwordResetService.createRecoveryKey(principal.userId(), request.password());
+    }
+
     @PostMapping("/password-reset/confirm")
-    public PasswordResetResponse confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+    public PasswordResetResponse confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request, HttpServletRequest httpRequest) {
         if (passwordResetService == null) {
             throw new IllegalStateException("Servicio de recuperación no inicializado.");
         }
-        return passwordResetService.confirmReset(request);
+        String ip = httpRequest.getRemoteAddr();
+        recoveryLimiter.assertAllowed(ip, request.email());
+        try {
+            PasswordResetResponse response = passwordResetService.confirmReset(request);
+            recoveryLimiter.reset(ip, request.email());
+            return response;
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            recoveryLimiter.recordFailure(ip, request.email());
+            throw ex;
+        }
     }
 
     @PostMapping("/mfa/verify")

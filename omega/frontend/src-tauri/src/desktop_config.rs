@@ -23,6 +23,8 @@ pub struct StoredDesktopConfig {
     pub smtp_username: String,
     pub smtp_password: String,
     pub smtp_from: String,
+    pub smtp_override: bool,
+    pub env_file_path: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -50,6 +52,7 @@ pub struct SaveDesktopConfigPayload {
     pub smtp_password: Option<String>,
     pub smtp_from: Option<String>,
     pub clear_smtp_config: Option<bool>,
+    pub env_file_path: Option<String>,
 }
 
 /// Resumen seguro devuelto a React: jamás incluye API keys ni contraseñas SMTP en claro.
@@ -76,6 +79,8 @@ pub struct DesktopConfigSummary {
     pub smtp_port: u16,
     pub smtp_username: String,
     pub smtp_from: String,
+    pub env_file_path: String,
+    pub env_file_loaded: bool,
 }
 
 fn sanitize_line(raw: &str) -> Result<String, String> {
@@ -190,6 +195,15 @@ pub fn apply_payload_and_save(
         }
     }
 
+    if payload.clear_smtp_config == Some(true)
+        || payload.smtp_host.is_some()
+        || payload.smtp_port.is_some()
+        || payload.smtp_username.is_some()
+        || payload.smtp_password.is_some()
+        || payload.smtp_from.is_some()
+    {
+        cfg.smtp_override = true;
+    }
     if payload.clear_smtp_config == Some(true) {
         cfg.smtp_host.clear();
         cfg.smtp_port = 587;
@@ -231,17 +245,48 @@ pub fn apply_payload_and_save(
         }
     }
 
+    if let Some(ref env_path) = payload.env_file_path {
+        let clean = sanitize_line(env_path)?;
+        if !clean.is_empty() && !Path::new(&clean).is_file() {
+            return Err(
+                "La ruta de archivo .env indicada no existe o no es un archivo válido.".to_string(),
+            );
+        }
+        cfg.env_file_path = clean;
+    }
+
+    write_desktop_config(app_data_dir, &cfg)?;
+    Ok(cfg)
+}
+
+fn write_desktop_config(app_data_dir: &Path, cfg: &StoredDesktopConfig) -> Result<(), String> {
     std::fs::create_dir_all(app_data_dir)
         .map_err(|e| format!("No se pudo crear {}: {e}", app_data_dir.display()))?;
     let path = config_path(app_data_dir);
-    let body = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    let body = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
     std::fs::write(&path, body).map_err(|e| format!("No se pudo guardar configuración: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
-    Ok(cfg)
+    Ok(())
+}
+
+pub fn persist_env_file_path(app_data_dir: &Path, env_path: &Path) {
+    if !env_path.is_file() {
+        return;
+    }
+    let clean = env_path.to_string_lossy().trim().to_string();
+    if clean.is_empty() || clean.chars().any(|c| c == '\0' || c == '\r' || c == '\n') {
+        return;
+    }
+    let mut cfg = load_desktop_config(app_data_dir);
+    if cfg.env_file_path == clean {
+        return;
+    }
+    cfg.env_file_path = clean;
+    let _ = write_desktop_config(app_data_dir, &cfg);
 }
 
 fn ollama_base_for_docker(raw: &str) -> String {
@@ -318,9 +363,15 @@ pub fn build_summary(cfg: &StoredDesktopConfig) -> DesktopConfigSummary {
         omni_route_model: cfg.omni_route_model.clone(),
         smtp_configured: !cfg.smtp_host.is_empty(),
         smtp_host: cfg.smtp_host.clone(),
-        smtp_port: if cfg.smtp_port == 0 { 587 } else { cfg.smtp_port },
+        smtp_port: if cfg.smtp_port == 0 {
+            587
+        } else {
+            cfg.smtp_port
+        },
         smtp_username: cfg.smtp_username.clone(),
         smtp_from: cfg.smtp_from.clone(),
+        env_file_loaded: !cfg.env_file_path.is_empty() && Path::new(&cfg.env_file_path).is_file(),
+        env_file_path: cfg.env_file_path.clone(),
     }
 }
 
@@ -337,7 +388,10 @@ pub fn build_docker_envs(cfg: &StoredDesktopConfig) -> Vec<(&'static str, String
     }
     if cfg.custom_provider == "ollama" {
         envs.push(("OMEGA_AI_PROVIDER", "ollama".to_string()));
-        envs.push(("OMEGA_OLLAMA_BASE_URL", ollama_base_for_docker(&cfg.custom_base_url)));
+        envs.push((
+            "OMEGA_OLLAMA_BASE_URL",
+            ollama_base_for_docker(&cfg.custom_base_url),
+        ));
         if !cfg.custom_model.is_empty() {
             envs.push(("OMEGA_OLLAMA_CHAT_MODEL", cfg.custom_model.clone()));
         }
@@ -355,7 +409,10 @@ pub fn build_docker_envs(cfg: &StoredDesktopConfig) -> Vec<(&'static str, String
         }
     }
     if cfg.omni_route_enabled {
-        envs.push(("OMNIROUTE_BASE_URL", "http://host.docker.internal:20128/v1".to_string()));
+        envs.push((
+            "OMNIROUTE_BASE_URL",
+            "http://host.docker.internal:20128/v1".to_string(),
+        ));
         if !cfg.omni_route_api_key.is_empty() {
             envs.push(("OMNIROUTE_API_KEY", cfg.omni_route_api_key.clone()));
         }
@@ -363,18 +420,12 @@ pub fn build_docker_envs(cfg: &StoredDesktopConfig) -> Vec<(&'static str, String
             envs.push(("OMNIROUTE_MODEL", cfg.omni_route_model.clone()));
         }
     }
-    if !cfg.smtp_host.is_empty() {
+    if cfg.smtp_override || !cfg.smtp_host.is_empty() {
         envs.push(("OMEGA_SMTP_HOST", cfg.smtp_host.clone()));
         envs.push(("OMEGA_SMTP_PORT", cfg.smtp_port.to_string()));
-        if !cfg.smtp_username.is_empty() {
-            envs.push(("OMEGA_SMTP_USERNAME", cfg.smtp_username.clone()));
-        }
-        if !cfg.smtp_password.is_empty() {
-            envs.push(("OMEGA_SMTP_PASSWORD", cfg.smtp_password.clone()));
-        }
-        if !cfg.smtp_from.is_empty() {
-            envs.push(("OMEGA_SMTP_FROM", cfg.smtp_from.clone()));
-        }
+        envs.push(("OMEGA_SMTP_USERNAME", cfg.smtp_username.clone()));
+        envs.push(("OMEGA_SMTP_PASSWORD", cfg.smtp_password.clone()));
+        envs.push(("OMEGA_SMTP_FROM", cfg.smtp_from.clone()));
     }
     envs
 }
@@ -382,6 +433,32 @@ pub fn build_docker_envs(cfg: &StoredDesktopConfig) -> Vec<(&'static str, String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clearing_mail_overrides_an_imported_configuration() {
+        let dir = std::env::temp_dir().join("omega-clear-smtp-test");
+        let cfg = apply_payload_and_save(
+            &dir,
+            &SaveDesktopConfigPayload {
+                clear_smtp_config: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(cfg.smtp_override);
+        let envs = build_docker_envs(&cfg);
+        for key in [
+            "OMEGA_SMTP_HOST",
+            "OMEGA_SMTP_USERNAME",
+            "OMEGA_SMTP_PASSWORD",
+            "OMEGA_SMTP_FROM",
+        ] {
+            assert!(envs
+                .iter()
+                .any(|(name, value)| *name == key && value.is_empty()));
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn saves_config_without_leaking_secrets_in_summary() {
@@ -407,8 +484,12 @@ mod tests {
         assert!(!serialized.contains("app_password_secret"));
 
         let envs = build_docker_envs(&saved);
-        assert!(envs.iter().any(|(k, v)| *k == "GROQ_API_KEY" && v == "gsk_test_secret_value"));
-        assert!(envs.iter().any(|(k, v)| *k == "OMEGA_SMTP_HOST" && v == "smtp.gmail.com"));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| *k == "GROQ_API_KEY" && v == "gsk_test_secret_value"));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| *k == "OMEGA_SMTP_HOST" && v == "smtp.gmail.com"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -437,10 +518,12 @@ mod tests {
         assert_eq!(summary.active_provider, "ollama");
 
         let envs = build_docker_envs(&saved);
-        assert!(envs.iter().any(|(k, v)| *k == "OMEGA_AI_PROVIDER" && v == "ollama"));
         assert!(envs
             .iter()
-            .any(|(k, v)| *k == "OMEGA_OLLAMA_BASE_URL" && v == "http://host.docker.internal:11434"));
+            .any(|(k, v)| *k == "OMEGA_AI_PROVIDER" && v == "ollama"));
+        assert!(envs.iter().any(
+            |(k, v)| *k == "OMEGA_OLLAMA_BASE_URL" && v == "http://host.docker.internal:11434"
+        ));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -172,10 +172,7 @@ export function saveAuthSession(tokenResponse) {
     tenantSlug: tokenResponse.tenantSlug,
     email: tokenResponse.email,
     role: tokenResponse.role,
-    isLocalWorkspace: Boolean(
-      tokenResponse?.isLocalWorkspace ||
-        (tokenResponse?.tenantSlug === 'espacio-local' && tokenResponse?.email === 'operador@omega.local'),
-    ),
+    isLocalWorkspace: Boolean(tokenResponse?.isLocalWorkspace),
   };
   inMemoryAuthSession = session;
   scrubLegacyDiskStorage();
@@ -525,6 +522,12 @@ export async function requestPasswordReset({ email, tenantSlug } = {}) {
   });
 }
 
+export async function createRecoveryKey(password) {
+  return apiFetch('/auth/recovery-key', {
+    method: 'POST', body: { password },
+  });
+}
+
 export async function confirmPasswordReset({ email, code, newPassword, tenantSlug } = {}) {
   const normalizedSlug = String(tenantSlug || '').trim().toLowerCase();
   return apiFetch('/auth/password-reset/confirm', {
@@ -562,7 +565,7 @@ export async function registerAccount({
       ...(normalizedOrg ? { organizationName: normalizedOrg } : {}),
     },
   });
-  return saveAuthSession(tokenRes);
+  return tokenRes;
 }
 
 export async function registerTenant({
@@ -1011,7 +1014,7 @@ export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sen
       deviceUid,
       hostname: hostname || 'equipo-omega',
       osPlatform: osPlatform || 'web',
-      sensorVersion: sensorVersion || '2.0.5',
+      sensorVersion: sensorVersion || '2.0.6',
     },
   });
 }

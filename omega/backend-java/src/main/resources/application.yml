@@ -40,6 +40,10 @@ spring:
           auth: ${OMEGA_SMTP_AUTH:true}
           starttls:
             enable: ${OMEGA_SMTP_STARTTLS:true}
+            required: ${OMEGA_SMTP_STARTTLS:true}
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
 
 server:
   port: 8080
@@ -79,6 +83,10 @@ omega:
     jwt-issuer: omega-rag-core
     allow-tenant-self-registration: ${OMEGA_ALLOW_TENANT_SELF_REGISTRATION:true}
     local-instant-access: ${OMEGA_LOCAL_ACCESS_ENABLED:false}
+    local-workspace-slug: ${OMEGA_LOCAL_WORKSPACE_SLUG:}
+    local-workspace-name: ${OMEGA_LOCAL_WORKSPACE_NAME:}
+    local-operator-email: ${OMEGA_LOCAL_OPERATOR_EMAIL:}
+    local-operator-name: ${OMEGA_LOCAL_OPERATOR_NAME:}
     bootstrap-secret: ${OMEGA_BOOTSTRAP_SECRET:}
     internal-service-token: ${INTERNAL_SERVICE_TOKEN:omega-dev-internal-service-token-change-in-prod}
     session-cookie-name: ${OMEGA_SESSION_COOKIE_NAME:omega_session}

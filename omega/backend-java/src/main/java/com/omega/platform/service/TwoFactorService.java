@@ -66,7 +66,7 @@ public class TwoFactorService {
             OmegaProperties omegaProperties,
             @Autowired(required = false) JavaMailSender mailSender,
             @Value("${spring.mail.host:}") String smtpHost,
-            @Value("${omega.mail.from:no-reply@omega.local}") String smtpFrom) {
+            @Value("${OMEGA_SMTP_FROM:${spring.mail.username:}}") String smtpFrom) {
         this.userRepository = userRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.passwordEncoder = passwordEncoder;

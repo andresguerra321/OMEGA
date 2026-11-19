@@ -46,6 +46,7 @@ import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import { TwoFactorSettingsCard } from './TwoFactorSettingsCard';
+import { RecoveryKeyCard } from './RecoveryKeyCard';
 import {
   ActionConfirmationBanner,
   PanelErrorBanner,
@@ -1081,6 +1082,7 @@ export function SettingsPanel({
                     )}
 
                     <TwoFactorSettingsCard authSession={authSession} />
+                    <RecoveryKeyCard />
 
                     {authSession.role === 'ADMIN' && (
                       <div className="pt-3 border-t border-white/[0.06] space-y-3">

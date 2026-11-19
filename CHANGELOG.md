@@ -1,8 +1,20 @@
-![OMEGA v2.0.5 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
+![OMEGA v2.0.6 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.6] - 2026-11-19
+
+### Arranque local con servicios incluidos y recuperación sin correo
+- Imágenes Docker precompiladas incluidas en los instaladores; el equipo receptor no necesita compilar Java/Python ni preparar `.env`.
+- Configuración y secretos persistentes por instalación, importación del volumen PostgreSQL existente, reutilización de servicios compatibles y respaldo previo a las actualizaciones.
+- Detección de conflictos, protección frente a versiones anteriores y bloqueo de arranques simultáneos.
+- Clave de recuperación de un solo uso entregada al registrarse y regenerable desde Seguridad; solo se almacena su hash. SMTP es opcional y los códigos dejan de aparecer en logs.
+- Eliminada la identidad local fija y conservadas las mejoras de remitente, TLS y timeouts SMTP.
+- Pipeline adaptado para construir imágenes en Linux y reutilizarlas al empaquetar las plataformas de escritorio, verificando el commit de procedencia.
+- Validadas 40 pruebas de cliente, 21 nativas, 24 seleccionadas del backend y 3 de empaquetado, además del flujo real de recuperación y reinicio con contenedores aislados. Pendiente una instalación completa en un Windows limpio.
+- Versionado sincronizado a `2.0.6`. [Notas de release](.github/release-notes/v2.0.6.md).
 
 ## [2.0.5] - 2026-11-19
 

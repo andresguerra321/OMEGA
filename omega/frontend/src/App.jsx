@@ -1279,9 +1279,7 @@ export default function App() {
                     <>
                       <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
                       <span className="hidden lg:inline max-w-[110px] truncate font-tech">
-                        {authSession.isLocalWorkspace || authSession.tenantSlug === 'espacio-local'
-                          ? 'Local'
-                          : authSession.email?.split('@')[0] || authSession.tenantSlug}
+                        {authSession.email?.split('@')[0] || authSession.tenantSlug}
                       </span>
                     </>
                   ) : (

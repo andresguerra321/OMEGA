@@ -55,7 +55,11 @@ public record OmegaProperties(
                         boolean allowTenantSelfRegistration,
                         String bootstrapSecret,
                         @NotBlank String internalServiceToken,
-                        boolean localInstantAccess) {
+                        boolean localInstantAccess,
+                        String localWorkspaceSlug,
+                        String localWorkspaceName,
+                        String localOperatorEmail,
+                        String localOperatorName) {
                 @ConstructorBinding
                 public Security {
                 }
@@ -68,7 +72,23 @@ public record OmegaProperties(
                                 String bootstrapSecret,
                                 String internalServiceToken) {
                         this(jwtSecret, jwtExpirationSeconds, jwtIssuer, allowTenantSelfRegistration,
-                                        bootstrapSecret, internalServiceToken, false);
+                                        bootstrapSecret, internalServiceToken, false, "", "", "", "");
+                }
+
+                public Security(
+                                String jwtSecret,
+                                long jwtExpirationSeconds,
+                                String jwtIssuer,
+                                boolean allowTenantSelfRegistration,
+                                String bootstrapSecret,
+                                String internalServiceToken,
+                                boolean localInstantAccess) {
+                        this(jwtSecret, jwtExpirationSeconds, jwtIssuer, allowTenantSelfRegistration,
+                                        bootstrapSecret, internalServiceToken, localInstantAccess, "", "", "", "");
+                }
+
+                public boolean hasConfiguredLocalOperator() {
+                        return localInstantAccess && localOperatorEmail != null && !localOperatorEmail.isBlank();
                 }
         }
 

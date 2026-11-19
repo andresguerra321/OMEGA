@@ -56,13 +56,14 @@ class LocalWorkspaceAccessTest {
     @Test
     void localSessionIssuesCookieWhenEnabledAndBlocksForwardedProxyRequests() throws Exception {
         var enabledSecurity = new OmegaProperties.Security(
-                "0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "internal-tok", true);
+                "0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "internal-tok",
+                true, "lab-local", "Lab Local", "analyst@example.test", "Analyst");
         when(properties.security()).thenReturn(enabledSecurity);
         UUID userId = UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
         when(authService.enterLocalWorkspace()).thenReturn(new AuthTokenResponse(
-                "local-jwt-token", "Bearer", 3600, userId, tenantId, "espacio-local",
-                "operador@omega.local", Role.ADMIN));
+                "local-jwt-token", "Bearer", 3600, userId, tenantId, "lab-local",
+                "analyst@example.test", Role.ADMIN));
 
         mvc.perform(get("/api/v1/auth/config"))
                 .andExpect(status().isOk())
@@ -70,8 +71,8 @@ class LocalWorkspaceAccessTest {
 
         mvc.perform(post("/api/v1/auth/local-session").with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tenantSlug").value("espacio-local"))
-                .andExpect(jsonPath("$.email").value("operador@omega.local"))
+                .andExpect(jsonPath("$.tenantSlug").value("lab-local"))
+                .andExpect(jsonPath("$.email").value("analyst@example.test"))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("omega_session=local-jwt-token")));
 
         mvc.perform(post("/api/v1/auth/local-session").with(csrf())
@@ -80,32 +81,34 @@ class LocalWorkspaceAccessTest {
     }
 
     @Test
-    void authServiceCreatesIsolatedLocalTenantWithRandomSecretAndRespectsDisabledFlag() {
+    void authServiceRequiresExplicitEnvOperatorAndCreatesIsolatedTenantWithRandomSecret() {
         TenantRepository tenantRepo = mock(TenantRepository.class);
         UserRepository userRepo = mock(UserRepository.class);
         ExpedienteRepository expRepo = mock(ExpedienteRepository.class);
         JwtService realJwt = mock(JwtService.class);
         LoginRateLimiter limiter = new LoginRateLimiter();
 
-        var disabledProps = new OmegaProperties(
-                new OmegaProperties.Security("0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "tok", false),
-                new OmegaProperties.Ingest("/tmp/omega", 1024, "/tmp/tess"),
-                null,
-                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
-                new OmegaProperties.Cti("/tmp/cti"));
-        AuthService disabledSvc = new AuthService(tenantRepo, userRepo, expRepo, new BCryptPasswordEncoder(),
-                realJwt, disabledProps, limiter);
-        assertThatThrownBy(disabledSvc::enterLocalWorkspace).isInstanceOf(AccessDeniedException.class);
-
-        var enabledProps = new OmegaProperties(
+        // Fail-closed incluso si localInstantAccess=true pero sin OMEGA_LOCAL_OPERATOR_EMAIL
+        var missingEmailProps = new OmegaProperties(
                 new OmegaProperties.Security("0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "tok", true),
                 new OmegaProperties.Ingest("/tmp/omega", 1024, "/tmp/tess"),
                 null,
                 new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
                 new OmegaProperties.Cti("/tmp/cti"));
-        when(tenantRepo.findBySlugAndActiveTrue("espacio-local")).thenReturn(Optional.empty());
-        when(tenantRepo.existsBySlug("espacio-local")).thenReturn(false);
-        TenantEntity savedTenant = new TenantEntity("espacio-local", "OMEGA Local");
+        AuthService missingEmailSvc = new AuthService(tenantRepo, userRepo, expRepo, new BCryptPasswordEncoder(),
+                realJwt, missingEmailProps, limiter);
+        assertThatThrownBy(missingEmailSvc::enterLocalWorkspace).isInstanceOf(AccessDeniedException.class);
+
+        var enabledProps = new OmegaProperties(
+                new OmegaProperties.Security("0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "tok",
+                        true, "mi-espacio", "Mi Espacio", "dev@example.test", "Dev User"),
+                new OmegaProperties.Ingest("/tmp/omega", 1024, "/tmp/tess"),
+                null,
+                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
+                new OmegaProperties.Cti("/tmp/cti"));
+        when(tenantRepo.findBySlugAndActiveTrue("mi-espacio")).thenReturn(Optional.empty());
+        when(tenantRepo.existsBySlug("mi-espacio")).thenReturn(false);
+        TenantEntity savedTenant = new TenantEntity("mi-espacio", "Mi Espacio");
         when(tenantRepo.save(any())).thenReturn(savedTenant);
         when(userRepo.findByTenantIdAndEmailIgnoreCase(any(), any())).thenReturn(Optional.empty());
         when(userRepo.save(any())).thenAnswer(inv -> inv.getArgument(0, UserEntity.class));
@@ -117,8 +120,8 @@ class LocalWorkspaceAccessTest {
         AuthService enabledSvc = new AuthService(tenantRepo, userRepo, expRepo, new BCryptPasswordEncoder(),
                 realJwt, enabledProps, limiter);
         AuthTokenResponse token = enabledSvc.enterLocalWorkspace();
-        assertThat(token.tenantSlug()).isEqualTo("espacio-local");
-        assertThat(token.email()).isEqualTo("operador@omega.local");
+        assertThat(token.tenantSlug()).isEqualTo("mi-espacio");
+        assertThat(token.email()).isEqualTo("dev@example.test");
         assertThat(token.role()).isEqualTo(Role.ADMIN);
         assertThat(token.accessToken()).isEqualTo("jwt-issued");
     }

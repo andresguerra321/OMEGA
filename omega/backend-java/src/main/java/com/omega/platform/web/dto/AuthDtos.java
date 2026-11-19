@@ -101,8 +101,21 @@ public final class AuthDtos {
             boolean mfaRequired,
             String mfaChallengeToken,
             String mfaMethod,
-            String maskedEmail
+            String maskedEmail,
+            String recoveryKey
     ) {
+        public AuthTokenResponse(String accessToken, String tokenType, long expiresInSeconds, UUID userId,
+                UUID tenantId, String tenantSlug, String email, Role role, boolean mfaRequired,
+                String mfaChallengeToken, String mfaMethod, String maskedEmail) {
+            this(accessToken, tokenType, expiresInSeconds, userId, tenantId, tenantSlug, email, role,
+                    mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, null);
+        }
+
+        public AuthTokenResponse withRecoveryKey(String key) {
+            return new AuthTokenResponse(accessToken, tokenType, expiresInSeconds, userId, tenantId,
+                    tenantSlug, email, role, mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, key);
+        }
+
         public AuthTokenResponse(
                 String accessToken,
                 String tokenType,
@@ -181,7 +194,7 @@ public final class AuthDtos {
             @Pattern(regexp = ValidationPatterns.STRICT_EMAIL_REGEX, message = "Ingresa un correo electrónico válido")
             String email,
             @NotBlank(message = "El código de recuperación es obligatorio")
-            @Pattern(regexp = "^\\d{6}$", message = "El código de recuperación debe tener 6 dígitos")
+            @Pattern(regexp = "^(?:\\d{6}|[a-f0-9]{48})$", message = "Ingresa un código de 6 dígitos o tu clave de recuperación")
             String code,
             @NotBlank(message = "La nueva contraseña es obligatoria")
             @Size(min = 12, max = 128, message = "La contraseña debe tener entre 12 y 128 caracteres")

@@ -41,9 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
-    private static final String LOCAL_WORKSPACE_SLUG = "espacio-local";
-    private static final String LOCAL_WORKSPACE_NAME = "OMEGA Local";
-    private static final String LOCAL_OPERATOR_EMAIL = "operador@omega.local";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final TenantRepository tenantRepository;
@@ -321,37 +318,55 @@ public class AuthService {
 
     @Transactional
     public synchronized AuthTokenResponse enterLocalWorkspace() {
-        if (!properties.security().localInstantAccess()) {
-            throw new AccessDeniedException("El acceso local sin cuenta está deshabilitado");
+        OmegaProperties.Security sec = properties.security();
+        if (!sec.hasConfiguredLocalOperator()) {
+            throw new AccessDeniedException(
+                    "El acceso local directo requiere OMEGA_LOCAL_ACCESS_ENABLED=true y OMEGA_LOCAL_OPERATOR_EMAIL en .env");
         }
-        TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(LOCAL_WORKSPACE_SLUG)
+        String operatorEmail = sec.localOperatorEmail().trim().toLowerCase(Locale.ROOT);
+        String rawSlug = sec.localWorkspaceSlug() != null && !sec.localWorkspaceSlug().isBlank()
+                ? sec.localWorkspaceSlug().trim().toLowerCase(Locale.ROOT)
+                : operatorEmail.substring(0, Math.max(1, operatorEmail.indexOf('@')));
+        String workspaceSlug = rawSlug.replaceAll("[^a-z0-9-]+", "-").replaceAll("^-+|-+$", "");
+        if (workspaceSlug.length() < 3) {
+            workspaceSlug = allocateUniqueTenantSlug(workspaceSlug);
+        }
+        String workspaceName = sec.localWorkspaceName() != null && !sec.localWorkspaceName().isBlank()
+                ? sec.localWorkspaceName().trim()
+                : workspaceSlug;
+        String operatorName = sec.localOperatorName() != null && !sec.localOperatorName().isBlank()
+                ? sec.localOperatorName().trim()
+                : operatorEmail;
+
+        final String targetSlug = workspaceSlug;
+        TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(targetSlug)
                 .orElseGet(() -> {
-                    if (tenantRepository.existsBySlug(LOCAL_WORKSPACE_SLUG)) {
-                        throw new AccessDeniedException("El espacio local se encuentra inactivo");
+                    if (tenantRepository.existsBySlug(targetSlug)) {
+                        throw new AccessDeniedException("El espacio configurado se encuentra inactivo");
                     }
-                    return tenantRepository.save(new TenantEntity(LOCAL_WORKSPACE_SLUG, LOCAL_WORKSPACE_NAME));
+                    return tenantRepository.save(new TenantEntity(targetSlug, workspaceName));
                 });
 
-        UserEntity operator = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), LOCAL_OPERATOR_EMAIL)
+        UserEntity operator = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), operatorEmail)
                 .orElseGet(() -> {
                     byte[] rawEntropy = new byte[32];
                     SECURE_RANDOM.nextBytes(rawEntropy);
                     String generatedSecret = Base64.getUrlEncoder().withoutPadding().encodeToString(rawEntropy);
                     return userRepository.save(new UserEntity(
                             tenant.getId(),
-                            LOCAL_OPERATOR_EMAIL,
+                            operatorEmail,
                             passwordEncoder.encode(generatedSecret),
-                            "Operador Local",
+                            operatorName,
                             Role.ADMIN));
                 });
         if (!operator.isActive()) {
-            throw new AccessDeniedException("El operador local se encuentra suspendido");
+            throw new AccessDeniedException("El operador configurado se encuentra suspendido");
         }
         if (expedienteRepository.findAllByTenantIdOrderByCreatedAtDesc(tenant.getId()).isEmpty()) {
             expedienteRepository.save(new ExpedienteEntity(
                     tenant.getId(),
                     operator.getId(),
-                    "Espacio local",
+                    workspaceName,
                     ClassificationLevel.CONFIDENTIAL));
         }
         return issueTokenResponse(operator, tenant.getSlug());

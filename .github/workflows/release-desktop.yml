@@ -19,8 +19,34 @@ jobs:
     name: Validate Java 21 CORS and CSRF
     uses: ./.github/workflows/backend-security.yml
 
-  build-tauri-v2:
+  docker-images:
+    name: Build bundled Linux Docker services
     needs: backend-security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Test resource packaging
+        run: python -m unittest discover -s omega/scripts -p test_stage_desktop_resources.py
+      - name: Build and export services once on a Linux Docker host
+        run: python omega/scripts/stage_desktop_resources.py --with-images
+      - name: Verify local account recovery against isolated services
+        run: python omega/scripts/smoke_local_recovery.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: omega-self-hosted-images
+          path: |
+            omega/frontend/src-tauri/bundle-resources/omega/desktop-images.tar
+            omega/frontend/src-tauri/bundle-resources/omega/desktop-release.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+  build-tauri-v2:
+    needs: [backend-security, docker-images]
     name: Build OMEGA Tauri v2 + Rust Sensor (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -49,6 +75,14 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: omega-self-hosted-images
+          path: ${{ runner.temp }}/omega-self-hosted-images
+      - name: Use the Docker images verified for this commit
+        shell: pwsh
+        run: |
+          "OMEGA_PREBUILT_IMAGES_DIR=$(Join-Path $env:RUNNER_TEMP 'omega-self-hosted-images')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Verify CTI and PDF Corpus SHA-256 Manifests
         run: python omega/rag_engine/corpus_integrity.py
       - name: Stage Self-Hosted Docker Resources (compose + service sources)

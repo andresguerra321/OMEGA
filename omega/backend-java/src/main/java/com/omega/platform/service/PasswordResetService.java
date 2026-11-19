@@ -76,9 +76,11 @@ public class PasswordResetService {
 
     @Transactional
     public PasswordResetResponse requestReset(PasswordResetRequest request) {
+        if (smtpHost.isBlank() || mailSender == null) {
+            return new PasswordResetResponse(true, "recovery_key",
+                    "Usa la clave de recuperación que guardaste al crear tu cuenta. No necesitas correo ni conexión a Internet.");
+        }
         String email = normalizeEmail(request.email());
-        boolean smtpConfigured = !smtpHost.isBlank() && mailSender != null;
-        String deliveryMode = smtpConfigured ? "smtp" : "local_log";
 
         Optional<UserEntity> userOpt = resolveTargetUser(email, request.tenantSlug());
         if (userOpt.isPresent()) {
@@ -102,30 +104,46 @@ public class PasswordResetService {
                     Timestamp.from(expiresAt)
             );
 
-            if (smtpConfigured) {
-                try {
-                    sendStyledRecoveryEmail(user, code);
-                } catch (Exception ex) {
-                    log.warn("No se pudo enviar correo SMTP de recuperación a {}: {}", maskEmail(email), ex.getMessage());
-                    log.info("[OMEGA-AUTH-RECOVERY] Código de recuperación para {}: {} (válido {} min)", maskEmail(email), code, TOKEN_TTL_MINUTES);
-                }
-            } else {
-                log.info("[OMEGA-AUTH-RECOVERY] SMTP no configurado. Código de recuperación para {}: {} (válido {} min)", maskEmail(email), code, TOKEN_TTL_MINUTES);
+            try {
+                sendStyledRecoveryEmail(user, code);
+            } catch (Exception ex) {
+                log.warn("No se pudo enviar correo SMTP de recuperación a {}", maskEmail(email));
+                throw new IllegalStateException("No se pudo enviar el correo. Inténtalo de nuevo o usa tu clave de recuperación.");
             }
         }
 
-        String msg = smtpConfigured
-                ? "Si el correo está registrado en OMEGA, enviamos un código de 6 dígitos válido por 15 minutos."
-                : "Si el correo está registrado, se generó un código de 6 dígitos (válido 15 min). Como no hay SMTP configurado en este nodo local, consúltalo en los logs de omega_backend_java.";
-        return new PasswordResetResponse(true, deliveryMode, msg);
+        String msg = "Si el correo está registrado en OMEGA, enviamos un código de 6 dígitos válido por 15 minutos.";
+        return new PasswordResetResponse(true, "smtp", msg);
+    }
+
+    @Transactional
+    public Map<String, String> createRecoveryKey(UUID userId, String password) {
+        UserEntity user = userRepository.findById(userId)
+                .filter(UserEntity::isActive)
+                .orElseThrow(() -> new BadCredentialsException("Cuenta no disponible."));
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BadCredentialsException("Contraseña incorrecta.");
+        }
+        byte[] bytes = new byte[24];
+        RANDOM.nextBytes(bytes);
+        String key = HexFormat.of().formatHex(bytes);
+        userRepository.flush();
+        jdbcTemplate.update("""
+                INSERT INTO omega_rag.account_recovery_keys (user_id, key_hash)
+                VALUES (?, ?)
+                ON CONFLICT (user_id) DO UPDATE SET key_hash = EXCLUDED.key_hash, created_at = NOW()
+                """, userId, sha256Hex(key));
+        auditLogService.record(user.getTenantId(), userId, "RECOVERY_KEY_CREATED", "USER",
+                userId.toString(), Map.of());
+        return Map.of("recoveryKey", key);
     }
 
     @Transactional
     public PasswordResetResponse confirmReset(PasswordResetConfirmRequest request) {
         String email = normalizeEmail(request.email());
         String code = request.code() == null ? "" : request.code().trim();
-        if (!code.matches("^\\d{6}$")) {
-            throw new BadCredentialsException("El código de verificación debe tener 6 dígitos.");
+        if (!code.matches("^(?:\\d{6}|[a-f0-9]{48})$")) {
+            throw new BadCredentialsException("Ingresa un código de 6 dígitos o tu clave de recuperación.");
         }
 
         UserEntity user = resolveTargetUser(email, request.tenantSlug())
@@ -148,14 +166,15 @@ public class PasswordResetService {
                 hash
         );
 
-        if (tokenIds.isEmpty()) {
+        boolean recoveryKey = code.length() == 48 && jdbcTemplate.update("""
+                DELETE FROM omega_rag.account_recovery_keys WHERE user_id = ? AND key_hash = ?
+                """, user.getId(), hash) == 1;
+        if (tokenIds.isEmpty() && !recoveryKey) {
             throw new BadCredentialsException("El código de recuperación es inválido o ya expiró.");
         }
 
-        jdbcTemplate.update(
-                "UPDATE omega_rag.password_reset_tokens SET used_at = NOW() WHERE id = ?",
-                tokenIds.get(0)
-        );
+        jdbcTemplate.update("UPDATE omega_rag.password_reset_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL",
+                user.getId());
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
 

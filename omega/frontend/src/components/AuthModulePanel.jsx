@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import {
   confirmPasswordReset,
+  saveAuthSession,
   enterLocalWorkspace,
   getAuthConfig,
   loginWithPassword,
@@ -79,6 +80,7 @@ export function AuthAccessForm({
     localAccessEnabled: false,
   });
   const [loading, setLoading] = useState(false);
+  const [registeredAccount, setRegisteredAccount] = useState(null);
   const [shakeTick, setShakeTick] = useState(0);
   const guard = useSingleFlight();
   const [errorState, setErrorState] = useState({ tab, message: '' });
@@ -232,7 +234,10 @@ export function AuthAccessForm({
     setFieldErrorState({ tab: 'register', errors: {} });
     try {
       const session = await registerAccount(validation.sanitized);
-      onAuthenticated?.(session, { isNewAccount: true });
+      const recoveryKey = session.recoveryKey;
+      if (!recoveryKey) throw new Error('El servidor debe actualizarse para completar el registro con recuperación local.');
+      setRegForm((p) => ({ ...p, password: '' }));
+      setRegisteredAccount({ session, recoveryKey });
     } catch (err) {
       const serverFields = err?.problem?.fieldErrors;
       if (serverFields && typeof serverFields === 'object') {
@@ -267,8 +272,8 @@ export function AuthAccessForm({
         ...p,
         email: cleanEmail,
         step: 'confirm',
-        deliveryMode: res?.delivery_mode || (authConfig.smtpConfigured ? 'smtp' : 'local_log'),
-        statusMessage: res?.message || 'Código generado. Revisa tu correo o los logs locales.',
+        deliveryMode: res?.deliveryMode || res?.delivery_mode || 'recovery_key',
+        statusMessage: res?.message || 'Usa tu clave de recuperación.',
       }));
     } catch (err) {
       setErrorState({
@@ -284,8 +289,8 @@ export function AuthAccessForm({
   async function handleRecoverConfirm(e) {
     e.preventDefault();
     const cleanCode = recoverForm.code.trim();
-    if (!/^\d{6}$/.test(cleanCode)) {
-      setErrorState({ tab: 'recover', message: 'El código debe tener exactamente 6 dígitos.' });
+    if (!/^(?:\d{6}|[a-f0-9]{48})$/.test(cleanCode)) {
+      setErrorState({ tab: 'recover', message: 'Ingresa un código de 6 dígitos o tu clave de recuperación.' });
       setShakeTick((n) => n + 1);
       return;
     }
@@ -410,6 +415,20 @@ export function AuthAccessForm({
     : 'bg-[#0A0A0C]/75 border-white/[0.09] placeholder:text-[#9A9AA2]/65 focus:border-[#2F6FED] focus:shadow-[0_0_20px_rgba(47,111,237,0.22)]';
   const inputClass = (field) =>
     `${inputSurface} ${fieldErrors[field] ? '!border-[#FF453A]/75 focus:!border-[#FF453A]' : ''}`;
+
+  if (registeredAccount) {
+    return (
+      <div className="space-y-4" role="status">
+        <h2 className="text-lg font-semibold">Guarda tu clave de recuperación</h2>
+        <p className="text-sm text-[#9FA6B8]">Permite recuperar tu cuenta sin correo. Guárdala fuera de OMEGA; se muestra una sola vez y es de un solo uso.</p>
+        <code className="block break-all select-all rounded-lg border border-white/20 p-3">{registeredAccount.recoveryKey}</code>
+        <button type="button" className="w-full rounded-lg bg-[#2F6FED] p-3 text-white"
+          onClick={() => { const account = registeredAccount; setRegisteredAccount(null); onAuthenticated?.(saveAuthSession(account.session), { isNewAccount: true }); }}>
+          Ya guardé mi clave, continuar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={compact ? 'space-y-3.5' : 'space-y-4'}>
@@ -719,10 +738,15 @@ export function AuthAccessForm({
 
           {recoverForm.step === 'request' && !authConfig.smtpConfigured && (
             <div className="rounded-[10px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/10 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-[#FFE2B8]">
-              Este nodo local aún no tiene SMTP configurado: el código no llegará por correo sino que se registrará en{' '}
-              <code className="font-tech">docker logs omega_backend_java</code>. Si es tu primer acceso local, usa{' '}
-              <span className="font-medium text-white">Crear cuenta</span> (no pide correo).
+              Usa la clave de recuperación guardada al crear tu cuenta. Funciona sin correo ni conexión a Internet.
             </div>
+          )}
+
+          {recoverForm.step === 'request' && authConfig.smtpConfigured && (
+            <button type="button" className="text-[12px] text-[#8BB2FF]"
+              onClick={() => setRecoverForm((p) => ({ ...p, step: 'confirm', deliveryMode: 'recovery_key', code: '', statusMessage: '' }))}>
+              Usar mi clave de recuperación sin correo
+            </button>
           )}
 
           {recoverForm.step === 'confirm' && (
@@ -738,7 +762,7 @@ export function AuthAccessForm({
                   <h2 className="text-[16px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
                     {recoverForm.deliveryMode === 'smtp'
                       ? 'Revisa tu correo de verificación'
-                      : 'Código generado en el servidor local'}
+                      : 'Usa tu clave de recuperación'}
                   </h2>
                   <p className="mt-0.5 text-[12px] text-[#9FA6B8]">
                     {recoverForm.deliveryMode === 'smtp' ? (
@@ -748,9 +772,7 @@ export function AuthAccessForm({
                       </>
                     ) : (
                       <>
-                        Sin SMTP configurado: consulta el código de 6 dígitos en los logs de{' '}
-                        <code className="font-tech text-[#F2F2F4]">omega_backend_java</code> para{' '}
-                        <span className="font-medium text-[#F2F2F4]">{recoverForm.email}</span>
+                        Introduce tu clave de recuperación. Es de un solo uso; después podrás generar otra en Seguridad.
                       </>
                     )}
                   </p>
@@ -758,6 +780,15 @@ export function AuthAccessForm({
               </div>
 
               <div>
+                {recoverForm.deliveryMode === 'recovery_key' ? (
+                  <label className="block text-[12px] text-[#D4D8E4]">
+                    Clave de recuperación
+                    <input required type="text" autoComplete="off" spellCheck={false} maxLength={48}
+                      value={recoverForm.code}
+                      onChange={(e) => setRecoverForm((p) => ({ ...p, code: e.target.value.trim().toLowerCase() }))}
+                      className={`mt-2 w-full rounded-[10px] border p-3 font-mono text-[13px] ${inputSurface}`} />
+                  </label>
+                ) : (<>
                 <label className="sr-only">Código de recuperación de 6 dígitos</label>
                 <div
                   className="grid grid-cols-6 gap-2"
@@ -808,6 +839,7 @@ export function AuthAccessForm({
                     );
                   })}
                 </div>
+                </>)}
               </div>
 
               <div>
@@ -916,14 +948,14 @@ export function AuthAccessForm({
                   <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.12s]" />
                   <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce" />
                 </span>
-                <span>{recoverForm.step === 'confirm' ? 'Verificando código...' : 'Enviando código...'}</span>
+                <span>{recoverForm.step === 'confirm' ? 'Verificando recuperación...' : 'Preparando recuperación...'}</span>
               </span>
             ) : (
               <>
                 <span>
                   {recoverForm.step === 'confirm'
                     ? 'Restablecer contraseña'
-                    : 'Enviar código de recuperación'}
+                    : authConfig.smtpConfigured ? 'Enviar código de recuperación' : 'Continuar con mi clave'}
                 </span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </>
@@ -1575,8 +1607,8 @@ export function AuthModulePanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 font-tech text-[10.5px] text-[#30D158]">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#30D158] motion-safe:animate-pulse" />
-                      {authSession.isLocalWorkspace || authSession.tenantSlug === 'espacio-local'
-                        ? 'Espacio local (sin cuenta)'
+                      {authSession.isLocalWorkspace
+                        ? 'Espacio local'
                         : 'Sesión activa'}
                     </span>
                     <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
