@@ -35,8 +35,8 @@ Definido en [`.github/workflows/sast-security.yml`](../.github/workflows/sast-se
   - `pull_request` hacia `main` (nunca `pull_request_target`, garantizando aislamiento ante PRs externos).
   - `push` sobre `main`.
   - `schedule`: semanal (`0 4 * * 1`, lunes 04:00 UTC) para detectar nuevas consultas/reglas sobre código existente.
-  - `workflow_dispatch`: ejecución manual eligiendo `enforcement_mode` (`observe` o `enforce`).
-- **Permisos mínimos:** `contents: read` a nivel global; `security-events: write` únicamente en los jobs que publican SARIF; `actions: read` únicamente en CodeQL.
+  - `workflow_dispatch`: ejecución manual eligiendo `enforce-new-error` (por defecto), `enforce-all-error` u `observe`.
+- **Permisos mínimos y PRs desde forks:** `contents: read` a nivel global; `security-events: write` únicamente en los jobs que publican SARIF; `actions: read` únicamente en CodeQL. En PRs provenientes de forks (`github.event.pull_request.head.repo.fork == true`), GitHub degrada `GITHUB_TOKEN` a solo lectura: el pipeline omite la subida SARIF a Code Scanning (`upload: never` en CodeQL y condición negativa en `upload-sarif@v4`) para no fallar por permisos sin privilegios elevados, conservando el análisis completo, el gate y el artifact descargable.
 - **Concurrencia y timeouts:** cancela ejecuciones previas en la misma rama/PR (no en `main`), con `timeout-minutes: 25` para CodeQL y `15` para Semgrep.
 
 ---
@@ -54,28 +54,44 @@ En la ejecución inicial de Semgrep sobre `omega/` y `.github/workflows/` (run [
 | `yaml.github-actions.security.github-actions-mutable-action-tag` (32 ocurrencias en `.github/workflows/*.yml`) | `WARNING` (Medium) | **Riesgo de cadena de suministro** (tags mutables `@v4`/`@v7`) | **Corregido:** todas las acciones de los 4 workflows fijadas a **SHAs de commit completos de 40 caracteres**, con actualizaciones semanales vía [`.github/dependabot.yml`](../.github/dependabot.yml). |
 | `java.lang.security.audit.crypto.unencrypted-socket` (`WebIntelExtractorService.java:352`) | `WARNING` (Medium) | **Falso positivo para HTTPS / comportamiento esperado para HTTP CTI** | **Riesgo aceptado y documentado** en [`.github/security/semgrep-accepted-risks.json`](../.github/security/semgrep-accepted-risks.json): el socket `Proxy.NO_PROXY` implementa *IP pinning* anti-DNS-rebinding SSRF y actualiza inmediatamente a `SSLSocket` con SNI cuando el esquema es `https://`. |
 | `PartialParsing` (`OnboardingTourModal.jsx:518`) | Error de parseo JS | Texto `&` sin entidad en JSX | **Corregido** (`&` → `y`), eliminando el error de parseo JS. |
+| `PartialParsing` (`sast-security.yml:136`, `release-desktop.yml:158`) | Advertencia de parseo CI | Interpolación `${{ ... }}` directa dentro de `run:` | **Corregido:** expresiones movidas a variables `env:`, mitigando además riesgo de script injection. |
+| `Internal matching error` (`release-desktop.yml` pasos `shell: pwsh`) | 4 advertencias de matcher | Regla `gha-curl-pipe-shell` intenta parsear scripts PowerShell como Bash | **Limitación de herramienta documentada:** ninguno de esos 4 pasos usa `curl \| sh`; CodeQL (`actions`) sigue analizando los workflows completos. |
 
-### Política de enforcement implementada
+### Política de enforcement y gestión de fingerprints
 
-Evaluada por [`.github/scripts/evaluate_semgrep_gate.py`](../.github/scripts/evaluate_semgrep_gate.py):
+Evaluada y probada por [`.github/scripts/evaluate_semgrep_gate.py`](../.github/scripts/evaluate_semgrep_gate.py) y [`.github/scripts/test_evaluate_semgrep_gate.py`](../.github/scripts/test_evaluate_semgrep_gate.py) (ejecutada obligatoriamente en CI antes del gate):
 
-1. **Bloqueo ante fallos del escáner:** códigos de salida `>= 2` o errores fatales del motor Semgrep fallan el pipeline inmediatamente (nunca se interpretan como verde).
-2. **Riesgos aceptados explícitos ([`semgrep-accepted-risks.json`](../.github/security/semgrep-accepted-risks.json)):** solo se excluyen del bloqueo entradas auditadas por par exacto `(check_id, path)` con clasificación, fecha y justificación técnica, manteniéndolas visibles en el *Step Summary*.
-3. **Línea base diferencial ([`semgrep-baseline.json`](../.github/security/semgrep-baseline.json)):** distingue deuda preexistente de hallazgos nuevos.
-4. **Modo por defecto (`enforce-new-error`):** bloquea automáticamente cualquier PR o push a `main` que introduzca un hallazgo nuevo de severidad `ERROR` (High/Critical), sin bloquear deuda aceptada ni preexistente. Se mantiene soporte manual (`workflow_dispatch`) para `enforce-all-error` y `observe`.
+1. **Bloqueo ante fallos del escáner:** códigos de salida `>= 2`, reportes JSON/SARIF ausentes o corruptos, errores fatales de Semgrep (`FatalError`) o configuraciones de excepción inválidas/caducadas aplican **fail-closed** (`exit 2`).
+2. **Identificación resistente por fingerprint ([`semgrep-accepted-risks.json`](../.github/security/semgrep-accepted-risks.json)):**
+   - **Prohibidas las excepciones globales por archivo/regla o con comodines (`*`).**
+   - Cada excepción exige `check_id`, `path`, `context_sha256` (hash SHA-256 de la región coincidente + 3 líneas previas y 1 posterior) o `semgrep_fingerprint` real, `max_occurrences` (consumo 1:1), `classification`, `owner`, `reviewed_at`, `expires_at` y `justification` técnica (`>= 20` caracteres).
+   - Un desplazamiento de líneas por encima de la función mantiene estable el `context_sha256`, mientras que una segunda copia o una nueva coincidencia en otro método **no hereda la excepción**.
+   - Si una excepción caduca (`expires_at < fecha UTC actual`), el evaluador falla solicitando nueva revisión explícita.
+3. **Línea base diferencial ([`semgrep-baseline.json`](../.github/security/semgrep-baseline.json)):** distingue deuda preexistente por `(check_id, path, context_sha256)` de hallazgos nuevos.
+4. **Modos de control:**
+   - `enforce-new-error` *(por defecto en PR y push)*: bloquea cualquier hallazgo **nuevo** de severidad `ERROR`.
+   - `enforce-all-error`: bloquea cualquier hallazgo activo `ERROR` (incluyendo deuda preexistente en línea base).
+   - `observe`: registra y publica métricas/SARIF sin bloquear por hallazgos de código (pero **sí falla** ante errores técnicos o config inválida).
 
-> La activación de reglas obligatorias (*Required status checks*) en la protección de rama de `main` permanece bajo aprobación manual del mantenedor del repositorio.
+### Validación funcional Docker / Nginx y activación de Required Status Checks
+
+- La imagen de `omega/frontend/Dockerfile` (`nginxinc/nginx-unprivileged:1.27-alpine`, `USER 101`, `EXPOSE 8080`, `docker-compose.yml` mapeado a `5173:8080`) fue validada funcionalmente ejecutando el contenedor contra un upstream de prueba en red Docker: `uid=101(nginx)`, procesos `nginx` no-root, entrega `HTTP 200` de assets estáticos (`/assets/*.js` con `immutable`), fallback SPA (`200` en rutas cliente), ocultación de versión (`Server: nginx`) y proxy `/actuator/health` + `/api/` reenviando `Host: backend-java:8080` y cabeceras `X-Forwarded-*`.
+- **Activación segura de Required Status Checks en `main` (manual tras el merge de PR #1):**
+  1. Verificar 2 ejecuciones consecutivas limpias en `main` para confirmar estabilidad de tiempos y ausencia de falsos bloqueos.
+  2. En *Settings → Branches → Branch protection / Rulesets (`main`)*, marcar como requeridos únicamente los checks estables en PR internos y externos: `Semgrep SAST (OWASP + OMEGA Rules)` y los checks `CodeQL (java-kotlin)`, `CodeQL (python)`, `CodeQL (javascript-typescript)`, `CodeQL (actions)`.
 
 ---
 
 ## 5. Operación diaria
 
 ### Ejecutar análisis manualmente
-- **En GitHub:** *Actions → SAST Security Analysis (CodeQL & Semgrep) → Run workflow*, eligiendo `observe` o `enforce`.
-- **En local (Semgrep):**
+- **En GitHub:** *Actions → SAST Security Analysis (CodeQL & Semgrep) → Run workflow*, eligiendo `enforce-new-error`, `enforce-all-error` u `observe`.
+- **En local (Semgrep + Gate):**
   ```bash
-  pip install "semgrep>=1.90,<2.0"
-  semgrep scan --config .semgrep/omega-rules.yml --config p/owasp-top-ten --metrics=off omega/
+  pip install "semgrep>=1.90,<2.0" pytest
+  python -m pytest .github/scripts/test_evaluate_semgrep_gate.py -v
+  semgrep scan --config .semgrep/omega-rules.yml --config p/owasp-top-ten --metrics=off --sarif-output=omega-semgrep.sarif --json-output=omega-semgrep.json omega/ .github/workflows/
+  python .github/scripts/evaluate_semgrep_gate.py --report omega-semgrep.json --sarif omega-semgrep.sarif --mode enforce-new-error
   ```
 
 ### Revisar alertas y descargar reportes

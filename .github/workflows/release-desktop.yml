@@ -152,12 +152,15 @@ jobs:
           cargo test --locked
           cargo build --release --locked
       - name: Stage Rust Sensor Sidecar
+        env:
+          MATRIX_EXT: ${{ matrix.ext }}
+          MATRIX_TRIPLE: ${{ matrix.triple }}
         shell: pwsh
         run: |
           $binDir = 'omega/frontend/src-tauri/binaries'
           New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-          $src = "omega/sensor-rust/target/release/omega-sensor${{ matrix.ext }}"
-          $dst = "$binDir/omega-sensor-${{ matrix.triple }}${{ matrix.ext }}"
+          $src = "omega/sensor-rust/target/release/omega-sensor$($env:MATRIX_EXT)"
+          $dst = "$binDir/omega-sensor-$($env:MATRIX_TRIPLE)$($env:MATRIX_EXT)"
           Copy-Item -Force $src $dst
       - name: Test Tauri v2 Rust Shell (including PDF Vault Index)
         working-directory: omega/frontend/src-tauri

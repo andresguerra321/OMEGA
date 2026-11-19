@@ -76,6 +76,7 @@ jobs:
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           category: "/language:${{ matrix.language }}"
+          upload: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'never' || 'always' }}
 
   semgrep:
     name: Semgrep SAST (OWASP + OMEGA Rules)
@@ -129,18 +130,26 @@ jobs:
             exit "${SEMGREP_RC}"
           fi
 
+      - name: Run Semgrep Gate Evaluator Unit Tests
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest .github/scripts/test_evaluate_semgrep_gate.py -v
+
       - name: Evaluate Semgrep Security Gate (Baseline + Accepted Risks)
         id: evaluate_gate
+        env:
+          SEMGREP_SCAN_EXIT_CODE: ${{ steps.semgrep_scan.outputs.exit_code }}
         run: |
           python .github/scripts/evaluate_semgrep_gate.py \
             --report omega-semgrep.json \
-            --exit-code "${{ steps.semgrep_scan.outputs.exit_code }}" \
+            --sarif omega-semgrep.sarif \
+            --exit-code "${SEMGREP_SCAN_EXIT_CODE}" \
             --accepted-risks .github/security/semgrep-accepted-risks.json \
             --baseline .github/security/semgrep-baseline.json \
             --mode "${ENFORCEMENT_MODE}"
 
       - name: Upload Semgrep SARIF to GitHub Code Scanning
-        if: always() && hashFiles('omega-semgrep.sarif') != ''
+        if: always() && hashFiles('omega-semgrep.sarif') != '' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           sarif_file: omega-semgrep.sarif
