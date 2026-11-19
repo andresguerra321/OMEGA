@@ -108,6 +108,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-omega_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omega_dev_secret}
       OMEGA_JWT_SECRET: ${OMEGA_JWT_SECRET:-omega-dev-local-only-hmac-sha256-secret-key-2026-change-in-prod}
+      OMEGA_LOCAL_ACCESS_ENABLED: ${OMEGA_LOCAL_ACCESS_ENABLED:-true}
       OMEGA_COOKIE_SECURE: ${OMEGA_COOKIE_SECURE:-false}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Define un secreto efimero en RAM para iniciar los servicios}
       OMEGA_REQUIRE_HMAC: "true"

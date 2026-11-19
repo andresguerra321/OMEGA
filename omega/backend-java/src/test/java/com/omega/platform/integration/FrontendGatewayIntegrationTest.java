@@ -282,7 +282,11 @@ class FrontendGatewayIntegrationTest {
                                 .andExpect(jsonPath("$.tenantSelfRegistrationEnabled").value(true))
                                 .andExpect(jsonPath("$.bootstrapSecretRequired").value(false))
                                 .andExpect(jsonPath("$.cookieAuthEnabled").value(true))
-                                .andExpect(jsonPath("$.passkeysSupported").value(false));
+                                .andExpect(jsonPath("$.passkeysSupported").value(false))
+                                .andExpect(jsonPath("$.localAccessEnabled").value(false));
+
+                mockMvc.perform(post("/api/v1/auth/local-session").with(csrf()))
+                                .andExpect(status().isForbidden());
 
                 mockMvc.perform(options("/api/v1/auth/config")
                                 .header(HttpHeaders.ORIGIN, "http://localhost:5173")

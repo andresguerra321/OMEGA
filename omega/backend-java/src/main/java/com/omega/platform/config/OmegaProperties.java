@@ -54,7 +54,22 @@ public record OmegaProperties(
                         @NotBlank String jwtIssuer,
                         boolean allowTenantSelfRegistration,
                         String bootstrapSecret,
-                        @NotBlank String internalServiceToken) {
+                        @NotBlank String internalServiceToken,
+                        boolean localInstantAccess) {
+                @ConstructorBinding
+                public Security {
+                }
+
+                public Security(
+                                String jwtSecret,
+                                long jwtExpirationSeconds,
+                                String jwtIssuer,
+                                boolean allowTenantSelfRegistration,
+                                String bootstrapSecret,
+                                String internalServiceToken) {
+                        this(jwtSecret, jwtExpirationSeconds, jwtIssuer, allowTenantSelfRegistration,
+                                        bootstrapSecret, internalServiceToken, false);
+                }
         }
 
         public record Ingest(

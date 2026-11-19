@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import {
   confirmPasswordReset,
+  enterLocalWorkspace,
   getAuthConfig,
   loginWithPassword,
   registerAccount,
@@ -75,6 +76,7 @@ export function AuthAccessForm({
     tenantSelfRegistrationEnabled: true,
     bootstrapSecretRequired: false,
     smtpConfigured: false,
+    localAccessEnabled: false,
   });
   const [loading, setLoading] = useState(false);
   const [shakeTick, setShakeTick] = useState(0);
@@ -1395,9 +1397,46 @@ export function AuthModulePanel({
   gateMode = false,
   apiOnline = true,
   bootstrapping = false,
+  localAccessEnabled = false,
 }) {
   const fileInputRef = useRef(null);
   const [gateTab, setGateTab] = useState('login');
+  const [enteringLocal, setEnteringLocal] = useState(false);
+  const [localEntryError, setLocalEntryError] = useState('');
+  const [canEnterLocal, setCanEnterLocal] = useState(Boolean(localAccessEnabled));
+
+  useEffect(() => {
+    if (localAccessEnabled) {
+      setCanEnterLocal(true);
+      return;
+    }
+    if (!gateMode || !apiOnline) return;
+    let cancelled = false;
+    getAuthConfig()
+      .then((cfg) => {
+        if (!cancelled && cfg?.localAccessEnabled) {
+          setCanEnterLocal(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gateMode, apiOnline, localAccessEnabled]);
+
+  async function handleEnterLocalWorkspace() {
+    if (enteringLocal) return;
+    setEnteringLocal(true);
+    setLocalEntryError('');
+    try {
+      const session = await enterLocalWorkspace();
+      onAuthenticated?.(session, { isNewAccount: false });
+    } catch (err) {
+      setLocalEntryError(err?.message || 'No se pudo iniciar el espacio local.');
+    } finally {
+      setEnteringLocal(false);
+    }
+  }
   const tenantStats = govStats?.tenant_usage || null;
   const indexedCount = privateDocs.filter((d) => d.status === 'INDEXED').length;
 
@@ -1490,6 +1529,27 @@ export function AuthModulePanel({
                   onAuthenticated={onAuthenticated}
                   reasonMessage={reasonMessage}
                 />
+
+                {canEnterLocal && apiOnline && (
+                  <div className="mt-3 pt-3 border-t border-white/[0.08] space-y-2">
+                    {localEntryError && (
+                      <p className="text-[11.5px] text-[#FFB4AE] text-center">{localEntryError}</p>
+                    )}
+                    <button
+                      type="button"
+                      disabled={enteringLocal}
+                      onClick={() => void handleEnterLocalWorkspace()}
+                      className="w-full h-9.5 rounded-[10px] border border-[#30D158]/35 bg-[#30D158]/10 hover:bg-[#30D158]/18 disabled:opacity-50 text-[12.5px] font-medium text-[#D2FCE0] inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-[#30D158]" />
+                      <span>
+                        {enteringLocal
+                          ? 'Abriendo espacio local...'
+                          : 'Entrar sin cuenta (Espacio local)'}
+                      </span>
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -1515,7 +1575,9 @@ export function AuthModulePanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 font-tech text-[10.5px] text-[#30D158]">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#30D158] motion-safe:animate-pulse" />
-                      Sesión activa
+                      {authSession.isLocalWorkspace || authSession.tenantSlug === 'espacio-local'
+                        ? 'Espacio local (sin cuenta)'
+                        : 'Sesión activa'}
                     </span>
                     <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
                       {authSession.role || 'ANALYST'}

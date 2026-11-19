@@ -259,3 +259,34 @@ test('dossier export downloads authenticated binary data and preserves permissio
   globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'Sin permisos sobre el expediente' }), { status: 403, headers: { 'content-type': 'application/json' } });
   await assert.rejects(api.exportExpedienteDossier('case-id', 'json'), error => error.status === 403);
 });
+
+test('enterLocalWorkspace requests local-session once and marks session as local workspace', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import(`./api.js?local-ws=${Date.now()}`);
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, method: options?.method || 'GET' });
+    if (String(url).endsWith('/auth/csrf')) {
+      return { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ token: 'csrf-tok', headerName: 'X-XSRF-TOKEN' }) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        accessToken: makeFutureJwt(),
+        expiresInSeconds: 3600,
+        userId: '11111111-1111-1111-1111-111111111111',
+        tenantId: '22222222-2222-2222-2222-222222222222',
+        tenantSlug: 'espacio-local',
+        email: 'operador@omega.local',
+        role: 'ADMIN',
+      }),
+    };
+  };
+  const [first, second] = await Promise.all([api.enterLocalWorkspace(), api.enterLocalWorkspace()]);
+  assert.equal(first.isLocalWorkspace, true);
+  assert.equal(second.tenantSlug, 'espacio-local');
+  const postCalls = calls.filter((c) => c.url.endsWith('/auth/local-session'));
+  assert.equal(postCalls.length, 1);
+});

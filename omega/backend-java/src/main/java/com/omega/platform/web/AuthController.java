@@ -32,6 +32,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -107,7 +108,8 @@ public class AuthController {
                 true,
                 false,
                 PASSKEYS_ROADMAP_NOTE,
-                smtpConfigured);
+                smtpConfigured,
+                properties.security().localInstantAccess());
     }
 
     public record AuthConfigResponse(
@@ -116,9 +118,10 @@ public class AuthController {
             boolean cookieAuthEnabled,
             boolean passkeysSupported,
             String passkeysRoadmap,
-            boolean smtpConfigured) {
+            boolean smtpConfigured,
+            boolean localAccessEnabled) {
         public AuthConfigResponse(boolean tenantSelfRegistrationEnabled, boolean bootstrapSecretRequired) {
-            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, true, false, PASSKEYS_ROADMAP_NOTE, false);
+            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, true, false, PASSKEYS_ROADMAP_NOTE, false, false);
         }
 
         public AuthConfigResponse(
@@ -127,7 +130,17 @@ public class AuthController {
                 boolean cookieAuthEnabled,
                 boolean passkeysSupported,
                 String passkeysRoadmap) {
-            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, cookieAuthEnabled, passkeysSupported, passkeysRoadmap, false);
+            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, cookieAuthEnabled, passkeysSupported, passkeysRoadmap, false, false);
+        }
+
+        public AuthConfigResponse(
+                boolean tenantSelfRegistrationEnabled,
+                boolean bootstrapSecretRequired,
+                boolean cookieAuthEnabled,
+                boolean passkeysSupported,
+                String passkeysRoadmap,
+                boolean smtpConfigured) {
+            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, cookieAuthEnabled, passkeysSupported, passkeysRoadmap, smtpConfigured, false);
         }
     }
 
@@ -161,6 +174,23 @@ public class AuthController {
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
         AuthTokenResponse response = authService.login(request, httpServletRequest.getRemoteAddr());
+        attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
+        return response;
+    }
+
+    @PostMapping("/local-session")
+    public AuthTokenResponse localSession(
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse) {
+        if (!properties.security().localInstantAccess()) {
+            throw new AccessDeniedException("El acceso local sin cuenta está deshabilitado");
+        }
+        String forwardedFor = httpServletRequest.getHeader("X-Forwarded-For");
+        String forwarded = httpServletRequest.getHeader("Forwarded");
+        if ((forwardedFor != null && !forwardedFor.isBlank()) || (forwarded != null && !forwarded.isBlank())) {
+            throw new AccessDeniedException("El acceso local sin cuenta solo se admite en conexiones locales directas");
+        }
+        AuthTokenResponse response = authService.enterLocalWorkspace();
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
         return response;
     }

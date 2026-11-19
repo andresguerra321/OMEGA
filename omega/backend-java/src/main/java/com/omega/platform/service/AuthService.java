@@ -24,7 +24,9 @@ import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.text.Normalizer;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -39,6 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    private static final String LOCAL_WORKSPACE_SLUG = "espacio-local";
+    private static final String LOCAL_WORKSPACE_NAME = "OMEGA Local";
+    private static final String LOCAL_OPERATOR_EMAIL = "operador@omega.local";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
@@ -311,6 +317,44 @@ public class AuthService {
         if (!properties.security().allowTenantSelfRegistration()) {
             throw new AccessDeniedException("El auto-registro de tenants está deshabilitado");
         }
+    }
+
+    @Transactional
+    public synchronized AuthTokenResponse enterLocalWorkspace() {
+        if (!properties.security().localInstantAccess()) {
+            throw new AccessDeniedException("El acceso local sin cuenta está deshabilitado");
+        }
+        TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(LOCAL_WORKSPACE_SLUG)
+                .orElseGet(() -> {
+                    if (tenantRepository.existsBySlug(LOCAL_WORKSPACE_SLUG)) {
+                        throw new AccessDeniedException("El espacio local se encuentra inactivo");
+                    }
+                    return tenantRepository.save(new TenantEntity(LOCAL_WORKSPACE_SLUG, LOCAL_WORKSPACE_NAME));
+                });
+
+        UserEntity operator = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), LOCAL_OPERATOR_EMAIL)
+                .orElseGet(() -> {
+                    byte[] rawEntropy = new byte[32];
+                    SECURE_RANDOM.nextBytes(rawEntropy);
+                    String generatedSecret = Base64.getUrlEncoder().withoutPadding().encodeToString(rawEntropy);
+                    return userRepository.save(new UserEntity(
+                            tenant.getId(),
+                            LOCAL_OPERATOR_EMAIL,
+                            passwordEncoder.encode(generatedSecret),
+                            "Operador Local",
+                            Role.ADMIN));
+                });
+        if (!operator.isActive()) {
+            throw new AccessDeniedException("El operador local se encuentra suspendido");
+        }
+        if (expedienteRepository.findAllByTenantIdOrderByCreatedAtDesc(tenant.getId()).isEmpty()) {
+            expedienteRepository.save(new ExpedienteEntity(
+                    tenant.getId(),
+                    operator.getId(),
+                    "Espacio local",
+                    ClassificationLevel.CONFIDENTIAL));
+        }
+        return issueTokenResponse(operator, tenant.getSlug());
     }
 
     @Transactional(readOnly = true)

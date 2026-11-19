@@ -1,5 +1,6 @@
 mod desktop_config;
 mod docker_bootstrap;
+mod env_loader;
 mod pdf_vault_index;
 mod usb_bridge;
 

@@ -1,8 +1,15 @@
-![OMEGA v2.0.4 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
+![OMEGA v2.0.5 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.5] - 2026-11-19
+
+### Arranque inmediato sin cuenta + detección y sincronización automática de `.env` en el `.exe`
+- **Detección e inyección automática de `.env` desde Tauri (`env_loader.rs`, `docker_bootstrap.rs`):** sin empaquetar secretos dentro del instalador, localiza el archivo `.env` local (`OMEGA_ENV_FILE`, directorio del `docker-compose.yml`, `app_data_dir/.env`, ancestros `omega/.env`, `~/.omega/.env` o etiqueta `working_dir` de contenedores OMEGA previos), fusiona `GROQ_API_KEY`, `GROQ_MODEL`, `OMEGA_SMTP_*` y claves de reputación preservando los secretos efímeros locales y las anulaciones de Ajustes, y verifica una huella determinista (`env_fingerprint`) en `built-images.json` para recrear automáticamente los contenedores cuando `.env` cambie.
+- **Acceso local directo sin crear cuenta (`AuthController.java`, `AuthService.java`, `OmegaProperties.java`, `SecurityConfig.java`, `App.jsx`, `AuthModulePanel.jsx`):** nuevo endpoint `POST /api/v1/auth/local-session` (deshabilitado por defecto en producción/Java puro, habilitado en modo local `OMEGA_LOCAL_ACCESS_ENABLED=true`, protegido contra `X-Forwarded-For` y aislado en su propio tenant `espacio-local`). Al abrir OMEGA en modo local, entra directo al espacio operativo para usar chat, verificador de enlaces, análisis de PC, USB/MVT y OSINT sin registro previo, conservando botón de acceso directo y creación de cuentas multi-tenant bajo demanda.
+- **Versionado sincronizado a `2.0.5`:** manifiestos frontend/Tauri/sensor Rust y notas en [v2.0.5](.github/release-notes/v2.0.5.md).
 
 ## [2.0.4] - 2026-11-19
 

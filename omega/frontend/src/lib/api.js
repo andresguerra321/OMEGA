@@ -9,6 +9,7 @@ const LEGACY_CLIENT_STORAGE_KEYS = [
 // Estado estrictamente volátil en RAM para tokens/credenciales (cero persistencia en disco del cliente)
 let inMemoryAuthSession = null;
 let inMemoryWorkspaceId = null;
+let inFlightLocalWorkspacePromise = null;
 
 function scrubLegacyDiskStorage() {
   try {
@@ -171,6 +172,10 @@ export function saveAuthSession(tokenResponse) {
     tenantSlug: tokenResponse.tenantSlug,
     email: tokenResponse.email,
     role: tokenResponse.role,
+    isLocalWorkspace: Boolean(
+      tokenResponse?.isLocalWorkspace ||
+        (tokenResponse?.tenantSlug === 'espacio-local' && tokenResponse?.email === 'operador@omega.local'),
+    ),
   };
   inMemoryAuthSession = session;
   scrubLegacyDiskStorage();
@@ -410,6 +415,24 @@ function normalizeRagResponse(data, expedienteId = null) {
 
 export async function getAuthConfig() {
   return apiFetch('/auth/config', { skipAuth: true });
+}
+
+export async function enterLocalWorkspace() {
+  const existing = getAuthSession();
+  if (existing && (existing.accessToken || existing.cookieBacked)) {
+    return existing;
+  }
+  if (!inFlightLocalWorkspacePromise) {
+    inFlightLocalWorkspacePromise = apiFetch('/auth/local-session', {
+      method: 'POST',
+      skipAuth: true,
+    })
+      .then((tokenRes) => saveAuthSession({ ...tokenRes, isLocalWorkspace: true }))
+      .finally(() => {
+        inFlightLocalWorkspacePromise = null;
+      });
+  }
+  return inFlightLocalWorkspacePromise;
 }
 
 export async function loginWithPassword({ tenantSlug, email, password }) {
@@ -988,7 +1011,7 @@ export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sen
       deviceUid,
       hostname: hostname || 'equipo-omega',
       osPlatform: osPlatform || 'web',
-      sensorVersion: sensorVersion || '2.0.4',
+      sensorVersion: sensorVersion || '2.0.5',
     },
   });
 }

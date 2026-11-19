@@ -1,6 +1,6 @@
 [package]
 name = "omega-desktop-tauri"
-version = "2.0.4"
+version = "2.0.5"
 description = "OMEGA Security Desktop Shell (Tauri v2)"
 authors = ["OMEGA Security"]
 edition = "2021"
