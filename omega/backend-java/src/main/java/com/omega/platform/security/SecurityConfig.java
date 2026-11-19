@@ -18,6 +18,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -35,7 +36,7 @@ public class SecurityConfig {
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             JsonSecurityHandlers jsonSecurityHandlers,
-            @Value("${omega.security.cors-allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,http://tauri.localhost,https://tauri.localhost,tauri://localhost,null}") String corsAllowedOriginsRaw) {
+            @Value("${omega.security.cors-allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,http://tauri.localhost,https://tauri.localhost,tauri://localhost}") String corsAllowedOriginsRaw) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jsonSecurityHandlers = jsonSecurityHandlers;
         this.corsAllowedOrigins = Arrays.stream(corsAllowedOriginsRaw.split(","))
@@ -45,10 +46,22 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            @Value("${omega.security.session-cookie-secure:false}") boolean forceSecureCookie) throws Exception {
+        CookieCsrfTokenRepository csrfTokens = new CookieCsrfTokenRepository();
+        csrfTokens.setCookieCustomizer(cookie -> {
+            cookie.httpOnly(true).sameSite("Strict").path("/api");
+            if (forceSecureCookie) cookie.secure(true);
+        });
         return http
                 .cors(Customizer.withDefaults())
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokens)
+                        .ignoringRequestMatchers(request -> {
+                            String bearer = JwtAuthenticationFilter.extractBearerToken(request);
+                            return (bearer != null && !bearer.isEmpty())
+                                    || JwtAuthenticationFilter.isBearerOnlyRequest(request);
+                        }))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -64,7 +77,7 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config", "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout",
                                 "/api/v1/auth/register", "/api/v1/auth/tenants/register",
                                 "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
@@ -81,7 +94,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(corsAllowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Omega-Bootstrap-Secret"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Omega-Bootstrap-Secret", "X-XSRF-TOKEN", "X-Omega-Auth-Mode"));
         config.setExposedHeaders(List.of("Retry-After"));
         boolean hasWildcardOrigin = corsAllowedOrigins.contains("*");
         config.setAllowCredentials(!hasWildcardOrigin);

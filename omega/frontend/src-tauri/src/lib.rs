@@ -1,11 +1,17 @@
 mod docker_bootstrap;
 mod pdf_vault_index;
+mod usb_bridge;
 
 use docker_bootstrap::{
     run_self_hosted_bootstrap, BootstrapStatus, SharedBootstrapState,
 };
 use pdf_vault_index::{
     load_index, register_pdf_source, resolve_pdf_source, LocalPdfSourceRecord, ResolvedPdfSource,
+};
+use usb_bridge::{
+    check_adb_status, check_ios_status, collect_device_snapshot, collect_ios_snapshot,
+    harden_private_dns, install_portable_adb, pick_adb_binary, pick_ios_backup_dir,
+    read_ios_backup_artifacts, read_ios_backup_manifest,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -171,7 +177,17 @@ pub fn run() {
             collect_host_telemetry_snapshot,
             register_local_pdf_source,
             resolve_local_pdf_source,
-            list_local_pdf_sources
+            list_local_pdf_sources,
+            check_adb_status,
+            pick_adb_binary,
+            install_portable_adb,
+            collect_device_snapshot,
+            harden_private_dns,
+            check_ios_status,
+            collect_ios_snapshot,
+            pick_ios_backup_dir,
+            read_ios_backup_manifest,
+            read_ios_backup_artifacts
         ])
         .run(tauri::generate_context!())
         .expect("error while running OMEGA Tauri v2 application");

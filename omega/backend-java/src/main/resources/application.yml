@@ -82,7 +82,7 @@ omega:
     internal-service-token: ${INTERNAL_SERVICE_TOKEN:omega-dev-internal-service-token-change-in-prod}
     session-cookie-name: ${OMEGA_SESSION_COOKIE_NAME:omega_session}
     session-cookie-secure: ${OMEGA_COOKIE_SECURE:false}
-    cors-allowed-origins: ${OMEGA_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,null}
+    cors-allowed-origins: ${OMEGA_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,http://tauri.localhost,https://tauri.localhost,tauri://localhost}
   ingest:
     temp-dir: ${OMEGA_INGEST_TMP_DIR:/tmp/omega_ingest}
     max-pdf-bytes: ${OMEGA_MAX_PDF_BYTES:26214400}

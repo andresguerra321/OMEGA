@@ -1,5 +1,7 @@
 package com.omega.platform.integration;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -264,7 +266,7 @@ class HybridRagQueryTest {
     }
 
     private JsonNode registerTenant(String slug, String name, String email) throws Exception {
-        MvcResult res = mockMvc.perform(post("/api/v1/auth/tenants/register")
+        MvcResult res = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

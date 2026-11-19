@@ -257,9 +257,21 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
   const url = rawUrl ? path : `${API_V1}${path}`;
   const reqHeaders = new Headers(headers);
   const session = getAuthSession();
+  const bearerOnly = isTauriDesktopContext()
+    || (typeof window !== 'undefined' && window.location?.protocol === 'file:');
+  if (bearerOnly) reqHeaders.set('X-Omega-Auth-Mode', 'bearer');
 
   if (!skipAuth && session?.accessToken) {
     reqHeaders.set('Authorization', `Bearer ${session.accessToken}`);
+  }
+
+  if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method.toUpperCase())
+      && !bearerOnly && !/^Bearer \S/.test(reqHeaders.get('Authorization') || '')) {
+    const csrf = await apiFetch('/auth/csrf', { skipAuth: true });
+    if (!csrf?.token || csrf.headerName !== 'X-XSRF-TOKEN') {
+      throw new Error('No se pudo obtener la protección de la sesión. Vuelve a intentarlo.');
+    }
+    reqHeaders.set(csrf.headerName, csrf.token);
   }
 
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
@@ -277,7 +289,7 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
       method,
       headers: reqHeaders,
       body: finalBody,
-      credentials: shouldIncludeCredentials() ? 'include' : 'same-origin',
+      credentials: bearerOnly ? 'omit' : shouldIncludeCredentials() ? 'include' : 'same-origin',
     });
   } catch (networkErr) {
     const err = new Error(
@@ -572,7 +584,7 @@ export async function loginOrCreateSandboxDemo() {
 
 export async function logoutSession() {
   try {
-    await apiFetch('/auth/logout', { method: 'POST', skipAuth: true });
+    await apiFetch('/auth/logout', { method: 'POST' });
   } catch {
     // Asegurar limpieza local incluso si el servidor está offline o el token ya caducó
   } finally {
@@ -976,7 +988,7 @@ export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sen
       deviceUid,
       hostname: hostname || 'equipo-omega',
       osPlatform: osPlatform || 'web',
-      sensorVersion: sensorVersion || '2.0.1',
+      sensorVersion: sensorVersion || '2.0.2',
     },
   });
 }

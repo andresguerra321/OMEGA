@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -28,7 +28,7 @@ import {
   syncStixFeeds,
   verifyMvtText,
 } from '../lib/api';
-import { collectNativeHostSnapshot, isDesktopApp } from '../lib/desktopBridge';
+import { collectNativeHostSnapshot, getMobileDesktopBridge, isDesktopApp } from '../lib/desktopBridge';
 import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
 import { MobileUsbAuditCard } from './MobileUsbAuditCard';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
@@ -95,15 +95,33 @@ export function MvtVerifierPanel({
   const guard = useSingleFlight();
 
   const hasPcTelemetryBridge = isDesktopApp();
-  const hasDesktopBridge = false;
+  const desktopBridge = useMemo(() => getMobileDesktopBridge(), []);
+  const hasDesktopBridge = Boolean(desktopBridge);
   const desktopPlatform =
     typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || '') ? 'darwin' : 'win32';
 
   useScrollReveal(resultContainerRef, [result?.sourceLabel, result?.verdictCode]);
 
-  const fetchUsbStatuses = useCallback(async () => {
-    setRefreshingUsb(false);
-  }, []);
+  const fetchUsbStatuses = useCallback(async (adbPath = '', ios = false, showLoading = false) => {
+    if (!desktopBridge) return;
+    if (showLoading) setRefreshingUsb(true);
+    try {
+      if (ios) {
+        setIosStatus(await desktopBridge.checkIosStatus());
+      } else {
+        const status = await desktopBridge.checkAdbStatus(adbPath);
+        setUsbDevice(status);
+        setSelectedSerial((previous) => status.devices?.some((d) => d.serial === previous && d.state === 'device')
+          ? previous : status.serial || '');
+      }
+    } catch (err) {
+      if (ios) setIosStatus(null);
+      else setUsbDevice(null);
+      if (showLoading) setErrorMsg(err?.message || String(err));
+    } finally {
+      if (showLoading) setRefreshingUsb(false);
+    }
+  }, [desktopBridge]);
 
   useEffect(() => {
     const handlePanicPurge = () => {
@@ -135,7 +153,7 @@ export function MvtVerifierPanel({
       clearTimeout(initTimer);
       clearInterval(timer);
     };
-  }, [customAdbPath, deviceTab, fetchUsbStatuses]);
+  }, [customAdbPath, deviceTab, fetchUsbStatuses, hasDesktopBridge]);
 
   const applyLiveDeviceResult = useCallback(
     (liveRes, fallbackLabel, notifyParent = true) => {
@@ -191,22 +209,67 @@ export function MvtVerifierPanel({
   }
 
   async function handlePickAdbBinary() {
-    setErrorMsg('El puente ADB directo requiere módulo nativo USB; usa carga de artefactos o respaldo manual.');
+    if (!desktopBridge) return;
+    try {
+      const picked = await desktopBridge.pickAdbBinary();
+      if (picked.canceled) return;
+      if (!picked.valid) throw new Error(picked.error || 'No se pudo validar ADB.');
+      setCustomAdbPath(picked.adb_path);
+      setErrorMsg('');
+      await fetchUsbStatuses(picked.adb_path, false, true);
+    } catch (err) {
+      setErrorMsg(err?.message || String(err));
+    }
   }
 
   async function handleLiveUsbScan() {
-    if (scanningUsb || isAnalyzing) return;
-    setErrorMsg('La captura USB ADB directa no está habilitada en esta versión; carga el volcado o archivo MVT.');
+    if (!desktopBridge || scanningUsb || isAnalyzing) return;
+    await guard(async () => {
+      setScanningUsb(true);
+      setErrorMsg('');
+      try {
+        const snapshot = await desktopBridge.collectDeviceSnapshot(customAdbPath, selectedSerial || usbDevice?.serial);
+        applyLiveDeviceResult(await analyzeLiveDeviceSnapshot(snapshot), 'Android');
+      } catch (err) {
+        setErrorMsg(err?.message || String(err));
+      } finally {
+        setScanningUsb(false);
+      }
+    });
   }
 
   async function handleLiveIosScan() {
-    if (scanningIos || isAnalyzing) return;
-    setErrorMsg('La captura USB iOS directa no está habilitada en esta versión; analiza un respaldo iOS.');
+    if (!desktopBridge || scanningIos || isAnalyzing) return;
+    await guard(async () => {
+      setScanningIos(true);
+      setErrorMsg('');
+      try {
+        const snapshot = await desktopBridge.collectIosSnapshot(iosStatus?.device?.udid);
+        applyLiveDeviceResult(await analyzeLiveDeviceSnapshot(snapshot), 'iPhone / iPad');
+      } catch (err) {
+        setErrorMsg(err?.message || String(err));
+      } finally {
+        setScanningIos(false);
+      }
+    });
   }
 
   async function handleInstallPortableAdb() {
-    if (installingAdb) return;
-    setErrorMsg('Descarga platform-tools oficiales de Google Android y carga el volcado manualmente.');
+    if (!desktopBridge || installingAdb) return;
+    await guard(async () => {
+      setInstallingAdb(true);
+      setErrorMsg('');
+      try {
+        const installed = await desktopBridge.installPortableAdb();
+        if (!installed.ok) throw new Error(installed.error || 'No se pudo instalar ADB.');
+        setCustomAdbPath(installed.adbPath);
+        await fetchUsbStatuses(installed.adbPath, false, true);
+      } catch (err) {
+        setErrorMsg(err?.message || String(err));
+      } finally {
+        setInstallingAdb(false);
+      }
+    });
   }
 
   async function handlePcLiveAudit() {
@@ -230,26 +293,86 @@ export function MvtVerifierPanel({
     });
   }
 
-  async function analyzeIosBackupDirectory() {
-    if (scanningIos || isAnalyzing) return;
-    setErrorMsg('Selecciona o carga directamente el archivo Manifest.db o artefactos exportados del respaldo iOS.');
+  async function analyzeIosBackupDirectory(backupPath, meta) {
+    if (!desktopBridge || scanningIos || isAnalyzing) return;
+    await guard(async () => {
+      setScanningIos(true);
+      setErrorMsg('');
+      setEncryptedBackupPrompt(null);
+      setBackupPassword('');
+      setBackupUnlockError('');
+      try {
+        const manifest = await desktopBridge.readIosBackupManifest(backupPath);
+        if (manifest.encrypted) {
+          setEncryptedBackupPrompt({ backupPath, meta: manifest.backup || meta });
+          return;
+        }
+        const resolved = await resolveIosManifestTargets(manifest.manifest_b64);
+        const snapshot = await desktopBridge.readIosBackupArtifacts(backupPath, false, resolved.targets);
+        applyLiveDeviceResult(await analyzeLiveDeviceSnapshot(snapshot), 'Respaldo iOS');
+      } catch (err) {
+        setErrorMsg(err?.message || String(err));
+      } finally {
+        setScanningIos(false);
+      }
+    });
   }
 
   async function handleUnlockEncryptedBackup(e) {
     e?.preventDefault?.();
     if (!encryptedBackupPrompt || !backupPassword || unlockingBackup) return;
-    setBackupUnlockError('Desbloqueo de carpeta local iOS no disponible en esta sesión.');
-    setBackupPassword('');
+    await guard(async () => {
+      setUnlockingBackup(true);
+      setBackupUnlockError('');
+      const password = backupPassword;
+      setBackupPassword('');
+      try {
+        const { backupPath } = encryptedBackupPrompt;
+        const manifest = await desktopBridge.readIosBackupManifest(backupPath);
+        const resolved = await resolveEncryptedIosManifestTargets(
+          manifest.manifest_plist_b64, manifest.manifest_b64, password,
+        );
+        if (!resolved.unlock_token) throw new Error('No se recibió la sesión de desbloqueo del respaldo.');
+        const snapshot = await desktopBridge.readIosBackupArtifacts(backupPath, true, resolved.targets);
+        snapshot.ios_unlock_token = resolved.unlock_token;
+        applyLiveDeviceResult(await analyzeLiveDeviceSnapshot(snapshot), 'Respaldo iOS');
+        setEncryptedBackupPrompt(null);
+      } catch (err) {
+        setBackupUnlockError(err?.message || String(err));
+      } finally {
+        setUnlockingBackup(false);
+      }
+    });
   }
 
   async function handlePickIosBackupDir() {
-    if (scanningIos || isAnalyzing) return;
-    setErrorMsg('Carga directamente los artefactos exportados del respaldo iOS en la zona de carga.');
+    if (!desktopBridge || scanningIos || isAnalyzing) return;
+    try {
+      const picked = await desktopBridge.pickIosBackupDir();
+      if (picked.canceled) return;
+      if (!picked.valid || !picked.backup?.path) throw new Error(picked.error || 'El respaldo seleccionado no es válido.');
+      await analyzeIosBackupDirectory(picked.backup.path, picked.backup);
+    } catch (err) {
+      setErrorMsg(err?.message || String(err));
+    }
   }
 
   async function handleConfirmHardenDns() {
     setConfirmingDns(false);
-    setDnsAppliedNote('Configura DNS Privado cifrado (dns.quad9.net) en Ajustes -> Red e Internet del dispositivo.');
+    if (!desktopBridge || hardeningDns) return;
+    await guard(async () => {
+      setHardeningDns(true);
+      setDnsAppliedNote('');
+      try {
+        const response = await desktopBridge.hardenPrivateDns(customAdbPath, selectedSerial || usbDevice?.serial);
+        if (!response.applied) throw new Error('No se pudo verificar la configuración de DNS privado.');
+        setDnsAppliedNote('DNS privado dns.quad9.net aplicado y verificado.');
+      } catch (err) {
+        setErrorMsg(err?.message || String(err));
+      } finally {
+        setHardeningDns(false);
+      }
+    });
   }
 
   async function handleSyncStix() {
@@ -1286,6 +1409,16 @@ export function MvtVerifierPanel({
                                   <span>
                                     {usbDevice?.adb_path ? 'Cambiar conector adb.exe' : 'Elegir adb.exe en mi PC'}
                                   </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={installingAdb || scanningUsb || isAnalyzing}
+                                  onClick={handleInstallPortableAdb}
+                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4]/90 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {installingAdb ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                                  <span>{installingAdb ? 'Instalando conector...' : 'Instalar conector USB'}</span>
                                 </button>
 
                                 <button

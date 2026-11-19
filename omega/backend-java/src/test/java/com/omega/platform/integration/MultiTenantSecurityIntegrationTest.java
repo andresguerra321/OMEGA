@@ -1,5 +1,7 @@
 package com.omega.platform.integration;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -261,7 +263,7 @@ class MultiTenantSecurityIntegrationTest {
             String password,
             String fullName
     ) throws Exception {
-        MvcResult res = mockMvc.perform(post("/api/v1/auth/tenants/register")
+        MvcResult res = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -301,7 +303,7 @@ class MultiTenantSecurityIntegrationTest {
     }
 
     private String login(String tenantSlug, String email, String password) throws Exception {
-        MvcResult res = mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult res = mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

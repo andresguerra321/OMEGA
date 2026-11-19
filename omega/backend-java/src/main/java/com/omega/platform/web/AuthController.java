@@ -3,6 +3,7 @@ package com.omega.platform.web;
 import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.security.SessionCookieHelper;
+import org.springframework.security.web.csrf.CsrfToken;
 import com.omega.platform.service.AuthService;
 import com.omega.platform.service.PasswordResetService;
 import com.omega.platform.service.TwoFactorService;
@@ -76,6 +77,11 @@ public class AuthController {
         this.sessionCookieHelper = sessionCookieHelper;
         this.passwordResetService = passwordResetService;
         this.twoFactorService = twoFactorService;
+    }
+
+    @GetMapping("/csrf")
+    public Map<String, String> csrf(CsrfToken token) {
+        return Map.of("headerName", token.getHeaderName(), "token", token.getToken());
     }
 
     @GetMapping("/config")

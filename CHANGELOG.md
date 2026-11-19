@@ -1,8 +1,19 @@
-![OMEGA v2.0.1 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
+![OMEGA v2.0.2 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.2] - 2026-11-18
+
+### USB nativo, CORS y protección CSRF
+- Restaurada la conexión de `MvtVerifierPanel` con los comandos Tauri de detección y captura USB Android/iOS, selección/instalación de ADB y lectura de respaldos iOS normales y cifrados.
+- Alineados los orígenes Tauri del backend Java y retirado `null` de los valores predeterminados de CORS.
+- Activada la protección CSRF para las operaciones web sin Bearer, incluidos los endpoints públicos de autenticación; el cliente obtiene y envía automáticamente el token.
+- Autenticación Bearer sin recurrir a cookies ante encabezados inválidos y modo explícito sin cookies para Tauri.
+- Añadidas pruebas CORS/CSRF y un workflow Java 21 que bloquea el release si fallan. Validadas 88 pruebas Java y 36 del frontend.
+- Sincronizada la versión de frontend, shell Tauri y sensor Rust a `2.0.2`. Notas y visuales oficiales en [v2.0.2](.github/release-notes/v2.0.2.md).
+- Pendiente la validación con dispositivos físicos y respaldos reales por el usuario.
 
 ## [2.0.1] - 2026-11-18
 

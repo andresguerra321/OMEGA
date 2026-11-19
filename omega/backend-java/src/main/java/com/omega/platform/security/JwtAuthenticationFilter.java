@@ -122,13 +122,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String resolveJwtToken(HttpServletRequest request) {
+        String bearer = extractBearerToken(request);
+        // An explicit Bearer header must never fall back to ambient cookie credentials.
+        if (bearer != null) {
+            return bearer;
+        }
+        return sessionCookieHelper == null || isBearerOnlyRequest(request)
+                ? null : sessionCookieHelper.extractSessionToken(request);
+    }
+
+    public static boolean isBearerOnlyRequest(HttpServletRequest request) {
+        return request != null && "bearer".equals(request.getHeader("X-Omega-Auth-Mode"));
+    }
+
+    static String extractBearerToken(HttpServletRequest request) {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-            String bearer = authHeader.substring(BEARER_PREFIX.length()).trim();
-            if (!bearer.isEmpty()) {
-                return bearer;
-            }
+            return authHeader.substring(BEARER_PREFIX.length()).trim();
         }
-        return sessionCookieHelper == null ? null : sessionCookieHelper.extractSessionToken(request);
+        return null;
     }
 }

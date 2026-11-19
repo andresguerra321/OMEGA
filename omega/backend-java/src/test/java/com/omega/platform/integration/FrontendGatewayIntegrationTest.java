@@ -1,5 +1,7 @@
 package com.omega.platform.integration;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -228,7 +230,7 @@ class FrontendGatewayIntegrationTest {
                 }
                 String suffix = tag.toString();
                 String slug = prefix + "-" + suffix;
-                MvcResult result = mockMvc.perform(post("/api/v1/auth/tenants/register")
+                MvcResult result = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -246,7 +248,7 @@ class FrontendGatewayIntegrationTest {
 
         private String loginTenantUser(String tenantSlug, String adminToken, String email, String role)
                         throws Exception {
-                mockMvc.perform(post("/api/v1/auth/users")
+                mockMvc.perform(post("/api/v1/auth/users").with(csrf())
                                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -259,7 +261,7 @@ class FrontendGatewayIntegrationTest {
                                                 """.formatted(email, role)))
                                 .andExpect(status().isCreated());
 
-                MvcResult login = mockMvc.perform(post("/api/v1/auth/login")
+                MvcResult login = mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -486,7 +488,7 @@ class FrontendGatewayIntegrationTest {
 
         @Test
         void standardAccountRegistrationAndEmailOnlyLoginWorkCleanly() throws Exception {
-                MvcResult reg = mockMvc.perform(post("/api/v1/auth/register")
+                MvcResult reg = mockMvc.perform(post("/api/v1/auth/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -510,7 +512,7 @@ class FrontendGatewayIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$[0].title").value("Espacio personal"));
 
-                mockMvc.perform(post("/api/v1/auth/register")
+                mockMvc.perform(post("/api/v1/auth/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -521,7 +523,7 @@ class FrontendGatewayIntegrationTest {
                                                 """))
                                 .andExpect(status().isConflict());
 
-                mockMvc.perform(post("/api/v1/auth/login")
+                mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -536,7 +538,7 @@ class FrontendGatewayIntegrationTest {
 
         @Test
         void invalidRegistrationPayloadsAreRejectedWithFieldErrors() throws Exception {
-                mockMvc.perform(post("/api/v1/auth/register")
+                mockMvc.perform(post("/api/v1/auth/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -553,7 +555,7 @@ class FrontendGatewayIntegrationTest {
                                 .andExpect(jsonPath("$.fieldErrors.password").isString())
                                 .andExpect(jsonPath("$.fieldErrors.organizationName").isString());
 
-                mockMvc.perform(post("/api/v1/auth/register")
+                mockMvc.perform(post("/api/v1/auth/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -598,7 +600,7 @@ class FrontendGatewayIntegrationTest {
 
         @Test
         void loginEndpointRateLimitsAfterFiveFailedAttemptsAndReturns429WithRetryAfter() throws Exception {
-                mockMvc.perform(post("/api/v1/auth/register")
+                mockMvc.perform(post("/api/v1/auth/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -616,7 +618,7 @@ class FrontendGatewayIntegrationTest {
                 };
 
                 for (int attempt = 1; attempt <= 5; attempt++) {
-                        mockMvc.perform(post("/api/v1/auth/login")
+                        mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                                         .with(attackerIp)
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("""
@@ -630,7 +632,7 @@ class FrontendGatewayIntegrationTest {
 
                 // Sexto intento (incluso con contraseña correcta) debe quedar bloqueado con
                 // HTTP 429 + Retry-After
-                mockMvc.perform(post("/api/v1/auth/login")
+                mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                                 .with(attackerIp)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -645,7 +647,7 @@ class FrontendGatewayIntegrationTest {
                                 .andExpect(jsonPath("$.retryAfterSeconds").isNumber());
 
                 // Otra IP legítima no queda bloqueada por el ataque desde 198.51.100.77
-                mockMvc.perform(post("/api/v1/auth/login")
+                mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                                 .with(request -> {
                                         request.setRemoteAddr("198.51.100.88");
                                         return request;
@@ -664,7 +666,7 @@ class FrontendGatewayIntegrationTest {
         @Test
         void httpOnlyCookieAuthenticatesWithoutLocalStorageAndLogoutClearsCookieAndGovernanceExposesFreshness()
                         throws Exception {
-                MvcResult loginReg = mockMvc.perform(post("/api/v1/auth/register")
+                MvcResult loginReg = mockMvc.perform(post("/api/v1/auth/register").with(csrf())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -698,7 +700,7 @@ class FrontendGatewayIntegrationTest {
                                 .andExpect(jsonPath("$.os_scope_notice").value(
                                                 org.hamcrest.Matchers.containsString("kernel")));
 
-                mockMvc.perform(post("/api/v1/auth/logout")
+                mockMvc.perform(post("/api/v1/auth/logout").with(csrf())
                                 .cookie(new jakarta.servlet.http.Cookie("omega_session", token)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.loggedOut").value(true))

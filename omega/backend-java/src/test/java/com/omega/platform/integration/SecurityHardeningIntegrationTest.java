@@ -1,5 +1,7 @@
 package com.omega.platform.integration;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -147,7 +149,7 @@ class SecurityHardeningIntegrationTest {
     @Test
     void enforcesForensicBridgeRbacAndFailClosedInternalToken() throws Exception {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        MvcResult reg = mockMvc.perform(post("/api/v1/auth/tenants/register")
+        MvcResult reg = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -164,7 +166,7 @@ class SecurityHardeningIntegrationTest {
         String adminToken = adminJson.get("accessToken").asText();
         UUID tenantId = UUID.fromString(adminJson.get("tenantId").asText());
 
-        mockMvc.perform(post("/api/v1/auth/users")
+        mockMvc.perform(post("/api/v1/auth/users").with(csrf())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -177,7 +179,7 @@ class SecurityHardeningIntegrationTest {
                                 """.formatted(suffix)))
                 .andExpect(status().isCreated());
 
-        MvcResult clientLogin = mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult clientLogin = mockMvc.perform(post("/api/v1/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -191,9 +193,10 @@ class SecurityHardeningIntegrationTest {
         String clientToken = objectMapper.readTree(clientLogin.getResponse().getContentAsString())
                 .get("accessToken").asText();
 
-        // 1. Endpoint sin JWT responde 401
+        // 1. Con CSRF válido, el endpoint sin JWT responde 401.
         mockMvc.perform(multipart("/api/v1/forensics/yara/scan")
-                        .file(new MockMultipartFile("files", "sample.bin", "application/octet-stream", "test".getBytes())))
+                        .file(new MockMultipartFile("files", "sample.bin", "application/octet-stream", "test".getBytes()))
+                        .with(csrf()))
                 .andExpect(status().isUnauthorized());
 
         // 2. Rol CLIENT no puede ejecutar escaneo YARA ni triage forense (403)

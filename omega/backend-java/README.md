@@ -116,3 +116,28 @@ Ejecución de pruebas con Maven (Docker `pgvector/pgvector:pg16` o `OMEGA_TEST_D
 cd omega/backend-java
 mvn -B test
 ```
+
+Pruebas de CORS y CSRF con JDK 21, sin base de datos:
+
+```bash
+mvn -B -Dtest=CorsConfigurationTest,CsrfSecurityTest test
+```
+
+La autenticación por cookie se acepta en todas las rutas protegidas de `/api/v1/**`.
+Las peticiones POST, PUT, PATCH y DELETE sin Bearer requieren un token CSRF,
+incluidos login, registro, MFA, recuperación de contraseña y logout. El cliente web
+obtiene `{headerName, token}` mediante `GET /api/v1/auth/csrf` con credenciales y
+envía el token en `X-XSRF-TOKEN`, junto con la cookie HttpOnly `XSRF-TOKEN`.
+El endpoint no se almacena en caché. Las cookies conservan `SameSite=Strict` y
+la opción `OMEGA_COOKIE_SECURE` fuerza HTTPS para ambas cookies.
+
+Las peticiones con `Authorization: Bearer <JWT>` no requieren CSRF. Un Bearer
+inválido o vacío nunca usa la cookie como alternativa. Tauri y otros clientes sin
+cookies pueden usar `X-Omega-Auth-Mode: bearer`, también durante login: este modo
+ignora las cookies de autenticación y no emite cookies de sesión; las rutas
+protegidas siguen requiriendo un JWT válido. El cliente de escritorio envía
+`credentials: omit`. Esa cabecera está sujeta al preflight CORS y no autoriza
+orígenes ajenos a la lista permitida. `Origin: null` se rechaza por defecto.
+
+El workflow `.github/workflows/backend-security.yml` ejecuta estas pruebas con
+Temurin 21 y Maven en cambios del backend y permite ejecución manual.

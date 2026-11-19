@@ -1,5 +1,7 @@
 package com.omega.platform.integration;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -262,7 +264,7 @@ class StixAndForensicBridgeTest {
 
         // 2. Autenticar Tenant para pruebas del puente forense
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        MvcResult reg = mockMvc.perform(post("/api/v1/auth/tenants/register")
+        MvcResult reg = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

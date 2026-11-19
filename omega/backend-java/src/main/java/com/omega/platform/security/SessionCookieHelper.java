@@ -47,7 +47,7 @@ public class SessionCookieHelper {
             HttpServletRequest request,
             HttpServletResponse response,
             String jwtToken) {
-        if (jwtToken == null || jwtToken.isBlank()) {
+        if (jwtToken == null || jwtToken.isBlank() || JwtAuthenticationFilter.isBearerOnlyRequest(request)) {
             return;
         }
         ResponseCookie cookie = ResponseCookie.from(cookieName, jwtToken.trim())

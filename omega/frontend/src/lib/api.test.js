@@ -71,11 +71,13 @@ function installMockBrowserEnvironment({ seedLegacy = true } = {}) {
       this.detail = init.detail;
     }
   };
-  globalThis.fetch = async () => ({
+  globalThis.fetch = async (url) => ({
     ok: true,
     status: 200,
     headers: new Headers({ 'content-type': 'application/json' }),
-    json: async () => ({ loggedOut: true, cookieCleared: true }),
+    json: async () => url.endsWith('/auth/csrf')
+      ? { token: 'csrf-test-token', headerName: 'X-XSRF-TOKEN' }
+      : { loggedOut: true, cookieCleared: true },
   });
 
   return { lsStore, ssStore, events };
@@ -93,6 +95,60 @@ function makeFutureJwt() {
   ).toString('base64url');
   return `${header}.${payload}.sig`;
 }
+
+test('cookie writes obtain a fresh CSRF token and send it with credentials', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js?csrf-cookie');
+  api.restoreCookieAuthSession({ role: 'ADMIN' });
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify(url.endsWith('/auth/csrf')
+      ? { headerName: 'X-XSRF-TOKEN', token: `masked-token-${calls.length}` }
+      : { enabled: true }), { headers: { 'content-type': 'application/json' } });
+  };
+  await api.getHostRealtimeStatus();
+  await api.toggleHostRealtime(true);
+  await api.toggleHostRealtime(false);
+  assert.equal(calls.length, 5);
+  assert.equal(calls[1].url, '/api/v1/auth/csrf');
+  assert.equal(calls[1].options.credentials, 'include');
+  assert.equal(calls[2].options.headers.get('X-XSRF-TOKEN'), 'masked-token-2');
+  assert.equal(calls[2].options.credentials, 'include');
+  assert.equal(calls[4].options.headers.get('X-XSRF-TOKEN'), 'masked-token-4');
+});
+
+test('failed CSRF bootstrap prevents the state-changing request', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js?csrf-failure');
+  api.restoreCookieAuthSession({ role: 'ADMIN' });
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    return new Response('{}', { headers: { 'content-type': 'application/json' } });
+  };
+  await assert.rejects(api.toggleHostRealtime(true), /protección de la sesión/);
+  assert.deepEqual(calls, ['/api/v1/auth/csrf']);
+});
+
+test('desktop login explicitly uses bearer-only mode without cookies or CSRF bootstrap', async () => {
+  installMockBrowserEnvironment({ seedLegacy: false });
+  window.__TAURI_INTERNALS__ = { invoke: async () => ({}) };
+  const api = await import('./api.js?csrf-desktop');
+  api.clearAuthSession();
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ accessToken: makeFutureJwt(), expiresInSeconds: 3600 }),
+      { headers: { 'content-type': 'application/json' } });
+  };
+  await api.loginWithPassword({ tenantSlug: 'test', email: 'user@example.org', password: 'password' });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8080/api/v1/auth/login');
+  assert.equal(calls[0].options.headers.get('X-Omega-Auth-Mode'), 'bearer');
+  assert.equal(calls[0].options.headers.has('X-XSRF-TOKEN'), false);
+  assert.equal(calls[0].options.credentials, 'omit');
+});
 
 test('cliente web/desktop nunca persiste JWT o credenciales en localStorage y limpia legados al iniciar', async () => {
   const env = installMockBrowserEnvironment();

@@ -15,7 +15,12 @@ permissions:
   contents: read
 
 jobs:
+  backend-security:
+    name: Validate Java 21 CORS and CSRF
+    uses: ./.github/workflows/backend-security.yml
+
   build-tauri-v2:
+    needs: backend-security
     name: Build OMEGA Tauri v2 + Rust Sensor (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -112,6 +117,21 @@ jobs:
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: python omega/scripts/release_integrity.py --source installer-input --output release --recursive
+      - name: Package Official OMEGA Visuals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import shutil
+
+          output = Path('release')
+          with (output / 'MEDIA_SHA256SUMS.txt').open('w', encoding='utf-8', newline='\n') as manifest:
+              for name in ('omega-v2-release-banner.jpg', 'omega-v2-0-1-showcase.jpg', 'omega-v2-0-1-shield-pillars.jpg'):
+                  source = Path('docs/assets') / name
+                  target = output / name
+                  shutil.copy2(source, target)
+                  manifest.write(f'{hashlib.sha256(target.read_bytes()).hexdigest()}  {name}\n')
+          PY
       - name: Attest Build Provenance (Sigstore / SLSA)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

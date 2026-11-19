@@ -14,6 +14,24 @@ export function isDesktopApp(win = typeof window !== 'undefined' ? window : null
   return detectDesktopRuntime(win) === 'tauri-v2';
 }
 
+export function getMobileDesktopBridge(win = typeof window !== 'undefined' ? window : null) {
+  if (!isDesktopApp(win)) return null;
+  const invoke = (command, args = {}) => win.__TAURI_INTERNALS__.invoke(command, args);
+  return {
+    checkAdbStatus: (customPath = '') => invoke('check_adb_status', { customPath }),
+    checkIosStatus: () => invoke('check_ios_status'),
+    pickAdbBinary: () => invoke('pick_adb_binary'),
+    installPortableAdb: () => invoke('install_portable_adb'),
+    collectDeviceSnapshot: (customPath, serial) => invoke('collect_device_snapshot', { customPath, serial }),
+    collectIosSnapshot: (udid) => invoke('collect_ios_snapshot', { udid }),
+    pickIosBackupDir: () => invoke('pick_ios_backup_dir'),
+    readIosBackupManifest: (backupPath) => invoke('read_ios_backup_manifest', { backupPath }),
+    readIosBackupArtifacts: (backupPath, encrypted, targets) =>
+      invoke('read_ios_backup_artifacts', { backupPath, encrypted, targets }),
+    hardenPrivateDns: (customPath, serial) => invoke('harden_private_dns', { customPath, serial, confirmed: true }),
+  };
+}
+
 export async function getDesktopRuntimeInfo(win = typeof window !== 'undefined' ? window : null) {
   if (detectDesktopRuntime(win) === 'tauri-v2') {
     return win.__TAURI_INTERNALS__.invoke('get_desktop_runtime_info');
