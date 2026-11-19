@@ -8,7 +8,7 @@ import { transformWithOxc } from 'vite';
 
 const componentUrl = new URL('./AuthModulePanel.jsx', import.meta.url);
 const code = (await transformWithOxc(await fs.readFile(componentUrl, 'utf8'), fileURLToPath(componentUrl), { jsx: { runtime: 'automatic' } })).code;
-const names = ['confirmPasswordReset', 'saveAuthSession', 'enterLocalWorkspace', 'getAuthConfig',
+const names = ['confirmPasswordReset', 'saveAuthSession', 'getAuthConfig',
   'loginWithPassword', 'registerAccount', 'requestPasswordReset', 'resendMfaEmail', 'verifyMfaLogin'];
 const api = {};
 globalThis.__omegaRecoveryTestApi = api;
@@ -40,7 +40,7 @@ for (const [key, value] of Object.entries({ window: dom.window, document: dom.wi
 }
 const { createElement, act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { AuthAccessForm } = await import('./AuthModulePanel.jsx');
+const { AuthAccessForm, AuthModulePanel } = await import('./AuthModulePanel.jsx');
 let root, container;
 beforeEach(() => {
   for (const name of names) api[name] = () => { throw new Error(`Unexpected API: ${name}`); };
@@ -87,4 +87,12 @@ test('recovery without SMTP asks for a saved key and never directs the user to D
   const keyInput = container.querySelector('input[maxlength="48"]');
   assert.ok(keyInput); assert.equal(container.textContent.includes('docker logs'), false);
   assert.equal(container.textContent.includes('omega_backend_java'), false);
+});
+
+test('the login gate offers no accountless entry even when an older backend advertises it', async () => {
+  api.getAuthConfig = async () => ({ tenantSelfRegistrationEnabled: true, localAccessEnabled: true, smtpConfigured: false });
+  await act(async () => root.render(createElement(AuthModulePanel, { gateMode: true, apiOnline: true, localAccessEnabled: true })));
+  assert.equal(container.textContent.includes('Entrar sin cuenta'), false);
+  assert.equal(container.textContent.includes('Espacio local'), false);
+  assert.ok(container.querySelector('input[type="password"]'));
 });

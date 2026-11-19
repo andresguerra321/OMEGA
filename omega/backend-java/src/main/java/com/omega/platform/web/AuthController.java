@@ -91,7 +91,7 @@ public class AuthController {
         this.sessionCookieHelper = sessionCookieHelper;
         this.passwordResetService = passwordResetService;
         this.twoFactorService = twoFactorService;
-        this.smtpConfigured = smtpHost != null && !smtpHost.isBlank();
+        this.smtpConfigured = passwordResetService != null && passwordResetService.isSmtpConfigured();
     }
 
     @GetMapping("/csrf")
@@ -110,7 +110,7 @@ public class AuthController {
                 false,
                 PASSKEYS_ROADMAP_NOTE,
                 smtpConfigured,
-                properties.security().hasConfiguredLocalOperator());
+                false);
     }
 
     public record AuthConfigResponse(
@@ -183,23 +183,6 @@ public class AuthController {
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
         AuthTokenResponse response = authService.login(request, httpServletRequest.getRemoteAddr());
-        attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
-        return response;
-    }
-
-    @PostMapping("/local-session")
-    public AuthTokenResponse localSession(
-            HttpServletRequest httpServletRequest,
-            HttpServletResponse httpServletResponse) {
-        if (!properties.security().hasConfiguredLocalOperator()) {
-            throw new AccessDeniedException("El acceso local sin cuenta está deshabilitado");
-        }
-        String forwardedFor = httpServletRequest.getHeader("X-Forwarded-For");
-        String forwarded = httpServletRequest.getHeader("Forwarded");
-        if ((forwardedFor != null && !forwardedFor.isBlank()) || (forwarded != null && !forwarded.isBlank())) {
-            throw new AccessDeniedException("El acceso local sin cuenta solo se admite en conexiones locales directas");
-        }
-        AuthTokenResponse response = authService.enterLocalWorkspace();
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
         return response;
     }

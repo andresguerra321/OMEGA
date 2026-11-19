@@ -5,6 +5,10 @@ El equipo receptor necesita Docker Desktop instalado con soporte para contenedor
 OMEGA intenta iniciarlo si está detenido. No requiere Maven, Python ni un archivo `.env` del usuario.
 La autenticación y recuperación local no requieren SMTP. Las funciones que utilizan proveedores externos siguen necesitando su configuración y conexión.
 
+El acceso a la aplicación exige registro o inicio de sesión con credenciales. No existe un modo de entrada anónimo, operador predeterminado ni un ajuste que lo habilite.
+La actualización v2.0.7 invalida las sesiones anteriores y desactiva la antigua identidad sintética sin borrar sus documentos.
+El remitente SMTP pertenece a la instalación y puede ser distinto del destinatario registrado. Las credenciales SMTP no se empaquetan en el instalador.
+
 En el primer inicio se generan secretos propios de la instalación y una configuración en el directorio de datos de Tauri (`com.omega.security.desktop`).
 Si existe una instalación Compose del proyecto `omega`, se importan sus credenciales y el volumen PostgreSQL existente.
 Los inicios siguientes utilizan `bootstrap.env` en ese directorio, sin buscar archivos en carpetas ajenas.

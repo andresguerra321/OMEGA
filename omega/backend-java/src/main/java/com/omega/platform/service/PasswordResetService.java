@@ -71,12 +71,12 @@ public class PasswordResetService {
         this.mailSender = mailSender;
         this.smtpHost = smtpHost == null ? "" : smtpHost.trim();
         String effectiveFrom = (smtpFrom != null && !smtpFrom.isBlank()) ? smtpFrom.trim() : (smtpUsername == null ? "" : smtpUsername.trim());
-        this.smtpFrom = effectiveFrom.isBlank() ? "no-reply@omega.local" : effectiveFrom;
+        this.smtpFrom = effectiveFrom;
     }
 
     @Transactional
     public PasswordResetResponse requestReset(PasswordResetRequest request) {
-        if (smtpHost.isBlank() || mailSender == null) {
+        if (!isSmtpConfigured()) {
             return new PasswordResetResponse(true, "recovery_key",
                     "Usa la clave de recuperación que guardaste al crear tu cuenta. No necesitas correo ni conexión a Internet.");
         }
@@ -114,6 +114,10 @@ public class PasswordResetService {
 
         String msg = "Si el correo está registrado en OMEGA, enviamos un código de 6 dígitos válido por 15 minutos.";
         return new PasswordResetResponse(true, "smtp", msg);
+    }
+
+    public boolean isSmtpConfigured() {
+        return !smtpHost.isBlank() && mailSender != null && !smtpFrom.isBlank();
     }
 
     @Transactional

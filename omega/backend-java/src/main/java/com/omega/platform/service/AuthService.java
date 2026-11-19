@@ -24,9 +24,7 @@ import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.text.Normalizer;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -41,7 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
@@ -314,62 +311,6 @@ public class AuthService {
         if (!properties.security().allowTenantSelfRegistration()) {
             throw new AccessDeniedException("El auto-registro de tenants está deshabilitado");
         }
-    }
-
-    @Transactional
-    public synchronized AuthTokenResponse enterLocalWorkspace() {
-        OmegaProperties.Security sec = properties.security();
-        if (!sec.hasConfiguredLocalOperator()) {
-            throw new AccessDeniedException(
-                    "El acceso local directo requiere OMEGA_LOCAL_ACCESS_ENABLED=true y OMEGA_LOCAL_OPERATOR_EMAIL en .env");
-        }
-        String operatorEmail = sec.localOperatorEmail().trim().toLowerCase(Locale.ROOT);
-        String rawSlug = sec.localWorkspaceSlug() != null && !sec.localWorkspaceSlug().isBlank()
-                ? sec.localWorkspaceSlug().trim().toLowerCase(Locale.ROOT)
-                : operatorEmail.substring(0, Math.max(1, operatorEmail.indexOf('@')));
-        String workspaceSlug = rawSlug.replaceAll("[^a-z0-9-]+", "-").replaceAll("^-+|-+$", "");
-        if (workspaceSlug.length() < 3) {
-            workspaceSlug = allocateUniqueTenantSlug(workspaceSlug);
-        }
-        String workspaceName = sec.localWorkspaceName() != null && !sec.localWorkspaceName().isBlank()
-                ? sec.localWorkspaceName().trim()
-                : workspaceSlug;
-        String operatorName = sec.localOperatorName() != null && !sec.localOperatorName().isBlank()
-                ? sec.localOperatorName().trim()
-                : operatorEmail;
-
-        final String targetSlug = workspaceSlug;
-        TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(targetSlug)
-                .orElseGet(() -> {
-                    if (tenantRepository.existsBySlug(targetSlug)) {
-                        throw new AccessDeniedException("El espacio configurado se encuentra inactivo");
-                    }
-                    return tenantRepository.save(new TenantEntity(targetSlug, workspaceName));
-                });
-
-        UserEntity operator = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), operatorEmail)
-                .orElseGet(() -> {
-                    byte[] rawEntropy = new byte[32];
-                    SECURE_RANDOM.nextBytes(rawEntropy);
-                    String generatedSecret = Base64.getUrlEncoder().withoutPadding().encodeToString(rawEntropy);
-                    return userRepository.save(new UserEntity(
-                            tenant.getId(),
-                            operatorEmail,
-                            passwordEncoder.encode(generatedSecret),
-                            operatorName,
-                            Role.ADMIN));
-                });
-        if (!operator.isActive()) {
-            throw new AccessDeniedException("El operador configurado se encuentra suspendido");
-        }
-        if (expedienteRepository.findAllByTenantIdOrderByCreatedAtDesc(tenant.getId()).isEmpty()) {
-            expedienteRepository.save(new ExpedienteEntity(
-                    tenant.getId(),
-                    operator.getId(),
-                    workspaceName,
-                    ClassificationLevel.CONFIDENTIAL));
-        }
-        return issueTokenResponse(operator, tenant.getSlug());
     }
 
     @Transactional(readOnly = true)

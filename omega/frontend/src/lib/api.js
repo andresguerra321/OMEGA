@@ -9,7 +9,6 @@ const LEGACY_CLIENT_STORAGE_KEYS = [
 // Estado estrictamente volátil en RAM para tokens/credenciales (cero persistencia en disco del cliente)
 let inMemoryAuthSession = null;
 let inMemoryWorkspaceId = null;
-let inFlightLocalWorkspacePromise = null;
 
 function scrubLegacyDiskStorage() {
   try {
@@ -131,7 +130,7 @@ function parseJwtPayload(token) {
     const json = atob(padded);
     const payload = JSON.parse(json);
     if (!payload || typeof payload !== 'object') return null;
-    if (!payload.sub || !payload.tid || !payload.email) return null;
+    if (!payload.sub || !payload.tid || !payload.email || payload.authn !== 'credentials-v1') return null;
     if (typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now() + 15_000) {
       return null;
     }
@@ -172,7 +171,6 @@ export function saveAuthSession(tokenResponse) {
     tenantSlug: tokenResponse.tenantSlug,
     email: tokenResponse.email,
     role: tokenResponse.role,
-    isLocalWorkspace: Boolean(tokenResponse?.isLocalWorkspace),
   };
   inMemoryAuthSession = session;
   scrubLegacyDiskStorage();
@@ -414,24 +412,6 @@ export async function getAuthConfig() {
   return apiFetch('/auth/config', { skipAuth: true });
 }
 
-export async function enterLocalWorkspace() {
-  const existing = getAuthSession();
-  if (existing && (existing.accessToken || existing.cookieBacked)) {
-    return existing;
-  }
-  if (!inFlightLocalWorkspacePromise) {
-    inFlightLocalWorkspacePromise = apiFetch('/auth/local-session', {
-      method: 'POST',
-      skipAuth: true,
-    })
-      .then((tokenRes) => saveAuthSession({ ...tokenRes, isLocalWorkspace: true }))
-      .finally(() => {
-        inFlightLocalWorkspacePromise = null;
-      });
-  }
-  return inFlightLocalWorkspacePromise;
-}
-
 export async function loginWithPassword({ tenantSlug, email, password }) {
   const normalizedSlug = String(tenantSlug || '').trim().toLowerCase();
   const tokenRes = await apiFetch('/auth/login', {
@@ -593,19 +573,6 @@ export async function registerTenant({
     },
   });
   return saveAuthSession(tokenRes);
-}
-
-export async function loginOrCreateSandboxDemo() {
-  const suffix = Math.random().toString(36).slice(2, 8);
-  const creds = {
-    tenantSlug: `omega-lab-${suffix}`,
-    tenantName: `Sandbox Forense ${suffix.toUpperCase()}`,
-    adminEmail: `analista-${suffix}@omega.local`,
-    adminPassword: `Omega!Lab#${suffix}2026`,
-    adminFullName: 'Analista Sandbox Local',
-  };
-
-  return registerTenant(creds);
 }
 
 export async function logoutSession() {
@@ -1014,7 +981,7 @@ export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sen
       deviceUid,
       hostname: hostname || 'equipo-omega',
       osPlatform: osPlatform || 'web',
-      sensorVersion: sensorVersion || '2.0.6',
+      sensorVersion: sensorVersion || '2.0.7',
     },
   });
 }

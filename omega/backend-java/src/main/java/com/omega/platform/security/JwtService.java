@@ -52,6 +52,7 @@ public class JwtService {
                 .claim(CLAIM_TENANT_ID, tenantId.toString())
                 .claim(CLAIM_ROLE, role.name())
                 .claim(CLAIM_EMAIL, email)
+                .claim("authn", "credentials-v1")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
                 .signWith(signingKey, Jwts.SIG.HS256)
@@ -63,6 +64,7 @@ public class JwtService {
             Claims claims = Jwts.parser()
                     .verifyWith(signingKey)
                     .requireIssuer(issuer)
+                    .require("authn", "credentials-v1")
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();

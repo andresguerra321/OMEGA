@@ -1,128 +1,49 @@
 package com.omega.platform.security;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.omega.platform.config.OmegaProperties;
-import com.omega.platform.domain.ExpedienteEntity;
-import com.omega.platform.domain.TenantEntity;
-import com.omega.platform.domain.UserEntity;
-import com.omega.platform.repository.ExpedienteRepository;
-import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.repository.UserRepository;
 import com.omega.platform.service.AuthService;
 import com.omega.platform.web.AuthController;
-import com.omega.platform.web.dto.AuthDtos.AuthTokenResponse;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(controllers = AuthController.class)
+@WebMvcTest(controllers = AuthController.class, properties = {
+        "omega.security.local-instant-access=true",
+        "omega.security.local-operator-email=obsolete@example.test"})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, SessionCookieHelper.class, JsonSecurityHandlers.class})
 class LocalWorkspaceAccessTest {
-
-    @Autowired
-    private MockMvc mvc;
-
-    @MockBean
-    private JwtService jwtService;
-
-    @MockBean
-    private UserRepository userRepository;
-
-    @MockBean
-    private AuthService authService;
-
-    @MockBean
-    private OmegaProperties properties;
+    @Autowired private MockMvc mvc;
+    @MockBean private JwtService jwtService;
+    @MockBean private UserRepository userRepository;
+    @MockBean private AuthService authService;
+    @MockBean private OmegaProperties properties;
 
     @Test
-    void localSessionIssuesCookieWhenEnabledAndBlocksForwardedProxyRequests() throws Exception {
-        var enabledSecurity = new OmegaProperties.Security(
-                "0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "internal-tok",
-                true, "lab-local", "Lab Local", "analyst@example.test", "Analyst");
-        when(properties.security()).thenReturn(enabledSecurity);
-        UUID userId = UUID.randomUUID();
-        UUID tenantId = UUID.randomUUID();
-        when(authService.enterLocalWorkspace()).thenReturn(new AuthTokenResponse(
-                "local-jwt-token", "Bearer", 3600, userId, tenantId, "lab-local",
-                "analyst@example.test", Role.ADMIN));
-
+    void legacyConfigurationCannotEnableAccountlessAccess() throws Exception {
+        when(properties.security()).thenReturn(new OmegaProperties.Security(
+                "0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "internal-token"));
         mvc.perform(get("/api/v1/auth/config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.localAccessEnabled").value(true));
-
+                .andExpect(jsonPath("$.localAccessEnabled").value(false));
         mvc.perform(post("/api/v1/auth/local-session").with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tenantSlug").value("lab-local"))
-                .andExpect(jsonPath("$.email").value("analyst@example.test"))
-                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("omega_session=local-jwt-token")));
-
-        mvc.perform(post("/api/v1/auth/local-session").with(csrf())
-                        .header("X-Forwarded-For", "203.0.113.9"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(authService);
     }
 
     @Test
-    void authServiceRequiresExplicitEnvOperatorAndCreatesIsolatedTenantWithRandomSecret() {
-        TenantRepository tenantRepo = mock(TenantRepository.class);
-        UserRepository userRepo = mock(UserRepository.class);
-        ExpedienteRepository expRepo = mock(ExpedienteRepository.class);
-        JwtService realJwt = mock(JwtService.class);
-        LoginRateLimiter limiter = new LoginRateLimiter();
-
-        // Fail-closed incluso si localInstantAccess=true pero sin OMEGA_LOCAL_OPERATOR_EMAIL
-        var missingEmailProps = new OmegaProperties(
-                new OmegaProperties.Security("0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "tok", true),
-                new OmegaProperties.Ingest("/tmp/omega", 1024, "/tmp/tess"),
-                null,
-                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
-                new OmegaProperties.Cti("/tmp/cti"));
-        AuthService missingEmailSvc = new AuthService(tenantRepo, userRepo, expRepo, new BCryptPasswordEncoder(),
-                realJwt, missingEmailProps, limiter);
-        assertThatThrownBy(missingEmailSvc::enterLocalWorkspace).isInstanceOf(AccessDeniedException.class);
-
-        var enabledProps = new OmegaProperties(
-                new OmegaProperties.Security("0123456789abcdef0123456789abcdef", 3600, "omega", true, "", "tok",
-                        true, "mi-espacio", "Mi Espacio", "dev@example.test", "Dev User"),
-                new OmegaProperties.Ingest("/tmp/omega", 1024, "/tmp/tess"),
-                null,
-                new OmegaProperties.ForensicWorker("http://localhost:8000", 1000, 1000),
-                new OmegaProperties.Cti("/tmp/cti"));
-        when(tenantRepo.findBySlugAndActiveTrue("mi-espacio")).thenReturn(Optional.empty());
-        when(tenantRepo.existsBySlug("mi-espacio")).thenReturn(false);
-        TenantEntity savedTenant = new TenantEntity("mi-espacio", "Mi Espacio");
-        when(tenantRepo.save(any())).thenReturn(savedTenant);
-        when(userRepo.findByTenantIdAndEmailIgnoreCase(any(), any())).thenReturn(Optional.empty());
-        when(userRepo.save(any())).thenAnswer(inv -> inv.getArgument(0, UserEntity.class));
-        when(expRepo.findAllByTenantIdOrderByCreatedAtDesc(any())).thenReturn(List.of());
-        when(expRepo.save(any())).thenAnswer(inv -> inv.getArgument(0, ExpedienteEntity.class));
-        when(realJwt.issueToken(any(), any(), any(), any())).thenReturn("jwt-issued");
-        when(realJwt.getExpirationSeconds()).thenReturn(3600L);
-
-        AuthService enabledSvc = new AuthService(tenantRepo, userRepo, expRepo, new BCryptPasswordEncoder(),
-                realJwt, enabledProps, limiter);
-        AuthTokenResponse token = enabledSvc.enterLocalWorkspace();
-        assertThat(token.tenantSlug()).isEqualTo("mi-espacio");
-        assertThat(token.email()).isEqualTo("dev@example.test");
-        assertThat(token.role()).isEqualTo(Role.ADMIN);
-        assertThat(token.accessToken()).isEqualTo("jwt-issued");
+    void protectedApplicationEndpointsRequireLogin() throws Exception {
+        for (String path : new String[] {"/api/v1/auth/me", "/api/v1/expedientes", "/api/v1/forensics/host/realtime/status"}) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
+        verifyNoInteractions(authService);
     }
 }

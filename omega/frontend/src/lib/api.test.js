@@ -88,6 +88,7 @@ function makeFutureJwt() {
   const payload = Buffer.from(
     JSON.stringify({
       sub: '11111111-1111-1111-1111-111111111111',
+      authn: 'credentials-v1',
       tid: '22222222-2222-2222-2222-222222222222',
       email: 'analista@redaccion.org',
       exp: Math.floor(Date.now() / 1000) + 3600,
@@ -260,33 +261,19 @@ test('dossier export downloads authenticated binary data and preserves permissio
   await assert.rejects(api.exportExpedienteDossier('case-id', 'json'), error => error.status === 403);
 });
 
-test('enterLocalWorkspace requests local-session once and marks session as local workspace', async () => {
+test('accountless access helpers are absent', async () => {
+  const api = await import(`./api.js?mandatory-login=${Date.now()}`);
+  assert.equal(api.enterLocalWorkspace, undefined);
+  assert.equal(api.loginOrCreateSandboxDemo, undefined);
+});
+
+test('legacy tokens without credential authentication cannot restore a session', async () => {
   installMockBrowserEnvironment({ seedLegacy: false });
-  const api = await import(`./api.js?local-ws=${Date.now()}`);
-  const calls = [];
-  globalThis.fetch = async (url, options) => {
-    calls.push({ url, method: options?.method || 'GET' });
-    if (String(url).endsWith('/auth/csrf')) {
-      return { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ token: 'csrf-tok', headerName: 'X-XSRF-TOKEN' }) };
-    }
-    return {
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => ({
-        accessToken: makeFutureJwt(),
-        expiresInSeconds: 3600,
-        userId: '11111111-1111-1111-1111-111111111111',
-        tenantId: '22222222-2222-2222-2222-222222222222',
-        tenantSlug: 'espacio-local',
-        email: 'operador@omega.local',
-        role: 'ADMIN',
-      }),
-    };
-  };
-  const [first, second] = await Promise.all([api.enterLocalWorkspace(), api.enterLocalWorkspace()]);
-  assert.equal(first.isLocalWorkspace, true);
-  assert.equal(second.tenantSlug, 'espacio-local');
-  const postCalls = calls.filter((c) => c.url.endsWith('/auth/local-session'));
-  assert.equal(postCalls.length, 1);
+  const api = await import(`./api.js?legacy-credentials=${Date.now()}`);
+  const payload = { sub: '11111111-1111-1111-1111-111111111111', tid: '22222222-2222-2222-2222-222222222222',
+    email: 'legacy@example.org', exp: Math.floor(Date.now() / 1000) + 3600 };
+  const token = 'header.' + Buffer.from(JSON.stringify(payload)).toString('base64url') + '.signature';
+  api.saveAuthSession({ accessToken: token, expiresInSeconds: 3600 });
+  assert.equal(api.getAuthSession(), null);
+  assert.equal(api.isAuthenticated(), false);
 });

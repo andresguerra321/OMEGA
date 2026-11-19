@@ -82,11 +82,6 @@ omega:
     jwt-expiration-seconds: ${OMEGA_JWT_EXPIRATION_SECONDS:3600}
     jwt-issuer: omega-rag-core
     allow-tenant-self-registration: ${OMEGA_ALLOW_TENANT_SELF_REGISTRATION:true}
-    local-instant-access: ${OMEGA_LOCAL_ACCESS_ENABLED:false}
-    local-workspace-slug: ${OMEGA_LOCAL_WORKSPACE_SLUG:}
-    local-workspace-name: ${OMEGA_LOCAL_WORKSPACE_NAME:}
-    local-operator-email: ${OMEGA_LOCAL_OPERATOR_EMAIL:}
-    local-operator-name: ${OMEGA_LOCAL_OPERATOR_NAME:}
     bootstrap-secret: ${OMEGA_BOOTSTRAP_SECRET:}
     internal-service-token: ${INTERNAL_SERVICE_TOKEN:omega-dev-internal-service-token-change-in-prod}
     session-cookie-name: ${OMEGA_SESSION_COOKIE_NAME:omega_session}

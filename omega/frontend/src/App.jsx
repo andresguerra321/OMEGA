@@ -15,7 +15,6 @@ import {
   ChevronDown,
   BookOpen,
   Gauge,
-  Sparkles,
   UserCheck,
   Bell,
   KeyRound,
@@ -24,8 +23,6 @@ import {
   fetchApiHealth,
   fetchSystemGovernance,
   fetchCurrentPrincipal,
-  enterLocalWorkspace,
-  getAuthConfig,
   sendChatQuery,
   sendMultimodalQuery,
   analyzePcLiveSnapshot,
@@ -157,7 +154,6 @@ export default function App() {
   const [authSession, setAuthSession] = useState(() => getAuthSession());
   const [verifyingSession, setVerifyingSession] = useState(true);
   const [enteringWorkspace, setEnteringWorkspace] = useState(false);
-  const [localAccessAvailable, setLocalAccessAvailable] = useState(false);
   const [authGateReason, setAuthGateReason] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState('');
@@ -174,7 +170,6 @@ export default function App() {
   const sendLockRef = useRef(false);
   const enterRunIdRef = useRef(0);
   const manualLogoutRef = useRef(false);
-  const localAutoEnteringRef = useRef(false);
   const workspaceMainRef = useRef(null);
 
   const openAuthModal = useCallback((reason = '') => {
@@ -321,23 +316,6 @@ export default function App() {
             if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
               clearAuthSession();
               setAuthSession(null);
-              if (!manualLogoutRef.current) {
-                try {
-                  const cfg = await getAuthConfig();
-                  if (cancelled || manualLogoutRef.current) return;
-                  if (cfg?.localAccessEnabled) {
-                    setLocalAccessAvailable(true);
-                    const localSession = await enterLocalWorkspace();
-                    if (!cancelled && localSession && !manualLogoutRef.current) {
-                      setAuthSession(localSession);
-                      setAuthGateReason('');
-                      return;
-                    }
-                  }
-                } catch {
-                  // El backend puede seguir arrancando; omega:backend-ready reintentará
-                }
-              }
               if (hadInMemorySession) {
                 setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
               }
@@ -957,62 +935,16 @@ export default function App() {
     [refreshSystemTelemetry, refreshPrivateWorkspace],
   );
 
-  const tryAutoEnterLocal = useCallback(async () => {
-    if (
-      manualLogoutRef.current ||
-      localAutoEnteringRef.current ||
-      isAuthenticated()
-    ) {
-      return;
-    }
-    localAutoEnteringRef.current = true;
-    try {
-      const cfg = await getAuthConfig();
-      if (manualLogoutRef.current || isAuthenticated()) return;
-      if (!cfg?.localAccessEnabled) {
-        setLocalAccessAvailable(false);
-        return;
-      }
-      setLocalAccessAvailable(true);
-      const localSession = await enterLocalWorkspace();
-      if (localSession && !manualLogoutRef.current) {
-        completeAuthenticationTransition(localSession, { isNewAccount: false });
-      }
-    } catch {
-      // Gateway aún iniciándose; reintentará al estar listo
-    } finally {
-      localAutoEnteringRef.current = false;
-    }
-  }, [completeAuthenticationTransition]);
-
   useEffect(() => {
-    const onBackendReady = () => {
-      void refreshSystemTelemetry();
-      void tryAutoEnterLocal();
-    };
+    const onBackendReady = () => { void refreshSystemTelemetry(); };
     window.addEventListener('omega:backend-ready', onBackendReady);
     return () => window.removeEventListener('omega:backend-ready', onBackendReady);
-  }, [refreshSystemTelemetry, tryAutoEnterLocal]);
-
-  useEffect(() => {
-    if (!authSession && !verifyingSession && !enteringWorkspace && !manualLogoutRef.current) {
-      if (apiOnline || desktopBootstrap.status?.state === 'ready') {
-        void tryAutoEnterLocal();
-      }
-    }
-  }, [
-    apiOnline,
-    authSession,
-    verifyingSession,
-    enteringWorkspace,
-    desktopBootstrap.status?.state,
-    tryAutoEnterLocal,
-  ]);
+  }, [refreshSystemTelemetry]);
 
   const isDesktop = isDesktopApp();
-  const isSignedIn = Boolean(authSession);
+  const isSignedIn = Boolean(authSession && isAuthenticated());
   const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
-  const reportsCount = Number(govStats?.corpus_stats?.reports ?? 26);
+  const reportsCount = Number(govStats?.corpus_stats?.reports ?? 0);
   const usbConnected = Boolean(usbStatus?.android?.connected || usbStatus?.ios?.connected);
   const pcRawVerdict = pcAudit?.triage?.diagnosis?.verdict_code || pcAudit?.verdict;
   const pcVerdict = pcRawVerdict ? String(pcRawVerdict).toLowerCase() : null;
@@ -1063,7 +995,6 @@ export default function App() {
             authSession={null}
             apiOnline={apiOnline}
             bootstrapping={desktopBootstrap.pending}
-            localAccessEnabled={localAccessAvailable}
             reasonMessage={authGateReason}
             onAuthenticated={completeAuthenticationTransition}
           />
@@ -1497,7 +1428,6 @@ export default function App() {
                   <div className="flex-1 min-h-0 overflow-y-auto">
                     <AuthModulePanel
                       authSession={authSession}
-                      localAccessEnabled={localAccessAvailable}
                       onAuthenticated={(session) => {
                         manualLogoutRef.current = false;
                         setAuthSession(session);

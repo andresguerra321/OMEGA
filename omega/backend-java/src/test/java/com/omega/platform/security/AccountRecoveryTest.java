@@ -22,6 +22,33 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 class AccountRecoveryTest {
+    @Test
+    void smtpUsesTheRegisteredRecipientAndReportsSendFailures() {
+        var sender = mock(org.springframework.mail.javamail.JavaMailSender.class);
+        var message = new jakarta.mail.internet.MimeMessage(jakarta.mail.Session.getInstance(new java.util.Properties()));
+        when(sender.createMimeMessage()).thenReturn(message);
+        when(user.getEmail()).thenReturn("recipient@example.org");
+        when(users.findAllActiveByEmailIgnoreCase("recipient@example.org")).thenReturn(List.of(user));
+        var mailService = new PasswordResetService(users, tenants, encoder, jdbc, audit, sender,
+                "smtp.example.org", "sender@example.org", "sender@example.org");
+        assertTrue(mailService.isSmtpConfigured());
+        var request = new PasswordResetRequest("recipient@example.org", null);
+        assertEquals("smtp", mailService.requestReset(request).deliveryMode());
+        verify(sender).send(message);
+        assertDoesNotThrow(() -> assertEquals("recipient@example.org", message.getAllRecipients()[0].toString()));
+        doThrow(new org.springframework.mail.MailAuthenticationException("provider rejected credentials"))
+                .when(sender).send(message);
+        assertThrows(IllegalStateException.class, () -> mailService.requestReset(request));
+    }
+
+    @Test
+    void smtpRequiresAnExplicitSenderOrConfiguredUsername() {
+        var sender = mock(org.springframework.mail.javamail.JavaMailSender.class);
+        var mailService = new PasswordResetService(users, tenants, encoder, jdbc, audit, sender,
+                "smtp.example.org", "", "");
+        assertFalse(mailService.isSmtpConfigured());
+    }
+
     private final UserRepository users = mock(UserRepository.class);
     private final TenantRepository tenants = mock(TenantRepository.class);
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);

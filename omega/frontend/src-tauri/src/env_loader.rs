@@ -259,6 +259,15 @@ pub fn merge_bootstrap_envs(
         );
     }
 
+    for key in [
+        "OMEGA_LOCAL_ACCESS_ENABLED",
+        "OMEGA_LOCAL_WORKSPACE_SLUG",
+        "OMEGA_LOCAL_WORKSPACE_NAME",
+        "OMEGA_LOCAL_OPERATOR_EMAIL",
+        "OMEGA_LOCAL_OPERATOR_NAME",
+    ] {
+        merged.remove(key);
+    }
     merged.insert("OMEGA_DESKTOP_VERSION".to_string(), app_version.to_string());
     merged.insert(
         "OMEGA_DESKTOP_RELEASE_ID".to_string(),
@@ -348,7 +357,7 @@ mod tests {
         let env_path = dir.join(".env");
         std::fs::write(
             &env_path,
-            "GROQ_API_KEY=gsk_from_env\nOMEGA_SMTP_HOST=smtp.gmail.com\n",
+            "GROQ_API_KEY=gsk_from_env\nOMEGA_SMTP_HOST=smtp.gmail.com\nOMEGA_LOCAL_ACCESS_ENABLED=true\nOMEGA_LOCAL_OPERATOR_EMAIL=obsolete@example.org\n",
         )
         .unwrap();
 

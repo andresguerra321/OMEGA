@@ -74,12 +74,12 @@ public class TwoFactorService {
         this.objectMapper = objectMapper;
         this.mailSender = mailSender;
         this.smtpHost = smtpHost == null ? "" : smtpHost.trim();
-        this.smtpFrom = smtpFrom == null || smtpFrom.isBlank() ? "no-reply@omega.local" : smtpFrom.trim();
+        this.smtpFrom = smtpFrom == null ? "" : smtpFrom.trim();
         this.totpAtRestKey = TotpUtil.deriveAes256Key(omegaProperties.security().jwtSecret());
     }
 
     public boolean isSmtpConfigured() {
-        return mailSender != null && !smtpHost.isBlank();
+        return mailSender != null && !smtpHost.isBlank() && !smtpFrom.isBlank();
     }
 
     @Transactional(readOnly = true)

@@ -12,6 +12,19 @@ import org.springframework.mock.env.MockEnvironment;
 class JwtServiceTest {
 
     @Test
+    void rejectsSessionsIssuedBeforeMandatoryCredentialAuthentication() {
+        String secret = "omega-unit-test-hmac-sha256-secret-key-32-chars";
+        JwtService service = new JwtService(defaultProps(secret, "test"), new MockEnvironment());
+        String legacy = io.jsonwebtoken.Jwts.builder()
+                .issuer("omega-rag-core").subject(UUID.randomUUID().toString())
+                .claim("tid", UUID.randomUUID().toString()).claim("email", "user@example.org").claim("role", "ADMIN")
+                .expiration(java.util.Date.from(java.time.Instant.now().plusSeconds(3600)))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .compact();
+        assertThatThrownBy(() -> service.parseAndValidate(legacy)).isInstanceOf(JwtException.class);
+    }
+
+    @Test
     void issuesAndParsesTenantScopedClaims() {
         OmegaProperties props = defaultProps("omega-unit-test-hmac-sha256-secret-key-32-chars", "test");
         JwtService jwtService = new JwtService(props, new MockEnvironment());

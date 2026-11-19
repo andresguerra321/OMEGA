@@ -4,6 +4,15 @@
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
 
+## [2.0.7] - 2026-11-19
+
+### Autenticación obligatoria y SMTP verificado
+- Eliminados el endpoint y las rutas de acceso local automático, las opciones que lo habilitaban y la creación de cuentas demo.
+- Invalidadas las sesiones anteriores mediante una versión de autenticación firmada en JWT; desactivado el operador sintético heredado sin borrar sus documentos.
+- Validación SMTP alineada con el servicio real de correo y remitentes obtenidos de configuración, sin correo ficticio alternativo.
+- Envío de recuperación probado con remitente y destinatario distintos, con recepción confirmada por el destinatario.
+- Aprobadas 42 pruebas del cliente, 31 del backend y 21 nativas; el flujo aislado de CI ahora exige 401 al acceso sin credenciales incluso con variables heredadas de acceso local activadas.
+
 ## [2.0.6] - 2026-11-19
 
 ### Arranque local con servicios incluidos y recuperación sin correo

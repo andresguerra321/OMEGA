@@ -30,4 +30,4 @@ jobs:
           cache-dependency-path: omega/backend-java/pom.xml
       - name: Test CORS and CSRF through the security filter chain
         working-directory: omega/backend-java
-        run: mvn -B -Dtest=CorsConfigurationTest,CsrfSecurityTest,AccountRecoveryTest,LocalWorkspaceAccessTest,LoginRateLimiterTest test
+        run: mvn -B -Dtest=CorsConfigurationTest,CsrfSecurityTest,AccountRecoveryTest,LocalWorkspaceAccessTest,LoginRateLimiterTest,JwtServiceTest test

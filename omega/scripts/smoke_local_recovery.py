@@ -32,7 +32,7 @@ def check():
                '-e', 'SPRING_DATASOURCE_URL=jdbc:postgresql://database:5432/check_db?currentSchema=omega_rag,public',
                '-e', 'POSTGRES_USER=check_owner', '-e', 'POSTGRES_PASSWORD=' + password,
                '-e', 'OMEGA_JWT_SECRET=' + secrets.token_hex(48), '-e', 'INTERNAL_SERVICE_TOKEN=' + secrets.token_hex(32),
-               '-e', 'OMEGA_EXTERNAL_IOC_SYNC_ENABLED=false', '-e', 'OMEGA_LOCAL_ACCESS_ENABLED=false',
+               '-e', 'OMEGA_EXTERNAL_IOC_SYNC_ENABLED=false', '-e', 'OMEGA_LOCAL_ACCESS_ENABLED=true',
                'omega-backend-java:latest')
         ports = json.loads(docker('inspect', '--format', '{{json .NetworkSettings.Ports}}', backend))
         base = 'http://127.0.0.1:' + ports['8080/tcp'][0]['HostPort']
@@ -59,6 +59,10 @@ def check():
             raise RuntimeError('The isolated backend did not become healthy')
 
         wait_ready()
+        status, config = request('/api/v1/auth/config')
+        assert status == 200 and config['localAccessEnabled'] is False
+        assert request('/api/v1/auth/local-session', {})[0] == 401
+        assert request('/api/v1/auth/me')[0] == 401
         status, account = request('/api/v1/auth/register', {
             'fullName': 'Ana Martinez', 'email': 'ana@example.org', 'password': 'Initial-password-123'})
         assert status == 201, f'Registration failed: {status}'
