@@ -1,0 +1,23 @@
+name: "OMEGA CodeQL Security Config"
+
+queries:
+  - uses: security-extended
+
+paths:
+  - omega/backend-java/src/main
+  - omega/api
+  - omega/rag_engine
+  - omega/frontend/src
+  - omega/frontend/electron
+  - .github/workflows
+
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/target/**"
+  - "**/dist/**"
+  - "**/release/**"
+  - "**/tests/**"
+  - "**/src/test/**"
+  - "**/*.test.js"
+  - "omega/corpus_mvp/**"
+  - "docs/**"

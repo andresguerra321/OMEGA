@@ -1,0 +1,202 @@
+name: SAST Security Analysis (CodeQL & Semgrep)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Escaneo semanal los lunes a las 04:00 UTC para recoger nuevas consultas/reglas
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      enforcement_mode:
+        description: 'Modo de control Semgrep: observe (línea base) o enforce (bloquea ERROR)'
+        required: false
+        default: 'observe'
+        type: choice
+        options:
+          - observe
+          - enforce
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (for Java CodeQL manual build)
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Build Java backend for CodeQL semantic analysis
+        if: matrix.language == 'java-kotlin'
+        working-directory: omega/backend-java
+        run: mvn -B -DskipTests compile
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  semgrep:
+    name: Semgrep SAST (OWASP + OMEGA Rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      ENFORCEMENT_MODE: ${{ inputs.enforcement_mode || 'observe' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python for Semgrep CLI
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep
+        run: python -m pip install --upgrade pip "semgrep>=1.90,<2.0"
+
+      - name: Run Semgrep SAST scan (SARIF + JSON)
+        id: semgrep_scan
+        run: |
+          set -o pipefail
+          EXTRA_ARGS=()
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ -n "${GITHUB_BASE_SHA:-}" ]; then
+            echo "Modo PR: escaneo completo con contexto de baseline ${GITHUB_BASE_SHA}"
+          fi
+
+          # Ejecutar escaneo multi-lenguaje + reglas personalizadas de OMEGA
+          # --sarif-output y --json-output se generan siempre para trazabilidad y GitHub Code Scanning
+          semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/java \
+            --config p/python \
+            --config p/javascript \
+            --config p/react \
+            --config p/rust \
+            --config p/dockerfile \
+            --config .semgrep/omega-rules.yml \
+            --metrics=off \
+            --sarif-output=omega-semgrep.sarif \
+            --json-output=omega-semgrep.json \
+            --severity WARNING \
+            --severity ERROR \
+            omega/ .github/workflows/ || SEMGREP_RC=$?
+
+          SEMGREP_RC=${SEMGREP_RC:-0}
+          echo "exit_code=${SEMGREP_RC}" >> "$GITHUB_OUTPUT"
+
+          # Fallar inmediatamente si Semgrep tuvo un error de ejecución (exit code >= 2)
+          if [ "${SEMGREP_RC}" -ge 2 ]; then
+            echo "::error::Semgrep falló con código de error técnico (${SEMGREP_RC})."
+            exit "${SEMGREP_RC}"
+          fi
+
+      - name: Summarize Semgrep Findings & Evaluate Gate
+        id: evaluate_gate
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          data = json.loads(Path("omega-semgrep.json").read_text(encoding="utf-8"))
+          results = data.get("results", [])
+          errors = data.get("errors", [])
+          sev_counts = Counter(r.get("extra", {}).get("severity", "UNKNOWN").upper() for r in results)
+
+          summary_lines = [
+              "## Semgrep SAST Summary (OMEGA)",
+              "",
+              f"- **Modo de control:** `{os.environ.get('ENFORCEMENT_MODE', 'observe')}`",
+              f"- **Total hallazgos:** `{len(results)}`",
+              f"- **ERROR (High/Critical):** `{sev_counts.get('ERROR', 0)}`",
+              f"- **WARNING (Medium):** `{sev_counts.get('WARNING', 0)}`",
+              f"- **Errores de parseo/scanner:** `{len(errors)}`",
+              "",
+          ]
+          if results:
+              summary_lines.append("### Top hallazgos (máx. 20)")
+              summary_lines.append("| Severidad | Regla | Archivo | Línea |")
+              summary_lines.append("| :--- | :--- | :--- | ---: |")
+              for item in results[:20]:
+                  sev = item.get("extra", {}).get("severity", "UNKNOWN")
+                  rule = item.get("check_id", "")
+                  path = item.get("path", "")
+                  line = item.get("start", {}).get("line", 0)
+                  summary_lines.append(f"| `{sev}` | `{rule}` | `{path}` | {line} |")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(summary_lines) + "\n")
+
+          print("\n".join(summary_lines))
+
+          mode = os.environ.get("ENFORCEMENT_MODE", "observe")
+          if mode == "enforce" and sev_counts.get("ERROR", 0) > 0:
+              raise SystemExit(
+                  f"Enforcement gate failed: {sev_counts['ERROR']} finding(s) with severity ERROR."
+              )
+          PY
+
+      - name: Upload Semgrep SARIF to GitHub Code Scanning
+        if: always() && hashFiles('omega-semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: omega-semgrep.sarif
+          category: semgrep-omega
+
+      - name: Upload Semgrep Reports as Artifact
+        if: always() && hashFiles('omega-semgrep.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: omega-semgrep-sast-report
+          path: |
+            omega-semgrep.sarif
+            omega-semgrep.json
+          retention-days: 30

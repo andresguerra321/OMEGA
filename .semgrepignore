@@ -1,0 +1,37 @@
+# Dependencias y artefactos generados
+node_modules/
+**/node_modules/
+target/
+**/target/
+dist/
+**/dist/
+release/
+**/release/
+binaries/
+**/binaries/
+gen/
+**/gen/
+.venv/
+venv/
+**/__pycache__/
+.pytest_cache/
+
+# Corpus forense seed, documentación y binarios estáticos
+omega/corpus_mvp/
+docs/
+img/
+*.pdf
+*.png
+*.jpg
+*.ico
+*.svg
+*.stix2
+*.min.js
+package-lock.json
+Cargo.lock
+
+# Fixtures de prueba (analizados por suites unitarias, excluidos de falsos positivos SAST)
+omega/api/tests/
+omega/backend-java/src/test/
+omega/frontend/electron/*.test.js
+omega/frontend/src/**/*.test.js
