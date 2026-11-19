@@ -59,6 +59,13 @@ const button=text=>[...container.querySelectorAll('button')].find(node=>node.tex
 async function click(text){assert.ok(button(text));await act(async()=>button(text).click());}
 async function key(value){await act(async()=>{const node=container.querySelector('input');Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new window.Event('input',{bubbles:true}));});}
 async function submit(){await act(async()=>container.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));}
+async function settle(predicate){
+  for(let attempt=0;attempt<300;attempt++){
+    if(predicate())return;
+    await act(async()=>new Promise(resolve=>setTimeout(resolve,10)));
+  }
+  assert.ok(predicate(),'The expected UI state did not become ready');
+}
 
 test('missing AI configuration blocks workspace and offers only sequential mandatory steps',async()=>{
   await render();assert.equal(workspace(),null);
@@ -115,7 +122,8 @@ test('authenticator enrollment keeps entry blocked until OTP confirmation and ba
   await render();await click('Configurar copiloto');await key('gsk_test_only');await submit();
   await act(async()=>container.querySelector('[role="switch"]').click());
   const portalButton=text=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===text);
-  await act(async()=>{portalButton('Continuar').click();await new Promise(resolve=>setTimeout(resolve,40));});
+  await act(async()=>portalButton('Continuar').click());
+  await settle(()=>document.querySelector('img[alt="Código QR 2FA"]'));
   assert.ok(document.querySelector('img[alt="Código QR 2FA"]'));
   const pasted=new window.Event('paste',{bubbles:true,cancelable:true});
   Object.defineProperty(pasted,'clipboardData',{value:{getData:()=> '123456'}});
