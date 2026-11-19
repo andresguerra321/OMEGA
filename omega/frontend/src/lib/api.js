@@ -28,12 +28,23 @@ function scrubLegacyDiskStorage() {
 
 scrubLegacyDiskStorage();
 
+function isTauriDesktopContext() {
+  if (typeof window === 'undefined') return false;
+  const proto = window.location?.protocol || '';
+  const host = window.location?.hostname || '';
+  return (
+    Boolean(window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') ||
+    proto === 'tauri:' ||
+    host === 'tauri.localhost'
+  );
+}
+
 function shouldIncludeCredentials() {
   return typeof window !== 'undefined' && window.location?.protocol !== 'file:';
 }
 
 function resolveApiOrigin() {
-  if (typeof window !== 'undefined' && (window.location?.protocol === 'file:' || window.omegaDesktop?.isDesktop)) {
+  if (typeof window !== 'undefined' && (window.location?.protocol === 'file:' || isTauriDesktopContext())) {
     const params = new URLSearchParams(window.location?.search || '');
     const rawCloud = params.get('omegaCloudOrigin');
     if (rawCloud) {
@@ -61,13 +72,7 @@ const API_ORIGIN = resolveApiOrigin();
 const API_V1 = `${API_ORIGIN}/api/v1`;
 
 export async function prepareDesktopHostSensor() {
-  const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
-  if (!bridge?.prepareHostSensor) return { ready: true };
-  const session = getAuthSession();
-  if (!session?.accessToken || session.role !== 'ADMIN') throw new Error('Inicia sesión como administrador para proteger esta computadora.');
-  const result = await bridge.prepareHostSensor({ accessToken: session.accessToken });
-  if (!result?.ready) throw new Error(result?.message || 'No se pudo preparar la protección. Pulsa Reintentar.');
-  return result;
+  return { ready: true };
 }
 
 export function getHostRealtimeStatus() {

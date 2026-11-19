@@ -38,6 +38,7 @@ import {
   listExpedienteDocuments,
   uploadExpedientePdf,
 } from './lib/api';
+import { collectNativeHostSnapshot, isDesktopApp } from './lib/desktopBridge';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaLogo } from './components/OmegaLogo';
@@ -449,41 +450,6 @@ export default function App() {
   }, [refreshSystemTelemetry]);
 
   useEffect(() => {
-    const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
-    if (!bridge?.isDesktop || !authSession) return undefined;
-    let cancelled = false;
-
-    const pollUsb = async () => {
-      try {
-        const [adb, ios] = await Promise.all([
-          bridge.checkAdbStatus ? bridge.checkAdbStatus('').catch(() => null) : null,
-          bridge.checkIosStatus ? bridge.checkIosStatus().catch(() => null) : null,
-        ]);
-        if (cancelled) return;
-        setUsbStatus({
-          android: adb || { connected: false },
-          ios: ios || { connected: false },
-        });
-      } catch {
-        // Ignore transient bridge errors
-      }
-    };
-
-    void pollUsb();
-    const timer = setInterval(pollUsb, 8000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [authSession]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.omegaDesktop?.setTitleBarTheme) {
-      void window.omegaDesktop.setTitleBarTheme('dark');
-    }
-  }, [activeNav]);
-
-  useEffect(() => {
     if (!authSession) return undefined;
     function onKeyDown(e) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -803,16 +769,15 @@ export default function App() {
   }
 
   async function handleRunPcScan() {
-    const bridge = typeof window !== 'undefined' ? window.omegaDesktop : null;
     if (scanningPc) return;
-    if (!bridge?.collectPcAuditSnapshot) {
+    if (!isDesktopApp()) {
       handleNavigate('equipo', { tab: 'pc' });
       return;
     }
     setScanningPc(true);
     setStageFeedback(null);
     try {
-      const col = await bridge.collectPcAuditSnapshot();
+      const col = await collectNativeHostSnapshot();
       if (col?.ok && col.snapshot) {
         const analysis = await analyzePcLiveSnapshot(col.snapshot);
         handlePcAuditComplete(analysis);
@@ -958,7 +923,7 @@ export default function App() {
     [refreshSystemTelemetry, refreshPrivateWorkspace],
   );
 
-  const isDesktop = typeof window !== 'undefined' && Boolean(window.omegaDesktop?.isDesktop);
+  const isDesktop = isDesktopApp();
   const isSignedIn = Boolean(authSession);
   const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
   const reportsCount = Number(govStats?.corpus_stats?.reports ?? 26);
@@ -1005,20 +970,6 @@ export default function App() {
           className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4]"
         >
           <OmegaAuthBackdrop />
-          {isDesktop && (
-            <header
-              aria-label="Barra superior de acceso OMEGA"
-              className="titlebar-drag motion-safe:animate-fade-in absolute top-0 left-0 right-0 z-20 h-[48px] px-4 flex items-center justify-between select-none [&_button]:[-webkit-app-region:no-drag]"
-            >
-              <div className="inline-flex items-center gap-2">
-                <OmegaLogo size={20} />
-                <span className="font-display text-[13px] font-semibold tracking-[0.06em] text-[#F2F2F4]">
-                  OMEGA
-                </span>
-              </div>
-              <div className="sm:mr-36" />
-            </header>
-          )}
           <AuthModulePanel
             gateMode
             authSession={null}
@@ -1109,11 +1060,7 @@ export default function App() {
             {/* Barra Principal Unificada — Pill de navegación flotante separada (sin doble blur debajo) */}
             <header
               aria-label="Barra principal OMEGA"
-              className={`relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.07] bg-[#0A0A0C]/55 flex items-center justify-between gap-2 select-none ${
-                isDesktop
-                  ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_select]:[-webkit-app-region:no-drag] [&_a]:[-webkit-app-region:no-drag]'
-                  : ''
-              }`}
+              className="relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.07] bg-[#0A0A0C]/55 flex items-center justify-between gap-2 select-none"
             >
               <div className="relative z-10 min-w-0 flex items-center gap-2 shrink-0">
                 <button
@@ -1149,7 +1096,7 @@ export default function App() {
               </div>
 
               {/* Controles globales derechos unificados en todas las vistas */}
-              <div className={`titlebar-no-drag relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
+              <div className="relative z-10 flex items-center gap-1.5 shrink-0">
                 <div
                   role="group"
                   aria-label="Modo de experiencia OMEGA"

@@ -307,10 +307,7 @@ export function SecurityPostureStage({
       {/* Cabecera flotante superior — Nav pill flotante separada de los bordes */}
       <header
         aria-label="Barra principal OMEGA"
-        className={`relative z-30 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.05] flex items-center justify-between gap-2 select-none ${isDesktop
-          ? 'titlebar-drag [&_button]:[-webkit-app-region:no-drag] [&_div[role=group]]:[-webkit-app-region:no-drag]'
-          : ''
-          }`}
+        className="relative z-30 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.05] flex items-center justify-between gap-2 select-none"
       >
         {/* Marca OMEGA izquierda */}
         <button
@@ -337,8 +334,8 @@ export function SecurityPostureStage({
           />
         </div>
 
-        {/* Utilidades derechas unificadas con reserva limpia para controles Electron - □ ✕ */}
-        <div className={`relative z-10 flex items-center gap-1.5 shrink-0 ${isDesktop ? 'sm:mr-36' : ''}`}>
+        {/* Utilidades derechas unificadas */}
+        <div className="relative z-10 flex items-center gap-1.5 shrink-0">
           <div
             role="group"
             aria-label="Nivel de detalle"

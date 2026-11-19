@@ -18,10 +18,8 @@ class ReleaseIntegrityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'api').mkdir()
-            (root / 'frontend/electron').mkdir(parents=True)
             (root / 'corpus_mvp').mkdir()
             (root / 'api/self_integrity.py').write_text("TRUSTED_PUBLIC_KEY = ''\n")
-            (root / 'frontend/electron/securityHardening.js').write_text("export const TRUSTED_PUBLIC_KEY = '';\n")
             (root / 'corpus_mvp/ioc.stix2').write_bytes(b'original')
             key = Ed25519PrivateKey.generate()
             pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
@@ -30,7 +28,6 @@ class ReleaseIntegrityTest(unittest.TestCase):
             key.public_key().verify(base64.b64decode((root / 'integrity-manifest.sig').read_bytes()), raw)
             public = base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
             self.assertIn(public, (root / 'api/self_integrity.py').read_text())
-            self.assertIn(public, (root / 'frontend/electron/securityHardening.js').read_text())
             self.assertEqual(json.loads(raw)['files']['corpus_mvp/ioc.stix2'], hashlib.sha256(b'original').hexdigest())
             self.assertFalse(any(b'PRIVATE KEY' in item.read_bytes() for item in root.rglob('*') if item.is_file()))
 

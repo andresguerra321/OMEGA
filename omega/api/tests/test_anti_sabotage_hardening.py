@@ -247,15 +247,32 @@ def test_native_pipe_roundtrip_uses_real_acl_and_node_client(monkeypatch):
         except Exception as exc: errors.append(exc)
     worker = threading.Thread(target=server, daemon=True)
     worker.start()
-    module = (Path(__file__).resolve().parents[2] / 'frontend/electron/hostSensor.js').as_uri()
-    script = '''const {connectHostSensor}=await import(process.argv[1]);
-let sensor;
-for(let i=0;i<30;i++){try{sensor=await connectHostSensor({endpoint:process.argv[2],tenant:'test'});break;}catch(e){if(i===29)throw e;await new Promise(r=>setTimeout(r,50));}}
-const health=await sensor.request('GET','/api/health');
-if(health.service!=='omega-forensic-worker')process.exit(1);
-sensor.close();'''
+    script = '''const net = await import('node:net');
+const rpc = (msg) => new Promise((resolve, reject) => {
+  const s = net.connect(process.argv[1]);
+  let buf = '';
+  s.once('error', reject);
+  s.once('connect', () => s.write(JSON.stringify(msg) + '\\n'));
+  s.on('data', (c) => {
+    buf += c.toString('utf8');
+    const nl = buf.indexOf('\\n');
+    if (nl !== -1) { s.end(); resolve(JSON.parse(buf.slice(0, nl))); }
+  });
+});
+let healthResp;
+for (let i = 0; i < 30; i++) {
+  try {
+    healthResp = await rpc({ method: 'GET', target: '/api/health', headers: {}, body: '' });
+    break;
+  } catch (e) {
+    if (i === 29) throw e;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+const health = JSON.parse(Buffer.from(healthResp.body, 'base64').toString('utf8'));
+if (healthResp.status !== 200 || health.service !== 'omega-forensic-worker') process.exit(1);'''
     try:
-        result = subprocess.run(['node', '--input-type=module', '-e', script, module, endpoint], capture_output=True, text=True, timeout=20)
+        result = subprocess.run(['node', '--input-type=module', '-e', script, endpoint], capture_output=True, text=True, timeout=20)
         assert result.returncode == 0, result.stderr
         assert not errors
     finally:

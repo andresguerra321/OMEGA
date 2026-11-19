@@ -67,8 +67,7 @@ export function LinkVerifierPanel({
 
   useScrollReveal(resultContainerRef, [result?.normalized_url, traceResult?.final_url]);
 
-  const canTraceInRam =
-    typeof window !== 'undefined' && Boolean(window.omegaDesktop?.inspectLinkEphemeral);
+  const canTraceInRam = false;
 
   useEffect(() => {
     if (!initialCheckKey || !initialUrl || initialCheckKey === lastCheckKeyRef.current) {
@@ -165,17 +164,7 @@ export function LinkVerifierPanel({
       setTraceError('');
       setFinalCheckResult(null);
       try {
-        const trace = await window.omegaDesktop.inspectLinkEphemeral(result.normalized_url);
-        setTraceResult(trace);
-        onLinkVerified?.({ ...result, trace_result: trace });
-        if (trace?.final_url && trace.final_url !== result.normalized_url) {
-          try {
-            const destCheck = await verifySuspiciousLink(trace.final_url);
-            setFinalCheckResult(destCheck);
-          } catch {
-            // Ignore passive re-check error while keeping redirect trace visible
-          }
-        }
+        setTraceError('El trazado efímero aislado solo está disponible con módulo de sandbox remoto.');
       } catch (err) {
         setTraceError(err?.message || 'No se pudo trazar el enlace en la sesión aislada en RAM.');
       } finally {
@@ -249,7 +238,7 @@ export function LinkVerifierPanel({
                   type="button"
                   disabled={traceLoading}
                   onClick={handleTraceEphemeral}
-                  title="Sigue redirecciones HTTP en una sesión Electron sin JavaScript, sin imágenes y 100% en RAM"
+                  title="Sigue redirecciones HTTP en sesión aislada sin JavaScript, sin imágenes y 100% en RAM"
                   className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.1] bg-white/[0.05] px-3 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.09] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
                 >
                   {traceLoading && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -422,7 +411,7 @@ export function LinkVerifierPanel({
           />
         )}
 
-        {/* Trazado Aislado en RAM (Electron sin JS ni imágenes) */}
+        {/* Trazado Aislado en RAM (Sin JS ni imágenes) */}
         {traceResult && (
           <section
             className="animate-on-scroll apple-group rounded-[13px] overflow-hidden"

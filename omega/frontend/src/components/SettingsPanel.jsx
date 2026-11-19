@@ -404,7 +404,7 @@ export function SettingsPanel({
   const corpusRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
-  const isDesktopApp = Boolean(typeof window !== 'undefined' && window.omegaDesktop?.saveAiEngineConfig);
+  const isDesktopApp = false;
 
   useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
@@ -551,46 +551,8 @@ export function SettingsPanel({
     return () => clearTimeout(t);
   }, [initialSection, initialSectionKey]);
 
-  useEffect(() => {
-    const getCfg = window?.omegaDesktop?.getAiEngineConfig;
-    if (typeof getCfg !== 'function') return;
-    getCfg()
-      .then((res) => {
-        if (res?.ok && res.config) {
-          const cfg = res.config;
-          setDesktopAiConfig(cfg);
-          const detectedProvider =
-            cfg.activeProvider && cfg.activeProvider !== 'extractive'
-              ? cfg.activeProvider
-              : 'groq';
-          const preset = findAiPreset(detectedProvider);
-          setAiProviderDraft(preset.id);
-          if (cfg.customConfigured && cfg.customBaseUrl) {
-            setAiBaseUrlDraft(cfg.customBaseUrl);
-            setAiModelDraft(cfg.customModel || preset.defaultModel);
-          } else if (detectedProvider === 'omniroute') {
-            setAiBaseUrlDraft(preset.baseUrl);
-            setAiModelDraft(cfg.omniRouteModel || 'auto');
-          } else if (detectedProvider === 'openai') {
-            setAiBaseUrlDraft(preset.baseUrl);
-            setAiModelDraft(cfg.openAiChatModel || 'gpt-4o-mini');
-          } else {
-            setAiBaseUrlDraft(preset.baseUrl);
-            setAiModelDraft(cfg.groqModel || 'openai/gpt-oss-120b');
-          }
-        }
-      })
-      .catch(() => {
-        // Sin acceso IPC fuera de Electron
-      });
-  }, []);
-
   function openExternalLink(url) {
     if (!url) return;
-    if (typeof window?.omegaDesktop?.openExternalUrl === 'function') {
-      void window.omegaDesktop.openExternalUrl(url);
-      return;
-    }
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
@@ -694,7 +656,7 @@ export function SettingsPanel({
           };
         }
 
-        const res = await window.omegaDesktop.saveAiEngineConfig(payload);
+        const res = { ok: false, config: null };
         if (res?.config) {
           setDesktopAiConfig(res.config);
         }

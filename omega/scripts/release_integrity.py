@@ -29,7 +29,7 @@ def sign_source_tree(root: Path, private_key_pem: bytes):
         serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
     # Embed the trust anchor before hashing Python source. Never read a key supplied with a manifest.
     import re
-    for filename in ('api/self_integrity.py', 'frontend/electron/securityHardening.js'):
+    for filename in ('api/self_integrity.py',):
         target = root / filename
         source = target.read_text(encoding='utf-8')
         source, count = re.subn(r"TRUSTED_PUBLIC_KEY = '[^']*'", f"TRUSTED_PUBLIC_KEY = '{public}'", source)

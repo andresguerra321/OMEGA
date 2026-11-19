@@ -6,21 +6,16 @@
   "description": "OMEGA — Plataforma Defensiva de Cyber Threat Intelligence",
   "author": "OMEGA",
   "type": "module",
-  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test:desktop": "node --test electron/*.test.js src/lib/*.test.js src/components/*.test.js",
+    "test:desktop": "node --test src/lib/*.test.js src/components/*.test.js",
     "preview": "vite preview",
-    "desktop:dev": "concurrently -k \"vite --port 5174 --strictPort\" \"wait-on http://localhost:5174 && node electron/launch.js http://localhost:5174\"",
-    "desktop:start": "vite build && node electron/launch.js",
-    "desktop:pack": "vite build && electron-builder --dir",
-    "desktop:dist": "vite build && electron-builder --win nsis portable",
     "sensor:build": "cargo build --release --manifest-path ../sensor-rust/Cargo.toml",
     "tauri:dev": "npx @tauri-apps/cli@2 dev",
     "tauri:build": "powershell -ExecutionPolicy Bypass -File ../scripts/build-tauri-windows.ps1",
-    "test": "node --test electron/*.test.js src/lib/*.test.js src/components/*.test.js"
+    "test": "node --test src/lib/*.test.js src/components/*.test.js"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -41,102 +36,9 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "concurrently": "^10.0.7",
-    "electron": "^45.3.1",
-    "electron-builder": "^26.18.0",
     "jsdom": "^31.0.1",
     "oxlint": "^1.90.0",
     "tailwindcss": "^4.3.5",
-    "vite": "^8.3.6",
-    "wait-on": "^9.5.1"
-  },
-  "build": {
-    "appId": "com.omega.desktop",
-    "productName": "OMEGA",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "!electron/**/*.test.js",
-      "!electron/**/*.md",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "build",
-        "to": "build",
-        "filter": [
-          "icon.ico",
-          "icon.png"
-        ]
-      },
-      {
-        "from": "..",
-        "to": "omega",
-        "filter": [
-          "docker-compose.yml",
-          "docker-compose.prod.yml",
-          ".env.example",
-          "db/init.sql",
-          "api/**/*",
-          "backend-java/**/*",
-          "!**/.env",
-          "!**/.env.local",
-          "!**/.env.production",
-          "!**/.env.development",
-          "!.env",
-          "!**/.venv/**",
-          "!**/venv/**",
-          "!**/__pycache__/**",
-          "!**/.pytest*/**",
-          "!**/*.log",
-          "!**/*.pyc",
-          "!**/target/**",
-          "!**/node_modules/**",
-          "!**/.git/**",
-          "rag_engine/**/*",
-          "integrity-manifest.json",
-          "integrity-manifest.sig",
-          "corpus_mvp/**/*"
-        ]
-      }
-    ],
-    "win": {
-      "signExts": [
-        "!omega-sensor.exe"
-      ],
-      "icon": "build/icon.ico",
-      "signAndEditExecutable": true,
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "OMEGA",
-      "artifactName": "OMEGA-Setup-${version}-${arch}.exe"
-    },
-    "portable": {
-      "artifactName": "OMEGA-Portable-${version}-${arch}.exe"
-    },
-    "beforePack": "electron/packageDesktop.cjs"
+    "vite": "^8.3.6"
   }
 }

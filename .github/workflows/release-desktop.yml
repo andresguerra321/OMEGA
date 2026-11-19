@@ -15,107 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  build-desktop:
-    name: Build OMEGA Desktop (${{ matrix.platform }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            platform: windows
-            targets: '--win nsis portable'
-          - os: macos-latest
-            platform: macos
-            targets: '--mac dmg'
-          - os: ubuntu-latest
-            platform: linux
-            targets: '--linux AppImage'
-    defaults:
-      run:
-        working-directory: omega/frontend
-        shell: pwsh
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: omega/frontend/package-lock.json
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-
-      - name: Verify CTI and PDF Corpus SHA-256 Manifests
-        working-directory: .
-        run: python omega/rag_engine/corpus_integrity.py
-
-      - name: Prepare Self-contained Sensor Build Tools
-        run: |
-          python -m pip install -r ../scripts/desktop-build-requirements.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Sensor build dependencies failed' }
-
-      - name: Install Dependencies and Run Checks
-        run: |
-          npm ci --ignore-scripts
-          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
-          npm run lint
-          if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
-          npm run test:desktop
-          if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed' }
-          node node_modules/electron/install.js
-          if ($LASTEXITCODE -ne 0) { throw 'Electron install failed' }
-          npm run build
-          if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-
-      - name: Package with Conditional Authenticode or Developer ID and Notarization
-        env:
-          OMEGA_INTEGRITY_SIGNING_KEY: ${{ secrets.OMEGA_INTEGRITY_SIGNING_KEY }}
-          BUILD_TARGETS: ${{ matrix.targets }}
-          CSC_LINK: ${{ runner.os == 'Windows' && (secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK) && (secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD) && (secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK) || runner.os == 'macOS' && secrets.APPLE_CSC_LINK && secrets.APPLE_ID && secrets.APPLE_APP_SPECIFIC_PASSWORD && secrets.APPLE_TEAM_ID && secrets.APPLE_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && (secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD) || runner.os == 'macOS' && secrets.APPLE_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
-        run: |
-          $targets = $env:BUILD_TARGETS.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
-          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
-            Remove-Item Env:CSC_LINK -ErrorAction SilentlyContinue
-            Remove-Item Env:CSC_KEY_PASSWORD -ErrorAction SilentlyContinue
-            $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
-            if ($env:RUNNER_OS -eq 'Windows') {
-              Write-Output '::warning::Certificado Windows incompleto o ausente. Instaladores de pruebas sin Authenticode.'
-            }
-            if ($env:RUNNER_OS -eq 'macOS') {
-              Write-Output '::warning::Credenciales Apple incompletas o ausentes. Build de pruebas sin Developer ID ni notarización.'
-              $targets += @('-c.mac.identity=-', '-c.mac.notarize=false')
-            }
-          } else {
-            $env:CSC_IDENTITY_AUTO_DISCOVERY = 'true'
-            if ($env:RUNNER_OS -eq 'macOS') { $targets += '-c.mac.notarize=true' }
-          }
-          npx electron-builder @targets --publish never
-          if ($LASTEXITCODE -ne 0) { throw 'Desktop packaging or configured code signing failed' }
-
-      - name: Require Installer SHA-256 Manifest
-        run: python ../scripts/release_integrity.py --source release --output release
-
-      - name: Upload Platform Installers and Checksums
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: omega-desktop-${{ matrix.platform }}
-          if-no-files-found: error
-          path: |
-            omega/frontend/release/*.exe
-            omega/frontend/release/*.msi
-            omega/frontend/release/*.dmg
-            omega/frontend/release/*.AppImage
-            omega/frontend/release/*.deb
-            omega/frontend/release/SHA256SUMS.txt
-          retention-days: 90
-
   build-tauri-v2:
-    name: Build OMEGA v2.0 Tauri + Rust Sensor (${{ matrix.platform }})
+    name: Build OMEGA Tauri v2 + Rust Sensor (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -140,6 +41,11 @@ jobs:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: omega/frontend/package-lock.json
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Verify CTI and PDF Corpus SHA-256 Manifests
+        run: python omega/rag_engine/corpus_integrity.py
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
       - name: Install Linux WebKitGTK Dependencies
         if: runner.os == 'Linux'
@@ -169,6 +75,7 @@ jobs:
         working-directory: omega/frontend
         run: |
           npm ci --ignore-scripts
+          npm run lint
           npm test
           npx @tauri-apps/cli@2 build
       - name: Upload Tauri v2 Installers
@@ -181,12 +88,12 @@ jobs:
             omega/frontend/src-tauri/target/release/bundle/dmg/*.dmg
             omega/frontend/src-tauri/target/release/bundle/appimage/*.AppImage
             omega/frontend/src-tauri/target/release/bundle/deb/*.deb
-          if-no-files-found: warn
-          retention-days: 30
+          if-no-files-found: error
+          retention-days: 90
 
   release-integrity:
     name: Verify, Sign and Attest Consolidated Installers
-    needs: [build-desktop, build-tauri-v2]
+    needs: build-tauri-v2
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -199,7 +106,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: omega-desktop-*
+          pattern: omega-desktop-tauri-*
           path: installer-input
       - name: Generate Mandatory Checksums and Optional Detached Signature
         env:
@@ -229,7 +136,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $notesFile)) {
             $notesFile = Join-Path $env:RUNNER_TEMP 'omega-release-notes.md'
             @(
-              'Instaladores OMEGA para Windows, macOS y Linux.'
+              'Instaladores nativos OMEGA Tauri v2 + Sensor Rust para Windows, macOS y Linux.'
               ''
               'Comprueba SHA256SUMS.txt y la atestación de procedencia. Si hay firma separada, verifica SHA256SUMS.txt.sig con una clave pública obtenida por un canal confiable.'
               ''

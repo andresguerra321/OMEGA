@@ -33,5 +33,4 @@ Cargo.lock
 # Fixtures de prueba (analizados por suites unitarias, excluidos de falsos positivos SAST)
 omega/api/tests/
 omega/backend-java/src/test/
-omega/frontend/electron/*.test.js
 omega/frontend/src/**/*.test.js

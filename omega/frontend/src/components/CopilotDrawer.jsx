@@ -114,9 +114,7 @@ export function CopilotDrawer({
       {/* Cajón lateral deslizable vidrio esmerilado */}
       <motion.aside
         variants={drawerVariants}
-        className={`relative h-full w-full max-w-[470px] border-l border-white/[0.08] bg-[rgba(20,20,24,0.72)] backdrop-blur-xl shadow-[-18px_0_52px_rgba(0,0,0,0.72)] flex flex-col ${
-          typeof window !== 'undefined' && window.omegaDesktop?.isDesktop ? 'pt-9' : ''
-        }`}
+        className="relative h-full w-full max-w-[470px] border-l border-white/[0.08] bg-[rgba(20,20,24,0.72)] backdrop-blur-xl shadow-[-18px_0_52px_rgba(0,0,0,0.72)] flex flex-col"
       >
         {/* Cabecera del copiloto */}
         <div className="h-14 shrink-0 border-b border-white/[0.08] px-4 flex items-center justify-between gap-3">

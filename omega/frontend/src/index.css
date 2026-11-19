@@ -154,14 +154,7 @@ h2 {
   background: rgba(255, 255, 255, 0.28);
 }
 
-/* Integración nativa de ventana Electron Windows / macOS */
-.titlebar-drag {
-  -webkit-app-region: drag;
-}
-
-.titlebar-no-drag {
-  -webkit-app-region: no-drag;
-}
+/* Superficies y transiciones base */
 
 .ease-apple,
 .ease-kowalski {

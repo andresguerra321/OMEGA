@@ -57,15 +57,15 @@ omega/
 │   ├── matriz_trazabilidad.md       # Matriz RF1–RF8 y RNF1–RNF8
 │   ├── declaracion_etica.md         # Declaración de alcance defensivo y salvaguardas (RNF7/RNF8)
 │   └── guion_demo.md                # Guión de demostración en vivo (5 minutos)
-├── frontend/                        # Cliente Web & Desktop (React 19 + Vite 8 + Tailwind v4 + Three.js + Electron 45)
-│   ├── Dockerfile                   # Multi-stage Node 22-alpine + Nginx Alpine
+├── frontend/                        # Cliente Web & Desktop (React 19 + Vite 8 + Tailwind v4 + Three.js + Tauri v2)
+│   ├── Dockerfile                   # Multi-stage Node 22-alpine + Nginx unprivileged
 │   ├── nginx.conf                   # Proxy /api/ -> http://omega-api:8000/api/ (alias de forensic-worker)
-│   ├── electron/                    # Empaquetado nativo de escritorio (IPC PC/ADB/iOS, titleBarOverlay)
+│   ├── src-tauri/                   # App nativa de escritorio Tauri v2 + Sensor Rust sidecar (omega-sensor)
 │   └── src/
 │       ├── App.jsx                  # Navegación espacial, estado global y conmutador Simple | Técnico
 │       ├── components/              # SecurityPostureStage, SecurityCenterpiece3D, OmegaShaderOrb,
 │       │                            # SpatialNavPill, ChatWorkspace, CopilotDrawer, ChatAtmosphere, etc.
-│       └── lib/api.js               # Cliente HTTP unificado Web + Electron
+│       └── lib/api.js               # Cliente HTTP unificado Web + Tauri v2
 └── rag_engine/                      # Ingesta Python del corpus público y suite de evaluación RAGAS
     ├── ingest.py / normalize_meta.py / ingest_iocs.py / verify_mvt.py
     └── eval/                        # Benchmark RAGAS (eval_dataset.json, run_benchmark.py, eval_report.md)

@@ -28,6 +28,7 @@ import {
   syncStixFeeds,
   verifyMvtText,
 } from '../lib/api';
+import { collectNativeHostSnapshot, isDesktopApp } from '../lib/desktopBridge';
 import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
 import { MobileUsbAuditCard } from './MobileUsbAuditCard';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
@@ -93,53 +94,16 @@ export function MvtVerifierPanel({
   const [dismissedResultKey, setDismissedResultKey] = useState('');
   const guard = useSingleFlight();
 
-  const hasDesktopBridge =
-    typeof window !== 'undefined' && Boolean(window.omegaDesktop?.checkAdbStatus);
-  const desktopPlatform = typeof window !== 'undefined' ? window.omegaDesktop?.platform || 'win32' : 'win32';
+  const hasPcTelemetryBridge = isDesktopApp();
+  const hasDesktopBridge = false;
+  const desktopPlatform =
+    typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || '') ? 'darwin' : 'win32';
 
   useScrollReveal(resultContainerRef, [result?.sourceLabel, result?.verdictCode]);
 
-  const fetchUsbStatuses = useCallback(
-    async (explicitPath = customAdbPath, includeIos = false, isManual = false) => {
-      if (!window.omegaDesktop?.checkAdbStatus) return;
-      if (isManual) setRefreshingUsb(true);
-      try {
-        const status = await window.omegaDesktop.checkAdbStatus(explicitPath);
-        setUsbDevice(status);
-        if (status?.devices?.length) {
-          const readyDev = status.devices.find((d) => d.state === 'device') || status.devices[0];
-          setSelectedSerial((prev) =>
-            prev && status.devices.some((d) => d.serial === prev) ? prev : readyDev.serial,
-          );
-        }
-      } catch {
-        setUsbDevice({
-          available: false,
-          connected: false,
-          status_code: 'ADB_NOT_FOUND',
-          devices: [],
-          reason: 'No se pudo consultar el estado del puente ADB.',
-        });
-      }
-
-      if (includeIos && window.omegaDesktop?.checkIosStatus) {
-        try {
-          const ios = await window.omegaDesktop.checkIosStatus();
-          setIosStatus(ios);
-        } catch {
-          setIosStatus({
-            tools_available: false,
-            connected: false,
-            status_code: 'TOOLS_MISSING',
-            local_backups: [],
-            reason: 'No se pudo consultar el puente USB iOS.',
-          });
-        }
-      }
-      if (isManual) setRefreshingUsb(false);
-    },
-    [customAdbPath],
-  );
+  const fetchUsbStatuses = useCallback(async () => {
+    setRefreshingUsb(false);
+  }, []);
 
   useEffect(() => {
     const handlePanicPurge = () => {
@@ -156,7 +120,7 @@ export function MvtVerifierPanel({
   }, []);
 
   useEffect(() => {
-    if (!window.omegaDesktop?.checkAdbStatus || deviceTab === 'pc') return undefined;
+    if (!hasDesktopBridge || deviceTab === 'pc') return undefined;
     let cancelled = false;
 
     const tick = () => {
@@ -227,93 +191,31 @@ export function MvtVerifierPanel({
   }
 
   async function handlePickAdbBinary() {
-    if (!window.omegaDesktop?.pickAdbBinary) return;
-    setErrorMsg('');
-    try {
-      const pick = await window.omegaDesktop.pickAdbBinary();
-      if (pick?.canceled) return;
-      if (!pick?.valid || !pick.adb_path) {
-        setErrorMsg(pick?.error || 'El ejecutable seleccionado no es un binario ADB válido.');
-        return;
-      }
-      setCustomAdbPath(pick.adb_path);
-      await fetchUsbStatuses(pick.adb_path, false);
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo verificar la ruta de ADB.');
-    }
+    setErrorMsg('El puente ADB directo requiere módulo nativo USB; usa carga de artefactos o respaldo manual.');
   }
 
   async function handleLiveUsbScan() {
-    if (!window.omegaDesktop?.collectDeviceSnapshot || scanningUsb || isAnalyzing) return;
-    await guard(async () => {
-      setScanningUsb(true);
-      setErrorMsg('');
-      setConfirmingDns(false);
-      setDnsAppliedNote('');
-      try {
-        const snapshot = await window.omegaDesktop.collectDeviceSnapshot({
-          customPath: customAdbPath,
-          serial: selectedSerial || usbDevice?.serial || '',
-        });
-        const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
-        applyLiveDeviceResult(liveRes, 'Dispositivo Android');
-      } catch (err) {
-        setErrorMsg(err?.message || 'Error auditando el dispositivo Android por USB.');
-      } finally {
-        setScanningUsb(false);
-      }
-    });
+    if (scanningUsb || isAnalyzing) return;
+    setErrorMsg('La captura USB ADB directa no está habilitada en esta versión; carga el volcado o archivo MVT.');
   }
 
   async function handleLiveIosScan() {
-    if (!window.omegaDesktop?.collectIosSnapshot || scanningIos || isAnalyzing) return;
-    await guard(async () => {
-      setScanningIos(true);
-      setErrorMsg('');
-      setConfirmingDns(false);
-      setDnsAppliedNote('');
-      try {
-        const snapshot = await window.omegaDesktop.collectIosSnapshot({
-          udid: iosStatus?.device?.udid || '',
-        });
-        const liveRes = await analyzeLiveDeviceSnapshot(snapshot);
-        applyLiveDeviceResult(liveRes, 'iPhone / iPad (USB Lockdown)');
-      } catch (err) {
-        setErrorMsg(err?.message || 'Error auditando el dispositivo iOS por USB.');
-      } finally {
-        setScanningIos(false);
-      }
-    });
+    if (scanningIos || isAnalyzing) return;
+    setErrorMsg('La captura USB iOS directa no está habilitada en esta versión; analiza un respaldo iOS.');
   }
 
   async function handleInstallPortableAdb() {
-    if (!window.omegaDesktop?.installPortableAdb || installingAdb) return;
-    await guard(async () => {
-      setInstallingAdb(true);
-      setErrorMsg('');
-      try {
-        const res = await window.omegaDesktop.installPortableAdb();
-        if (!res?.ok || !res.adbPath) {
-          setErrorMsg(res?.error || 'No se pudo instalar el conector USB de Google.');
-          return;
-        }
-        setCustomAdbPath(res.adbPath);
-        await fetchUsbStatuses(res.adbPath, false, true);
-      } catch (err) {
-        setErrorMsg(err?.message || 'Error instalando conector ADB automático.');
-      } finally {
-        setInstallingAdb(false);
-      }
-    });
+    if (installingAdb) return;
+    setErrorMsg('Descarga platform-tools oficiales de Google Android y carga el volcado manualmente.');
   }
 
   async function handlePcLiveAudit() {
-    if (!window.omegaDesktop?.collectPcAuditSnapshot || scanningPc || isAnalyzing) return;
+    if (!hasPcTelemetryBridge || scanningPc || isAnalyzing) return;
     await guard(async () => {
       setScanningPc(true);
       setErrorMsg('');
       try {
-        const col = await window.omegaDesktop.collectPcAuditSnapshot();
+        const col = await collectNativeHostSnapshot();
         if (!col?.ok || !col.snapshot) {
           setErrorMsg(col?.error || 'No se pudo leer el estado de seguridad de esta computadora.');
           return;
@@ -328,147 +230,26 @@ export function MvtVerifierPanel({
     });
   }
 
-  async function analyzeIosBackupDirectory(backupPath, fallbackMeta = null) {
-    if (!window.omegaDesktop?.readIosBackupManifest || scanningIos || isAnalyzing) return;
-    setScanningIos(true);
-    setErrorMsg('');
-    setBackupUnlockError('');
-    try {
-      const manifestData = await window.omegaDesktop.readIosBackupManifest(backupPath);
-      if (manifestData.encrypted || !manifestData.manifest_b64) {
-        if (!manifestData.manifest_plist_b64) {
-          setErrorMsg(
-            `El respaldo "${manifestData.backup?.deviceName || 'iOS'}" está cifrado pero falta Manifest.plist para desbloquearlo en memoria.`,
-          );
-          return;
-        }
-        setBackupPassword('');
-        setEncryptedBackupPrompt({
-          backupPath,
-          meta: manifestData.backup || fallbackMeta,
-          manifestB64: manifestData.manifest_b64 || '',
-          manifestPlistB64: manifestData.manifest_plist_b64,
-        });
-        return;
-      }
-      const targetPlan = await resolveIosManifestTargets(manifestData.manifest_b64);
-      if (targetPlan.encrypted) {
-        if (!manifestData.manifest_plist_b64) {
-          setErrorMsg(targetPlan.detail || 'Manifest.db cifrado; requiere contraseña de respaldo.');
-          return;
-        }
-        setBackupPassword('');
-        setEncryptedBackupPrompt({
-          backupPath,
-          meta: manifestData.backup || fallbackMeta,
-          manifestB64: manifestData.manifest_b64 || '',
-          manifestPlistB64: manifestData.manifest_plist_b64,
-        });
-        return;
-      }
-      const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
-        backupPath,
-        targets: targetPlan.targets || [],
-      });
-      const liveRes = await analyzeLiveDeviceSnapshot(backupPayload);
-      applyLiveDeviceResult(liveRes, 'Respaldo iOS (Manifest.db en RAM)');
-    } catch (err) {
-      setErrorMsg(err?.message || 'No se pudo analizar la carpeta de respaldo iOS en RAM.');
-    } finally {
-      setScanningIos(false);
-    }
+  async function analyzeIosBackupDirectory() {
+    if (scanningIos || isAnalyzing) return;
+    setErrorMsg('Selecciona o carga directamente el archivo Manifest.db o artefactos exportados del respaldo iOS.');
   }
 
   async function handleUnlockEncryptedBackup(e) {
     e?.preventDefault?.();
     if (!encryptedBackupPrompt || !backupPassword || unlockingBackup) return;
-    await guard(async () => {
-      setUnlockingBackup(true);
-      setBackupUnlockError('');
-      const pwd = backupPassword;
-      try {
-        const targetPlan = await resolveEncryptedIosManifestTargets(
-          encryptedBackupPrompt.manifestPlistB64,
-          encryptedBackupPrompt.manifestB64,
-          pwd,
-        );
-        setBackupPassword('');
-        const backupPayload = await window.omegaDesktop.readIosBackupArtifacts({
-          backupPath: encryptedBackupPrompt.backupPath,
-          targets: targetPlan.targets || [],
-          encrypted: true,
-        });
-        const liveRes = await analyzeLiveDeviceSnapshot({
-          ...backupPayload,
-          ios_unlock_token: targetPlan.unlock_token || '',
-        });
-        setEncryptedBackupPrompt(null);
-        applyLiveDeviceResult(liveRes, 'Respaldo iOS Encriptado (en RAM)');
-      } catch (err) {
-        setBackupUnlockError(
-          err?.message || 'No se pudo abrir la copia encriptada. Revisa tu contraseña de respaldo.',
-        );
-      } finally {
-        setBackupPassword('');
-        setUnlockingBackup(false);
-      }
-    });
+    setBackupUnlockError('Desbloqueo de carpeta local iOS no disponible en esta sesión.');
+    setBackupPassword('');
   }
 
   async function handlePickIosBackupDir() {
-    if (!window.omegaDesktop?.pickIosBackupDir || scanningIos || isAnalyzing) return;
-    await guard(async () => {
-      setErrorMsg('');
-      try {
-        const pick = await window.omegaDesktop.pickIosBackupDir();
-        if (pick?.canceled) return;
-        if (!pick?.valid || !pick.backup?.path) {
-          setErrorMsg(pick?.error || 'La carpeta seleccionada no es un respaldo iOS válido.');
-          return;
-        }
-        await analyzeIosBackupDirectory(pick.backup.path);
-      } catch (err) {
-        setErrorMsg(err?.message || 'No se pudo inspeccionar la carpeta seleccionada.');
-      }
-    });
+    if (scanningIos || isAnalyzing) return;
+    setErrorMsg('Carga directamente los artefactos exportados del respaldo iOS en la zona de carga.');
   }
 
   async function handleConfirmHardenDns() {
-    if (!window.omegaDesktop?.hardenPrivateDns || hardeningDns) return;
-    await guard(async () => {
-      setHardeningDns(true);
-      setErrorMsg('');
-      try {
-        const res = await window.omegaDesktop.hardenPrivateDns({
-          customPath: customAdbPath,
-          serial: selectedSerial || usbDevice?.serial || '',
-        });
-        setConfirmingDns(false);
-        if (res?.applied) {
-          setDnsAppliedNote('DNS Privado cifrado (dns.quad9.net) aplicado en el dispositivo.');
-          setHardeningReport((prev) => {
-            if (!prev?.hardening_checks) return prev;
-            return {
-              ...prev,
-              hardening_checks: prev.hardening_checks.map((chk) =>
-                chk.control.includes('DNS Privado')
-                  ? {
-                      ...chk,
-                      status: 'OK',
-                      value: 'dns.quad9.net',
-                      detail: 'Resoluciones DNS cifradas mediante dns.quad9.net (DoT aplicado).',
-                    }
-                  : chk,
-              ),
-            };
-          });
-        }
-      } catch (err) {
-        setErrorMsg(err?.message || 'No se pudo configurar el DNS Privado en el dispositivo.');
-      } finally {
-        setHardeningDns(false);
-      }
-    });
+    setConfirmingDns(false);
+    setDnsAppliedNote('Configura DNS Privado cifrado (dns.quad9.net) en Ajustes -> Red e Internet del dispositivo.');
   }
 
   async function handleSyncStix() {
@@ -705,8 +486,7 @@ export function MvtVerifierPanel({
         'Se detectaron privilegios activos de accesibilidad, administración de dispositivo o conexiones kernel anómalas que requieren verificación inmediata.';
     }
 
-    const canHardenDnsInDesktop =
-      typeof window !== 'undefined' && Boolean(window.omegaDesktop?.hardenPrivateDns);
+    const canHardenDnsInDesktop = false;
 
     return (
       <div
@@ -1497,24 +1277,6 @@ export function MvtVerifierPanel({
                           {hasDesktopBridge && (
                             <div className="pt-0.5 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                {window.omegaDesktop?.installPortableAdb && !usbDevice?.adb_path && (
-                                  <button
-                                    type="button"
-                                    disabled={installingAdb}
-                                    onClick={handleInstallPortableAdb}
-                                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[11.5px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:opacity-50 transition-all cursor-pointer"
-                                  >
-                                    {installingAdb ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <Download className="h-3.5 w-3.5" />
-                                    )}
-                                    <span>
-                                      {installingAdb ? 'Descargando conector Google...' : 'Instalar conector automático (Google)'}
-                                    </span>
-                                  </button>
-                                )}
-
                                 <button
                                   type="button"
                                   onClick={handlePickAdbBinary}
@@ -1526,20 +1288,20 @@ export function MvtVerifierPanel({
                                   </span>
                                 </button>
 
-                                {window.omegaDesktop?.openExternalUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      window.omegaDesktop.openExternalUrl(
-                                        'https://developer.android.com/tools/releases/platform-tools',
-                                      )
-                                    }
-                                    className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                    <span>Descargar conector oficial (Google)</span>
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    window.open(
+                                      'https://developer.android.com/tools/releases/platform-tools',
+                                      '_blank',
+                                      'noopener,noreferrer',
+                                    )
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  <span>Descargar conector oficial (Google)</span>
+                                </button>
 
                                 <button
                                   type="button"
@@ -1845,7 +1607,7 @@ export function MvtVerifierPanel({
                     </div>
                   </div>
 
-                  {hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot ? (
+                  {hasPcTelemetryBridge ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                       <span className="text-[11.5px] text-[#9A9AA2]">
                         Solo lectura en RAM · ~2 segundos · Sin cambios en tu equipo.
@@ -2039,12 +1801,12 @@ export function MvtVerifierPanel({
                   : 'Conecta tu celular arriba para inspección directa o carga una copia / lista de indicadores abajo. Todo corre en RAM sin guardar archivos.'
               }
               actionLabel={
-                deviceTab === 'pc' && hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot
+                deviceTab === 'pc' && hasPcTelemetryBridge
                   ? 'Analizar esta computadora'
                   : undefined
               }
               onAction={
-                deviceTab === 'pc' && hasDesktopBridge && window.omegaDesktop?.collectPcAuditSnapshot
+                deviceTab === 'pc' && hasPcTelemetryBridge
                   ? handlePcLiveAudit
                   : undefined
               }
