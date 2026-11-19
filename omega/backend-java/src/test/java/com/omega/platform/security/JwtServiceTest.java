@@ -13,7 +13,7 @@ class JwtServiceTest {
 
     @Test
     void rejectsSessionsIssuedBeforeMandatoryCredentialAuthentication() {
-        String secret = "omega-unit-test-hmac-sha256-secret-key-32-chars";
+        String secret = java.util.HexFormat.of().formatHex(java.security.SecureRandom.getSeed(32));
         JwtService service = new JwtService(defaultProps(secret, "test"), new MockEnvironment());
         String legacy = io.jsonwebtoken.Jwts.builder()
                 .issuer("omega-rag-core").subject(UUID.randomUUID().toString())
