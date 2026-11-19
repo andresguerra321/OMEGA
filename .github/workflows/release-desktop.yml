@@ -51,6 +51,8 @@ jobs:
           python-version: '3.12'
       - name: Verify CTI and PDF Corpus SHA-256 Manifests
         run: python omega/rag_engine/corpus_integrity.py
+      - name: Stage Self-Hosted Docker Resources (compose + service sources)
+        run: python omega/scripts/stage_desktop_resources.py
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
       - name: Install Linux WebKitGTK Dependencies
         if: runner.os == 'Linux'

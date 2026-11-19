@@ -13,6 +13,7 @@
     "test:desktop": "node --test src/lib/*.test.js src/components/*.test.js",
     "preview": "vite preview",
     "sensor:build": "cargo build --release --manifest-path ../sensor-rust/Cargo.toml",
+    "stage:resources": "python ../scripts/stage_desktop_resources.py",
     "tauri:dev": "npx @tauri-apps/cli@2 dev",
     "tauri:build": "powershell -ExecutionPolicy Bypass -File ../scripts/build-tauri-windows.ps1",
     "test": "node --test src/lib/*.test.js src/components/*.test.js"

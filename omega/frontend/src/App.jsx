@@ -39,6 +39,8 @@ import {
   uploadExpedientePdf,
 } from './lib/api';
 import { collectNativeHostSnapshot, isDesktopApp } from './lib/desktopBridge';
+import { useDesktopBootstrap } from './lib/useDesktopBootstrap';
+import { DesktopBootstrapBanner } from './components/DesktopBootstrapBanner';
 import { ChatAtmosphere } from './components/ChatAtmosphere';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaLogo } from './components/OmegaLogo';
@@ -115,6 +117,7 @@ export default function App() {
   const [commandQuery, setCommandQuery] = useState('');
   const [technicalMode, setTechnicalMode] = useState(false);
   const [apiOnline, setApiOnline] = useState(true);
+  const desktopBootstrap = useDesktopBootstrap();
   const [govStats, setGovStats] = useState(null);
   const [usbStatus, setUsbStatus] = useState({
     android: { connected: false },
@@ -243,6 +246,13 @@ export default function App() {
       setApiOnline(false);
     }
   }, []);
+
+  // Al terminar el arranque de contenedores (app de escritorio) revalidamos el gateway de inmediato.
+  useEffect(() => {
+    const onBackendReady = () => void refreshSystemTelemetry();
+    window.addEventListener('omega:backend-ready', onBackendReady);
+    return () => window.removeEventListener('omega:backend-ready', onBackendReady);
+  }, [refreshSystemTelemetry]);
 
   const refreshPrivateWorkspace = useCallback(async () => {
     if (!isAuthenticated()) {
@@ -944,6 +954,8 @@ export default function App() {
         : 'screen-workspace';
 
   return (
+    <>
+    <DesktopBootstrapBanner bootstrap={desktopBootstrap} />
     <AnimatePresence mode="wait" initial={false}>
       {verifyingSession || enteringWorkspace ? (
         <motion.div
@@ -1610,5 +1622,6 @@ export default function App() {
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   );
 }

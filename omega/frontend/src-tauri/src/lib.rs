@@ -76,10 +76,18 @@ fn retry_self_hosted_bootstrap(
     state: State<'_, SharedBootstrapState>,
 ) -> BootstrapStatus {
     let shared = state.inner().clone();
-    let resource_dir = app.path().resource_dir().ok();
-    thread::spawn(move || {
-        run_self_hosted_bootstrap(shared, resource_dir);
-    });
+    // Evita lanzar dos `docker compose up` simultáneos si el usuario pulsa Reintentar varias veces.
+    let busy = shared
+        .lock()
+        .map(|g| g.state == "checking" || g.state == "starting")
+        .unwrap_or(false);
+    if !busy {
+        let resource_dir = app.path().resource_dir().ok();
+        let app_data_dir = app.path().app_data_dir().ok();
+        thread::spawn(move || {
+            run_self_hosted_bootstrap(shared, resource_dir, app_data_dir);
+        });
+    }
     state.lock().map(|g| g.clone()).unwrap_or_default()
 }
 
@@ -164,8 +172,9 @@ pub fn run() {
                 // Auto-orquestación Docker en segundo plano al abrir la app
                 let shared = bootstrap_state.clone();
                 let resource_dir = app.path().resource_dir().ok();
+                let app_data_dir = app.path().app_data_dir().ok();
                 thread::spawn(move || {
-                    run_self_hosted_bootstrap(shared, resource_dir);
+                    run_self_hosted_bootstrap(shared, resource_dir, app_data_dir);
                 });
             }
             Ok(())
