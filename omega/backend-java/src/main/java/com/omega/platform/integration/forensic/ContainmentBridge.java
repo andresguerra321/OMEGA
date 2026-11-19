@@ -1,6 +1,7 @@
 package com.omega.platform.integration.forensic;
 
 import com.omega.platform.config.SovereignModePolicy;
+import com.omega.platform.saas.AlertDispatcherService;
 import com.omega.platform.security.ContainmentAuthorizationService;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
@@ -32,6 +33,9 @@ public class ContainmentBridge {
 
     @Autowired(required = false)
     private SovereignModePolicy sovereignPolicy;
+
+    @Autowired(required = false)
+    private AlertDispatcherService alertDispatcherService;
 
     @Autowired
     public ContainmentBridge(
@@ -83,7 +87,7 @@ public class ContainmentBridge {
         payload.put("target", request.target());
         payload.put("dryRun", request.dryRun());
         payload.put("previewToken", request.previewToken());
-        return containmentOperation(
+        Map<String, Object> result = containmentOperation(
                 principal,
                 "/api/containment/execute",
                 payload,
@@ -91,6 +95,20 @@ public class ContainmentBridge {
                 String.valueOf(request.target().getOrDefault("sha256", "")),
                 request.dryRun(),
                 request.expedienteId());
+        if (!request.dryRun() && alertDispatcherService != null && principal != null) {
+            try {
+                alertDispatcherService.dispatchCriticalAlert(
+                        principal.tenantId(),
+                        principal.userId(),
+                        "CRITICAL",
+                        "Contención ejecutada en host: " + request.actionType(),
+                        "Acción de aislamiento aplicada sobre objetivo: " + request.target(),
+                        "");
+            } catch (RuntimeException ignored) {
+                // El despacho fuera de banda nunca debe revertir la contención ya aplicada
+            }
+        }
+        return result;
     }
 
     public Map<String, Object> rollbackContainment(

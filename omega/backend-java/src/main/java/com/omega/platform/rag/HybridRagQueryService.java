@@ -1,14 +1,19 @@
 package com.omega.platform.rag;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.omega.platform.config.SovereignModePolicy;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.ingest.AsyncDocumentProcessor;
 import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.saas.CommercialSaasService;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -40,6 +45,12 @@ public class HybridRagQueryService {
     private final RagAnswerGenerator answerGenerator;
     private final AuditLogService auditLogService;
 
+    @Autowired(required = false)
+    private CommercialSaasService commercialSaasService;
+
+    @Autowired(required = false)
+    private SovereignModePolicy sovereignModePolicy;
+
     public HybridRagQueryService(
             ExpedienteAuthorizationService authorizationService,
             DocumentRepository documentRepository,
@@ -63,6 +74,14 @@ public class HybridRagQueryService {
             RagQueryRequest request
     ) {
         authorizationService.requireReadAccess(principal, expedienteId);
+        if (commercialSaasService != null && principal != null) {
+            boolean sovereign = sovereignModePolicy != null && sovereignModePolicy.enabled();
+            try {
+                commercialSaasService.consumeAiQuota(principal.tenantId(), principal.userId(), sovereign, false);
+            } catch (IllegalStateException ex) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), ex);
+            }
+        }
         String activeModel = embeddingProvider.modelName();
         int topK = request.topK() == null ? 6 : Math.max(1, Math.min(request.topK(), 20));
 

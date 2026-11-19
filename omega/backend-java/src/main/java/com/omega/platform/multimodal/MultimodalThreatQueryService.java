@@ -1,6 +1,7 @@
 package com.omega.platform.multimodal;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.omega.platform.config.SovereignModePolicy;
 import com.omega.platform.cti.ExternalReputationService;
 import com.omega.platform.cti.PublicCorpusRagService;
 import com.omega.platform.cti.PublicCorpusRagService.PublicCtiQueryRequest;
@@ -15,9 +16,11 @@ import com.omega.platform.rag.HybridRagQueryService;
 import com.omega.platform.rag.HybridRagQueryService.RagCitationDto;
 import com.omega.platform.rag.HybridRagQueryService.RagQueryRequest;
 import com.omega.platform.rag.HybridRagQueryService.RagQueryResponse;
+import com.omega.platform.saas.CommercialSaasService;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -60,6 +63,12 @@ public class MultimodalThreatQueryService {
     private final ExpedienteAuthorizationService authorizationService;
     private final AuditLogService auditLogService;
     private final Map<String, Deque<Long>> publicRateWindows = new ConcurrentHashMap<>();
+
+    @Autowired(required = false)
+    private CommercialSaasService commercialSaasService;
+
+    @Autowired(required = false)
+    private SovereignModePolicy sovereignModePolicy;
 
     public MultimodalThreatQueryService(
             ImageSecuritySanitizer sanitizer,
@@ -110,6 +119,14 @@ public class MultimodalThreatQueryService {
             byte[] imageBytes,
             String rawQuestion
     ) {
+        if (commercialSaasService != null && principal != null) {
+            boolean sovereign = sovereignModePolicy != null && sovereignModePolicy.enabled();
+            try {
+                commercialSaasService.consumeAiQuota(principal.tenantId(), principal.userId(), sovereign, true);
+            } catch (IllegalStateException ex) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), ex);
+            }
+        }
         String question = (rawQuestion == null || rawQuestion.isBlank())
                 ? "Analiza esta captura en busca de indicadores maliciosos, phishing o vectores de spyware."
                 : rawQuestion.trim();

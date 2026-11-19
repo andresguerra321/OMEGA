@@ -500,3 +500,16 @@ def get_mobile_usb_audit_status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Trabajo de auditoría USB no encontrado.")
     return job
+
+
+@app.get("/api/host/infostealer/scan")
+def run_host_infostealer_scan():
+    """Escaneo bajo demanda del escudo diario Anti-Infostealer (navegadores, SSH, .env)."""
+    from infostealer_shield import scan_infostealer_activity
+
+    alerts = scan_infostealer_activity()
+    return {
+        "ok": True,
+        "count": len(alerts),
+        "alerts": alerts,
+    }

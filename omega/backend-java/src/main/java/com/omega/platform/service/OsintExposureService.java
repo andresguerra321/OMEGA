@@ -69,6 +69,9 @@ public class OsintExposureService {
     private final String hibpApiKey;
     private final HttpClient httpClient;
 
+    @Autowired(required = false)
+    private com.omega.platform.saas.AlertDispatcherService alertDispatcherService;
+
     public OsintExposureService(
             OsintAssetRepository assetRepository,
             PublicSchemaSupport publicSchemaSupport,
@@ -192,6 +195,25 @@ public class OsintExposureService {
                         "subdomainsCount", exposedSubdomains.size()
                 )
         );
+
+        int emailBreachCount = (emailBreaches != null && emailBreaches.breaches() != null)
+                ? emailBreaches.breaches().size()
+                : 0;
+        boolean hasCriticalExposure = !ctiMatches.isEmpty() || emailBreachCount > 0;
+        if (hasCriticalExposure && alertDispatcherService != null) {
+            try {
+                alertDispatcherService.dispatchCriticalAlert(
+                        principal.tenantId(),
+                        principal.userId(),
+                        !ctiMatches.isEmpty() ? "CRITICAL" : "HIGH",
+                        "Exposición OSINT detectada en " + asset.getAssetType() + ": " + value,
+                        "Coincidencias CTI: " + ctiMatches.size()
+                                + ", brechas de correo: " + emailBreachCount + ".",
+                        "");
+            } catch (RuntimeException ignored) {
+                // El despacho externo no interrumpe el reporte OSINT
+            }
+        }
 
         return new OsintScanReport(
                 asset.getId(),

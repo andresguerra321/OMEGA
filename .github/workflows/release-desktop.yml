@@ -114,9 +114,76 @@ jobs:
             omega/frontend/release/SHA256SUMS.txt
           retention-days: 90
 
+  build-tauri-v2:
+    name: Build OMEGA v2.0 Tauri + Rust Sensor (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            triple: x86_64-pc-windows-msvc
+            ext: '.exe'
+          - os: macos-latest
+            platform: macos
+            triple: aarch64-apple-darwin
+            ext: ''
+          - os: ubuntu-latest
+            platform: linux
+            triple: x86_64-unknown-linux-gnu
+            ext: ''
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: omega/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux WebKitGTK Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Test and Build Native Rust Sensor (omega-sensor)
+        working-directory: omega/sensor-rust
+        run: |
+          cargo test --locked
+          cargo build --release --locked
+      - name: Stage Rust Sensor Sidecar
+        shell: pwsh
+        run: |
+          $binDir = 'omega/frontend/src-tauri/binaries'
+          New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+          $src = "omega/sensor-rust/target/release/omega-sensor${{ matrix.ext }}"
+          $dst = "$binDir/omega-sensor-${{ matrix.triple }}${{ matrix.ext }}"
+          Copy-Item -Force $src $dst
+      - name: Test Tauri v2 Rust Shell (including PDF Vault Index)
+        working-directory: omega/frontend/src-tauri
+        run: cargo test --locked
+      - name: Install Frontend Dependencies and Build Tauri v2 Bundle
+        working-directory: omega/frontend
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npx @tauri-apps/cli@2 build
+      - name: Upload Tauri v2 Installers
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: omega-desktop-tauri-${{ matrix.platform }}
+          path: |
+            omega/frontend/src-tauri/target/release/bundle/nsis/*.exe
+            omega/frontend/src-tauri/target/release/bundle/msi/*.msi
+            omega/frontend/src-tauri/target/release/bundle/dmg/*.dmg
+            omega/frontend/src-tauri/target/release/bundle/appimage/*.AppImage
+            omega/frontend/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: warn
+          retention-days: 30
+
   release-integrity:
     name: Verify, Sign and Attest Consolidated Installers
-    needs: build-desktop
+    needs: [build-desktop, build-tauri-v2]
     runs-on: ubuntu-latest
     permissions:
       contents: write

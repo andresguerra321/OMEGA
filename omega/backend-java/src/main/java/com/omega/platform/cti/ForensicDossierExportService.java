@@ -143,7 +143,7 @@ public class ForensicDossierExportService {
                 "Informe automatizado de OMEGA: no acredita firma de un perito ni certificación legal o sello de tiempo de una autoridad externa.",
                 "CHAIN_VALID verifica la consistencia del snapshot almacenado; no demuestra autenticidad del archivo original ni detecta una reescritura completa de la cadena o eliminación de su cola sin un anclaje externo previo.",
                 "Se verifica toda la cadena del tenant en orden chain_seq. Los registros de otros recursos se incluyen solo como compromisos hash, sin metadatos privados; no se pueden recalcular externamente sin acceso autorizado al registro original.",
-                "Los SHA-256 de documentos son los registrados al ingresar; el PDF original no se conserva y no se ha vuelto a medir durante esta exportación."));
+                "Los SHA-256 de documentos son los registrados al ingresar; el PDF original no se conserva en el servidor bajo política Zero-Retention y no se ha vuelto a medir durante esta exportación. ADVERTENCIA LEGAL: el hash SHA-256 certifica integridad criptográfica, pero NO reemplaza la custodia ni la presentación del documento PDF original conservado localmente en el equipo del analista."));
     }
 
     private JsonNode readMetadata(String raw) {

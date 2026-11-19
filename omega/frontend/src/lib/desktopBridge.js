@@ -50,3 +50,46 @@ export async function collectNativeHostSnapshot(win = typeof window !== 'undefin
     error: 'La telemetría local del host requiere la app de escritorio OMEGA (Tauri v2 / Sensor Rust).',
   };
 }
+
+export async function registerLocalPdfSource(
+  { documentId, sha256, localPath },
+  win = typeof window !== 'undefined' ? window : null,
+) {
+  if (detectDesktopRuntime(win) !== 'tauri-v2') {
+    return null;
+  }
+  return win.__TAURI_INTERNALS__.invoke('register_local_pdf_source', {
+    documentId,
+    sha256,
+    localPath,
+  });
+}
+
+export async function resolveLocalPdfSource(
+  { documentId, sha256 = '', page = null },
+  win = typeof window !== 'undefined' ? window : null,
+) {
+  if (detectDesktopRuntime(win) !== 'tauri-v2') {
+    return {
+      found: false,
+      fileExists: false,
+      documentId,
+      sha256,
+      localPath: null,
+      page,
+      notice: 'Índice local de PDFs disponible en la app de escritorio Tauri v2.',
+    };
+  }
+  return win.__TAURI_INTERNALS__.invoke('resolve_local_pdf_source', {
+    documentId,
+    sha256,
+    page,
+  });
+}
+
+export async function listLocalPdfSources(win = typeof window !== 'undefined' ? window : null) {
+  if (detectDesktopRuntime(win) !== 'tauri-v2') {
+    return [];
+  }
+  return win.__TAURI_INTERNALS__.invoke('list_local_pdf_sources');
+}

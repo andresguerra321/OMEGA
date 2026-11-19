@@ -1,8 +1,31 @@
-![OMEGA — Visualización de Marca](img/banner.png)
+![OMEGA v2.0 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.0] - 2026-11-18
+
+### Escritorio Nativo Tauri v2 + Sensor Residente Rust (Fase 9)
+- **Sensor nativo `omega-sensor` (`omega/sensor-rust/`):** binario estático de ~256 KB con telemetría de procesos/memoria, detector **Anti-Infostealer** nativo y firma/verificación **HMAC-SHA256**.
+- **Shell Desktop Tauri v2 (`omega/frontend/src-tauri/`):** instaladores nativos Windows `.exe` (NSIS, ~3.5 MiB) y `.msi` (WiX, ~4.8 MiB) con auto-orquestación Docker (`docker_bootstrap.rs`) en modo `SELF_HOSTED` por defecto y cambio automático a `CLOUD_MANAGED` cuando `OMEGA_BACKEND_URL=https://...` está definida.
+- **Índice local privado de PDFs (`pdf_vault_index.rs`):** mapeo local `(documentId, sha256) -> ruta PDF original` en `app_data_dir()` para abrir citas en página exacta y reindexar en 1 clic sin almacenar PDFs en el servidor, reforzado con advertencia legal explícita en `ForensicDossierExportService.java`.
+- **Pipeline de CI actualizado (`.github/workflows/release-desktop.yml`):** job `build-tauri-v2` con `cargo test`, compilación release de `omega-sensor` y empaquetado Tauri v2 multiplataforma.
+
+### Capa Comercial SaaS, Cuotas IA y Alertas Críticas (Fase 8)
+- **Migración Flyway `V8__commercial_saas_fleet_and_alerts.sql`:** tablas `subscriptions`, `devices`, `ai_usage_quotas` y `alert_dispatches` con claves foráneas compuestas `(tenant_id, user_id)`.
+- **Cuotas IA aplicadas de punta a punta:** `CommercialSaasService.consumeAiQuota()` conectado a `HybridRagQueryService` y `MultimodalThreatQueryService` (tope mensual para OpenAI/Vision en la nube; **Modo Soberano Ollama siempre ilimitado**).
+- **Despacho automático de alertas fuera de banda (`AlertDispatcherService`):** conectado a hallazgos críticos de `OsintExposureService`, `HostSensorBridge` y ejecuciones reales de `ContainmentBridge` vía Webhook HTTPS (anti-SSRF) y Telegram Bot API.
+- **UX dual (`Modo Escudo` vs. `Modo Laboratorio`) + `SaasFleetCard.jsx`:** navegación simplificada para usuarios finales/ejecutivos y suite forense completa para analistas/legal.
+
+### Fidelidad Anti-Pegasus y Protección Diaria (Fase 7)
+- **Soporte completo de `sysdiagnose` iOS (`.tar.gz`):** extracción en streaming anti-Zip-Slip + Zero-Retention con analizadores para `shutdown.log`, `DataUsage.sqlite`, perfiles `.mobileconfig` (root CA/MDM) y crash logs `.ips` zero-click.
+- **USB portable y Android profundo (`usb_device_connector.py`):** `resolve_portable_tool()` para `adb`/`libimobiledevice` empaquetados y auditoría de servicios de Accesibilidad abusivos y perfiles MDM.
+- **Escudo diario Anti-Infostealer (`infostealer_shield.py` + `GET /api/host/infostealer/scan`):** vigilancia de accesos no firmados a credenciales de navegador, llaves SSH y `.env` (filtrando cookies propias de apps Electron y `.env.example`).
+- **Verificación Ed25519 de feeds CTI (`SignedFeedVerifier.java`):** política fail-closed antes de ingerir feeds externos en `ExternalIocFeedSyncService.java`.
+
+### Limpieza Arquitectónica y Blindaje SAST (Fase 6)
+- División de `ForensicBridgeService.java` en 4 puentes especializados (`HostSensorBridge`, `ContainmentBridge`, `MobileUsbBridge`, `MvtTriageBridge`), modularización de `containment_engine.py` (`firewall_adapters.py`, `quarantine_vault.py`, `process_controller.py`), volumen persistente `omega_quarantine_vault` en `docker-compose.yml` y gate continuo de `vice-security` en `.github/workflows/supply-chain-audit.yml`.
 
 ## [1.6.0] - 2026-11-16
 

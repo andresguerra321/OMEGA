@@ -1,8 +1,10 @@
-![OMEGA — Visualización de Marca](img/banner.png)
+![OMEGA v2.0 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
-# OMEGA — Plataforma Defensiva de Cyber Threat Intelligence sobre Spyware Comercial
+# OMEGA v2.0 — Plataforma Defensiva Anti-Spyware, Forense Móvil y CTI Soberano
 
-Plataforma defensiva de inteligencia de amenazas cibernéticas (CTI) asistida por RAG híbrido, trazabilidad verificable, verificación forense de indicadores (MVT / YARA / respaldos móviles) en memoria volátil y auditoría pasiva de exposición (OSINT), con aislamiento multi-tenant y política de **Zero-Retention** sobre archivos originales.
+Plataforma defensiva de inteligencia de amenazas cibernéticas (CTI) asistida por RAG híbrido, trazabilidad verificable, verificación forense de indicadores (MVT / YARA / `sysdiagnose` iOS / USB Android-iOS) en memoria volátil, escudo diario Anti-Infostealer nativo en Rust y capa comercial SaaS multi-tenant con política estricta de **Zero-Retention** sobre archivos originales.
+
+> **Novedades en v2.0.0:** Cliente de escritorio nativo **Tauri v2** (~3.5 MiB) + sensor residente en **Rust** (`omega-sensor`, 256 KB) con auto-orquestación Docker en modo `SELF_HOSTED` y soporte `CLOUD_MANAGED` HTTPS; soporte completo de `sysdiagnose` `.tar.gz`, Android Accesibilidad/MDM y feeds CTI firmados **Ed25519**; migración Flyway `V8` (flota de dispositivos, planes `PERSONAL`/`PRO`/`ENTERPRISE`, cuotas de IA con **Ollama soberano ilimitado** y alertas fuera de banda Webhook/Telegram); separación de UX **Modo Escudo** vs. **Modo Laboratorio** e índice local privado de PDFs originales en Tauri.
 
 ---
 

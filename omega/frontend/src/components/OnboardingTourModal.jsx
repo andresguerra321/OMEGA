@@ -64,11 +64,11 @@ const TOUR_STEPS = [
   },
   {
     id: 'control-atajos',
-    badge: '05 · Atajos y privacidad',
-    title: 'Domina la cabina en segundos',
+    badge: '05 · Escudo vs. Laboratorio',
+    title: 'Elige tu modo y controla tu flota',
     subtitle:
-      'Navega rápido con teclado, cambia el nivel de detalle entre Simple y Técnico o ejecuta una purga instantánea si lo necesitas.',
-    accent: 'Control total',
+      'Alterna entre Modo Escudo (3 flujos guiados con sensor nativo Rust) y Modo Laboratorio (STIX, OSINT, RAG y dictamen PDF), o gestiona equipos y cuotas desde Cuenta.',
+    accent: 'Control total v2.0',
   },
 ];
 

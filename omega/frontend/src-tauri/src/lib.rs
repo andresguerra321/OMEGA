@@ -1,7 +1,11 @@
 mod docker_bootstrap;
+mod pdf_vault_index;
 
 use docker_bootstrap::{
     run_self_hosted_bootstrap, BootstrapStatus, SharedBootstrapState,
+};
+use pdf_vault_index::{
+    load_index, register_pdf_source, resolve_pdf_source, LocalPdfSourceRecord, ResolvedPdfSource,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -96,6 +100,43 @@ async fn collect_host_telemetry_snapshot(app: tauri::AppHandle) -> Result<Value,
         .map_err(|e| format!("Telemetría JSON inválida de omega-sensor: {e}"))
 }
 
+#[tauri::command]
+fn register_local_pdf_source(
+    app: tauri::AppHandle,
+    document_id: String,
+    sha256: String,
+    local_path: String,
+) -> Result<LocalPdfSourceRecord, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No se pudo resolver app_data_dir: {e}"))?;
+    register_pdf_source(&dir, document_id, sha256, local_path)
+}
+
+#[tauri::command]
+fn resolve_local_pdf_source(
+    app: tauri::AppHandle,
+    document_id: String,
+    sha256: String,
+    page: Option<u32>,
+) -> Result<ResolvedPdfSource, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No se pudo resolver app_data_dir: {e}"))?;
+    Ok(resolve_pdf_source(&dir, &document_id, &sha256, page))
+}
+
+#[tauri::command]
+fn list_local_pdf_sources(app: tauri::AppHandle) -> Result<Vec<LocalPdfSourceRecord>, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No se pudo resolver app_data_dir: {e}"))?;
+    Ok(load_index(&dir).into_values().collect())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let bootstrap_state: SharedBootstrapState = Arc::new(Mutex::new(BootstrapStatus::default()));
@@ -127,7 +168,10 @@ pub fn run() {
             get_desktop_runtime_info,
             get_bootstrap_status,
             retry_self_hosted_bootstrap,
-            collect_host_telemetry_snapshot
+            collect_host_telemetry_snapshot,
+            register_local_pdf_source,
+            resolve_local_pdf_source,
+            list_local_pdf_sources
         ])
         .run(tauri::generate_context!())
         .expect("error while running OMEGA Tauri v2 application");

@@ -4,11 +4,14 @@ import com.omega.platform.cti.StixCatalogService;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.PersistenceAuditResponse;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeStatus;
 import com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeToggleRequest;
+import com.omega.platform.saas.AlertDispatcherService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,6 +33,10 @@ public class HostSensorBridge {
     private final AuditLogService auditLogService;
     private RestClient hostWorkerRestClient;
     private long lastHostCatalogSync;
+    private final Set<String> dispatchedCriticalAlertIds = ConcurrentHashMap.newKeySet();
+
+    @Autowired(required = false)
+    private AlertDispatcherService alertDispatcherService;
 
     @Value("${OMEGA_HOST_OWNER_TENANT_ID:}")
     private String hostOwnerTenantId = "";
@@ -85,10 +92,35 @@ public class HostSensorBridge {
     public RealtimeStatus hostRealtimeStatus(OmegaPrincipal principal) {
         syncHostCatalog(principal.tenantId());
         try {
-            return hostClient().get().uri("/api/host/realtime/status")
+            RealtimeStatus status = hostClient().get().uri("/api/host/realtime/status")
                     .header("X-Host-Tenant", principal.tenantId().toString())
                     .retrieve()
                     .body(RealtimeStatus.class);
+            if (status != null && status.alerts() != null && alertDispatcherService != null) {
+                for (Map<String, Object> alert : status.alerts()) {
+                    String severity = String.valueOf(alert.getOrDefault("severity", ""));
+                    String alertId = String.valueOf(alert.getOrDefault("id", ""));
+                    if ("CRITICAL".equalsIgnoreCase(severity) && !alertId.isBlank()) {
+                        if (dispatchedCriticalAlertIds.size() > 512) {
+                            dispatchedCriticalAlertIds.clear();
+                        }
+                        if (dispatchedCriticalAlertIds.add(alertId)) {
+                            try {
+                                alertDispatcherService.dispatchCriticalAlert(
+                                        principal.tenantId(),
+                                        principal.userId(),
+                                        "CRITICAL",
+                                        String.valueOf(alert.getOrDefault("userFriendlyTitle", "Alerta crítica del sensor de host")),
+                                        String.valueOf(alert.getOrDefault("detail", "")),
+                                        "");
+                            } catch (RuntimeException ignored) {
+                                // El despacho externo no interrumpe la lectura del sensor
+                            }
+                        }
+                    }
+                }
+            }
+            return status;
         } catch (RestClientException ex) {
             throw ForensicWorkerTransport.translateWorkerException(ex, "estado del sensor de equipo", false);
         }
