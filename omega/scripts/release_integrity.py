@@ -59,14 +59,15 @@ def generate(source: Path, output: Path, recursive=False):
                     if item.is_file() and item.suffix.lower() in INSTALLERS), key=lambda item: item.name)
     if not files:
         raise RuntimeError('No se generó ningún instalador; no se publicará un manifiesto vacío.')
-    if len({item.name for item in files}) != len(files):
+    if len({item.name.replace(' ', '.') for item in files}) != len(files):
         raise RuntimeError('Hay instaladores con el mismo nombre; se cancela para evitar sobrescribir evidencia.')
     output.mkdir(parents=True, exist_ok=True)
     lines = []
     for item in files:
         if '\n' in item.name or '\r' in item.name or '\\' in item.name:
             raise RuntimeError('Nombre de instalador no permitido en el manifiesto.')
-        target = output / item.name
+        # GitHub converts spaces to dots in release asset names.
+        target = output / item.name.replace(' ', '.')
         if item.resolve() != target.resolve():
             shutil.copy2(item, target)
         with target.open('rb') as stream:

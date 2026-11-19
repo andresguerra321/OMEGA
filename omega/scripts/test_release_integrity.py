@@ -10,6 +10,20 @@ from release_integrity import generate, openssl_path, sign_source_tree
 
 
 class ReleaseIntegrityTest(unittest.TestCase):
+    def test_manifest_uses_published_asset_names_and_rejects_normalization_collisions(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'RELEASE_SIGNING_KEY': ''}):
+            root = Path(directory)
+            source, output = root / 'input', root / 'output'
+            source.mkdir()
+            (source / 'OMEGA Security.exe').write_bytes(b'installer')
+            manifest = generate(source, output)
+            digest, name = manifest.read_text().strip().split('  ', 1)
+            self.assertEqual(name, 'OMEGA.Security.exe')
+            self.assertEqual(hashlib.sha256((output / name).read_bytes()).hexdigest(), digest)
+            (source / 'OMEGA.Security.exe').write_bytes(b'other installer')
+            with self.assertRaises(RuntimeError):
+                generate(source, output)
+
     def test_source_tree_manifest_embeds_public_anchor_and_detects_corpus_tampering(self):
         import base64
         import json
