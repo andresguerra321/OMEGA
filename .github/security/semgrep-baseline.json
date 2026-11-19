@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "description": "Línea base SAST de Semgrep tras remediación de v2.0 (solo hallazgos preexistentes no-ERROR aún en observación si los hubiera; 0 ERROR activos).",
+  "baseline_findings": []
+}

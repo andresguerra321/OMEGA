@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "accepted_risks": [
+    {
+      "check_id": "java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket",
+      "path": "omega/backend-java/src/main/java/com/omega/platform/cti/WebIntelExtractorService.java",
+      "context_sha256": "54b3dd8c64fcb36ef594f81979fe1024ea90b91d879ec20f6825b1f43a852ba1",
+      "max_occurrences": 1,
+      "classification": "FALSE_POSITIVE_FOR_HTTPS_AND_INTENTIONAL_HTTP_INSPECTION",
+      "severity": "WARNING",
+      "owner": "andresguerra321",
+      "reviewed_at": "2026-11-18",
+      "expires_at": "2027-05-18",
+      "justification": "La instancia Socket(Proxy.NO_PROXY) en connectPinnedSocket() se vincula a una IP pública validada (anti-DNS-rebinding SSRF); actualiza de inmediato a SSLSocket con SNI/HTTPS para scheme https:// y conserva TCP plano solo en inspección CTI explícita de URLs http://."
+    }
+  ]
+}

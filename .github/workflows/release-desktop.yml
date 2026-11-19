@@ -36,13 +36,13 @@ jobs:
         working-directory: omega/frontend
         shell: pwsh
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: omega/frontend/package-lock.json
-      - uses: actions/setup-python@v7.1.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
 
@@ -101,7 +101,7 @@ jobs:
         run: python ../scripts/release_integrity.py --source release --output release
 
       - name: Upload Platform Installers and Checksums
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: omega-desktop-${{ matrix.platform }}
           if-no-files-found: error
@@ -134,13 +134,13 @@ jobs:
             triple: x86_64-unknown-linux-gnu
             ext: ''
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: omega/frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
       - name: Install Linux WebKitGTK Dependencies
         if: runner.os == 'Linux'
         run: |
@@ -152,12 +152,15 @@ jobs:
           cargo test --locked
           cargo build --release --locked
       - name: Stage Rust Sensor Sidecar
+        env:
+          MATRIX_EXT: ${{ matrix.ext }}
+          MATRIX_TRIPLE: ${{ matrix.triple }}
         shell: pwsh
         run: |
           $binDir = 'omega/frontend/src-tauri/binaries'
           New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-          $src = "omega/sensor-rust/target/release/omega-sensor${{ matrix.ext }}"
-          $dst = "$binDir/omega-sensor-${{ matrix.triple }}${{ matrix.ext }}"
+          $src = "omega/sensor-rust/target/release/omega-sensor$($env:MATRIX_EXT)"
+          $dst = "$binDir/omega-sensor-$($env:MATRIX_TRIPLE)$($env:MATRIX_EXT)"
           Copy-Item -Force $src $dst
       - name: Test Tauri v2 Rust Shell (including PDF Vault Index)
         working-directory: omega/frontend/src-tauri
@@ -169,7 +172,7 @@ jobs:
           npm test
           npx @tauri-apps/cli@2 build
       - name: Upload Tauri v2 Installers
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: omega-desktop-tauri-${{ matrix.platform }}
           path: |
@@ -190,11 +193,11 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: omega-desktop-*
           path: installer-input
@@ -203,11 +206,11 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: python omega/scripts/release_integrity.py --source installer-input --output release --recursive
       - name: Attest Build Provenance (Sigstore / SLSA)
-        uses: actions/attest-build-provenance@v4.2.2
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: 'release/*'
       - name: Upload Verifiable Release Bundle
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: omega-desktop-release
           path: release/*

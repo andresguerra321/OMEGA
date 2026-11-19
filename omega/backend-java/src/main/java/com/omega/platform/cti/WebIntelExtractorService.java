@@ -349,6 +349,8 @@ public class WebIntelExtractorService {
             String peerHost,
             int port,
             boolean isHttps) throws IOException {
+        // Socket TCP directo pinneado a la IP pública validada para impedir DNS rebinding SSRF;
+        // cuando isHttps==true se actualiza de inmediato a SSLSocket con SNI y verificación HTTPS.
         Socket plain = new Socket(Proxy.NO_PROXY);
         try {
             plain.connect(new InetSocketAddress(pinnedAddress, port), CONNECT_TIMEOUT_MS);

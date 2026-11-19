@@ -181,7 +181,7 @@ services:
     labels: *omega-labels
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-5173}:80"
+      - "${FRONTEND_PORT:-5173}:8080"
     networks:
       - omega-public
     depends_on:

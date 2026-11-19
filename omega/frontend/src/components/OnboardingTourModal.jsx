@@ -515,7 +515,7 @@ function OnboardingTourDialog({
                           </div>
                           <div>
                             <div className="text-[13px] font-semibold text-[#F2F2F4]">
-                              Paleta Spotlight & Copiloto flotante
+                              Paleta Spotlight y Copiloto flotante
                             </div>
                             <p className="text-[11.5px] text-[#9A9AA2]">
                               Salta entre módulos al instante con <code className="font-tech text-[#CFE0FF]">Ctrl+K</code> o abre el Copiloto sin perder lo que estás haciendo con <code className="font-tech text-[#CFE0FF]">Ctrl+J</code>.
