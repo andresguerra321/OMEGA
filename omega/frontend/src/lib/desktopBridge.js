@@ -57,6 +57,23 @@ export async function retrySelfHostedBootstrap(win = typeof window !== 'undefine
   return null;
 }
 
+export async function getDesktopRuntimeConfig(win = typeof window !== 'undefined' ? window : null) {
+  if (detectDesktopRuntime(win) !== 'tauri-v2') {
+    return { ok: false, config: null };
+  }
+  return win.__TAURI_INTERNALS__.invoke('get_desktop_runtime_config');
+}
+
+export async function saveDesktopRuntimeConfig(
+  payload = {},
+  win = typeof window !== 'undefined' ? window : null,
+) {
+  if (detectDesktopRuntime(win) !== 'tauri-v2') {
+    return { ok: false, error: 'Disponible solo en OMEGA Desktop (Tauri v2).' };
+  }
+  return win.__TAURI_INTERNALS__.invoke('save_desktop_runtime_config', { payload });
+}
+
 export async function collectNativeHostSnapshot(win = typeof window !== 'undefined' ? window : null) {
   if (detectDesktopRuntime(win) === 'tauri-v2') {
     const snapshot = await win.__TAURI_INTERNALS__.invoke('collect_host_telemetry_snapshot');

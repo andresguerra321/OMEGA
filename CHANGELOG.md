@@ -1,8 +1,16 @@
-![OMEGA v2.0.3 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
+![OMEGA v2.0.4 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.4] - 2026-11-19
+
+### Arranque local completo tras instalar el `.exe` (validación de imágenes, Ajustes IA/SMTP y UX sin correo)
+- **Validación de versión e imágenes cacheadas (`docker_bootstrap.rs`):** antes de reutilizar `:8080`, verifica la etiqueta `io.omega.version`, el estado `healthy` de `omega_forensic_worker` y el marcador `built-images.json`; si había imágenes antiguas cacheadas (como compilaciones previas sin `/app/healthcheck.py`), fuerza `--build` automáticamente conservando el volumen de PostgreSQL.
+- **Configuración local persistente en Tauri (`desktop_config.rs`, `SettingsPanel.jsx`, `desktopBridge.js`):** guarda proveedor de IA (Groq, Ollama Soberano Local, Gemini, OpenAI, OmniRoute) y servidor SMTP opcional dentro de `app_data_dir/desktop-config.json` (sin exponer secretos al frontend ni tocar archivos `.env` del repo) y recarga únicamente `forensic-worker` + `backend-java` al aplicar cambios.
+- **Puerta de acceso y recuperación honesta en modo local (`AuthController.java`, `AuthModulePanel.jsx`):** `GET /api/v1/auth/config` expone `smtpConfigured`; la pestaña de recuperación avisa con claridad cuando no hay SMTP configurado (evitando esperar un correo que solo queda en `docker logs`) y durante el arranque inicial muestra el estado de preparación de contenedores en lugar de una falsa alarma de desconexión.
+- **Versionado sincronizado a `2.0.4`:** actualizados manifiestos frontend/Tauri/sensor Rust y notas en [v2.0.4](.github/release-notes/v2.0.4.md).
 
 ## [2.0.3] - 2026-11-19
 

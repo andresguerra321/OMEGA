@@ -1,9 +1,14 @@
+mod desktop_config;
 mod docker_bootstrap;
 mod pdf_vault_index;
 mod usb_bridge;
 
+use desktop_config::{
+    apply_payload_and_save, build_summary, load_desktop_config, DesktopConfigSummary,
+    SaveDesktopConfigPayload,
+};
 use docker_bootstrap::{
-    run_self_hosted_bootstrap, BootstrapStatus, SharedBootstrapState,
+    reapply_gateway_services, run_self_hosted_bootstrap, BootstrapStatus, SharedBootstrapState,
 };
 use pdf_vault_index::{
     load_index, register_pdf_source, resolve_pdf_source, LocalPdfSourceRecord, ResolvedPdfSource,
@@ -115,6 +120,58 @@ async fn collect_host_telemetry_snapshot(app: tauri::AppHandle) -> Result<Value,
 }
 
 #[tauri::command]
+fn get_desktop_runtime_config(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No se pudo resolver app_data_dir: {e}"))?;
+    let cfg = load_desktop_config(&dir);
+    let summary: DesktopConfigSummary = build_summary(&cfg);
+    Ok(serde_json::json!({
+        "ok": true,
+        "config": summary
+    }))
+}
+
+#[tauri::command]
+async fn save_desktop_runtime_config(
+    app: tauri::AppHandle,
+    state: State<'_, SharedBootstrapState>,
+    payload: SaveDesktopConfigPayload,
+) -> Result<serde_json::Value, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No se pudo resolver app_data_dir: {e}"))?;
+    let resource_dir = app.path().resource_dir().ok();
+    let shared = state.inner().clone();
+
+    let saved = apply_payload_and_save(&dir, &payload)?;
+    let summary = build_summary(&saved);
+
+    if resolve_deployment_mode() == "SELF_HOSTED" {
+        let reapply_res = tauri::async_runtime::spawn_blocking(move || {
+            reapply_gateway_services(shared, resource_dir, &dir)
+        })
+        .await
+        .map_err(|e| format!("Fallo interno recargando contenedores: {e}"))?;
+
+        if let Err(err) = reapply_res {
+            return Ok(serde_json::json!({
+                "ok": false,
+                "config": summary,
+                "error": err
+            }));
+        }
+    }
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "config": summary
+    }))
+}
+
+#[tauri::command]
 fn register_local_pdf_source(
     app: tauri::AppHandle,
     document_id: String,
@@ -187,6 +244,8 @@ pub fn run() {
             register_local_pdf_source,
             resolve_local_pdf_source,
             list_local_pdf_sources,
+            get_desktop_runtime_config,
+            save_desktop_runtime_config,
             check_adb_status,
             pick_adb_binary,
             install_portable_adb,

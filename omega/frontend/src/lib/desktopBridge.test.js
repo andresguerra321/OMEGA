@@ -4,9 +4,11 @@ import {
   collectNativeHostSnapshot,
   detectDesktopRuntime,
   getBootstrapStatus,
+  getDesktopRuntimeConfig,
   getDesktopRuntimeInfo,
   isDesktopApp,
   getMobileDesktopBridge,
+  saveDesktopRuntimeConfig,
 } from './desktopBridge.js';
 
 test('mobile desktop bridge forwards native commands and preserves device and backup arguments', async () => {
@@ -90,4 +92,28 @@ test('web fallback returns CLOUD_MANAGED without Docker requirement', async () =
 
   const snap = await collectNativeHostSnapshot({});
   assert.equal(snap.ok, false);
+});
+
+test('getDesktopRuntimeConfig and saveDesktopRuntimeConfig invoke Tauri v2 IPC', async () => {
+  const seen = [];
+  const fakeWin = {
+    __TAURI_INTERNALS__: {
+      invoke: async (cmd, args) => {
+        seen.push({ cmd, args });
+        return { ok: true, config: { activeProvider: 'ollama', sovereignLocal: true } };
+      },
+    },
+  };
+  const current = await getDesktopRuntimeConfig(fakeWin);
+  assert.equal(current.ok, true);
+  assert.equal(current.config.sovereignLocal, true);
+
+  const saved = await saveDesktopRuntimeConfig({ customProvider: 'ollama' }, fakeWin);
+  assert.equal(saved.ok, true);
+  assert.equal(seen[0].cmd, 'get_desktop_runtime_config');
+  assert.equal(seen[1].cmd, 'save_desktop_runtime_config');
+  assert.deepEqual(seen[1].args, { payload: { customProvider: 'ollama' } });
+
+  assert.equal((await getDesktopRuntimeConfig({})).ok, false);
+  assert.equal((await saveDesktopRuntimeConfig({}, {})).ok, false);
 });

@@ -74,6 +74,7 @@ export function AuthAccessForm({
   const [authConfig, setAuthConfig] = useState({
     tenantSelfRegistrationEnabled: true,
     bootstrapSecretRequired: false,
+    smtpConfigured: false,
   });
   const [loading, setLoading] = useState(false);
   const [shakeTick, setShakeTick] = useState(0);
@@ -106,6 +107,7 @@ export function AuthAccessForm({
     newPassword: '',
     confirmPassword: '',
     step: 'request',
+    deliveryMode: '',
     statusMessage: '',
   });
   const [showRecoverPwd, setShowRecoverPwd] = useState(false);
@@ -120,17 +122,22 @@ export function AuthAccessForm({
 
   useEffect(() => {
     let cancelled = false;
-    getAuthConfig()
-      .then((cfg) => {
-        if (!cancelled && cfg) {
-          setAuthConfig(cfg);
-        }
-      })
-      .catch(() => {
-        // Fallback silencioso cuando el gateway aún inicia
-      });
+    const loadConfig = () => {
+      getAuthConfig()
+        .then((cfg) => {
+          if (!cancelled && cfg) {
+            setAuthConfig(cfg);
+          }
+        })
+        .catch(() => {
+          // Fallback silencioso cuando el gateway aún inicia
+        });
+    };
+    loadConfig();
+    window.addEventListener('omega:backend-ready', loadConfig);
     return () => {
       cancelled = true;
+      window.removeEventListener('omega:backend-ready', loadConfig);
     };
   }, []);
 
@@ -258,6 +265,7 @@ export function AuthAccessForm({
         ...p,
         email: cleanEmail,
         step: 'confirm',
+        deliveryMode: res?.delivery_mode || (authConfig.smtpConfigured ? 'smtp' : 'local_log'),
         statusMessage: res?.message || 'Código generado. Revisa tu correo o los logs locales.',
       }));
     } catch (err) {
@@ -707,6 +715,14 @@ export function AuthAccessForm({
             </div>
           </div>
 
+          {recoverForm.step === 'request' && !authConfig.smtpConfigured && (
+            <div className="rounded-[10px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/10 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-[#FFE2B8]">
+              Este nodo local aún no tiene SMTP configurado: el código no llegará por correo sino que se registrará en{' '}
+              <code className="font-tech">docker logs omega_backend_java</code>. Si es tu primer acceso local, usa{' '}
+              <span className="font-medium text-white">Crear cuenta</span> (no pide correo).
+            </div>
+          )}
+
           {recoverForm.step === 'confirm' && (
             <>
               <div className="pt-1 pb-2 text-center space-y-2">
@@ -718,11 +734,23 @@ export function AuthAccessForm({
                 </div>
                 <div>
                   <h2 className="text-[16px] font-semibold tracking-[-0.015em] text-[#F2F2F4]">
-                    Revisa el código de verificación
+                    {recoverForm.deliveryMode === 'smtp'
+                      ? 'Revisa tu correo de verificación'
+                      : 'Código generado en el servidor local'}
                   </h2>
                   <p className="mt-0.5 text-[12px] text-[#9FA6B8]">
-                    Enviamos un código de 6 dígitos a{' '}
-                    <span className="font-medium text-[#F2F2F4]">{recoverForm.email}</span>
+                    {recoverForm.deliveryMode === 'smtp' ? (
+                      <>
+                        Enviamos un código de 6 dígitos a{' '}
+                        <span className="font-medium text-[#F2F2F4]">{recoverForm.email}</span>
+                      </>
+                    ) : (
+                      <>
+                        Sin SMTP configurado: consulta el código de 6 dígitos en los logs de{' '}
+                        <code className="font-tech text-[#F2F2F4]">omega_backend_java</code> para{' '}
+                        <span className="font-medium text-[#F2F2F4]">{recoverForm.email}</span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -1366,6 +1394,7 @@ export function AuthModulePanel({
   reasonMessage = '',
   gateMode = false,
   apiOnline = true,
+  bootstrapping = false,
 }) {
   const fileInputRef = useRef(null);
   const [gateTab, setGateTab] = useState('login');
@@ -1442,9 +1471,15 @@ export function AuthModulePanel({
                 {!apiOnline && (
                   <div
                     role="status"
-                    className="motion-safe:animate-fade-up rounded-[10px] border border-[#FF9F0A]/40 bg-[#FF9F0A]/12 px-3 py-2 text-[12px] text-[#FFE2B8]"
+                    className={`motion-safe:animate-fade-up rounded-[10px] border px-3 py-2 text-[12px] ${
+                      bootstrapping
+                        ? 'border-[#2F6FED]/40 bg-[#2F6FED]/12 text-[#DCE8FF]'
+                        : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/12 text-[#FFE2B8]'
+                    }`}
                   >
-                    Sin conexión con el gateway OMEGA. Verifica Docker o el servidor Java antes de entrar.
+                    {bootstrapping
+                      ? 'Preparando contenedores locales OMEGA... Podrás entrar en cuanto terminen las validaciones.'
+                      : 'Sin conexión con el gateway OMEGA. Verifica Docker o el servidor Java antes de entrar.'}
                   </div>
                 )}
 

@@ -30,6 +30,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -53,16 +54,26 @@ public class AuthController {
     private final SessionCookieHelper sessionCookieHelper;
     private final PasswordResetService passwordResetService;
     private final TwoFactorService twoFactorService;
+    private final boolean smtpConfigured;
 
     public AuthController(AuthService authService, OmegaProperties properties) {
-        this(authService, properties, null, null, null);
+        this(authService, properties, null, null, null, "");
     }
 
     public AuthController(
             AuthService authService,
             OmegaProperties properties,
             SessionCookieHelper sessionCookieHelper) {
-        this(authService, properties, sessionCookieHelper, null, null);
+        this(authService, properties, sessionCookieHelper, null, null, "");
+    }
+
+    public AuthController(
+            AuthService authService,
+            OmegaProperties properties,
+            SessionCookieHelper sessionCookieHelper,
+            PasswordResetService passwordResetService,
+            TwoFactorService twoFactorService) {
+        this(authService, properties, sessionCookieHelper, passwordResetService, twoFactorService, "");
     }
 
     @Autowired
@@ -71,12 +82,14 @@ public class AuthController {
             OmegaProperties properties,
             SessionCookieHelper sessionCookieHelper,
             @Autowired(required = false) PasswordResetService passwordResetService,
-            @Autowired(required = false) TwoFactorService twoFactorService) {
+            @Autowired(required = false) TwoFactorService twoFactorService,
+            @Value("${spring.mail.host:}") String smtpHost) {
         this.authService = authService;
         this.properties = properties;
         this.sessionCookieHelper = sessionCookieHelper;
         this.passwordResetService = passwordResetService;
         this.twoFactorService = twoFactorService;
+        this.smtpConfigured = smtpHost != null && !smtpHost.isBlank();
     }
 
     @GetMapping("/csrf")
@@ -93,7 +106,8 @@ public class AuthController {
                 bootstrapRequired,
                 true,
                 false,
-                PASSKEYS_ROADMAP_NOTE);
+                PASSKEYS_ROADMAP_NOTE,
+                smtpConfigured);
     }
 
     public record AuthConfigResponse(
@@ -101,9 +115,19 @@ public class AuthController {
             boolean bootstrapSecretRequired,
             boolean cookieAuthEnabled,
             boolean passkeysSupported,
-            String passkeysRoadmap) {
+            String passkeysRoadmap,
+            boolean smtpConfigured) {
         public AuthConfigResponse(boolean tenantSelfRegistrationEnabled, boolean bootstrapSecretRequired) {
-            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, true, false, PASSKEYS_ROADMAP_NOTE);
+            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, true, false, PASSKEYS_ROADMAP_NOTE, false);
+        }
+
+        public AuthConfigResponse(
+                boolean tenantSelfRegistrationEnabled,
+                boolean bootstrapSecretRequired,
+                boolean cookieAuthEnabled,
+                boolean passkeysSupported,
+                String passkeysRoadmap) {
+            this(tenantSelfRegistrationEnabled, bootstrapSecretRequired, cookieAuthEnabled, passkeysSupported, passkeysRoadmap, false);
         }
     }
 

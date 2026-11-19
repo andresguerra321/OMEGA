@@ -37,6 +37,11 @@ import {
   verifyAuditChain,
 } from '../lib/api';
 import { stripUnsafeChars, validateTenantUserForm } from '../lib/validators';
+import {
+  getDesktopRuntimeConfig,
+  isDesktopApp as checkIsDesktopApp,
+  saveDesktopRuntimeConfig,
+} from '../lib/desktopBridge';
 import { useSingleFlight } from '../lib/useSingleFlight';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
@@ -396,6 +401,12 @@ export function SettingsPanel({
   const [aiProbeResult, setAiProbeResult] = useState(null);
   const [savingAiConfig, setSavingAiConfig] = useState(false);
   const [copiedEnvSnippet, setCopiedEnvSnippet] = useState(false);
+  const [smtpHostDraft, setSmtpHostDraft] = useState('');
+  const [smtpPortDraft, setSmtpPortDraft] = useState('587');
+  const [smtpUserDraft, setSmtpUserDraft] = useState('');
+  const [smtpPassDraft, setSmtpPassDraft] = useState('');
+  const [smtpFromDraft, setSmtpFromDraft] = useState('');
+  const [savingSmtpConfig, setSavingSmtpConfig] = useState(false);
 
   const cuentaRef = useRef(null);
   const iaRef = useRef(null);
@@ -404,7 +415,7 @@ export function SettingsPanel({
   const corpusRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
-  const isDesktopApp = false;
+  const isDesktopApp = checkIsDesktopApp();
 
   useScrollReveal(scrollContainerRef, [activeSection, gov?.reports_count]);
 
@@ -551,6 +562,46 @@ export function SettingsPanel({
     return () => clearTimeout(t);
   }, [initialSection, initialSectionKey]);
 
+  useEffect(() => {
+    if (!isDesktopApp) return undefined;
+    let cancelled = false;
+    getDesktopRuntimeConfig()
+      .then((res) => {
+        if (cancelled || !res?.ok || !res.config) return;
+        const cfg = res.config;
+        setDesktopAiConfig(cfg);
+        const detected =
+          cfg.activeProvider && cfg.activeProvider !== 'extractive'
+            ? cfg.activeProvider
+            : 'groq';
+        const preset = findAiPreset(detected);
+        setAiProviderDraft(preset.id);
+        if (cfg.customConfigured) {
+          setAiBaseUrlDraft(cfg.customBaseUrl || preset.baseUrl);
+          setAiModelDraft(cfg.customModel || preset.defaultModel);
+        } else if (detected === 'omniroute') {
+          setAiBaseUrlDraft(preset.baseUrl);
+          setAiModelDraft(cfg.omniRouteModel || 'auto');
+        } else if (detected === 'openai') {
+          setAiBaseUrlDraft(preset.baseUrl);
+          setAiModelDraft(cfg.openAiChatModel || 'gpt-4o-mini');
+        } else {
+          setAiBaseUrlDraft(preset.baseUrl);
+          setAiModelDraft(cfg.groqModel || 'openai/gpt-oss-120b');
+        }
+        setSmtpHostDraft(cfg.smtpHost || '');
+        setSmtpPortDraft(String(cfg.smtpPort || 587));
+        setSmtpUserDraft(cfg.smtpUsername || '');
+        setSmtpFromDraft(cfg.smtpFrom || '');
+      })
+      .catch(() => {
+        // Ignorar si no hay puente desktop
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDesktopApp]);
+
   function openExternalLink(url) {
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -656,7 +707,7 @@ export function SettingsPanel({
           };
         }
 
-        const res = { ok: false, config: null };
+        const res = await saveDesktopRuntimeConfig(payload);
         if (res?.config) {
           setDesktopAiConfig(res.config);
         }
@@ -691,6 +742,49 @@ export function SettingsPanel({
         });
       } finally {
         setSavingAiConfig(false);
+      }
+    });
+  }
+
+  async function handleSaveDesktopSmtp(e) {
+    e?.preventDefault();
+    if (!isDesktopApp || savingSmtpConfig) return;
+    const host = smtpHostDraft.trim();
+    const port = Number.parseInt(smtpPortDraft, 10) || 587;
+    await guard(async () => {
+      setSavingSmtpConfig(true);
+      try {
+        const res = await saveDesktopRuntimeConfig({
+          clearSmtpConfig: !host,
+          smtpHost: host,
+          smtpPort: Math.min(65535, Math.max(1, port)),
+          smtpUsername: smtpUserDraft.trim(),
+          smtpPassword: smtpPassDraft.trim(),
+          smtpFrom: smtpFromDraft.trim(),
+        });
+        if (res?.config) setDesktopAiConfig(res.config);
+        if (res?.ok) {
+          setSmtpPassDraft('');
+          setActionBanner({
+            tone: 'clean',
+            message: host
+              ? `Correo SMTP (${host}) guardado y aplicado al backend local.`
+              : 'Configuración SMTP local eliminada.',
+          });
+          onAiConfigured?.();
+        } else {
+          setActionBanner({
+            tone: 'danger',
+            message: res?.error || 'No se pudo aplicar la configuración SMTP local.',
+          });
+        }
+      } catch (err) {
+        setActionBanner({
+          tone: 'danger',
+          message: err?.message || 'Error guardando la configuración SMTP local.',
+        });
+      } finally {
+        setSavingSmtpConfig(false);
       }
     });
   }
@@ -1409,7 +1503,7 @@ export function SettingsPanel({
                       {isDesktopApp ? (
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/[0.06]">
                           <span className="text-[11.5px] text-[#9A9AA2]">
-                            Se guarda localmente en <code className="font-tech">.env</code>; las claves de respaldo previas como Groq se mantienen como fallback.
+                            Se guarda en el almacenamiento local seguro de OMEGA Desktop y recarga el backend automáticamente.
                           </span>
                           <div className="flex flex-wrap items-center gap-2">
                             <button
@@ -1461,6 +1555,77 @@ export function SettingsPanel({
                         </div>
                       )}
                     </form>
+
+                    {isDesktopApp && authSession?.role === 'ADMIN' && (
+                      <form
+                        onSubmit={handleSaveDesktopSmtp}
+                        className="apple-group rounded-[13px] p-4 space-y-3 border border-white/[0.08]"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-[13px] font-semibold text-[#F2F2F4]">
+                              Correo SMTP local (opcional)
+                            </div>
+                            <p className="text-[11.5px] text-[#9A9AA2]">
+                              Permite enviar códigos de recuperación y 2FA por correo usando tu propio servidor (p. ej. Gmail con App Password).
+                            </p>
+                          </div>
+                          {desktopAiConfig?.smtpConfigured && (
+                            <span className="font-tech rounded-full border border-[#30D158]/40 bg-[#30D158]/10 px-2.5 py-0.5 text-[10.5px] text-[#30D158]">
+                              SMTP activo
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <input
+                            type="text"
+                            value={smtpHostDraft}
+                            onChange={(e) => setSmtpHostDraft(e.target.value)}
+                            placeholder="smtp.gmail.com"
+                            className="sm:col-span-2 rounded-[8px] border border-white/[0.1] bg-black/35 px-3 py-1.5 text-[12px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
+                          />
+                          <input
+                            type="number"
+                            min={1}
+                            max={65535}
+                            value={smtpPortDraft}
+                            onChange={(e) => setSmtpPortDraft(e.target.value)}
+                            placeholder="587"
+                            className="rounded-[8px] border border-white/[0.1] bg-black/35 px-3 py-1.5 text-[12px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
+                          />
+                          <input
+                            type="email"
+                            value={smtpUserDraft}
+                            onChange={(e) => setSmtpUserDraft(e.target.value)}
+                            placeholder="Usuario / Correo SMTP"
+                            className="rounded-[8px] border border-white/[0.1] bg-black/35 px-3 py-1.5 text-[12px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
+                          />
+                          <input
+                            type="password"
+                            value={smtpPassDraft}
+                            onChange={(e) => setSmtpPassDraft(e.target.value)}
+                            placeholder={desktopAiConfig?.smtpConfigured ? 'Nueva App Password (opcional)' : 'App Password'}
+                            className="rounded-[8px] border border-white/[0.1] bg-black/35 px-3 py-1.5 text-[12px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
+                          />
+                          <input
+                            type="email"
+                            value={smtpFromDraft}
+                            onChange={(e) => setSmtpFromDraft(e.target.value)}
+                            placeholder="Remitente (opcional)"
+                            className="rounded-[8px] border border-white/[0.1] bg-black/35 px-3 py-1.5 text-[12px] text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
+                          />
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="submit"
+                            disabled={savingSmtpConfig}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.12] bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] cursor-pointer"
+                          >
+                            <span>{savingSmtpConfig ? 'Aplicando SMTP...' : 'Guardar SMTP local'}</span>
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </>
                 );
               })()}

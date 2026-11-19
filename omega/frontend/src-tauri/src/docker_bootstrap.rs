@@ -1,3 +1,4 @@
+use crate::desktop_config::{build_docker_envs, load_desktop_config};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -439,6 +440,8 @@ pub fn run_self_hosted_bootstrap(
     };
     envs.push(("OMEGA_DESKTOP_VERSION", APP_VERSION.to_string()));
     envs.push(("OMEGA_DESKTOP_RELEASE_ID", format!("v{APP_VERSION}")));
+    let user_cfg = load_desktop_config(&data_dir);
+    envs.extend(build_docker_envs(&user_cfg));
 
     let rebuild = should_rebuild_images(
         APP_VERSION,
@@ -514,6 +517,86 @@ pub fn run_self_hosted_bootstrap(
         s.state = "error".to_string();
         s.message = "Los contenedores iniciaron pero el backend Java no respondió /actuator/health a tiempo. Revisa `docker compose -p omega logs backend-java` y pulsa Reintentar.".to_string();
     });
+}
+
+/// Recrea únicamente `forensic-worker` y `backend-java` preservando PostgreSQL y secretos
+/// tras actualizar la configuración de IA / SMTP desde la app de escritorio.
+pub fn reapply_gateway_services(
+    shared: SharedBootstrapState,
+    resource_dir: Option<PathBuf>,
+    data_dir: &Path,
+) -> Result<(), String> {
+    let Some(compose_file) = find_compose_file(resource_dir.as_deref()) else {
+        return Err("No se encontró docker-compose.yml para aplicar los cambios.".to_string());
+    };
+    let compose_dir = compose_file.parent().unwrap_or_else(|| Path::new("."));
+    let compose_str = compose_file.to_string_lossy().into_owned();
+
+    let secrets = load_or_create_secrets(data_dir)?;
+    let mut envs: Vec<(&str, String)> = vec![
+        ("INTERNAL_SERVICE_TOKEN", secrets.internal_service_token),
+        ("OMEGA_JWT_SECRET", secrets.jwt_secret),
+        ("OMEGA_DESKTOP_VERSION", APP_VERSION.to_string()),
+        ("OMEGA_DESKTOP_RELEASE_ID", format!("v{APP_VERSION}")),
+    ];
+    let user_cfg = load_desktop_config(data_dir);
+    envs.extend(build_docker_envs(&user_cfg));
+
+    update_status(&shared, |s| {
+        s.state = "starting".to_string();
+        s.compose_file = Some(compose_str.clone());
+        s.message = "Aplicando configuración local y recargando el backend OMEGA...".to_string();
+    });
+
+    let args = [
+        "compose",
+        "-p",
+        COMPOSE_PROJECT,
+        "-f",
+        &compose_str,
+        "up",
+        "-d",
+        "forensic-worker",
+        "backend-java",
+    ];
+    match run_hidden("docker", &args, Some(compose_dir), &envs) {
+        Ok((0, _, _)) => {}
+        Ok((code, _, stderr)) => {
+            let msg = format!("docker compose up -d falló (código {code}): {stderr}");
+            update_status(&shared, |s| {
+                s.state = "error".to_string();
+                s.message = msg.clone();
+            });
+            return Err(msg);
+        }
+        Err(err) => {
+            update_status(&shared, |s| {
+                s.state = "error".to_string();
+                s.message = err.clone();
+            });
+            return Err(err);
+        }
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(90);
+    while Instant::now() < deadline {
+        if is_local_backend_healthy(8080) {
+            update_status(&shared, |s| {
+                s.state = "ready".to_string();
+                s.action = "started".to_string();
+                s.message = "Configuración aplicada y backend OMEGA listo.".to_string();
+            });
+            return Ok(());
+        }
+        thread::sleep(Duration::from_secs(2));
+    }
+
+    let timeout_msg = "El backend tardó más de 90s en responder tras aplicar la configuración.".to_string();
+    update_status(&shared, |s| {
+        s.state = "error".to_string();
+        s.message = timeout_msg.clone();
+    });
+    Err(timeout_msg)
 }
 
 #[cfg(test)]

@@ -986,6 +986,7 @@ export default function App() {
             gateMode
             authSession={null}
             apiOnline={apiOnline}
+            bootstrapping={desktopBootstrap.pending}
             reasonMessage={authGateReason}
             onAuthenticated={completeAuthenticationTransition}
           />
