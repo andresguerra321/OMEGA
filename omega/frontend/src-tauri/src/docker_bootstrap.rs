@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -37,18 +37,39 @@ impl Default for BootstrapStatus {
 
 pub type SharedBootstrapState = Arc<Mutex<BootstrapStatus>>;
 
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const COMPOSE_SERVICES: [&str; 3] = ["postgres", "forensic-worker", "backend-java"];
 const COMPOSE_PROJECT: &str = "omega";
+const WORKER_CONTAINER: &str = "omega_forensic_worker";
+const BACKEND_CONTAINER: &str = "omega_backend_java";
+const WORKER_IMAGE: &str = "omega-forensic-worker:latest";
+const BACKEND_IMAGE: &str = "omega-backend-java:latest";
 /// La primera ejecución construye las imágenes (Maven + pip); damos margen amplio.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 
 /// Secretos por instalación. El compose exige `INTERNAL_SERVICE_TOKEN` y, sin
 /// `OMEGA_JWT_SECRET`, usaría una clave de desarrollo pública: aquí se generan
 /// una vez con el RNG del sistema y se persisten en el directorio de datos.
-#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct DesktopSecrets {
     internal_service_token: String,
     jwt_secret: String,
+}
+
+/// Registro de las imágenes construidas para detectar imágenes previas cacheadas
+/// (por ejemplo de otra versión o compilaciones manuales desactualizadas).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct BuiltImageMarker {
+    version: String,
+    forensic_image_id: String,
+    backend_image_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ContainerProbe {
+    version_label: Option<String>,
+    health_status: Option<String>,
+    image_id: Option<String>,
 }
 
 fn random_hex(bytes: usize) -> Result<String, String> {
@@ -80,6 +101,19 @@ fn load_or_create_secrets(app_data_dir: &Path) -> Result<DesktopSecrets, String>
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
     Ok(secrets)
+}
+
+fn load_built_marker(app_data_dir: &Path) -> Option<BuiltImageMarker> {
+    let raw = std::fs::read_to_string(app_data_dir.join("built-images.json")).ok()?;
+    serde_json::from_str::<BuiltImageMarker>(&raw).ok()
+}
+
+fn save_built_marker(app_data_dir: &Path, marker: &BuiltImageMarker) {
+    let Ok(body) = serde_json::to_string(marker) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(app_data_dir);
+    let _ = std::fs::write(app_data_dir.join("built-images.json"), body);
 }
 
 /// `resource_dir()` en Windows devuelve rutas `\\?\C:\...` que `docker compose` no acepta.
@@ -116,6 +150,104 @@ fn run_hidden(
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Ok((code, stdout, stderr))
+}
+
+fn clean_inspect_field(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "<no value>" {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn inspect_container(name: &str) -> Option<ContainerProbe> {
+    let fmt = "{{index .Config.Labels \"io.omega.version\"}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.Image}}";
+    let (code, stdout, _) = run_hidden("docker", &["container", "inspect", "-f", fmt, name], None, &[]).ok()?;
+    if code != 0 {
+        return None;
+    }
+    let mut parts = stdout.splitn(3, '|');
+    Some(ContainerProbe {
+        version_label: clean_inspect_field(parts.next().unwrap_or("")),
+        health_status: clean_inspect_field(parts.next().unwrap_or("")),
+        image_id: clean_inspect_field(parts.next().unwrap_or("")),
+    })
+}
+
+fn inspect_image_id(image: &str) -> Option<String> {
+    let (code, stdout, _) = run_hidden("docker", &["image", "inspect", "-f", "{{.Id}}", image], None, &[]).ok()?;
+    if code != 0 {
+        return None;
+    }
+    clean_inspect_field(&stdout)
+}
+
+fn should_rebuild_images(
+    app_version: &str,
+    marker: Option<&BuiltImageMarker>,
+    worker_image_id: Option<&str>,
+    backend_image_id: Option<&str>,
+    worker_container: Option<&ContainerProbe>,
+    backend_container: Option<&ContainerProbe>,
+) -> bool {
+    let (Some(w_img), Some(b_img)) = (worker_image_id, backend_image_id) else {
+        return true;
+    };
+    let Some(m) = marker else {
+        return true;
+    };
+    if m.version != app_version || m.forensic_image_id != w_img || m.backend_image_id != b_img {
+        return true;
+    }
+    let container_stale = |probe: Option<&ContainerProbe>, expected_img: &str| -> bool {
+        match probe {
+            Some(c) => {
+                c.version_label.as_deref() != Some(app_version)
+                    || c.image_id.as_deref() != Some(expected_img)
+            }
+            None => false,
+        }
+    };
+    container_stale(worker_container, w_img) || container_stale(backend_container, b_img)
+}
+
+fn should_reuse_running_backend(
+    app_version: &str,
+    marker: Option<&BuiltImageMarker>,
+    worker_image_id: Option<&str>,
+    backend_image_id: Option<&str>,
+    worker_container: Option<&ContainerProbe>,
+    backend_container: Option<&ContainerProbe>,
+) -> bool {
+    // Si no existen los contenedores Docker de OMEGA pero :8080 ya responde UP,
+    // respetamos un backend externo levantado manualmente (ej. desarrollo local).
+    if worker_container.is_none() && backend_container.is_none() {
+        return true;
+    }
+    let (Some(w), Some(b)) = (worker_container, backend_container) else {
+        return false;
+    };
+    if w.health_status.as_deref() != Some("healthy") {
+        return false;
+    }
+    !should_rebuild_images(
+        app_version,
+        marker,
+        worker_image_id,
+        backend_image_id,
+        Some(w),
+        Some(b),
+    )
+}
+
+fn build_compose_up_args<'a>(compose_file: &'a str, rebuild: bool) -> Vec<&'a str> {
+    let mut args = vec!["compose", "-p", COMPOSE_PROJECT, "-f", compose_file, "up", "-d"];
+    if rebuild {
+        args.push("--build");
+    }
+    args.extend_from_slice(&COMPOSE_SERVICES);
+    args
 }
 
 /// Comprueba si el backend Java local responde UP en /actuator/health sin dependencias externas.
@@ -191,8 +323,9 @@ fn update_status(shared: &SharedBootstrapState, f: impl FnOnce(&mut BootstrapSta
     }
 }
 
-/// Flujo autónomo Self-Hosted: verifica si el stack ya está sano; si no, valida Docker,
-/// levanta únicamente lo necesario (`docker compose up -d`) y espera a que `/actuator/health` esté UP.
+/// Flujo autónomo Self-Hosted: verifica Docker, detecta si las imágenes/contenedores
+/// corresponden a la versión instalada del ejecutable, reconstruye cuando están
+/// desactualizados y espera a que `/actuator/health` esté UP.
 pub fn run_self_hosted_bootstrap(
     shared: SharedBootstrapState,
     resource_dir: Option<PathBuf>,
@@ -203,20 +336,29 @@ pub fn run_self_hosted_bootstrap(
         s.message = "Verificando servicios locales de OMEGA...".to_string();
     });
 
-    // 1. Si el backend local ya está sano, reutilizarlo sin tocar contenedores
-    if is_local_backend_healthy(8080) {
+    let Some(data_dir) = app_data_dir else {
         update_status(&shared, |s| {
-            s.state = "ready".to_string();
-            s.action = "reused".to_string();
-            s.message = "Infraestructura OMEGA ya estaba activa y saludable; reutilizada.".to_string();
+            s.state = "error".to_string();
+            s.message = "No se pudo resolver el directorio de datos de la app.".to_string();
         });
         return;
-    }
+    };
 
-    // 2. Verificar que Docker Engine esté corriendo
-    match run_hidden("docker", &["info", "--format", "{{.ServerVersion}}"], None, &[]) {
+    let docker_ok = run_hidden("docker", &["info", "--format", "{{.ServerVersion}}"], None, &[]);
+    let backend_up = is_local_backend_healthy(8080);
+
+    // 1. Verificar estado de Docker Engine (salvo que haya un backend manual externo sin Docker).
+    match docker_ok {
         Ok((0, _, _)) => {}
         Ok((_, _, stderr)) => {
+            if backend_up {
+                update_status(&shared, |s| {
+                    s.state = "ready".to_string();
+                    s.action = "reused".to_string();
+                    s.message = "Backend OMEGA activo en http://127.0.0.1:8080.".to_string();
+                });
+                return;
+            }
             update_status(&shared, |s| {
                 s.state = "error".to_string();
                 s.message = format!(
@@ -226,12 +368,47 @@ pub fn run_self_hosted_bootstrap(
             return;
         }
         Err(err) => {
+            if backend_up {
+                update_status(&shared, |s| {
+                    s.state = "ready".to_string();
+                    s.action = "reused".to_string();
+                    s.message = "Backend OMEGA activo en http://127.0.0.1:8080.".to_string();
+                });
+                return;
+            }
             update_status(&shared, |s| {
                 s.state = "error".to_string();
                 s.message = format!("Docker CLI no encontrado en el equipo ({err}).");
             });
             return;
         }
+    }
+
+    // 2. Comprobar si las imágenes y contenedores actuales coinciden con esta versión del ejecutable.
+    let marker = load_built_marker(&data_dir);
+    let worker_img = inspect_image_id(WORKER_IMAGE);
+    let backend_img = inspect_image_id(BACKEND_IMAGE);
+    let worker_cnt = inspect_container(WORKER_CONTAINER);
+    let backend_cnt = inspect_container(BACKEND_CONTAINER);
+
+    if backend_up
+        && should_reuse_running_backend(
+            APP_VERSION,
+            marker.as_ref(),
+            worker_img.as_deref(),
+            backend_img.as_deref(),
+            worker_cnt.as_ref(),
+            backend_cnt.as_ref(),
+        )
+    {
+        update_status(&shared, |s| {
+            s.state = "ready".to_string();
+            s.action = "reused".to_string();
+            s.message = format!(
+                "Infraestructura OMEGA v{APP_VERSION} ya estaba activa y validada; reutilizada."
+            );
+        });
+        return;
     }
 
     // 3. Localizar docker-compose.yml
@@ -246,38 +423,47 @@ pub fn run_self_hosted_bootstrap(
     let compose_dir = compose_file.parent().unwrap_or_else(|| Path::new("."));
     let compose_str = compose_file.to_string_lossy().into_owned();
 
-    // Secretos por instalación: el compose aborta sin INTERNAL_SERVICE_TOKEN.
-    let envs: Vec<(&str, String)> = match app_data_dir.as_deref().map(load_or_create_secrets) {
-        Some(Ok(secrets)) => vec![
+    // 4. Secretos por instalación + etiquetas de versión para las imágenes/contenedores.
+    let mut envs: Vec<(&str, String)> = match load_or_create_secrets(&data_dir) {
+        Ok(secrets) => vec![
             ("INTERNAL_SERVICE_TOKEN", secrets.internal_service_token),
             ("OMEGA_JWT_SECRET", secrets.jwt_secret),
         ],
-        Some(Err(err)) => {
+        Err(err) => {
             update_status(&shared, |s| {
                 s.state = "error".to_string();
                 s.message = format!("No se pudieron preparar los secretos locales: {err}");
             });
             return;
         }
-        None => {
-            update_status(&shared, |s| {
-                s.state = "error".to_string();
-                s.message = "No se pudo resolver el directorio de datos de la app.".to_string();
-            });
-            return;
-        }
     };
+    envs.push(("OMEGA_DESKTOP_VERSION", APP_VERSION.to_string()));
+    envs.push(("OMEGA_DESKTOP_RELEASE_ID", format!("v{APP_VERSION}")));
+
+    let rebuild = should_rebuild_images(
+        APP_VERSION,
+        marker.as_ref(),
+        worker_img.as_deref(),
+        backend_img.as_deref(),
+        worker_cnt.as_ref(),
+        backend_cnt.as_ref(),
+    );
 
     update_status(&shared, |s| {
         s.state = "starting".to_string();
         s.compose_file = Some(compose_str.clone());
-        s.message = "Levantando contenedores OMEGA (PostgreSQL, Worker Forense y Backend Java). La primera vez construye las imágenes y puede tardar varios minutos...".to_string();
+        s.message = if rebuild {
+            format!(
+                "Construyendo e iniciando contenedores OMEGA v{APP_VERSION} (PostgreSQL, Worker Forense y Backend Java). Esto puede tardar varios minutos..."
+            )
+        } else {
+            "Levantando contenedores OMEGA (PostgreSQL, Worker Forense y Backend Java)...".to_string()
+        };
     });
 
-    // 4. Levantar solo el gateway y sus dependencias (el servicio `frontend` del compose
+    // 5. Levantar solo el gateway y sus dependencias (el servicio `frontend` del compose
     //    no se necesita: la UI ya vive dentro de la app de escritorio).
-    let mut compose_args: Vec<&str> = vec!["compose", "-p", COMPOSE_PROJECT, "-f", &compose_str, "up", "-d"];
-    compose_args.extend_from_slice(&COMPOSE_SERVICES);
+    let compose_args = build_compose_up_args(&compose_str, rebuild);
     match run_hidden("docker", &compose_args, Some(compose_dir), &envs) {
         Ok((0, _, _)) => {}
         Ok((code, _, stderr)) => {
@@ -296,14 +482,28 @@ pub fn run_self_hosted_bootstrap(
         }
     }
 
-    // 5. Esperar a que /actuator/health responda UP
+    // 6. Esperar a que /actuator/health responda UP
     let deadline = Instant::now() + STARTUP_TIMEOUT;
     while Instant::now() < deadline {
         if is_local_backend_healthy(8080) {
+            if let (Some(w_id), Some(b_id)) =
+                (inspect_image_id(WORKER_IMAGE), inspect_image_id(BACKEND_IMAGE))
+            {
+                save_built_marker(
+                    &data_dir,
+                    &BuiltImageMarker {
+                        version: APP_VERSION.to_string(),
+                        forensic_image_id: w_id,
+                        backend_image_id: b_id,
+                    },
+                );
+            }
             update_status(&shared, |s| {
                 s.state = "ready".to_string();
                 s.action = "started".to_string();
-                s.message = "Contenedores iniciados y backend OMEGA listo en http://127.0.0.1:8080.".to_string();
+                s.message = format!(
+                    "Contenedores OMEGA v{APP_VERSION} verificados y listos en http://127.0.0.1:8080."
+                );
             });
             return;
         }
@@ -336,7 +536,11 @@ mod tests {
     fn corrupted_secret_file_is_regenerated() {
         let dir = std::env::temp_dir().join(format!("omega-secrets-bad-{}", random_hex(8).unwrap()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("desktop-secrets.json"), "{\"internal_service_token\":\"short\",\"jwt_secret\":\"x\"}").unwrap();
+        std::fs::write(
+            dir.join("desktop-secrets.json"),
+            "{\"internal_service_token\":\"short\",\"jwt_secret\":\"x\"}",
+        )
+        .unwrap();
         let regenerated = load_or_create_secrets(&dir).unwrap();
         assert_eq!(regenerated.internal_service_token.len(), 64);
         let _ = std::fs::remove_dir_all(&dir);
@@ -358,5 +562,96 @@ mod tests {
     fn compose_starts_only_gateway_services_not_the_frontend_build() {
         assert!(!COMPOSE_SERVICES.contains(&"frontend"));
         assert!(COMPOSE_SERVICES.contains(&"backend-java"));
+        let with_build = build_compose_up_args("omega/docker-compose.yml", true);
+        assert!(with_build.contains(&"--build"));
+        let without_build = build_compose_up_args("omega/docker-compose.yml", false);
+        assert!(!without_build.contains(&"--build"));
+    }
+
+    #[test]
+    fn stale_cached_images_force_rebuild_and_block_blind_reuse() {
+        let old_marker = BuiltImageMarker {
+            version: "2.0.2".to_string(),
+            forensic_image_id: "sha256:old_worker".to_string(),
+            backend_image_id: "sha256:old_java".to_string(),
+        };
+        let matching_marker = BuiltImageMarker {
+            version: "2.0.3".to_string(),
+            forensic_image_id: "sha256:new_worker".to_string(),
+            backend_image_id: "sha256:new_java".to_string(),
+        };
+        let healthy_worker = ContainerProbe {
+            version_label: Some("2.0.3".to_string()),
+            health_status: Some("healthy".to_string()),
+            image_id: Some("sha256:new_worker".to_string()),
+        };
+        let matching_backend = ContainerProbe {
+            version_label: Some("2.0.3".to_string()),
+            health_status: Some("healthy".to_string()),
+            image_id: Some("sha256:new_java".to_string()),
+        };
+
+        // Sin marcador previo (caso imágenes antiguas 2026-11-17) => reconstruye y no reutiliza
+        assert!(should_rebuild_images(
+            "2.0.3",
+            None,
+            Some("sha256:old_worker"),
+            Some("sha256:old_java"),
+            None,
+            None,
+        ));
+        assert!(!should_reuse_running_backend(
+            "2.0.3",
+            None,
+            Some("sha256:old_worker"),
+            Some("sha256:old_java"),
+            Some(&healthy_worker),
+            Some(&matching_backend),
+        ));
+
+        // Versión distinta en marcador => reconstruye
+        assert!(should_rebuild_images(
+            "2.0.3",
+            Some(&old_marker),
+            Some("sha256:old_worker"),
+            Some("sha256:old_java"),
+            Some(&healthy_worker),
+            Some(&matching_backend),
+        ));
+
+        // Misma versión + mismas imágenes + worker sano => reutiliza sin reconstruir
+        assert!(!should_rebuild_images(
+            "2.0.3",
+            Some(&matching_marker),
+            Some("sha256:new_worker"),
+            Some("sha256:new_java"),
+            Some(&healthy_worker),
+            Some(&matching_backend),
+        ));
+        assert!(should_reuse_running_backend(
+            "2.0.3",
+            Some(&matching_marker),
+            Some("sha256:new_worker"),
+            Some("sha256:new_java"),
+            Some(&healthy_worker),
+            Some(&matching_backend),
+        ));
+
+        // Worker unhealthy bloquea reutilización aunque la versión coincida
+        let unhealthy_worker = ContainerProbe {
+            health_status: Some("unhealthy".to_string()),
+            ..healthy_worker.clone()
+        };
+        assert!(!should_reuse_running_backend(
+            "2.0.3",
+            Some(&matching_marker),
+            Some("sha256:new_worker"),
+            Some("sha256:new_java"),
+            Some(&unhealthy_worker),
+            Some(&matching_backend),
+        ));
+
+        // Sin contenedores Docker pero con puerto 8080 vivo => backend externo manual
+        assert!(should_reuse_running_backend("2.0.3", None, None, None, None, None));
     }
 }
