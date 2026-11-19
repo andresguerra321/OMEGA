@@ -1,8 +1,16 @@
-![OMEGA v2.0.2 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
+![OMEGA v2.0.3 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.3] - 2026-11-19
+
+### Arranque autónomo Docker en el instalador Tauri y sincronización de versión
+- **Bootstrap autónomo de contenedores desde la app instalada (`docker_bootstrap.rs`, `lib.rs`):** generación segura y persistente una sola vez de `INTERNAL_SERVICE_TOKEN` y `OMEGA_JWT_SECRET` mediante `getrandom` en `app_data_dir`, resolución de rutas `\\?\` en Windows y ejecución exclusiva de los servicios `postgres`, `forensic-worker` y `backend-java` (sin levantar el contenedor web redundante) con timeout extendido de primer arranque (`20 min`) y prevención de ejecuciones concurrentes.
+- **Empaquetado de recursos Self-Hosted (`stage_desktop_resources.py`, `tauri.conf.json`, `release-desktop.yml`):** staging limpio de `docker-compose.yml`, `db/init.sql`, `api/`, `backend-java/` y `corpus_mvp/` dentro de los recursos del instalador Tauri v2 (sin `.env` ni artefactos locales).
+- **Visibilidad y reconexión en UI (`useDesktopBootstrap.js`, `DesktopBootstrapBanner.jsx`, `App.jsx`):** banner de estado durante el arranque/error del stack Docker con botón **Reintentar** y revalidación inmediata del gateway vía evento `omega:backend-ready`.
+- **Sincronización de versión a `2.0.3`:** unificados `package.json`, `package-lock.json`, `tauri.conf.json`, `src-tauri/Cargo.toml`, `sensor-rust/Cargo.toml`, sus `Cargo.lock` y la versión reportada por el cliente. Notas de lanzamiento en [v2.0.3](.github/release-notes/v2.0.3.md).
 
 ## [2.0.2] - 2026-11-18
 
