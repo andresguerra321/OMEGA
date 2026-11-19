@@ -53,7 +53,7 @@ export function SaasFleetCard({ authSession }) {
         deviceUid: uid,
         hostname: navigator.platform || 'equipo-omega',
         osPlatform: navigator.userAgentData?.platform || navigator.platform || 'desktop',
-        sensorVersion: '1.10.1',
+        sensorVersion: '2.0.1',
       });
       setNotice('Heartbeat enviado y equipo registrado en tu flota.');
       await loadSummary();

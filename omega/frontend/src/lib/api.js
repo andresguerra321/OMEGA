@@ -971,7 +971,7 @@ export async function sendDeviceHeartbeat({ deviceUid, hostname, osPlatform, sen
       deviceUid,
       hostname: hostname || 'equipo-omega',
       osPlatform: osPlatform || 'web',
-      sensorVersion: sensorVersion || '1.10.1',
+      sensorVersion: sensorVersion || '2.0.1',
     },
   });
 }

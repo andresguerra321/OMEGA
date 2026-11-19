@@ -114,7 +114,7 @@ public class CommercialSaasService {
         created.setDeviceUid(cleanUid.length() > 128 ? cleanUid.substring(0, 128) : cleanUid);
         created.setHostname(sanitize(hostname, "equipo-omega", 200));
         created.setOsPlatform(sanitize(osPlatform, "unknown", 64));
-        created.setSensorVersion(sanitize(sensorVersion, "1.10.1", 40));
+        created.setSensorVersion(sanitize(sensorVersion, "2.0.1", 40));
         created.setStatus("ACTIVE");
         created.setLastHeartbeatAt(now);
         created.setCreatedAt(now);

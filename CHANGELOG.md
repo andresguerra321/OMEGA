@@ -1,8 +1,17 @@
-![OMEGA v2.0 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
+![OMEGA v2.0.1 — Visualización de Marca](docs/assets/omega-v2-release-banner.jpg)
 
 # Changelog — OMEGA
 
 Todas las entregas relevantes de arquitectura, seguridad y calidad verificada del proyecto se registran aquí siguiendo versionado semántico.
+
+## [2.0.1] - 2026-11-18
+
+### Seguridad DevSecOps, Hardening CI/Docker y Unificación de Versión
+- **Pipeline SAST (`CodeQL v4` + `Semgrep` + Gate fail-closed):** integrado análisis multi-lenguaje (`java-kotlin`, `python`, `javascript-typescript`, `actions`) con CodeQL `security-extended`, Semgrep OWASP + reglas propias de OMEGA en [`.semgrep/omega-rules.yml`](.semgrep/omega-rules.yml) y evaluador por `context_sha256` en [`.github/scripts/evaluate_semgrep_gate.py`](.github/scripts/evaluate_semgrep_gate.py) con pruebas unitarias obligatorias en CI.
+- **Cadena de suministro inmutable en CI/CD:** las 32 referencias de acciones en `.github/workflows/*.yml` quedaron fijadas a SHAs de commit de 40 caracteres verificados con actualización semanal vía [`.github/dependabot.yml`](.github/dependabot.yml).
+- **Contenedor frontend no privilegiado (`omega/frontend/Dockerfile`, `nginx.conf`, `docker-compose.yml`):** migrado a `nginxinc/nginx-unprivileged:1.27-alpine` (`USER 101`, puerto interno `8080`, `server_tokens off`, cabecera proxy `Host backend-java:8080` y mapeo `5173:8080` en Compose).
+- **Versionado unificado a `2.0.1`:** sincronizados `omega/frontend/package.json`, `package-lock.json`, `tauri.conf.json`, `src-tauri/Cargo.toml`, `sensor-rust/Cargo.toml` y defaults del sensor.
+- **Documentación y notas de lanzamiento:** guía operativa en [`docs/sast-security.md`](docs/sast-security.md) y notas visuales en [`.github/release-notes/v2.0.1.md`](.github/release-notes/v2.0.1.md).
 
 ## [2.0.0] - 2026-11-18
 
