@@ -43,6 +43,7 @@ from containment_engine import engine as containment_engine
 from evasion_intelligence import inspect_evasion
 from owasp_rules import scan_artifacts_with_owasp
 from schemas import (
+    ScanStatus,
     IocRawRequest,
     IocVerifyResponse,
     LinkCheckRequest,
@@ -514,3 +515,37 @@ def run_host_infostealer_scan():
         "count": len(alerts),
         "alerts": alerts,
     }
+
+
+@app.post("/api/repo/scan", response_model=ScanStatus)
+async def run_repo_scan(
+    file: UploadFile = File(...),
+    max_files: int = Form(5000),
+    timeout_seconds: float = Form(30.0),
+):
+    """Escaneo estático de repositorio en RAM/tmpfs (Fases 1 y 2)."""
+    from repo_scanner import DEFAULT_MAX_BYTES, scan_archive_bytes
+
+    raw = await file.read(DEFAULT_MAX_BYTES + 1)
+    if len(raw) > DEFAULT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="El archivo supera el límite máximo permitido (50 MiB).")
+    try:
+        return scan_archive_bytes(
+            file.filename or "repo.tar.gz",
+            raw,
+            max_files=max(1, min(int(max_files), 20000)),
+            timeout_seconds=max(5.0, min(float(timeout_seconds), 120.0)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/repo/scan/{scan_id}", response_model=ScanStatus)
+def get_repo_scan_status(scan_id: str):
+    """Consulta de resultados efímeros de un escaneo en memoria."""
+    from repo_scanner import get_ephemeral_scan
+
+    status = get_ephemeral_scan(scan_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Escaneo no encontrado o purgado por zero-retention.")
+    return status

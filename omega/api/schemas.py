@@ -159,6 +159,9 @@ class ScanStatus(BaseModel):
     files_scanned: int = Field(default=0, ge=0)
     findings: list[ScanFinding] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+    score: int = Field(default=0, ge=0, le=100)
+    score_breakdown: list[dict[str, Any]] = Field(default_factory=list)
+    summary: str = ""
     zero_retention_notice: str = (
         "Análisis estático en RAM/tmpfs; contenido purgado al finalizar."
     )
