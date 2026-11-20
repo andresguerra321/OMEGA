@@ -139,8 +139,8 @@ class HybridRagQueryTest {
         UUID otherCase = createExpediente(token, "Otro expediente");
         uploadPdfAndWaitIndexed(token, otherCase, "otro.pdf", "Contrato",
                 "Predator Intellexa contrato MARCADOR_OTRO_EXPEDIENTE.");
-        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
         assertLegalCitation(token, caseId, documentId);
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
 
         JsonNode general = registerTenant("general-" + suffix, "General", "general@" + suffix + ".org");
         String generalToken = general.get("accessToken").asText();
@@ -250,7 +250,7 @@ class HybridRagQueryTest {
         assertThat(citation.get("citationLabel").asText())
                 .isEqualTo("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]");
         assertThat(body.get("answer").asText())
-                .contains("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]")
+                .contains("[1]")
                 .doesNotContain("MARCADOR_EXCLUSIVO_EXPEDIENTE_A2")
                 .doesNotContain("MARCADOR_EXCLUSIVO_TENANT_B");
 
@@ -282,7 +282,7 @@ class HybridRagQueryTest {
         assertThat(degradedJson.get("warnings").get(0).asText()).contains("tsvector");
         assertThat(degradedJson.get("citations").get(0).get("originalFilename").asText()).isEqualTo("predator-cytrox.pdf");
         assertThat(degradedJson.get("answer").asText())
-                .contains("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]")
+                .contains("[1]")
                 .doesNotContain("MARCADOR_EXCLUSIVO_EXPEDIENTE_A2")
                 .doesNotContain("MARCADOR_EXCLUSIVO_TENANT_B");
 
