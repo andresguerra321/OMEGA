@@ -4,10 +4,12 @@ import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.domain.ExpedienteEntity;
+import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.ingest.AsyncDocumentProcessor.DocumentIngestCommand;
 import com.omega.platform.ingest.PdfSecuritySanitizer.PdfInspectionResult;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
@@ -54,6 +56,7 @@ public class DocumentIngestionService {
     private final AuditLogService auditLogService;
     private final AsyncDocumentProcessor asyncDocumentProcessor;
     private final TransactionTemplate transactionTemplate;
+    private final TenantRepository tenantRepository;
 
     public DocumentIngestionService(
             OmegaProperties properties,
@@ -63,7 +66,8 @@ public class DocumentIngestionService {
             DocumentRepository documentRepository,
             AuditLogService auditLogService,
             AsyncDocumentProcessor asyncDocumentProcessor,
-            TransactionTemplate transactionTemplate
+            TransactionTemplate transactionTemplate,
+            TenantRepository tenantRepository
     ) {
         this.properties = properties;
         this.authorizationService = authorizationService;
@@ -73,6 +77,7 @@ public class DocumentIngestionService {
         this.auditLogService = auditLogService;
         this.asyncDocumentProcessor = asyncDocumentProcessor;
         this.transactionTemplate = transactionTemplate;
+        this.tenantRepository = tenantRepository;
     }
 
     public IngestAcceptedResult ingestPdf(
@@ -113,7 +118,7 @@ public class DocumentIngestionService {
 
             // Confirmar fila PROCESSING + auditoría antes de lanzar el hilo @Async
             DocumentEntity savedDoc = transactionTemplate.execute(tx -> {
-                DocumentEntity entity = documentRepository.saveAndFlush(new DocumentEntity(
+                DocumentEntity entity = new DocumentEntity(
                         principal.tenantId(),
                         expediente.getId(),
                         principal.userId(),
@@ -123,7 +128,14 @@ public class DocumentIngestionService {
                         embeddingProvider.modelName(),
                         false,
                         DocumentStatus.PROCESSING
-                ));
+                );
+                var tenant = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
+                // Preserve existing GENERAL/DEVELOPER ingestion behavior while repairing LEGAL retrieval.
+                if (tenant.getProfile() == TenantProfile.LEGAL) {
+                    entity.setCorpusScope(TenantProfile.LEGAL);
+                }
+                documentRepository.saveAndFlush(entity);
 
                 auditLogService.record(
                         principal.tenantId(),

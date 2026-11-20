@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -36,6 +38,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -101,6 +106,90 @@ class HybridRagQueryTest {
 
     @MockBean
     private EmbeddingProvider embeddingProvider;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void legalUploadAndLegacyRepairRemainQueryableWithoutCrossCaseOrCrossTenantCitations() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts = inv.getArgument(0);
+            return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode legal = registerTenant("legal-" + suffix, "Legal", "legal@" + suffix + ".org");
+        String token = legal.get("accessToken").asText();
+        mockMvc.perform(put("/api/v1/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "profile": "LEGAL", "confirmed": true }
+                                """))
+                .andExpect(status().isOk());
+        UUID caseId = createExpediente(token, "Expediente contractual");
+        UUID documentId = uploadPdfAndWaitIndexed(token, caseId, "contrato.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_LEGAL_PRINCIPAL.");
+        UUID otherCase = createExpediente(token, "Otro expediente");
+        uploadPdfAndWaitIndexed(token, otherCase, "otro.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_OTRO_EXPEDIENTE.");
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
+        assertLegalCitation(token, caseId, documentId);
+
+        JsonNode general = registerTenant("general-" + suffix, "General", "general@" + suffix + ".org");
+        String generalToken = general.get("accessToken").asText();
+        UUID generalCase = createExpediente(generalToken, "Expediente general");
+        UUID generalDoc = uploadPdfAndWaitIndexed(generalToken, generalCase, "general.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_OTRO_TENANT.");
+        JsonNode developer = registerTenant("dev-" + suffix, "Developer", "dev@" + suffix + ".org");
+        String devToken = developer.get("accessToken").asText();
+        mockMvc.perform(put("/api/v1/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + devToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "profile": "DEVELOPER", "confirmed": true }
+                                """))
+                .andExpect(status().isOk());
+        UUID devCase = createExpediente(devToken, "Expediente developer");
+        UUID devDoc = uploadPdfAndWaitIndexed(devToken, devCase, "dev.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_DEVELOPER.");
+
+        // Recreate the pre-V17 bug, then execute the actual migration against existing rows.
+        jdbcTemplate.update("UPDATE omega_rag.documents SET corpus_scope = 'GENERAL' WHERE id = ?", documentId);
+        var migration = new ResourceDatabasePopulator(new ClassPathResource(
+                "db/migration/V17__repair_legal_document_corpus_scope.sql"));
+        migration.execute(dataSource);
+        migration.execute(dataSource);
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
+        assertThat(documentRepository.findById(generalDoc).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
+        assertThat(documentRepository.findById(devDoc).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
+        assertLegalCitation(token, caseId, documentId);
+        mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + generalToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Predator contrato\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    private void assertLegalCitation(String token, UUID caseId, UUID documentId) throws Exception {
+        mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Predator Intellexa contrato\",\"topK\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OK"))
+                .andExpect(jsonPath("$.citations.length()").value(1))
+                .andExpect(jsonPath("$.citations[0].documentId").value(documentId.toString()))
+                .andExpect(jsonPath("$.citations[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.citations[0].excerpt").value(
+                        org.hamcrest.Matchers.containsString("MARCADOR_LEGAL_PRINCIPAL")));
+    }
 
     @Test
     void enforcesHybridSearchTenantExpedienteIsolationCitationsAndModelDriftReindexWarning() throws Exception {

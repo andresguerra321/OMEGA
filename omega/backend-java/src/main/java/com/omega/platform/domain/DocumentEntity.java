@@ -139,6 +139,14 @@ public class DocumentEntity {
         return status;
     }
 
+    public String getCorpusScope() {
+        return corpusScope;
+    }
+
+    public void setCorpusScope(TenantProfile profile) {
+        this.corpusScope = profile.name();
+    }
+
     public void setStatus(DocumentStatus status) {
         this.status = status;
     }
