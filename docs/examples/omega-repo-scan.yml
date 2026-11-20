@@ -1,0 +1,27 @@
+name: OMEGA Repo Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  omega-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código fuente
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Ejecutar OMEGA Repo Scanner
+        uses: ./.github/actions/omega-scan
+        with:
+          path: "."
+          omega-url: ${{ vars.OMEGA_URL }}
+          api-token: ${{ secrets.OMEGA_API_TOKEN }}
+          fail-on: "HIGH"
+          upload-sarif: "true"

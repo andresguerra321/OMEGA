@@ -1,0 +1,128 @@
+name: "OMEGA Repo Scanner"
+description: "Ejecuta el análisis estático de repositorios OMEGA, publica resumen en el job y sube resultados SARIF 2.1.0."
+
+inputs:
+  path:
+    description: "Ruta del directorio del repositorio a analizar"
+    required: false
+    default: "."
+  omega-url:
+    description: "URL HTTPS del backend OMEGA (obligatoria salvo en modo offline)"
+    required: false
+    default: ""
+  api-token:
+    description: "Token de API OMEGA (scope REPO_SCAN), pasado vía OMEGA_API_TOKEN"
+    required: false
+    default: ""
+  offline:
+    description: "Ejecutar solo detectores locales sin red (true/false)"
+    required: false
+    default: "false"
+  fail-on:
+    description: "Umbral de severidad para fallar el job (LOW, MEDIUM, HIGH, CRITICAL)"
+    required: false
+    default: "HIGH"
+  upload-sarif:
+    description: "Subir archivo SARIF a GitHub Code Scanning (requiere security-events: write)"
+    required: false
+    default: "true"
+  sarif-file:
+    description: "Ruta del archivo SARIF de salida"
+    required: false
+    default: "omega-results.sarif"
+
+outputs:
+  sarif-file:
+    description: "Ruta al archivo SARIF generado"
+    value: ${{ inputs.sarif-file }}
+  exit-code:
+    description: "Código de salida de la CLI OMEGA (0=limpio, 1=hallazgos, 3=red/auth, 4=límites)"
+    value: ${{ steps.scan.outputs.exit_code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configurar Python
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version: "3.12"
+
+    - name: Instalar dependencias mínimas de la CLI
+      shell: bash
+      run: python -m pip install --quiet pydantic jsonschema
+
+    - name: Ejecutar OMEGA Repo Scanner
+      id: scan
+      shell: bash
+      env:
+        OMEGA_API_TOKEN: ${{ inputs.api-token }}
+        OMEGA_URL: ${{ inputs.omega-url }}
+        OMEGA_SCAN_PATH: ${{ inputs.path }}
+        OMEGA_OFFLINE: ${{ inputs.offline }}
+        OMEGA_FAIL_ON: ${{ inputs.fail-on }}
+        OMEGA_SARIF_FILE: ${{ inputs.sarif-file }}
+        OMEGA_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set +e
+        CLI_ARGS=("scan" "$OMEGA_SCAN_PATH" "--format" "sarif" "--output" "$OMEGA_SARIF_FILE" "--fail-on" "$OMEGA_FAIL_ON")
+        if [ "$OMEGA_OFFLINE" = "true" ]; then
+          CLI_ARGS+=("--offline")
+        else
+          CLI_ARGS+=("--url" "$OMEGA_URL")
+        fi
+
+        python "$OMEGA_ACTION_PATH/../../omega/cli/omega_cli.py" "${CLI_ARGS[@]}"
+        RC=$?
+        echo "exit_code=$RC" >> "$GITHUB_OUTPUT"
+
+        python - <<'PY'
+        import json, os, re
+        from pathlib import Path
+
+        sarif_path = Path(os.environ["OMEGA_SARIF_FILE"])
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path or not sarif_path.is_file():
+            raise SystemExit(0)
+
+        def esc_md(text: str) -> str:
+            return re.sub(r"([\\`*_{}\[\]()#+\-.!|>])", r"\\\1", str(text or ""))
+
+        data = json.loads(sarif_path.read_text(encoding="utf-8"))
+        run = (data.get("runs") or [{}])[0]
+        props = run.get("properties") or {}
+        results = run.get("results") or []
+        score = int(props.get("omegaScore") or 0)
+        summary = esc_md(props.get("summary") or "Sin señales detectadas con las reglas actuales.")
+
+        lines = [
+            "### OMEGA Repo Scanner",
+            f"- **Puntaje compuesto:** `{score}/100`",
+            f"- **Resumen:** {summary}",
+            f"- **Hallazgos:** {len(results)}",
+            "",
+        ]
+        if results:
+            lines.append("| Severidad | Regla | Ubicación |")
+            lines.append("|---|---|---|")
+            for res in results[:25]:
+                rprops = res.get("properties") or {}
+                sev = esc_md(rprops.get("severity") or res.get("level") or "MEDIUM")
+                rule = esc_md(res.get("ruleId") or "OMEGA-RULE")
+                loc = (((res.get("locations") or [{}])[0].get("physicalLocation") or {}).get("artifactLocation") or {}).get("uri", "repository-root")
+                lines.append(f"| {sev} | `{rule}` | `{esc_md(loc)}` |")
+        with open(summary_path, "a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        PY
+        exit 0
+
+    - name: Subir SARIF a GitHub Code Scanning
+      if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles(inputs.sarif-file) != '' }}
+      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: omega-repo-scanner
+
+    - name: Aplicar umbral de salida de OMEGA
+      if: ${{ steps.scan.outputs.exit_code != '0' }}
+      shell: bash
+      run: exit "${{ steps.scan.outputs.exit_code }}"
