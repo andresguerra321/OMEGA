@@ -177,13 +177,27 @@ public class AuthController {
         return response;
     }
 
+    private static final long TRUSTED_DEVICE_TTL_SECONDS = 30L * 24L * 3600L;
+
     @PostMapping("/login")
     public AuthTokenResponse login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
-        AuthTokenResponse response = authService.login(request, httpServletRequest.getRemoteAddr());
+        String trustedDeviceToken = sessionCookieHelper != null
+                ? sessionCookieHelper.extractTrustedDeviceToken(httpServletRequest)
+                : null;
+        AuthTokenResponse response = authService.login(request, httpServletRequest.getRemoteAddr(), trustedDeviceToken);
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
+        if (sessionCookieHelper != null && !response.mfaRequired() && response.userId() != null) {
+            if (Boolean.FALSE.equals(request.rememberMe())) {
+                sessionCookieHelper.clearTrustedDeviceCookie(httpServletRequest, httpServletResponse);
+            } else {
+                String renewed = authService.issueTrustedDeviceToken(response.userId(), TRUSTED_DEVICE_TTL_SECONDS);
+                sessionCookieHelper.attachTrustedDeviceCookie(
+                        httpServletRequest, httpServletResponse, renewed, TRUSTED_DEVICE_TTL_SECONDS);
+            }
+        }
         return response;
     }
 
@@ -256,6 +270,15 @@ public class AuthController {
             HttpServletResponse httpServletResponse) {
         AuthTokenResponse response = authService.completeMfaLogin(request.challengeToken(), request.code());
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
+        if (sessionCookieHelper != null && !response.mfaRequired() && response.userId() != null) {
+            if (Boolean.FALSE.equals(request.rememberDevice())) {
+                sessionCookieHelper.clearTrustedDeviceCookie(httpServletRequest, httpServletResponse);
+            } else {
+                String trustedToken = authService.issueTrustedDeviceToken(response.userId(), TRUSTED_DEVICE_TTL_SECONDS);
+                sessionCookieHelper.attachTrustedDeviceCookie(
+                        httpServletRequest, httpServletResponse, trustedToken, TRUSTED_DEVICE_TTL_SECONDS);
+            }
+        }
         return response;
     }
 

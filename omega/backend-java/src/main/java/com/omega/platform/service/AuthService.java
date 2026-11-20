@@ -140,11 +140,16 @@ public class AuthService {
 
     @Transactional
     public AuthTokenResponse login(LoginRequest request) {
-        return login(request, "local");
+        return login(request, "local", null);
     }
 
     @Transactional
     public AuthTokenResponse login(LoginRequest request, String clientIp) {
+        return login(request, clientIp, null);
+    }
+
+    @Transactional
+    public AuthTokenResponse login(LoginRequest request, String clientIp, String trustedDeviceToken) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         String rawSlug = request.tenantSlug() == null ? "" : request.tenantSlug().trim().toLowerCase(Locale.ROOT);
         String resolvedIp = (clientIp == null || clientIp.isBlank()) ? "unknown" : clientIp.trim();
@@ -161,7 +166,11 @@ public class AuthService {
         }
 
         try {
-            AuthTokenResponse response = authenticateLogin(normalizedEmail, rawSlug, request.password());
+            AuthTokenResponse response = authenticateLogin(
+                    normalizedEmail,
+                    rawSlug,
+                    request.password(),
+                    trustedDeviceToken);
             loginRateLimiter.reset(resolvedIp, normalizedEmail);
             return response;
         } catch (BadCredentialsException ex) {
@@ -177,7 +186,11 @@ public class AuthService {
         }
     }
 
-    private AuthTokenResponse authenticateLogin(String normalizedEmail, String rawSlug, String rawPassword) {
+    private AuthTokenResponse authenticateLogin(
+            String normalizedEmail,
+            String rawSlug,
+            String rawPassword,
+            String trustedDeviceToken) {
         if (!rawSlug.isBlank()) {
             TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(rawSlug)
                     .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
@@ -190,7 +203,7 @@ public class AuthService {
                 throw new BadCredentialsException("Credenciales inválidas");
             }
 
-            return finishLoginOrMfaChallenge(user, tenant);
+            return finishLoginOrMfaChallenge(user, tenant, trustedDeviceToken);
         }
 
         List<UserEntity> matches = userRepository.findAllActiveByEmailIgnoreCase(normalizedEmail).stream()
@@ -209,11 +222,16 @@ public class AuthService {
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
-        return finishLoginOrMfaChallenge(user, tenant);
+        return finishLoginOrMfaChallenge(user, tenant, trustedDeviceToken);
     }
 
-    private AuthTokenResponse finishLoginOrMfaChallenge(UserEntity user, TenantEntity tenant) {
-        if (twoFactorService != null && user.isMfaEnabled()) {
+    private AuthTokenResponse finishLoginOrMfaChallenge(
+            UserEntity user,
+            TenantEntity tenant,
+            String trustedDeviceToken) {
+        boolean trustedDevice = trustedDeviceToken != null
+                && jwtService.isTrustedDeviceTokenValid(trustedDeviceToken, user.getId());
+        if (twoFactorService != null && user.isMfaEnabled() && !trustedDevice) {
             TwoFactorService.LoginChallengeResult challenge = twoFactorService.createLoginChallenge(user);
             return AuthTokenResponse.mfaChallenge(
                     user.getId(),
@@ -226,6 +244,10 @@ public class AuthService {
                     challenge.maskedEmail());
         }
         return issueTokenResponse(user, tenant.getSlug());
+    }
+
+    public String issueTrustedDeviceToken(UUID userId, long ttlSeconds) {
+        return jwtService.issueTrustedDeviceToken(userId, ttlSeconds);
     }
 
     @Transactional(noRollbackFor = BadCredentialsException.class)

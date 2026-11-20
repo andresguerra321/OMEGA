@@ -16,7 +16,8 @@
     "DEVELOPER": {
       "visibleModules": [
         "repo_scanner",
-        "dev_cli",
+        "inicio",
+        "exposicion",
         "amenazas",
         "preguntar",
         "cuenta"

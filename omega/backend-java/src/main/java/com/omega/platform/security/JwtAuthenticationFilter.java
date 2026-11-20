@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -27,6 +28,20 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
+            "/actuator/health",
+            "/api/v1/auth/config",
+            "/api/v1/auth/csrf",
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/register",
+            "/api/v1/auth/tenants/register",
+            "/api/v1/auth/password-reset/request",
+            "/api/v1/auth/password-reset/confirm",
+            "/api/v1/auth/mfa/verify",
+            "/api/v1/auth/mfa/resend-email",
+            "/api/v1/integrations/github/webhook"
+    );
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
@@ -60,7 +75,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        boolean isLogoutEndpoint = "/api/v1/auth/logout".equals(request.getRequestURI());
+        boolean isPublicAuthPath = PUBLIC_AUTH_PATHS.contains(request.getRequestURI());
         try {
             if (SecurityContextHolder.getContext().getAuthentication() != null) {
                 filterChain.doFilter(request, response);
@@ -80,14 +95,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (activeUser.isEmpty()) {
                 SecurityContextHolder.clearContext();
-                if (isLogoutEndpoint) {
+                if (isPublicAuthPath) {
                     filterChain.doFilter(request, response);
                     return;
                 }
                 securityHandlers.commence(
                         request,
                         response,
-                        new BadCredentialsException("Usuario o tenant inactivo o inexistente")
+                        new BadCredentialsException("Tu cuenta o espacio de trabajo no se encuentra activo.")
                 );
                 return;
             }
@@ -111,14 +126,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (JwtException ex) {
             SecurityContextHolder.clearContext();
-            if (isLogoutEndpoint) {
+            if (isPublicAuthPath) {
                 filterChain.doFilter(request, response);
                 return;
             }
             securityHandlers.commence(
                     request,
                     response,
-                    new BadCredentialsException("Token JWT inválido o expirado", ex)
+                    new BadCredentialsException("Tu sesión expiró o no es válida. Inicia sesión nuevamente.", ex)
             );
         } finally {
             TenantContext.clear();

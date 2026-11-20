@@ -413,7 +413,7 @@ export async function getAuthConfig() {
   return apiFetch('/auth/config', { skipAuth: true });
 }
 
-export async function loginWithPassword({ tenantSlug, email, password }) {
+export async function loginWithPassword({ tenantSlug, email, password, rememberMe = true }) {
   const normalizedSlug = String(tenantSlug || '').trim().toLowerCase();
   const tokenRes = await apiFetch('/auth/login', {
     method: 'POST',
@@ -422,6 +422,7 @@ export async function loginWithPassword({ tenantSlug, email, password }) {
       ...(normalizedSlug ? { tenantSlug: normalizedSlug } : {}),
       email: String(email || '').trim().toLowerCase(),
       password,
+      rememberMe: Boolean(rememberMe),
     },
   });
   if (tokenRes?.mfaRequired) {
@@ -436,13 +437,14 @@ export async function loginWithPassword({ tenantSlug, email, password }) {
   return saveAuthSession(tokenRes);
 }
 
-export async function verifyMfaLogin({ challengeToken, code } = {}) {
+export async function verifyMfaLogin({ challengeToken, code, rememberDevice = true } = {}) {
   const tokenRes = await apiFetch('/auth/mfa/verify', {
     method: 'POST',
     skipAuth: true,
     body: {
       challengeToken: String(challengeToken || '').trim(),
       code: String(code || '').trim(),
+      rememberDevice: Boolean(rememberDevice),
     },
   });
   return saveAuthSession(tokenRes);
@@ -577,6 +579,19 @@ export async function scanRepositoryArchive(file) {
   return apiFetch('/repo/scan', {
     method: 'POST',
     body: formData,
+  });
+}
+
+export async function scanRepositoryUrl({ repoUrl, branch = '', githubToken = '' }) {
+  const cleanUrl = String(repoUrl || '').trim();
+  if (!cleanUrl) throw new Error('Ingresa el enlace del repositorio de GitHub para analizar.');
+  return apiFetch('/repo/scan-url', {
+    method: 'POST',
+    body: {
+      repoUrl: cleanUrl,
+      branch: String(branch || '').trim(),
+      githubToken: String(githubToken || '').trim(),
+    },
   });
 }
 

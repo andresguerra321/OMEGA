@@ -92,7 +92,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/mfa/verify", "/api/v1/auth/mfa/resend-email")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/integrations/github/webhook").permitAll()
-                        .requestMatchers("/api/v1/repo/scan", "/api/v1/repo/scan/**")
+                        .requestMatchers("/api/v1/repo/scan", "/api/v1/repo/scan-url", "/api/v1/repo/scan/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_ANALYST", "ROLE_CLIENT", "SCOPE_REPO_SCAN")
                         .requestMatchers("/api/v1/**").hasAnyRole("ADMIN", "ANALYST", "CLIENT")
                         .anyRequest().denyAll())

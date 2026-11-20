@@ -34,8 +34,8 @@ public class JsonSecurityHandlers implements AuthenticationEntryPoint, AccessDen
                 request,
                 response,
                 HttpStatus.UNAUTHORIZED,
-                "Autenticación requerida",
-                "Credenciales JWT ausentes, inválidas o expiradas."
+                "Sesión no válida o expirada",
+                "Tu sesión expiró o no es válida. Inicia sesión nuevamente para continuar."
         );
     }
 

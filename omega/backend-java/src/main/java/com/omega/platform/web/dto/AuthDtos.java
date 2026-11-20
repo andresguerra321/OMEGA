@@ -82,8 +82,12 @@ public final class AuthDtos {
             String email,
             @NotBlank(message = "La contraseña es obligatoria")
             @Size(min = 1, max = 128, message = "La contraseña debe tener entre 1 y 128 caracteres")
-            String password
+            String password,
+            Boolean rememberMe
     ) {
+        public LoginRequest(String tenantSlug, String email, String password) {
+            this(tenantSlug, email, password, Boolean.TRUE);
+        }
     }
 
     public record CreateTenantUserRequest(
@@ -233,8 +237,12 @@ public final class AuthDtos {
             String challengeToken,
             @NotBlank(message = "El código de verificación es obligatorio")
             @Size(min = 6, max = 16, message = "El código de verificación no es válido")
-            String code
+            String code,
+            Boolean rememberDevice
     ) {
+        public MfaVerifyLoginRequest(String challengeToken, String code) {
+            this(challengeToken, code, Boolean.TRUE);
+        }
     }
 
     public record MfaChallengeActionRequest(

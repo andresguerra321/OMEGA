@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, Copy, KeyRound, Plus, Trash2 } from 'lucide-react';
 import { createApiToken, listApiTokens, revokeApiToken } from '../lib/api';
 
-export function ApiTokensCard({ authSession }) {
+export function ApiTokensCard({ authSession, onActiveCountChange }) {
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -21,7 +21,9 @@ export function ApiTokensCard({ authSession }) {
     setError('');
     try {
       const data = await listApiTokens();
-      setTokens(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setTokens(list);
+      onActiveCountChange?.(list.filter((t) => !t.revokedAt).length);
     } catch (err) {
       setError(err?.message || 'No se pudieron cargar los tokens de API.');
     } finally {
@@ -82,40 +84,54 @@ export function ApiTokensCard({ authSession }) {
         </span>
       </div>
 
-      <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nombre (ej. CI GitHub)"
-          maxLength={120}
-          className="sm:col-span-5 rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-2 text-xs text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
-        />
-        <input
-          type="number"
-          min="1"
-          max="365"
-          value={expiresInDays}
-          onChange={(e) => setExpiresInDays(e.target.value)}
-          placeholder="Días (opcional)"
-          className="sm:col-span-2 rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-2 text-xs text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
-        />
-        <input
-          type="number"
-          min="1"
-          value={maxUses}
-          onChange={(e) => setMaxUses(e.target.value)}
-          placeholder="Máx. usos"
-          className="sm:col-span-2 rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-2 text-xs text-[#F2F2F4] focus:outline-none focus:border-[#2F6FED]"
-        />
-        <button
-          type="submit"
-          disabled={!name.trim() || creating}
-          className="sm:col-span-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-45 px-3 py-2 text-xs font-medium text-white cursor-pointer"
-        >
-          <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-          <span>{creating ? 'Creando...' : 'Generar token'}</span>
-        </button>
+      <form
+        onSubmit={handleCreate}
+        className="rounded-xl bg-[#141923]/80 border border-white/[0.07] grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-white/[0.07] overflow-hidden"
+      >
+        <label className="md:col-span-5 px-3.5 py-2.5 flex flex-col justify-center cursor-text">
+          <span className="text-[11px] text-slate-400">Nombre del token</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ej. CI GitHub"
+            maxLength={120}
+            className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+          />
+        </label>
+        <label className="md:col-span-3 px-3.5 py-2.5 flex flex-col justify-center cursor-text">
+          <span className="text-[11px] text-slate-400">Expiración (días)</span>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={expiresInDays}
+            onChange={(e) => setExpiresInDays(e.target.value)}
+            placeholder="90"
+            className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+          />
+        </label>
+        <label className="md:col-span-2 px-3.5 py-2.5 flex flex-col justify-center cursor-text">
+          <span className="text-[11px] text-slate-400">Límite usos</span>
+          <input
+            type="number"
+            min="1"
+            value={maxUses}
+            onChange={(e) => setMaxUses(e.target.value)}
+            placeholder="Ilimitado"
+            className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+          />
+        </label>
+        <div className="md:col-span-2 p-2 flex items-center justify-center">
+          <button
+            type="submit"
+            disabled={!name.trim() || creating}
+            className="w-full h-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-45 px-3 py-2 text-xs font-medium text-white transition-colors cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <span>{creating ? 'Creando...' : 'Generar'}</span>
+          </button>
+        </div>
       </form>
 
       {createdPlaintext && (

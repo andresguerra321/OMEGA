@@ -1083,6 +1083,8 @@ export default function App() {
             onLinkVerified={handleLinkVerified}
             onPanicPurge={handlePanicPurge}
             authSession={authSession}
+            visibleModuleIds={profileConfig?.visibleModules}
+            profileConfig={profileConfig}
           />
           </motion.div>
         ) : (
@@ -1110,7 +1112,13 @@ export default function App() {
               <div className="relative z-10 min-w-0 flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => handleNavigate('inicio')}
+                  onClick={() =>
+                    handleNavigate(
+                      profileConfig?.visibleModules?.includes('inicio')
+                        ? 'inicio'
+                        : profileConfig?.defaultView || 'inicio'
+                    )
+                  }
                   className="titlebar-no-drag inline-flex items-center gap-2 rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
                   title="Volver a Inicio"
                 >

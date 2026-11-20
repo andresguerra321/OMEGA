@@ -12,11 +12,14 @@ import {
   Laptop,
   Link2,
   Loader2,
+  PackageSearch,
   RefreshCw,
   Search,
+  Settings,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  Terminal,
   Trash2,
 } from 'lucide-react';
 import { verifySuspiciousLink } from '../lib/api';
@@ -54,6 +57,7 @@ function extractPcVerdictInfo(pcAudit) {
 }
 
 const SURFACE_ORDER = ['windows', 'usb', 'link', 'corpus'];
+const DEV_SURFACE_ORDER = ['repo', 'cli', 'link', 'corpus'];
 
 export function SecurityPostureStage({
   isDesktop = false,
@@ -82,8 +86,13 @@ export function SecurityPostureStage({
   onLogActivity,
   onPanicPurge,
   authSession = null,
+  visibleModuleIds = null,
+  profileConfig = null,
 }) {
+  const isDeveloper = profileConfig?.profile === 'DEVELOPER';
+  const surfaceOrder = isDeveloper ? DEV_SURFACE_ORDER : SURFACE_ORDER;
   const [surfaceMenuOpen, setSurfaceMenuOpen] = useState(false);
+  const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
   const [spinNonce, setSpinNonce] = useState(0);
   const [quickUrl, setQuickUrl] = useState('');
   const [linkLoading, setLinkLoading] = useState(false);
@@ -127,6 +136,30 @@ export function SecurityPostureStage({
 
   const surfaces = useMemo(
     () => ({
+      repo: {
+        id: 'repo',
+        kicker: 'APPSEC · INSPECCIÓN ESTÁTICA ZERO-RETENTION',
+        lead: 'Proyectos',
+        accent: 'GitHub',
+        statusLabel: 'Listo en RAM',
+        tone: 'royal',
+        icon: PackageSearch,
+        primaryLabel: 'Analizar repositorio',
+        onPrimary: () => onNavigate?.('repo_scanner'),
+        onDetail: () => onNavigate?.('repo_scanner'),
+      },
+      cli: {
+        id: 'cli',
+        kicker: 'OMEGA SCAN · TOKENS REPO_SCAN · SARIF 2.1.0',
+        lead: 'CLI y',
+        accent: 'GitHub App',
+        statusLabel: 'CI/CD',
+        tone: 'royal',
+        icon: Terminal,
+        primaryLabel: 'Abrir CLI y GitHub',
+        onPrimary: () => onNavigate?.('repo_scanner'),
+        onDetail: () => onNavigate?.('repo_scanner'),
+      },
       windows: {
         id: 'windows',
         kicker: 'HOST LOCAL · WMI / SOCKETS RAM',
@@ -207,7 +240,9 @@ export function SecurityPostureStage({
     ],
   );
 
-  const activeSurface = surfaces[selectedNodeId] || surfaces.windows;
+  const activeSurface =
+    (surfaceOrder.includes(selectedNodeId) ? surfaces[selectedNodeId] : null) ||
+    (isDeveloper ? surfaces.repo : surfaces.windows);
   const [mount3d, setMount3d] = useState(false);
 
   useEffect(() => {
@@ -227,9 +262,9 @@ export function SecurityPostureStage({
   }, []);
 
   function stepSurface(delta) {
-    const idx = SURFACE_ORDER.indexOf(activeSurface.id);
-    const nextIdx = (idx + delta + SURFACE_ORDER.length) % SURFACE_ORDER.length;
-    onSelectNode?.(SURFACE_ORDER[nextIdx]);
+    const idx = surfaceOrder.indexOf(activeSurface.id);
+    const nextIdx = (idx + delta + surfaceOrder.length) % surfaceOrder.length;
+    onSelectNode?.(surfaceOrder[nextIdx]);
   }
 
   async function handleQuickLinkSubmit(e) {
@@ -325,88 +360,104 @@ export function SecurityPostureStage({
             apiOnline={apiOnline}
             isLoadingChat={isLoadingChat}
             authConnected={Boolean(authSession)}
+            visibleModuleIds={visibleModuleIds}
           />
         </div>
 
-        {/* Utilidades derechas unificadas */}
+        {/* Utilidades derechas minimalistas (Linear/Raycast) */}
         <div className="relative z-10 flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            aria-label="Abrir búsqueda rápida (⌘K)"
+            title="Buscar módulo o CVE (⌘K)"
+            className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <Search className="h-[13px] w-[13px]" strokeWidth={1.75} />
+            <kbd className="hidden 2xl:inline text-[11px] text-slate-500 font-sans">⌘K</kbd>
+          </button>
+
           <button
             type="button"
             onClick={() => onOpenCopilot?.({})}
             aria-label="Abrir copiloto lateral"
             title="Copiloto (Ctrl+J)"
-            className="h-8 px-2 rounded-lg border border-white/[0.06] bg-[#141923]/75 hover:border-white/[0.14] inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] transition-colors cursor-pointer"
+            className="relative p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] inline-flex items-center justify-center transition-colors cursor-pointer"
           >
-            <Bell className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-            <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#2F6FED] text-white text-[10px] font-bold inline-flex items-center justify-center">
+            <Bell className="h-[15px] w-[15px]" strokeWidth={1.75} />
+            <span className="ml-1 text-[10px] font-medium bg-[#2F6FED] text-white px-1.5 py-0.5 rounded-full leading-none">
               {pcWarn ? pcInfo.findingsCount : reportsCount}
             </span>
           </button>
 
-          <div className="inline-flex items-center rounded-lg bg-[#141923]/75 border border-white/[0.06] divide-x divide-white/[0.08] overflow-hidden">
-            <button
-              type="button"
-              onClick={onOpenCommandPalette}
-              aria-label="Abrir búsqueda rápida (⌘K)"
-              title="Buscar módulo o CVE (⌘K)"
-              className="h-8 px-2.5 inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-            >
-              <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
-              <span className="font-tech hidden 2xl:inline">⌘K</span>
-            </button>
-
-            {onOpenOnboarding && (
+          {authSession ? (
+            <div className="relative">
               <button
                 type="button"
-                onClick={onOpenOnboarding}
-                aria-label="Abrir guía rápida de uso"
-                title="Guía rápida de OMEGA"
-                className="h-8 px-2.5 inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                onClick={() => setOperatorMenuOpen((v) => !v)}
+                aria-expanded={operatorMenuOpen}
+                title={`Cuenta: ${authSession.email} (${authSession.role})`}
+                className="px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] inline-flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
               >
-                <BookOpen className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-                <span className="hidden 2xl:inline">Guía</span>
-              </button>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onNavigate?.('cuenta')}
-            title={
-              authSession
-                ? `Cuenta: ${authSession.email} (${authSession.role})`
-                : 'Iniciar sesión o crear cuenta OMEGA'
-            }
-            className={`h-8 px-2 xl:px-2.5 rounded-lg border bg-[#141923]/75 inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
-              authSession
-                ? 'text-[#F2F2F4] border-emerald-400/30 hover:border-emerald-400/50'
-                : 'text-[#F2F2F4] border-[#2F6FED]/45 hover:border-[#2F6FED]'
-            }`}
-          >
-            {authSession ? (
-              <>
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-                <span className="hidden lg:inline max-w-[88px] truncate font-tech">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="hidden lg:inline max-w-[96px] truncate">
                   {authSession.email?.split('@')[0] || authSession.tenantSlug}
                 </span>
-              </>
-            ) : (
-              <>
-                <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-                <span className="hidden lg:inline">Entrar</span>
-              </>
-            )}
-          </button>
+                <ChevronDown className="h-3 w-3 text-slate-500" strokeWidth={1.75} />
+              </button>
+
+              {operatorMenuOpen && (
+                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-[#0F131B]/95 backdrop-blur-md border border-white/[0.08] p-1.5 shadow-xl z-50 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOperatorMenuOpen(false);
+                      onNavigate?.('cuenta');
+                    }}
+                    className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] cursor-pointer text-left"
+                  >
+                    <Settings className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                    <span>Cuenta y Ajustes</span>
+                  </button>
+                  {onOpenOnboarding && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOperatorMenuOpen(false);
+                        onOpenOnboarding();
+                      }}
+                      className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] cursor-pointer text-left"
+                    >
+                      <BookOpen className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                      <span>Guía interactiva</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onNavigate?.('cuenta')}
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] inline-flex items-center gap-1.5 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+            >
+              <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
+              <span className="hidden lg:inline">Entrar</span>
+            </button>
+          )}
 
           {authSession && (
             <>
-              <span aria-hidden="true" className="h-4 w-px bg-white/10 mx-0.5 shrink-0" />
+              <span aria-hidden="true" className="h-4 w-px bg-white/[0.08]" />
               <button
                 type="button"
-                onClick={() => void onPanicPurge?.()}
+                onClick={() => {
+                  setOperatorMenuOpen(false);
+                  void onPanicPurge?.();
+                }}
                 title="Purga rápida: destruye tokens, memoria volátil y caché local"
                 aria-label="Purga rápida"
-                className="h-8 px-2 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="hidden xl:inline">Purga</span>
@@ -427,6 +478,7 @@ export function SecurityPostureStage({
           apiOnline={apiOnline}
           isLoadingChat={isLoadingChat}
           authConnected={Boolean(authSession)}
+          visibleModuleIds={visibleModuleIds}
         />
       </div>
 
@@ -441,18 +493,30 @@ export function SecurityPostureStage({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="inline-flex items-center gap-1.5 text-[#F2F2F4]">
               <span className={`h-1.5 w-1.5 rounded-full ${apiOnline ? 'bg-[#2F6FED]' : 'bg-[#EF4444]'}`} />
-              {pcScannedAt ? `HOST · ${pcScannedAt}` : 'HOST · WINDOWS LIVE'}
+              {isDeveloper
+                ? 'APPSEC · SUPPLY CHAIN'
+                : pcScannedAt
+                  ? `HOST · ${pcScannedAt}`
+                  : 'HOST · WINDOWS LIVE'}
             </span>
             <span aria-hidden="true" className="hidden sm:inline text-white/15">|</span>
             <span>
               POSTURA:{' '}
-              <strong className="font-medium text-[#F2F2F4]">{postureLabel}</strong>
+              <strong className="font-medium text-[#F2F2F4]">
+                {isDeveloper ? 'ZERO-RETENTION' : postureLabel}
+              </strong>
             </span>
             <span aria-hidden="true" className="hidden sm:inline text-white/15">|</span>
             <span>
-              USB:{' '}
+              {isDeveloper ? 'REPOS:' : 'USB:'}{' '}
               <strong className="font-medium text-[#F2F2F4]">
-                {usbConnected ? (androidOk ? 'ANDROID ADB' : 'IPHONE USB') : 'EN ESPERA'}
+                {isDeveloper
+                  ? 'GITHUB & CLI'
+                  : usbConnected
+                    ? androidOk
+                      ? 'ANDROID ADB'
+                      : 'IPHONE USB'
+                    : 'EN ESPERA'}
               </strong>
             </span>
             <span aria-hidden="true" className="hidden lg:inline text-white/15">|</span>
@@ -548,7 +612,7 @@ export function SecurityPostureStage({
                 aria-label="Cambiar superficie mostrada"
                 className="animate-scale-in origin-top mt-2 w-[264px] rounded-[14px] border border-white/[0.1] border-b-black/50 border-r-black/50 bg-[#141418]/96 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_22px_52px_rgba(0,0,0,0.78)] text-left"
               >
-                {SURFACE_ORDER.map((id) => {
+                {surfaceOrder.map((id) => {
                   const s = surfaces[id];
                   const SIcon = s.icon;
                   const isSelected = id === activeSurface.id;
@@ -721,6 +785,108 @@ export function SecurityPostureStage({
           aria-label="Hallazgos recientes y acciones rápidas"
           className="animate-kowalski-in shrink-0 rounded-[20px] bg-[#0F131B]/75 backdrop-blur-md border border-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.45)] overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.07]"
         >
+          {isDeveloper ? (
+            <>
+              {/* Columna 1 (Developer): Proyectos GitHub */}
+              <div className="p-4 flex flex-col justify-between gap-2.5 transition-colors hover:bg-[rgba(28,36,56,0.35)]">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-[14px] font-semibold text-[#F2F2F4] leading-tight">
+                      Proyectos GitHub
+                    </h2>
+                    <p className="text-[11.5px] text-[#9A9AA2]">
+                      Repositorios · Manifiestos · Dependencias
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('repo_scanner')}
+                    aria-label="Abrir análisis de repositorios"
+                    className="h-7 w-7 rounded-full border border-white/[0.1] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/45 text-[#9A9AA2] hover:text-[#F2F2F4] inline-flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex items-end justify-between gap-3">
+                  <div className="space-y-2 min-w-0">
+                    <div className="text-[21px] font-semibold tracking-[-0.025em] text-[#F2F2F4] leading-none">
+                      Zero-Retention
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('repo_scanner')}
+                      className="kowalski-press h-8 rounded-full bg-[#2F6FED] text-white px-3.5 text-[12px] font-medium inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_24px_rgba(47,111,237,0.25)] hover:brightness-110 cursor-pointer"
+                    >
+                      <PackageSearch className="h-3.5 w-3.5" />
+                      <span>Analizar repositorio</span>
+                    </button>
+                  </div>
+
+                  <div className="text-right font-tech shrink-0 space-y-1">
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-[#F2F2F4]">URL / ZIP</div>
+                      <div className="text-[10px] text-[#9A9AA2]">En memoria</div>
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-[#F2F2F4]">0 B</div>
+                      <div className="text-[10px] text-[#9A9AA2]">En disco</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Columna 2 (Developer): CLI, Tokens API y GitHub App */}
+              <div className="p-4 flex flex-col justify-between gap-2.5 transition-colors hover:bg-[rgba(28,36,56,0.35)]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="h-7 w-7 rounded-lg bg-[#2F6FED]/15 border border-[#2F6FED]/35 text-[#2F6FED] inline-flex items-center justify-center">
+                      <Terminal className="h-3.5 w-3.5" />
+                    </span>
+                    <div>
+                      <h2 className="text-[14px] font-semibold text-[#F2F2F4] leading-tight">
+                        CLI y GitHub App
+                      </h2>
+                      <p className="text-[11.5px] text-[#9A9AA2]">
+                        omega scan · SARIF 2.1.0
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('repo_scanner')}
+                    aria-label="Abrir CLI y GitHub App"
+                    className="h-7 w-7 rounded-full border border-white/[0.1] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] hover:border-[#2F6FED]/45 text-[#9A9AA2] hover:text-[#F2F2F4] inline-flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0 space-y-2">
+                    <div className="text-[21px] font-semibold tracking-[-0.025em] text-[#F2F2F4] leading-tight truncate">
+                      CI / Local
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('repo_scanner')}
+                      className="kowalski-press h-8 rounded-full border border-white/[0.1] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] px-3.5 text-[11.5px] font-medium inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Tokens y GitHub</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="text-right font-tech shrink-0 space-y-1">
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-[#F2F2F4]">REPO_SCAN</div>
+                      <div className="text-[10px] text-[#9A9AA2]">Alcance API</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           {/* Columna 1: Equipo Local & Acción Primaria */}
           <div className="p-4 flex flex-col justify-between gap-2.5 transition-colors hover:bg-[rgba(28,36,56,0.35)]">
             <div className="flex items-start justify-between gap-2">
@@ -865,6 +1031,8 @@ export function SecurityPostureStage({
               </div>
             </div>
           </div>
+            </>
+          )}
 
           {/* Columna 3: Escudo Web Pasivo & Corpus STIX 2.1 */}
           <div className="p-4 flex flex-col justify-between gap-2.5 transition-colors hover:bg-[rgba(28,36,56,0.35)]">

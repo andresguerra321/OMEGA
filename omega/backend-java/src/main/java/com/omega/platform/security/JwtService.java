@@ -86,6 +86,37 @@ public class JwtService {
         return expirationSeconds;
     }
 
+    public String issueTrustedDeviceToken(UUID userId, long ttlSeconds) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(Math.max(60L, ttlSeconds));
+        return Jwts.builder()
+                .issuer(issuer)
+                .subject(userId.toString())
+                .claim("purpose", "trusted-device")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiresAt))
+                .signWith(signingKey, Jwts.SIG.HS256)
+                .compact();
+    }
+
+    public boolean isTrustedDeviceTokenValid(String token, UUID expectedUserId) {
+        if (token == null || token.isBlank() || expectedUserId == null) {
+            return false;
+        }
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(signingKey)
+                    .requireIssuer(issuer)
+                    .require("purpose", "trusted-device")
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            return expectedUserId.equals(UUID.fromString(claims.getSubject()));
+        } catch (JwtException | IllegalArgumentException | NullPointerException ex) {
+            return false;
+        }
+    }
+
     public record ParsedJwtClaims(
             UUID userId,
             UUID tenantId,

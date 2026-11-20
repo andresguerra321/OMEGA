@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class SessionCookieHelper {
 
+    private static final String TRUSTED_DEVICE_COOKIE_NAME = "omega_trusted_device";
+
     private final String cookieName;
     private final boolean forceSecureCookie;
     private final long maxAgeSeconds;
@@ -22,7 +24,7 @@ public class SessionCookieHelper {
     public SessionCookieHelper(
             @Value("${omega.security.session-cookie-name:omega_session}") String cookieName,
             @Value("${omega.security.session-cookie-secure:false}") boolean forceSecureCookie,
-            @Value("${omega.security.jwt-expiration-seconds:3600}") long maxAgeSeconds) {
+            @Value("${omega.security.jwt-expiration-seconds:604800}") long maxAgeSeconds) {
         this.cookieName = (cookieName == null || cookieName.isBlank()) ? "omega_session" : cookieName.trim();
         this.forceSecureCookie = forceSecureCookie;
         this.maxAgeSeconds = Math.max(60L, maxAgeSeconds);
@@ -62,6 +64,50 @@ public class SessionCookieHelper {
 
     public void clearSessionCookie(HttpServletRequest request, HttpServletResponse response) {
         ResponseCookie expired = ResponseCookie.from(cookieName, "")
+                .httpOnly(true)
+                .secure(shouldMarkSecure(request))
+                .sameSite("Strict")
+                .path("/api")
+                .maxAge(0)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expired.toString());
+    }
+
+    public String extractTrustedDeviceToken(HttpServletRequest request) {
+        if (request == null || request.getCookies() == null) {
+            return null;
+        }
+        for (Cookie cookie : request.getCookies()) {
+            if (TRUSTED_DEVICE_COOKIE_NAME.equals(cookie.getName())) {
+                String value = cookie.getValue();
+                if (value != null && !value.isBlank()) {
+                    return value.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    public void attachTrustedDeviceCookie(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            String token,
+            long ttlSeconds) {
+        if (token == null || token.isBlank() || JwtAuthenticationFilter.isBearerOnlyRequest(request)) {
+            return;
+        }
+        ResponseCookie cookie = ResponseCookie.from(TRUSTED_DEVICE_COOKIE_NAME, token.trim())
+                .httpOnly(true)
+                .secure(shouldMarkSecure(request))
+                .sameSite("Strict")
+                .path("/api")
+                .maxAge(Math.max(60L, ttlSeconds))
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    public void clearTrustedDeviceCookie(HttpServletRequest request, HttpServletResponse response) {
+        ResponseCookie expired = ResponseCookie.from(TRUSTED_DEVICE_COOKIE_NAME, "")
                 .httpOnly(true)
                 .secure(shouldMarkSecure(request))
                 .sameSite("Strict")

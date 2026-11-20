@@ -124,6 +124,7 @@ export function AuthAccessForm({
   const [mfaCode, setMfaCode] = useState('');
   const [mfaBackupMode, setMfaBackupMode] = useState(false);
   const [mfaStatusMsg, setMfaStatusMsg] = useState('');
+  const [rememberSession, setRememberSession] = useState(true);
   const mfaOtpRefs = useRef([]);
 
   useEffect(() => {
@@ -185,6 +186,7 @@ export function AuthAccessForm({
         email: validation.sanitized.email,
         password: validation.sanitized.password,
         tenantSlug: showOrgSlug ? validation.sanitized.tenantSlug : '',
+        rememberMe: rememberSession,
       });
       if (session?.mfaRequired) {
         setMfaChallenge({
@@ -375,6 +377,7 @@ export function AuthAccessForm({
       const session = await verifyMfaLogin({
         challengeToken: mfaChallenge.challengeToken,
         code: cleanCode,
+        rememberDevice: rememberSession,
       });
       setMfaChallenge(null);
       setMfaCode('');
@@ -1076,6 +1079,29 @@ export function AuthAccessForm({
                 {fieldErrors.password}
               </p>
             )}
+          </div>
+
+          <div className="pt-1 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={rememberSession}
+              onClick={() => setRememberSession((v) => !v)}
+              className="inline-flex items-center gap-2 text-[11.5px] text-[#C2C7D6] hover:text-white transition-colors cursor-pointer"
+            >
+              <span
+                className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                  rememberSession ? 'bg-[#2F6FED]' : 'bg-white/[0.14]'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                    rememberSession ? 'translate-x-3.5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+              <span>Recordar sesión en este equipo (30 días)</span>
+            </button>
           </div>
 
           <div className="pt-0.5 flex flex-wrap items-center justify-between gap-2">

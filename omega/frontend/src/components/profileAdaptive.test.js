@@ -14,15 +14,16 @@ const BASE_NAV_ITEMS = [
   { id: 'cuenta', label: 'Cuenta y Ajustes' },
 ];
 
-test('perfil DEVELOPER muestra repo_scanner y dev_cli y oculta módulos no listados manteniendo cuenta', () => {
+test('perfil DEVELOPER muestra repo_scanner y exposicion, consolida GitHub en un solo módulo y oculta dev_cli', () => {
   const visible = resolveVisibleNavItems(BASE_NAV_ITEMS, {
     profile: 'DEVELOPER',
-    visibleModules: ['repo_scanner', 'dev_cli', 'amenazas', 'preguntar', 'cuenta'],
+    visibleModules: ['repo_scanner', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
   });
   const ids = visible.map((i) => i.id);
   assert.ok(ids.includes('repo_scanner'));
-  assert.ok(ids.includes('dev_cli'));
+  assert.ok(ids.includes('exposicion'));
   assert.ok(ids.includes('cuenta'));
+  assert.equal(ids.includes('dev_cli'), false);
   assert.equal(ids.includes('equipo'), false);
 });
 

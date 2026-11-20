@@ -7,9 +7,20 @@ import com.omega.platform.security.TenantContext;
 import com.omega.platform.security.TenantScope;
 import com.omega.platform.service.ApiTokenService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
@@ -18,12 +29,13 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,9 +51,19 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/repo")
 public class RepoScannerProxyController {
 
+    private static final int MAX_REMOTE_ARCHIVE_BYTES = 25 * 1024 * 1024;
+    private static final Pattern GITHUB_REPO_PATTERN = Pattern.compile(
+            "^(?:https?://(?:www\\.)?github\\.com/)?([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100}?)(?:\\.git)?(?:/tree/([A-Za-z0-9_./-]{1,120}))?/?$"
+    );
+    private static final Pattern SAFE_BRANCH_PATTERN = Pattern.compile("^[A-Za-z0-9_./-]{1,120}$");
+
     private final RestClient forensicWorkerRestClient;
     private final TenantRepository tenantRepository;
     private final ApiTokenService apiTokenService;
+    private final HttpClient githubHttpClient = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     public RepoScannerProxyController(
             @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
@@ -85,11 +107,138 @@ public class RepoScannerProxyController {
                 ? file.getOriginalFilename()
                 : "repo.tar.gz";
 
-        MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        return forwardArchiveToScanner(tenant.getId(), filename, bytes);
+    }
+
+    @PostMapping(value = "/scan-url", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST') or hasAuthority('SCOPE_REPO_SCAN')")
+    public Map<String, Object> scanRepositoryByUrl(
+            @RequestBody ScanRepositoryUrlRequest payload,
+            HttpServletRequest request
+    ) {
+        TenantScope scope = TenantContext.get()
+                .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
+        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(scope.tenantId())
+                .orElseThrow(() -> new AccessDeniedException("Tenant inactivo o inexistente"));
+
+        String rawUrl = payload != null && payload.repoUrl() != null ? payload.repoUrl().trim() : "";
+        Matcher matcher = GITHUB_REPO_PATTERN.matcher(rawUrl);
+        if (!matcher.matches()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ingresa un enlace válido de GitHub (ej. https://github.com/usuario/repositorio)"
+            );
+        }
+        String owner = matcher.group(1);
+        String repo = matcher.group(2);
+        if ("..".equals(owner) || "..".equals(repo) || owner.contains("..") || repo.contains("..")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El enlace del repositorio no es válido");
+        }
+
+        String branch = payload != null && payload.branch() != null && !payload.branch().isBlank()
+                ? payload.branch().trim()
+                : (matcher.group(3) != null ? matcher.group(3).trim() : "");
+        if (!branch.isEmpty() && (!SAFE_BRANCH_PATTERN.matcher(branch).matches() || branch.contains(".."))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre de la rama no es válido");
+        }
+
+        if (apiTokenService != null) {
+            Object attr = request.getAttribute(ApiTokenAuthenticationFilter.API_TOKEN_ID_ATTR);
+            UUID apiTokenId = attr instanceof UUID uuid ? uuid : null;
+            apiTokenService.consumeScanQuotaAndTokenUse(tenant.getId(), apiTokenId);
+        }
+
+        String tarballUrl = "https://api.github.com/repos/" + owner + "/" + repo + "/tarball"
+                + (branch.isEmpty() ? "" : "/" + URLEncoder.encode(branch, StandardCharsets.UTF_8).replace("+", "%20"));
+
+        HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(tarballUrl))
+                .timeout(Duration.ofSeconds(25))
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "OMEGA-RepoScanner/1.0")
+                .GET();
+
+        String githubToken = payload != null && payload.githubToken() != null ? payload.githubToken().trim() : "";
+        if (!githubToken.isEmpty()) {
+            if (githubToken.contains("\r") || githubToken.contains("\n")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El token de GitHub tiene un formato inválido");
+            }
+            reqBuilder.header("Authorization", "Bearer " + githubToken);
+        }
+
+        byte[] archiveBytes = downloadBoundedArchive(reqBuilder.build());
+        String filename = owner + "-" + repo + ".tar.gz";
+        return forwardArchiveToScanner(tenant.getId(), filename, archiveBytes);
+    }
+
+    private byte[] downloadBoundedArchive(HttpRequest httpRequest) {
+        try {
+            HttpResponse<InputStream> resp = githubHttpClient.send(
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofInputStream()
+            );
+            int status = resp.statusCode();
+            if (status == 404) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No se encontró el repositorio o es privado. Si es privado, autoriza el acceso con un token de GitHub."
+                );
+            }
+            if (status == 401 || status == 403) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "GitHub rechazó el acceso al repositorio. Verifica que el token tenga permiso de lectura sobre el repo."
+                );
+            }
+            if (status < 200 || status >= 300) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "GitHub devolvió un error al descargar el repositorio (HTTP " + status + ")."
+                );
+            }
+
+            try (InputStream in = resp.body(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[16384];
+                int total = 0;
+                int read;
+                while ((read = in.read(buf)) != -1) {
+                    total += read;
+                    if (total > MAX_REMOTE_ARCHIVE_BYTES) {
+                        throw new ResponseStatusException(
+                                HttpStatus.PAYLOAD_TOO_LARGE,
+                                "El repositorio supera el límite de 25 MiB para análisis remoto."
+                        );
+                    }
+                    out.write(buf, 0, read);
+                }
+                if (total == 0) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_GATEWAY,
+                            "GitHub devolvió un archivo vacío para el repositorio."
+                    );
+                }
+                return out.toByteArray();
+            }
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Se interrumpió la descarga desde GitHub.");
+        } catch (IOException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "No se pudo conectar con GitHub para descargar el repositorio."
+            );
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> forwardArchiveToScanner(UUID tenantId, String filename, byte[] bytes) {
+        var body = new LinkedMultiValueMap<String, Object>();
         HttpHeaders partHeaders = new HttpHeaders();
         partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename(filename).build());
         partHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        bodyBuilder.part("file", new HttpEntity<>(new ByteArrayResource(bytes) {
+        body.add("file", new HttpEntity<>(new ByteArrayResource(bytes) {
             @Override
             public String getFilename() {
                 return filename;
@@ -99,9 +248,9 @@ public class RepoScannerProxyController {
         try {
             return forensicWorkerRestClient.post()
                     .uri("/api/repo/scan")
-                    .header("X-Tenant-Id", tenant.getId().toString())
+                    .header("X-Tenant-Id", tenantId.toString())
                     .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(bodyBuilder.build())
+                    .body(body)
                     .retrieve()
                     .body(Map.class);
         } catch (RestClientResponseException ex) {
@@ -110,6 +259,8 @@ public class RepoScannerProxyController {
                     "El motor de análisis de repositorios rechazó la solicitud");
         }
     }
+
+    public record ScanRepositoryUrlRequest(String repoUrl, String branch, String githubToken) {}
 
     @GetMapping("/scan/{scanId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST', 'CLIENT') or hasAuthority('SCOPE_REPO_SCAN')")
