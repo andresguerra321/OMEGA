@@ -1,8 +1,11 @@
 package com.omega.platform.web;
 
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -123,14 +126,15 @@ class GitHubWebhookSecurityTest {
                         .content(oversized))
                 .andExpect(status().isPayloadTooLarge());
 
-        // Firma inválida -> 403 Forbidden
+        // Firma inválida -> 403 Forbidden y NO registra X-GitHub-Delivery
         mvc.perform(post("/api/v1/integrations/github/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Hub-Signature-256", "sha256=" + "0".repeat(64))
-                        .header("X-GitHub-Delivery", "deliv-2")
+                        .header("X-GitHub-Delivery", "deliv-invalid-sig")
                         .header("X-GitHub-Event", "installation")
                         .content(body))
                 .andExpect(status().isForbidden());
+        verify(deliveryRepository, never()).tryRecordDelivery(eq("deliv-invalid-sig"), anyInt());
     }
 
     @Test

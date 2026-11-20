@@ -2,6 +2,8 @@ package com.omega.platform.service;
 
 import com.omega.platform.domain.GitHubAppInstallationEntity;
 import com.omega.platform.repository.GitHubAppInstallationRepository;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -10,11 +12,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpEntity;
@@ -27,6 +31,7 @@ import org.springframework.web.client.RestClient;
 /**
  * Orquesta el análisis estático de Pull Requests (incluidos forks en solo lectura)
  * y publica/actualiza un único comentario saneado por PR.
+ * <p>Nota: los semáforos de concurrencia y topes diarios por repositorio operan por instancia.</p>
  */
 @Service
 public class GitHubPullRequestScannerService {
@@ -34,7 +39,11 @@ public class GitHubPullRequestScannerService {
     private static final Logger log = LoggerFactory.getLogger(GitHubPullRequestScannerService.class);
     public static final String PR_COMMENT_MARKER = "<!-- omega-scan-pr -->";
     public static final int MAX_TARBALL_BYTES = 52_428_800; // 50 MiB
+    public static final int MAX_PR_COMMENT_LENGTH = 60_000; // Margen bajo el límite de 65,536 de GitHub
+    public static final int MAX_SCANS_PER_REPO_PER_DAY = 20;
     private static final int MAX_CONCURRENT_SCANS_PER_INSTALL = 2;
+
+    private static final Set<String> COLLABORATOR_ASSOCIATIONS = Set.of("OWNER", "MEMBER", "COLLABORATOR");
 
     private static final Set<String> MANIFEST_FILENAMES = Set.of(
             "package.json",
@@ -60,19 +69,26 @@ public class GitHubPullRequestScannerService {
     private final GitHubApiClient gitHubApiClient;
     private final RestClient forensicWorkerRestClient;
     private final ApiTokenService apiTokenService;
+    private final boolean collaboratorsOnly;
+    private final int maxScansPerRepoPerDay;
     private final ConcurrentHashMap<String, Future<?>> activePrScans = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Semaphore> installSemaphores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicInteger> dailyRepoCounters = new ConcurrentHashMap<>();
 
     public GitHubPullRequestScannerService(
             GitHubAppInstallationRepository installationRepository,
             GitHubApiClient gitHubApiClient,
             @Qualifier("forensicWorkerRestClient") ObjectProvider<RestClient> forensicWorkerRestClientProvider,
-            ObjectProvider<ApiTokenService> apiTokenServiceProvider
+            ObjectProvider<ApiTokenService> apiTokenServiceProvider,
+            @Value("${omega.github.collaborators-only:false}") boolean collaboratorsOnly,
+            @Value("${omega.github.max-scans-per-repo-per-day:" + MAX_SCANS_PER_REPO_PER_DAY + "}") int maxScansPerRepoPerDay
     ) {
         this.installationRepository = installationRepository;
         this.gitHubApiClient = gitHubApiClient;
         this.forensicWorkerRestClient = forensicWorkerRestClientProvider.getIfAvailable();
         this.apiTokenService = apiTokenServiceProvider.getIfAvailable();
+        this.collaboratorsOnly = collaboratorsOnly;
+        this.maxScansPerRepoPerDay = Math.max(1, maxScansPerRepoPerDay);
     }
 
     public Future<?> submitPullRequestWebhook(long installationId, Map<String, Object> payload) {
@@ -89,6 +105,7 @@ public class GitHubPullRequestScannerService {
         String headSha = prMap.get("head") instanceof Map<?, ?> headMap
                 ? String.valueOf(headMap.get("sha"))
                 : "";
+        String authorAssoc = String.valueOf(prMap.getOrDefault("author_association", ""));
         if (repoFullName.isBlank() || prNumber <= 0 || headSha.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -100,13 +117,19 @@ public class GitHubPullRequestScannerService {
         }
 
         CompletableFuture<Void> future = CompletableFuture.runAsync(
-                () -> executePullRequestScan(installationId, repoFullName, prNumber, headSha)
+                () -> executePullRequestScan(installationId, repoFullName, prNumber, headSha, authorAssoc)
         );
         activePrScans.put(prKey, future);
         return future;
     }
 
-    public void executePullRequestScan(long installationId, String repoFullName, int prNumber, String headSha) {
+    public void executePullRequestScan(
+            long installationId,
+            String repoFullName,
+            int prNumber,
+            String headSha,
+            String authorAssociation
+    ) {
         Optional<GitHubAppInstallationEntity> installOpt = installationRepository.findByInstallationId(installationId);
         if (installOpt.isEmpty() || installOpt.get().getSuspendedAt() != null) {
             return;
@@ -122,19 +145,58 @@ public class GitHubPullRequestScannerService {
         }
 
         try {
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
             String installationToken = gitHubApiClient.createInstallationAccessToken(installationId);
+
+            if (collaboratorsOnly && !COLLABORATOR_ASSOCIATIONS.contains(String.valueOf(authorAssociation).toUpperCase())) {
+                gitHubApiClient.upsertPullRequestComment(
+                        installationToken,
+                        repoFullName,
+                        prNumber,
+                        PR_COMMENT_MARKER,
+                        buildNoticeComment("Escaneo automático omitido: requiere aprobación de un colaborador del repositorio.")
+                );
+                return;
+            }
+
             List<String> changedFiles = gitHubApiClient.listPullRequestFiles(installationToken, repoFullName, prNumber);
             if (!shouldScanChangedFiles(changedFiles)) {
                 return;
             }
 
-            if (apiTokenService != null) {
-                apiTokenService.consumeScanQuotaAndTokenUse(install.getTenantId(), null);
+            if (!tryAcquireDailyRepoSlot(repoFullName)
+                    || (apiTokenService != null && !apiTokenService.hasAvailableMonthlyQuota(install.getTenantId()))) {
+                gitHubApiClient.upsertPullRequestComment(
+                        installationToken,
+                        repoFullName,
+                        prNumber,
+                        PR_COMMENT_MARKER,
+                        buildNoticeComment("Cuota de escaneos OMEGA alcanzada para este periodo o repositorio; análisis omitido sin bloquear el PR.")
+                );
+                return;
             }
 
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
             byte[] tarball = gitHubApiClient.downloadTarballBounded(
                     installationToken, repoFullName, headSha, MAX_TARBALL_BYTES);
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+
             Map<String, Object> scanResult = sendTarballToWorker(install.getTenantId().toString(), tarball);
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+
+            // Descontar cuota mensual del tenant SOLO tras completar el escaneo (sin tocar tokens de API ni cobrar cancelaciones/fallos)
+            if (apiTokenService != null) {
+                apiTokenService.consumeTenantMonthlyScanQuota(install.getTenantId());
+            }
+
             String commentBody = buildPullRequestComment(scanResult);
             gitHubApiClient.upsertPullRequestComment(
                     installationToken, repoFullName, prNumber, PR_COMMENT_MARKER, commentBody);
@@ -143,6 +205,12 @@ public class GitHubPullRequestScannerService {
         } finally {
             sem.release();
         }
+    }
+
+    private boolean tryAcquireDailyRepoSlot(String repoFullName) {
+        String key = LocalDate.now(ZoneOffset.UTC) + ":" + repoFullName.toLowerCase();
+        AtomicInteger counter = dailyRepoCounters.computeIfAbsent(key, ignored -> new AtomicInteger(0));
+        return counter.incrementAndGet() <= maxScansPerRepoPerDay;
     }
 
     public static boolean shouldScanChangedFiles(List<String> changedFiles) {
@@ -173,14 +241,36 @@ public class GitHubPullRequestScannerService {
             return "";
         }
         String noCtrl = raw.replaceAll("[\\x00-\\x1f\\x7f]", " ").trim();
+        String noHtmlComments = noCtrl.replace("<!--", " ").replace("-->", " ").replace("@", "(at)");
         String marker = "OMEGAREDACTMARKER";
-        String redacted = SECRET_VALUE_PATTERN.matcher(noCtrl).replaceAll(marker);
+        String redacted = SECRET_VALUE_PATTERN.matcher(noHtmlComments).replaceAll(marker);
         String escaped = MARKDOWN_UNSAFE_PATTERN.matcher(redacted).replaceAll("\\\\$1");
         String restored = escaped.replace(marker, "[REDACTED_SECRET]");
         if (restored.length() > maxLen) {
             return restored.substring(0, maxLen - 3) + "...";
         }
         return restored;
+    }
+
+    private static String[] splitFileAndLine(String rawLocation) {
+        String loc = rawLocation != null ? rawLocation.trim() : "repository-root";
+        String line = "-";
+        int colon = loc.lastIndexOf(':');
+        if (colon > 0 && colon < loc.length() - 1) {
+            String suffix = loc.substring(colon + 1);
+            if (suffix.chars().allMatch(Character::isDigit)) {
+                line = suffix;
+                loc = loc.substring(0, colon);
+            }
+        }
+        return new String[] {redactAndSanitizeUntrusted(loc, 180), line};
+    }
+
+    public static String buildNoticeComment(String noticeText) {
+        return PR_COMMENT_MARKER
+                + "\n### OMEGA Repo Scanner (Solo lectura)\n- "
+                + redactAndSanitizeUntrusted(noticeText, 400)
+                + "\n";
     }
 
     @SuppressWarnings("unchecked")
@@ -196,6 +286,7 @@ public class GitHubPullRequestScannerService {
                 200
         );
 
+        // Lista permitida estricta: solo regla, severidad, archivo y línea (NUNCA fragmentos de evidencia)
         StringBuilder sb = new StringBuilder();
         sb.append(PR_COMMENT_MARKER).append("\n");
         sb.append("### OMEGA Repo Scanner (Solo lectura)\n");
@@ -204,16 +295,19 @@ public class GitHubPullRequestScannerService {
             sb.append("- **Estado:** Sin señales detectadas con las reglas actuales.\n");
         } else {
             sb.append("- **Señales detectadas:** ").append(findings.size()).append("\n\n");
-            sb.append("| Severidad | Regla | Ubicación | Evidencia |\n");
+            sb.append("| Severidad | Regla | Archivo | Línea |\n");
             sb.append("|---|---|---|---|\n");
-            for (int i = 0; i < Math.min(findings.size(), 25); i++) {
+            for (int i = 0; i < Math.min(findings.size(), 100); i++) {
                 Map<String, Object> f = findings.get(i);
                 String sev = redactAndSanitizeUntrusted(String.valueOf(f.getOrDefault("severity", "MEDIUM")), 20);
                 String rule = redactAndSanitizeUntrusted(String.valueOf(f.getOrDefault("rule_id", "OMEGA-RULE")), 80);
-                String loc = redactAndSanitizeUntrusted(String.valueOf(f.getOrDefault("location", "repository-root")), 180);
-                String evid = redactAndSanitizeUntrusted(String.valueOf(f.getOrDefault("evidence", "")), 200);
-                sb.append("| ").append(sev).append(" | `").append(rule).append("` | `")
-                        .append(loc).append("` | `").append(evid).append("` |\n");
+                String[] fileAndLine = splitFileAndLine(String.valueOf(f.getOrDefault("location", "repository-root")));
+                String row = "| " + sev + " | `" + rule + "` | `" + fileAndLine[0] + "` | " + fileAndLine[1] + " |\n";
+                if (sb.length() + row.length() + 260 > MAX_PR_COMMENT_LENGTH) {
+                    sb.append("\n_Lista truncada para respetar el límite de longitud de comentarios de GitHub._\n");
+                    break;
+                }
+                sb.append(row);
             }
         }
         sb.append("\n_").append(notice).append("_\n");

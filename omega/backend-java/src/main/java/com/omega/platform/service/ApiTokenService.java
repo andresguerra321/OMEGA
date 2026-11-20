@@ -183,6 +183,20 @@ public class ApiTokenService {
         ));
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasAvailableMonthlyQuota(UUID tenantId) {
+        int monthlyQuota = resolveMonthlyScanQuota(tenantId);
+        String periodYm = YearMonth.now(ZoneOffset.UTC).toString();
+        return repoScanUsageRepository.findByTenantIdAndPeriodYm(tenantId, periodYm)
+                .map(u -> u.getScansUsed() < monthlyQuota)
+                .orElse(true);
+    }
+
+    @Transactional
+    public void consumeTenantMonthlyScanQuota(UUID tenantId) {
+        consumeScanQuotaAndTokenUse(tenantId, null);
+    }
+
     @Transactional
     public void consumeScanQuotaAndTokenUse(UUID tenantId, UUID apiTokenIdOrNull) {
         int monthlyQuota = resolveMonthlyScanQuota(tenantId);

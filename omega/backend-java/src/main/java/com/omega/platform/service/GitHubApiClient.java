@@ -52,6 +52,7 @@ public interface GitHubApiClient {
 
         private final String appId;
         private final String appPrivateKeyPem;
+        private final String expectedBotLogin;
         private final RestClient restClient = RestClient.builder()
                 .baseUrl("https://api.github.com")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
@@ -65,10 +66,12 @@ public interface GitHubApiClient {
 
         public DefaultGitHubApiClient(
                 @Value("${OMEGA_GITHUB_APP_ID:}") String appId,
-                @Value("${OMEGA_GITHUB_APP_PRIVATE_KEY:}") String appPrivateKeyPem
+                @Value("${OMEGA_GITHUB_APP_PRIVATE_KEY:}") String appPrivateKeyPem,
+                @Value("${OMEGA_GITHUB_APP_BOT_LOGIN:}") String expectedBotLogin
         ) {
             this.appId = appId != null ? appId.trim() : "";
             this.appPrivateKeyPem = appPrivateKeyPem != null ? appPrivateKeyPem.trim() : "";
+            this.expectedBotLogin = expectedBotLogin != null ? expectedBotLogin.trim() : "";
         }
 
         @Override
@@ -204,6 +207,14 @@ public interface GitHubApiClient {
             if (comments != null) {
                 for (Map<String, Object> c : comments) {
                     if (c.get("body") instanceof String b && b.contains(marker) && c.get("id") instanceof Number n) {
+                        if (!expectedBotLogin.isBlank()) {
+                            String authorLogin = c.get("user") instanceof Map<?, ?> u && u.get("login") instanceof String l
+                                    ? l.trim()
+                                    : "";
+                            if (!expectedBotLogin.equalsIgnoreCase(authorLogin)) {
+                                continue;
+                            }
+                        }
                         existingId = n.longValue();
                         break;
                     }

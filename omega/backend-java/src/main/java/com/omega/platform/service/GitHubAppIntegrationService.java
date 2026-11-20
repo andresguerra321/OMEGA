@@ -188,8 +188,17 @@ public class GitHubAppIntegrationService {
             return false;
         }
 
+        final String safeDeliveryId = deliveryId.trim();
         final String safeEvent = eventType != null ? eventType.trim() : "";
-        CompletableFuture.runAsync(() -> processWebhookPayload(rawBody, safeEvent));
+        CompletableFuture.runAsync(() -> {
+            try {
+                processWebhookPayload(rawBody, safeEvent);
+                deliveryRepository.markProcessed(safeDeliveryId);
+            } catch (Exception ex) {
+                deliveryRepository.markFailed(safeDeliveryId);
+                log.warn("Fallo procesando webhook {} ({}): {}", safeDeliveryId, safeEvent, ex.getClass().getSimpleName());
+            }
+        });
         return true;
     }
 
@@ -213,6 +222,7 @@ public class GitHubAppIntegrationService {
             }
         } catch (Exception ex) {
             log.warn("Error procesando webhook GitHub ({}): {}", eventType, ex.getClass().getSimpleName());
+            throw new IllegalStateException("Fallo procesando payload de webhook GitHub", ex);
         }
     }
 
