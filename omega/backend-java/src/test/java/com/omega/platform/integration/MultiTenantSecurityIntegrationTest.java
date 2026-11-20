@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,6 +17,7 @@ import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.repository.DocumentChunkRepository;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.service.AuditLogService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,6 +90,112 @@ class MultiTenantSecurityIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private AuditLogService auditLogService;
+
+    @Test
+    void onlyOwnerOrAdminCanManagePermissionsAndEverySuccessfulMutationIsAudited() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String slug = "acl-" + suffix;
+        JsonNode tenant = registerTenant(slug, "ACL Test", "admin@" + suffix + ".org",
+                "ClaveSeguraAlpha123!", "Admin Alpha");
+        String admin = tenant.get("accessToken").asText();
+        UUID tenantId = UUID.fromString(tenant.get("tenantId").asText());
+        String ownerId = createUser(admin, "owner@" + suffix + ".org", "OwnerClave123!", "Analista Owner", "ANALYST");
+        String writerId = createUser(admin, "writer@" + suffix + ".org", "WriterClave123!", "Cliente Writer", "CLIENT");
+        String readerId = createUser(admin, "reader@" + suffix + ".org", "ReaderClave123!", "Cliente Reader", "CLIENT");
+        String analystId = createUser(admin, "peer@" + suffix + ".org", "AnalystClave123!", "Analista Peer", "ANALYST");
+        String owner = login(slug, "owner@" + suffix + ".org", "OwnerClave123!");
+        String writer = login(slug, "writer@" + suffix + ".org", "WriterClave123!");
+        String reader = login(slug, "reader@" + suffix + ".org", "ReaderClave123!");
+        String analyst = login(slug, "peer@" + suffix + ".org", "AnalystClave123!");
+        MvcResult created = mockMvc.perform(post("/api/v1/expedientes")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Referencia confidencial de prueba\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        String caseId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText();
+        String permissionsUrl = "/api/v1/expedientes/" + caseId + "/permissions";
+
+        for (String userId : java.util.List.of(writerId, analystId)) {
+            mockMvc.perform(post(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + owner)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"userId\":\"" + userId + "\",\"permission\":\"WRITE\"}"))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(post(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + readerId + "\",\"permission\":\"READ\"}"))
+                .andExpect(status().isOk());
+        for (String token : java.util.List.of(owner, admin)) {
+            mockMvc.perform(get(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3));
+        }
+        for (String token : java.util.List.of(writer, reader, analyst)) {
+            mockMvc.perform(get("/api/v1/expedientes/" + caseId)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(post(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"userId\":\"" + ownerId + "\",\"permission\":\"READ\"}"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(delete(permissionsUrl + "/" + readerId)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+
+        JsonNode foreign = registerTenant("foreign-" + suffix, "Foreign", "foreign@" + suffix + ".org",
+                "ClaveSeguraBravo123!", "Admin Bravo");
+        String foreignToken = foreign.get("accessToken").asText();
+        mockMvc.perform(get(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreignToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreignToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + readerId + "\",\"permission\":\"WRITE\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete(permissionsUrl + "/" + readerId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + foreignToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + owner)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + foreign.get("userId").asText() + "\",\"permission\":\"READ\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete(permissionsUrl + "/" + foreign.get("userId").asText())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete(permissionsUrl + "/" + writerId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/expedientes/" + caseId).header(HttpHeaders.AUTHORIZATION, "Bearer " + writer))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + analystId + "\",\"permission\":\"READ\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.permission").value("READ"));
+        mockMvc.perform(delete(permissionsUrl + "/" + analystId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/expedientes/" + caseId).header(HttpHeaders.AUTHORIZATION, "Bearer " + analyst))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(permissionsUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT action FROM omega_rag.audit_logs WHERE tenant_id = ? AND resource_id = ? ORDER BY chain_seq",
+                String.class, tenantId, caseId)).containsExactly("EXPEDIENTE_CREATED",
+                        "EXPEDIENTE_PERMISSION_GRANTED", "EXPEDIENTE_PERMISSION_GRANTED", "EXPEDIENTE_PERMISSION_GRANTED",
+                        "EXPEDIENTE_PERMISSION_REVOKED", "EXPEDIENTE_PERMISSION_GRANTED", "EXPEDIENTE_PERMISSION_REVOKED");
+        for (String metadata : jdbcTemplate.queryForList(
+                "SELECT metadata_json FROM omega_rag.audit_logs WHERE tenant_id = ? AND resource_id = ?",
+                String.class, tenantId, caseId)) {
+            assertThat(metadata).doesNotContain("@", "Referencia confidencial", owner, admin, writer, reader, analyst);
+        }
+        assertThat(auditLogService.verifyTenantChain(tenantId).valid()).isTrue();
+    }
 
     @Test
     void enforcesStrictTenantIsolationRbacAndPgvectorTsvectorSchema() throws Exception {
