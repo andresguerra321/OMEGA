@@ -429,30 +429,22 @@ export function CampaignsPanel({
           </div>
 
           {families.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              {families.map((fam) => {
-                const active = familyFilter === fam;
-                return (
-                  <button
-                    key={fam}
-                    type="button"
-                    onClick={() => setFamilyFilter(fam)}
-                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors cursor-pointer ${
-                      active
-                        ? 'bg-[#2F6FED] text-white'
-                        : 'bg-[#141923]/75 border border-white/[0.05] text-[#9A9AA2] hover:text-[#F2F2F4]'
-                    }`}
-                  >
-                    {fam === 'ALL' ? `Todas (${campaigns.length})` : fam}
-                  </button>
-                );
-              })}
-            </div>
+            <select
+              aria-label="Filtrar por familia de amenaza"
+              value={familyFilter}
+              onChange={(e) => setFamilyFilter(e.target.value)}
+              className="w-full h-8 rounded-lg bg-[#141923]/80 border border-white/[0.06] px-2.5 text-xs text-slate-200 focus:border-[#2F6FED]/60 focus:outline-none cursor-pointer"
+            >
+              {families.map((fam) => (
+                <option key={fam} value={fam} className="bg-[#0F131B] text-slate-100">
+                  {fam === 'ALL' ? `Todas las familias (${campaigns.length})` : fam}
+                </option>
+              ))}
+            </select>
           )}
 
-          <div className="font-tech flex items-center justify-between gap-2 text-[10.5px] text-[#9A9AA2] pt-0.5">
-            <span>Corte CTI: {catalogFreshness?.catalog_cutoff_date || '2024-12-16'}</span>
-            <span>Revisión PR</span>
+          <div className="font-mono text-[11px] text-slate-500">
+            Corte CTI: {catalogFreshness?.catalog_cutoff_date || '2024-12-16'}
           </div>
         </div>
 
@@ -497,16 +489,24 @@ export function CampaignsPanel({
                       : 'bg-transparent hover:bg-[#141923]/55'
                   }`}
                 >
-                  <p className="text-[13.5px] font-medium tracking-[-0.01em] leading-[1.4] text-[#F2F2F4] line-clamp-2">
-                    {camp.name}
-                  </p>
-                  <div className="mt-1.5 flex items-center justify-between gap-2 font-tech text-[11px] text-[#9A9AA2]">
-                    <span className="truncate">
-                      <span className="text-[#F2F2F4]/90">{camp.spyware_family}</span>
-                      {stats.length > 0 && ` · ${stats.join(' · ')}`}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-slate-100 truncate">
+                      {camp.name}
                     </span>
                     {camp.first_seen_date && (
-                      <span className="shrink-0">{camp.first_seen_date}</span>
+                      <span className="font-mono text-[11px] text-slate-500 shrink-0">
+                        {camp.first_seen_date}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-400 truncate">
+                      {camp.spyware_family}
+                    </span>
+                    {stats.length > 0 && (
+                      <span className="font-mono text-[11px] text-slate-400 shrink-0">
+                        {stats.join(' · ')}
+                      </span>
                     )}
                   </div>
                 </button>
@@ -706,80 +706,130 @@ export function CampaignsPanel({
               </p>
             )}
 
-            {/* Ficha agrupada de atribución */}
-            {hasAttribution && (
-              <dl className="animate-on-scroll rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
+            {/* Tira integrada de metadatos (sin caja ancha vacía) */}
+            {(hasAttribution || totalIocCount > 0 || detail.first_seen_date) && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-3 border-t border-white/[0.06] text-xs text-slate-400">
                 {detail.suspected_actor && (
-                  <div className="space-y-1 min-w-0">
-                    <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Actor</dt>
-                    <dd className="font-medium text-[#F2F2F4] break-words">{detail.suspected_actor}</dd>
-                  </div>
+                  <span>
+                    Actor: <span className="text-slate-200 font-medium">{detail.suspected_actor}</span>
+                  </span>
+                )}
+                <span>
+                  Indicadores: <span className="font-mono text-slate-200">{totalIocCount}</span>
+                </span>
+                {detail.first_seen_date && (
+                  <span>
+                    Corte: <span className="font-mono text-slate-300">{detail.first_seen_date}</span>
+                  </span>
                 )}
                 {detail.target_sector && (
-                  <div className="space-y-1 min-w-0">
-                    <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Objetivo</dt>
-                    <dd className="font-medium text-[#F2F2F4] break-words">{detail.target_sector}</dd>
-                  </div>
+                  <span>
+                    Objetivo: <span className="text-slate-200 font-medium">{detail.target_sector}</span>
+                  </span>
                 )}
                 {detail.target_regions?.length > 0 && (
-                  <div className="space-y-1 min-w-0">
-                    <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Regiones</dt>
-                    <dd
-                      className="font-medium text-[#F2F2F4] break-words"
-                      title={detail.target_regions.join(', ')}
-                    >
-                      {detail.target_regions.length > 5
-                        ? `${detail.target_regions.slice(0, 5).join(', ')} (+${detail.target_regions.length - 5})`
+                  <span title={detail.target_regions.join(', ')}>
+                    Regiones:{' '}
+                    <span className="text-slate-200 font-medium">
+                      {detail.target_regions.length > 4
+                        ? `${detail.target_regions.slice(0, 4).join(', ')} (+${detail.target_regions.length - 4})`
                         : detail.target_regions.join(', ')}
-                    </dd>
-                  </div>
+                    </span>
+                  </span>
                 )}
-              </dl>
+              </div>
             )}
 
-            {/* Control Segmentado */}
-            <div className="space-y-4">
-              <div className="inline-flex flex-wrap max-w-full gap-0.5 rounded-lg bg-[#141923]/75 border border-white/[0.05] p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setDossierTab('cves')}
-                  className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
-                    dossierTab === 'cves'
-                      ? 'bg-[#2F6FED] text-white'
-                      : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                  }`}
-                >
-                  CVEs ({detail.cves?.length || 0})
-                </button>
+            {/* Contenedor único de resultados con barra de control unificada */}
+            <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
+                <div className="inline-flex flex-wrap max-w-full gap-0.5 rounded-lg bg-[#141923]/75 border border-white/[0.05] p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setDossierTab('iocs')}
+                    className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      dossierTab === 'iocs'
+                        ? 'bg-[#2F6FED] text-white'
+                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                    }`}
+                  >
+                    IOCs ({totalIocCount})
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setDossierTab('iocs')}
-                  className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
-                    dossierTab === 'iocs'
-                      ? 'bg-[#2F6FED] text-white'
-                      : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                  }`}
-                >
-                  IOCs ({totalIocCount})
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setDossierTab('cves')}
+                    className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      dossierTab === 'cves'
+                        ? 'bg-[#2F6FED] text-white'
+                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                    }`}
+                  >
+                    CVEs ({detail.cves?.length || 0})
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setDossierTab('sources')}
-                  className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
-                    dossierTab === 'sources'
-                      ? 'bg-[#2F6FED] text-white'
-                      : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                  }`}
-                >
-                  Fuentes ({detail.reports?.length || 0})
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setDossierTab('sources')}
+                    className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      dossierTab === 'sources'
+                        ? 'bg-[#2F6FED] text-white'
+                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
+                    }`}
+                  >
+                    Fuentes ({detail.reports?.length || 0})
+                  </button>
+                </div>
+
+                {dossierTab === 'iocs' && totalIocCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex flex-wrap items-center gap-1">
+                      {['ALL', ...Object.keys(detail.ioc_breakdown || {})].map((t) => {
+                        const labelMap = {
+                          ALL: 'Todos',
+                          domain: 'Dominio',
+                          url: 'URL',
+                          ipv4: 'IPv4',
+                          ip: 'IP',
+                          sha256: 'SHA-256',
+                          package: 'Paquete',
+                        };
+                        const label = labelMap[String(t)] || labelMap[String(t).toLowerCase()] || t;
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setIocTypeFilter(t)}
+                            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                              iocTypeFilter === t
+                                ? 'bg-[#2F6FED] text-white'
+                                : 'bg-[#141923] text-slate-400 border border-white/[0.06] hover:text-slate-100'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="relative w-56">
+                      <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
+                      <input
+                        type="text"
+                        maxLength={120}
+                        value={iocSearch}
+                        onChange={(e) => setIocSearch(sanitizeSearchInput(e.target.value, 120))}
+                        placeholder="Filtrar indicador..."
+                        className="w-full h-8 rounded-lg bg-[#141923] border border-white/[0.06] pl-8 pr-3 font-mono text-xs text-slate-100 placeholder-slate-500 focus:border-[#2F6FED]/60 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* TAB 1: CVEs */}
               {dossierTab === 'cves' && (
-                <div className="space-y-3">
+                <div className="p-4 space-y-3">
                   {(detail.cves?.length || 0) > 10 && (
                     <div className="relative w-full sm:w-64">
                       <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
@@ -892,111 +942,82 @@ export function CampaignsPanel({
 
               {/* TAB 2: IOCs */}
               {dossierTab === 'iocs' && (
-                <div className="space-y-3">
+                <div>
                   {totalIocCount === 0 ? (
-                    <p className="text-[12.5px] text-[#9A9AA2] py-2">Sin IOCs vinculados.</p>
+                    <p className="px-4 py-4 text-xs text-slate-400">Sin IOCs vinculados.</p>
                   ) : (
                     <>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap gap-1">
-                          {['ALL', ...Object.keys(detail.ioc_breakdown || {})].map((t) => (
-                            <button
-                              key={t}
-                              type="button"
-                              onClick={() => setIocTypeFilter(t)}
-                              className={`font-tech rounded-full px-2.5 py-0.5 text-[11px] uppercase transition-colors cursor-pointer ${
-                                iocTypeFilter === t
-                                  ? 'bg-[#2F6FED] text-white'
-                                  : 'bg-[#141923]/75 text-[#9A9AA2] border border-white/[0.05] hover:text-[#F2F2F4]'
-                              }`}
-                            >
-                              {t}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="relative w-full sm:w-56">
-                          <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
-                          <input
-                            type="text"
-                            maxLength={120}
-                            value={iocSearch}
-                            onChange={(e) => setIocSearch(sanitizeSearchInput(e.target.value, 120))}
-                            placeholder="Filtrar indicador..."
-                            className="w-full h-8 rounded-lg bg-[#141923]/75 border border-white/[0.05] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/60 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-
                       {totalIocCount > (detail.iocs?.length || 0) && (
-                        <p className="font-tech text-[11px] text-[#9A9AA2]">
+                        <p className="px-4 pt-3 font-mono text-[11px] text-slate-400">
                           Mostrando {detail.iocs.length} de {totalIocCount}.
                         </p>
                       )}
 
                       {filteredIocs.length === 0 ? (
-                        <p className="text-[13px] text-[#9A9AA2] py-2">Sin coincidencias.</p>
+                        <p className="px-4 py-4 text-xs text-slate-400">Sin coincidencias.</p>
                       ) : (
-                        <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] overflow-hidden">
-                          <div className="max-h-[360px] overflow-y-auto overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                              <thead className="sticky top-0 bg-[#141923] border-b border-white/[0.06] text-[12px] font-medium text-[#9A9AA2]">
-                                <tr>
-                                  <th className="px-3 sm:px-4 py-2.5 w-20 sm:w-24">Tipo</th>
-                                  <th className="px-3 sm:px-4 py-2.5">Indicador</th>
-                                  <th className="px-3 sm:px-4 py-2.5 hidden md:table-cell">Contexto</th>
-                                  <th className="px-3 sm:px-4 py-2.5 w-11 text-right" />
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-white/[0.06] text-[13px]">
-                                {filteredIocs.map((ioc, idx) => (
-                                  <tr
-                                    key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
-                                    className="hover:bg-[#141923]/55 transition-colors"
-                                  >
-                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#9A9AA2] whitespace-nowrap">
+                        <div className="max-h-[380px] overflow-y-auto overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="sticky top-0 bg-[#141923] border-b border-white/[0.06] text-xs font-medium text-slate-400">
+                              <tr>
+                                <th className="px-4 py-2.5 w-24">Tipo</th>
+                                <th className="px-4 py-2.5">Indicador</th>
+                                <th className="px-4 py-2.5 hidden md:table-cell">Contexto</th>
+                                <th className="px-4 py-2.5 w-20 text-right">Acciones</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.05] text-xs">
+                              {filteredIocs.map((ioc, idx) => (
+                                <tr
+                                  key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
+                                  className="hover:bg-[#141923]/55 transition-colors"
+                                >
+                                  <td className="px-4 py-2.5 whitespace-nowrap">
+                                    <span className="inline-block rounded-md bg-[#141923] border border-white/[0.06] px-2 py-0.5 font-mono text-[11px] uppercase text-slate-300">
                                       {ioc.ioc_type}
-                                    </td>
-                                    <td className="px-3 sm:px-4 py-2.5 font-tech text-[12.5px] text-[#F2F2F4] break-all min-w-0">
-                                      {ioc.ioc_value}
-                                    </td>
-                                    <td className="px-3 sm:px-4 py-2.5 text-[#9A9AA2] hidden md:table-cell">
-                                      {ioc.context || ''}
-                                    </td>
-                                    <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
-                                      <div className="inline-flex items-center justify-end gap-1">
-                                        {onVerifyLink &&
-                                          ['domain', 'url', 'hostname', 'fqdn', 'ipv4', 'ip'].includes(
-                                            String(ioc.ioc_type || '').toLowerCase(),
-                                          ) && (
-                                            <button
-                                              type="button"
-                                              onClick={() => onVerifyLink(ioc.ioc_value)}
-                                              title="Inspeccionar indicador en Enlaces sin contacto HTTP"
-                                              className="inline-flex items-center justify-center rounded-lg p-1 text-[#2F6FED] hover:bg-[#141923] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                                            >
-                                              <Link2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                                            </button>
-                                          )}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCopy(ioc.ioc_value)}
-                                          title="Copiar"
-                                          className="inline-flex items-center justify-center rounded-lg p-1 text-[#9A9AA2] hover:bg-white/[0.06] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                                        >
-                                          {copiedValue === ioc.ioc_value ? (
-                                            <Check className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
-                                          ) : (
-                                            <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
-                                          )}
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5 font-mono text-xs text-slate-100 select-all break-all min-w-0">
+                                    {ioc.ioc_value}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-slate-400 hidden md:table-cell">
+                                    {ioc.context || ''}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                    <div className="inline-flex items-center justify-end gap-1">
+                                      {onVerifyLink &&
+                                        ['domain', 'url', 'hostname', 'fqdn', 'ipv4', 'ip'].includes(
+                                          String(ioc.ioc_type || '').toLowerCase(),
+                                        ) && (
+                                          <button
+                                            type="button"
+                                            onClick={() => onVerifyLink(ioc.ioc_value)}
+                                            title="Abrir enlace en verificador pasivo"
+                                            aria-label="Abrir enlace"
+                                            className="inline-flex items-center justify-center rounded-lg p-1.5 text-[#2F6FED] hover:bg-[#141923] hover:text-slate-100 transition-colors cursor-pointer"
+                                          >
+                                            <Link2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                                          </button>
+                                        )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopy(ioc.ioc_value)}
+                                        title="Copiar IOC"
+                                        aria-label="Copiar IOC"
+                                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-slate-100 transition-colors cursor-pointer"
+                                      >
+                                        {copiedValue === ioc.ioc_value ? (
+                                          <Check className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
+                                        ) : (
+                                          <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       )}
                     </>
@@ -1006,7 +1027,7 @@ export function CampaignsPanel({
 
               {/* TAB 3: Fuentes reales */}
               {dossierTab === 'sources' && (
-                <div className="space-y-2.5">
+                <div className="p-4 space-y-2.5">
                   {!detail.reports || detail.reports.length === 0 ? (
                     <p className="text-[13px] text-[#9A9AA2] py-2">Sin fuentes vinculadas.</p>
                   ) : (
