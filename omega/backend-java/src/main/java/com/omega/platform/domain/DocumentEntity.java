@@ -48,6 +48,9 @@ public class DocumentEntity {
     @Column(name = "ocr_applied", nullable = false)
     private boolean ocrApplied;
 
+    @Column(name = "corpus_scope", nullable = false, length = 32)
+    private String corpusScope = "GENERAL";
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
     private DocumentStatus status = DocumentStatus.PROCESSING;

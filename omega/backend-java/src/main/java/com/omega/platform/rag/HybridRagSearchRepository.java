@@ -55,6 +55,7 @@ public class HybridRagSearchRepository {
                   AND d.status = 'INDEXED'
                   AND d.embedding_model = :embeddingModel
                   AND c.embedding_model = :embeddingModel
+                  AND (:corpusScope = '' OR d.corpus_scope = :corpusScope)
                 ORDER BY (c.embedding <=> CAST(:queryVector AS public.vector)) ASC
                 LIMIT :candidateLimit
             ),
@@ -76,6 +77,7 @@ public class HybridRagSearchRepository {
                   AND d.status = 'INDEXED'
                   AND d.embedding_model = :embeddingModel
                   AND c.embedding_model = :embeddingModel
+                  AND (:corpusScope = '' OR d.corpus_scope = :corpusScope)
                   AND c.search_vector @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
                 ORDER BY lex_score DESC
                 LIMIT :candidateLimit
@@ -133,6 +135,7 @@ public class HybridRagSearchRepository {
                   AND d.status = 'INDEXED'
                   AND d.embedding_model IN (:embeddingModels)
                   AND c.embedding_model IN (:embeddingModels)
+                  AND (:corpusScope = '' OR d.corpus_scope = :corpusScope)
                   AND c.search_vector @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
                 ORDER BY lex_score DESC
                 LIMIT :topK
@@ -176,15 +179,29 @@ public class HybridRagSearchRepository {
             String embeddingModel,
             int topK
     ) {
+        return searchHybrid(tenantId, expedienteId, question, queryVector, embeddingModel, topK, "");
+    }
+
+    public List<RankedChunk> searchHybrid(
+            UUID tenantId,
+            UUID expedienteId,
+            String question,
+            float[] queryVector,
+            String embeddingModel,
+            int topK,
+            String corpusScope
+    ) {
         int safeTopK = Math.max(1, Math.min(topK, 20));
         int candidateLimit = Math.max(safeTopK * 4, 24);
         String tsQuery = buildSanitizedOrTsQuery(question);
         boolean hasLexical = !tsQuery.isBlank();
+        String safeScope = corpusScope == null ? "" : corpusScope.trim();
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("expedienteId", expedienteId)
                 .addValue("embeddingModel", embeddingModel)
+                .addValue("corpusScope", safeScope)
                 .addValue("queryVector", toVectorLiteral(queryVector))
                 .addValue("lexicalTsQuery", hasLexical ? tsQuery : "omega_noop")
                 .addValue("hasLexical", hasLexical)
@@ -211,7 +228,7 @@ public class HybridRagSearchRepository {
         if (embeddingModel == null || embeddingModel.isBlank()) {
             return List.of();
         }
-        return searchLexicalOnly(tenantId, expedienteId, question, List.of(embeddingModel), topK);
+        return searchLexicalOnly(tenantId, expedienteId, question, List.of(embeddingModel), topK, "");
     }
 
     /**
@@ -225,6 +242,17 @@ public class HybridRagSearchRepository {
             Collection<String> embeddingModels,
             int topK
     ) {
+        return searchLexicalOnly(tenantId, expedienteId, question, embeddingModels, topK, "");
+    }
+
+    public List<RankedChunk> searchLexicalOnly(
+            UUID tenantId,
+            UUID expedienteId,
+            String question,
+            Collection<String> embeddingModels,
+            int topK,
+            String corpusScope
+    ) {
         if (embeddingModels == null || embeddingModels.isEmpty()) {
             return List.of();
         }
@@ -233,10 +261,12 @@ public class HybridRagSearchRepository {
             return List.of();
         }
         int safeTopK = Math.max(1, Math.min(topK, 20));
+        String safeScope = corpusScope == null ? "" : corpusScope.trim();
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("expedienteId", expedienteId)
                 .addValue("embeddingModels", List.copyOf(embeddingModels))
+                .addValue("corpusScope", safeScope)
                 .addValue("lexicalTsQuery", tsQuery)
                 .addValue("topK", safeTopK)
                 .addValue("rrfK", (double) properties.rag().rrfK())

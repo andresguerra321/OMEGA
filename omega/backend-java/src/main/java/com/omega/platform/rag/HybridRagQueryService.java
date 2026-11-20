@@ -4,9 +4,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.omega.platform.config.SovereignModePolicy;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
+import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.ingest.AsyncDocumentProcessor;
 import com.omega.platform.rag.RagAnswerGenerator.RankedChunk;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.saas.CommercialSaasService;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
@@ -51,6 +53,9 @@ public class HybridRagQueryService {
 
     @Autowired(required = false)
     private SovereignModePolicy sovereignModePolicy;
+
+    @Autowired(required = false)
+    private TenantRepository tenantRepository;
 
     public HybridRagQueryService(
             ExpedienteAuthorizationService authorizationService,
@@ -174,6 +179,7 @@ public class HybridRagQueryService {
             lexicalModels.add(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL);
         }
 
+        String corpusScope = resolveCorpusScope(principal);
         boolean lexicalDegraded = false;
         List<RankedChunk> ranked;
         if (activeIndexedCount == 0) {
@@ -184,7 +190,8 @@ public class HybridRagQueryService {
                     expedienteId,
                     retrievalQuestion,
                     lexicalModels,
-                    topK
+                    topK,
+                    corpusScope
             );
         } else {
             try {
@@ -195,7 +202,8 @@ public class HybridRagQueryService {
                         retrievalQuestion,
                         queryVector,
                         activeModel,
-                        topK
+                        topK,
+                        corpusScope
                 );
                 if (lexicalIndexedCount > 0) {
                     ranked = mergeLexicalFallbackHits(
@@ -205,7 +213,8 @@ public class HybridRagQueryService {
                                     expedienteId,
                                     retrievalQuestion,
                                     List.of(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL),
-                                    topK
+                                    topK,
+                                    corpusScope
                             ),
                             topK
                     );
@@ -220,7 +229,8 @@ public class HybridRagQueryService {
                         expedienteId,
                         retrievalQuestion,
                         lexicalModels,
-                        topK
+                        topK,
+                        corpusScope
                 );
             }
         }
@@ -262,6 +272,15 @@ public class HybridRagQueryService {
         String responseModel = answer.startsWith("Resumen extractivo sin síntesis LLM")
                 ? "omega-extractive-fallback" : answerGenerator.resolveActiveGeneratorModel();
         return new RagQueryResponse(status, responseModel, answer, warnings, reindexNotices, citations);
+    }
+
+    private String resolveCorpusScope(OmegaPrincipal principal) {
+        if (tenantRepository == null || principal == null || principal.tenantId() == null) {
+            return "";
+        }
+        return tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                .map(t -> t.getProfile() == TenantProfile.GENERAL ? "" : t.getProfile().name())
+                .orElse("");
     }
 
     private static List<RankedChunk> mergeLexicalFallbackHits(
