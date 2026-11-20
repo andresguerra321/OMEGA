@@ -37,3 +37,14 @@
 
 - Tests unitarios en `omega/api/tests/` cubriendo: Zip-Slip, bomba ZIP, exceso de `max_files` / `max_bytes`, timeout y ausencia de persistencia en disco tras el escaneo.
 - Verificación de `X-Internal-Service-Token` (401 fail-closed) en `POST /api/repo/scan` y `GET /api/repo/scan/{id}`.
+
+---
+
+## 4. Superficies Añadidas en Fase 4 (CLI, SARIF y GitHub App)
+
+| ID | Amenaza | Mitigación Obligatoria |
+|---|---|---|
+| **T7** | **Fuga de secretos del repo al subir desde CLI** | Exclusión obligatoria de `.env*`, llaves (`*.pem`, `*.key`, `id_rsa*`) y `.git/` incluso con `--include-ignored`; vista previa `--preview` y conteo explícito de exclusiones. |
+| **T8** | **Fuga de token de API (`omega_scan_...`)** | Almacenamiento solo como hash SHA-256 (`V13`), rechazo de `http://` fuera de `localhost`, preferencia por `OMEGA_API_TOKEN`/`stdin` y redacción en errores, logs, SARIF y comentarios. |
+| **T9** | **Inyección de Markdown / HTML / `@menciones` en comentarios PR o SARIF** | Comentarios PR por lista permitida estricta (solo severidad, regla, archivo y línea, nunca `evidence`), escape de Markdown/`@`/comentarios HTML y normalización `%SRCROOT%` en SARIF. |
+| **T10** | **Suplantación o replay de webhooks GitHub y abuso de forks** | Firma `X-Hub-Signature-256` sobre bytes crudos antes de parsear, límite `1 MiB`, registro atómico `X-GitHub-Delivery` (`RECEIVED`/`PROCESSED`/`FAILED`), whitelist de descarga (`api.github.com`, `codeload.github.com`) sin reenviar `Authorization` a `codeload`, tope diario por repo y verificación `GET /user/installations` al vincular. |
