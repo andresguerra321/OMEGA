@@ -31,71 +31,72 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = ProfileConfigController.class)
 @Import({
-        SecurityConfig.class,
-        JwtAuthenticationFilter.class,
-        SessionCookieHelper.class,
-        JsonSecurityHandlers.class,
-        TenantProfileConfigService.class
+                SecurityConfig.class,
+                JwtAuthenticationFilter.class,
+                SessionCookieHelper.class,
+                JsonSecurityHandlers.class,
+                TenantProfileConfigService.class
 })
 class TenantProfileMigrationAndEndpointTest {
 
-    @Autowired
-    private MockMvc mvc;
+        @Autowired
+        private MockMvc mvc;
 
-    @MockBean
-    private TenantRepository tenantRepository;
+        @MockBean
+        private TenantRepository tenantRepository;
 
-    @MockBean
-    private JwtService jwtService;
+        @MockBean
+        private JwtService jwtService;
 
-    @MockBean
-    private UserRepository userRepository;
+        @MockBean
+        private UserRepository userRepository;
 
-    @MockBean
-    private AuditLogService auditLogService;
+        @MockBean
+        private AuditLogService auditLogService;
 
-    private void mockAuth(String token, UUID tenantId, Role role, TenantProfile profile) {
-        UUID userId = UUID.randomUUID();
-        JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
-                userId, tenantId, role.name().toLowerCase() + "@omega.test", role);
-        UserEntity user = mock(UserEntity.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getTenantId()).thenReturn(tenantId);
-        when(user.isActive()).thenReturn(true);
-        when(user.getRole()).thenReturn(role);
-        when(user.getEmail()).thenReturn(claims.email());
+        private void mockAuth(String token, UUID tenantId, Role role, TenantProfile profile) {
+                UUID userId = UUID.randomUUID();
+                JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
+                                userId, tenantId, role.name().toLowerCase() + "@omega.test", role);
+                UserEntity user = mock(UserEntity.class);
+                when(user.getId()).thenReturn(userId);
+                when(user.getTenantId()).thenReturn(tenantId);
+                when(user.isActive()).thenReturn(true);
+                when(user.getRole()).thenReturn(role);
+                when(user.getEmail()).thenReturn(claims.email());
 
-        when(jwtService.parseAndValidate(token)).thenReturn(claims);
-        when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
-        when(tenantRepository.findByIdAndActiveTrue(tenantId))
-                .thenReturn(Optional.of(new TenantEntity("org-" + profile.name().toLowerCase(), "Org", profile)));
-    }
+                when(jwtService.parseAndValidate(token)).thenReturn(claims);
+                when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
+                when(tenantRepository.findByIdAndActiveTrue(tenantId))
+                                .thenReturn(Optional.of(new TenantEntity("org-" + profile.name().toLowerCase(), "Org",
+                                                profile)));
+        }
 
-    @Test
-    void migrationV11IsSafeAndReversible() throws Exception {
-        Path migration = Path.of("src/main/resources/db/migration/V11__tenant_profile.sql");
-        assertTrue(Files.exists(migration), "Debe existir V11__tenant_profile.sql");
-        String sql = Files.readString(migration);
-        assertTrue(sql.contains("ADD COLUMN IF NOT EXISTS profile"), "Debe agregar columna de forma segura");
-        assertTrue(sql.contains("DEFAULT 'GENERAL'"), "Debe asignar GENERAL a tenants existentes");
-        assertTrue(sql.contains("'LEGAL', 'DEVELOPER', 'GENERAL'"), "Debe restringir valores válidos");
-        assertTrue(sql.contains("DROP COLUMN IF EXISTS profile"), "Debe documentar reversibilidad");
-    }
+        @Test
+        void migrationV11IsSafeAndReversible() throws Exception {
+                Path migration = Path.of("src/main/resources/db/migration/V11__tenant_profile.sql");
+                assertTrue(Files.exists(migration), "Debe existir V11__tenant_profile.sql");
+                String sql = Files.readString(migration);
+                assertTrue(sql.contains("ADD COLUMN IF NOT EXISTS profile"), "Debe agregar columna de forma segura");
+                assertTrue(sql.contains("DEFAULT 'GENERAL'"), "Debe asignar GENERAL a tenants existentes");
+                assertTrue(sql.contains("'LEGAL', 'DEVELOPER', 'GENERAL'"), "Debe restringir valores válidos");
+                assertTrue(sql.contains("DROP COLUMN IF EXISTS profile"), "Debe documentar reversibilidad");
+        }
 
-    @Test
-    void tenantEntityDefaultsToGeneralAndAcceptsDeveloper() {
-        TenantEntity defaultTenant = new TenantEntity("acme", "Acme Corp");
-        assertEquals(TenantProfile.GENERAL, defaultTenant.getProfile());
+        @Test
+        void tenantEntityDefaultsToGeneralAndAcceptsDeveloper() {
+                TenantEntity defaultTenant = new TenantEntity("acme", "Acme Corp");
+                assertEquals(TenantProfile.GENERAL, defaultTenant.getProfile());
 
-        TenantEntity devTenant = new TenantEntity("devsec", "DevSec Lab", TenantProfile.DEVELOPER);
-        assertEquals(TenantProfile.DEVELOPER, devTenant.getProfile());
-    }
+                TenantEntity devTenant = new TenantEntity("devsec", "DevSec Lab", TenantProfile.DEVELOPER);
+                assertEquals(TenantProfile.DEVELOPER, devTenant.getProfile());
+        }
 
-    @Test
-    void profileConfigRequiresAuthentication() throws Exception {
-        mvc.perform(get("/api/v1/profile/config"))
-                .andExpect(status().isUnauthorized());
-    }
+        @Test
+        void profileConfigRequiresAuthentication() throws Exception {
+                mvc.perform(get("/api/v1/profile/config"))
+                                .andExpect(status().isUnauthorized());
+        }
 
     @Test
     void profileConfigReturnsVersionedConfigsAcrossProfilesAndRoles() throws Exception {
@@ -107,7 +108,7 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.defaultView").value("repo_scanner"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("dev_supply_chain_cti"))
                 .andExpect(jsonPath("$.copilotTone").value("technical_appsec"))
-                .andExpect(jsonPath("$.visibleModules[5]").value("repo_scanner"));
+                .andExpect(jsonPath("$.visibleModules[0]").value("repo_scanner"));
 
         mockAuth("tok-legal-analyst", UUID.randomUUID(), Role.ANALYST, TenantProfile.LEGAL);
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal-analyst"))
@@ -116,14 +117,14 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.defaultView").value("cuenta"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("legal_expedientes"))
                 .andExpect(jsonPath("$.copilotTone").value("forensic_legal"))
-                .andExpect(jsonPath("$.visibleModules[5]").value("expedientes"));
+                .andExpect(jsonPath("$.visibleModules[3]").value("expedientes"));
 
-        mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
-        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.profile").value("GENERAL"))
-                .andExpect(jsonPath("$.defaultView").value("inicio"))
-                .andExpect(jsonPath("$.ragCorpusScope").value("general_cti"))
-                .andExpect(jsonPath("$.copilotTone").value("balanced_defensive"));
-    }
+                mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
+                mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.profile").value("GENERAL"))
+                                .andExpect(jsonPath("$.defaultView").value("inicio"))
+                                .andExpect(jsonPath("$.ragCorpusScope").value("general_cti"))
+                                .andExpect(jsonPath("$.copilotTone").value("balanced_defensive"));
+        }
 }

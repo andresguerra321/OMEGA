@@ -313,7 +313,7 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = f
   }
 
   if (!response.ok) {
-    if (response.status === 401 && !skipAuth) {
+    if (response.status === 401 && !skipAuth && session && inMemoryAuthSession === session) {
       clearAuthSession();
       emitAuthRequired(path);
     }
@@ -601,6 +601,30 @@ export async function createApiToken({ name, expiresInDays, maxUses } = {}) {
 
 export async function revokeApiToken(tokenId) {
   return apiFetch(`/api-tokens/${encodeURIComponent(tokenId)}`, { method: 'DELETE' });
+}
+
+export async function getGitHubIntegrationStatus() {
+  return apiFetch('/integrations/github/status');
+}
+
+export async function createGitHubLinkState() {
+  return apiFetch('/integrations/github/state', { method: 'POST', body: {} });
+}
+
+export async function linkGitHubInstallation({ state, installationId, userAccessToken, accountLogin }) {
+  return apiFetch('/integrations/github/link', {
+    method: 'POST',
+    body: {
+      state: String(state || '').trim(),
+      installationId: Number(installationId),
+      userAccessToken: String(userAccessToken || '').trim(),
+      accountLogin: String(accountLogin || '').trim(),
+    },
+  });
+}
+
+export async function unlinkGitHubInstallation() {
+  return apiFetch('/integrations/github/link', { method: 'DELETE' });
 }
 
 export async function registerTenant({

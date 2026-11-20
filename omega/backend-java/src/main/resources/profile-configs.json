@@ -3,13 +3,10 @@
   "profiles": {
     "LEGAL": {
       "visibleModules": [
-        "inicio",
-        "equipo",
-        "exposicion",
-        "amenazas",
+        "cuenta",
         "preguntar",
-        "expedientes",
-        "cuenta"
+        "amenazas",
+        "expedientes"
       ],
       "ragCorpusScope": "legal_expedientes",
       "copilotTone": "forensic_legal",
@@ -18,12 +15,9 @@
     },
     "DEVELOPER": {
       "visibleModules": [
-        "inicio",
-        "equipo",
-        "exposicion",
+        "repo_scanner",
         "amenazas",
         "preguntar",
-        "repo_scanner",
         "cuenta"
       ],
       "ragCorpusScope": "dev_supply_chain_cti",
