@@ -21,3 +21,8 @@
 - **No analiza binarios compilados ni ejecución dinámica en sandbox.**
 - **Falsos positivos conocidos:** paquetes legítimos recién publicados (`< 14` días) o compiladores nativos que usan `postinstall`/`setup.py` con `subprocess` para compilar extensiones.
 - **Límites de APIs externas:** las consultas de metadatos a npm/PyPI usan timeout (`5s`), caché en RAM (`300s`) y degradan de forma elegante si no hay red (`None`).
+
+## Salida SARIF 2.1.0 (`omega/api/sarif_exporter.py`)
+- **Mapeo de severidad:** `CRITICAL` (`9.5`) y `HIGH` (`7.5`) → `error`; `MEDIUM` (`5.0`) → `warning`; `LOW` (`2.5`) → `note`.
+- **Qué no cabe de forma nativa en SARIF estándar:** el puntaje global (`score` 0–100), el desglose por peso (`score_breakdown`), `limitations` y `zero_retention_notice` se conservan en `run.properties`, y `confidence` + `evidence` en `result.properties`.
+- **Límites GitHub Code Scanning:** máx. `5,000` resultados por run (límite soft; `25,000` hard) y archivo comprimido `< 10 MB`. Toda ruta y evidencia se normaliza y sanea antes de emitir SARIF.
