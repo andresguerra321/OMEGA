@@ -134,9 +134,10 @@ Estudio comparativo de ablación realizado mediante **RAGAS** sobre `10` casos (
 ### Ejecución directa en Windows (`.exe`)
 Para usar la aplicación de escritorio directamente sin ejecutar Vite manualmente:
 1. Tener [Docker Desktop](https://www.docker.com/) iniciado (OMEGA orquesta automáticamente los contenedores la primera vez).
-2. Descargar desde **GitHub Releases (`v1.4.0`)** o ejecutar desde `omega/frontend/release/`:
-   * **Instalador Windows:** `OMEGA-Setup-1.4.0-x64.exe`
-   * **Portable Windows (sin instalación):** `OMEGA-Portable-1.4.0-x64.exe`
+2. Descargar desde **[GitHub Releases (`v2.0.9`)](https://github.com/andresguerra321/OMEGA/releases/tag/v2.0.9)** o compilar localmente en `omega/frontend/src-tauri/target/release/bundle/`:
+   * **Instalador Windows (NSIS):** `OMEGA Security_2.0.9_x64-setup.exe`
+   * **Instalador Windows (MSI):** `OMEGA Security_2.0.9_x64_es-ES.msi`
+   * **TODO:** verificar y publicar artefactos independientes para macOS / Linux si se habilitan en el release actual.
 3. En la pantalla de acceso haz clic en **Crear cuenta** para registrar tu usuario administrador inicial y su organización (`Espacio personal` incluido; contraseña mínima de `12` caracteres), o inicia sesión si ya tienes cuenta. *(El antiguo acceso demo con credenciales fijas fue retirado por endurecimiento de seguridad).*
 
 ### Docker Compose (modo servidor / desarrollo)
