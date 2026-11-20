@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchProfileConfig, updateTenantProfile } from './api';
+import { fetchProfileConfig, updateTenantProfile } from './api.js';
 
 export const DEFAULT_PROFILE_CONFIG = Object.freeze({
   profile: 'GENERAL',
