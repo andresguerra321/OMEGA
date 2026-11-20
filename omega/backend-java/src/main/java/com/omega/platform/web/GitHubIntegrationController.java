@@ -88,8 +88,11 @@ public class GitHubIntegrationController {
             @RequestHeader(value = "X-GitHub-Event", required = false) String eventType
     ) {
         byte[] rawBody = readBoundedBody(request, GitHubAppIntegrationService.MAX_WEBHOOK_BYTES);
-        integrationService.acceptWebhookAsync(rawBody, signature, deliveryId, eventType);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("accepted", true));
+        boolean newlyAccepted = integrationService.acceptWebhookAsync(rawBody, signature, deliveryId, eventType);
+        if (!newlyAccepted) {
+            return ResponseEntity.ok(Map.of("accepted", true, "duplicate", true));
+        }
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("accepted", true, "duplicate", false));
     }
 
     private static byte[] readBoundedBody(HttpServletRequest request, int maxBytes) {

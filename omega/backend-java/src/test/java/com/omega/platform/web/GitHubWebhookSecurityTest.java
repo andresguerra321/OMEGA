@@ -102,7 +102,7 @@ class GitHubWebhookSecurityTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.accepted").value(true));
 
-        // Replay con mismo deliveryId -> 409 Conflict
+        // Replay con mismo deliveryId -> 200 OK idempotente
         when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt())).thenReturn(false);
         mvc.perform(post("/api/v1/integrations/github/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,7 +110,18 @@ class GitHubWebhookSecurityTest {
                         .header("X-GitHub-Delivery", "deliv-1")
                         .header("X-GitHub-Event", "installation")
                         .content(body))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duplicate").value(true));
+
+        // Payload > 1 MiB -> 413 Payload Too Large
+        byte[] oversized = new byte[GitHubAppIntegrationService.MAX_WEBHOOK_BYTES + 10];
+        mvc.perform(post("/api/v1/integrations/github/webhook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Hub-Signature-256", sig)
+                        .header("X-GitHub-Delivery", "deliv-big")
+                        .header("X-GitHub-Event", "installation")
+                        .content(oversized))
+                .andExpect(status().isPayloadTooLarge());
 
         // Firma inválida -> 403 Forbidden
         mvc.perform(post("/api/v1/integrations/github/webhook")

@@ -26,6 +26,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -48,6 +50,9 @@ public class GitHubAppIntegrationService {
     private final ObjectMapper objectMapper;
     private final String webhookSecret;
     private final SecureRandom secureRandom = new SecureRandom();
+
+    @Autowired(required = false)
+    private GitHubPullRequestScannerService prScannerService;
 
     public GitHubAppIntegrationService(
             GitHubAppInstallationRepository installationRepository,
@@ -158,7 +163,7 @@ public class GitHubAppIntegrationService {
         );
     }
 
-    public void acceptWebhookAsync(
+    public boolean acceptWebhookAsync(
             byte[] rawBody,
             String signatureHeader,
             String deliveryId,
@@ -180,11 +185,12 @@ public class GitHubAppIntegrationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta cabecera X-GitHub-Delivery válida");
         }
         if (!deliveryRepository.tryRecordDelivery(deliveryId.trim(), DELIVERY_TTL_HOURS)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Entrega de webhook duplicada (anti-replay)");
+            return false;
         }
 
         final String safeEvent = eventType != null ? eventType.trim() : "";
         CompletableFuture.runAsync(() -> processWebhookPayload(rawBody, safeEvent));
+        return true;
     }
 
     @Transactional
@@ -202,6 +208,8 @@ public class GitHubAppIntegrationService {
                 handleInstallationEvent(installationId, action);
             } else if ("installation_repositories".equals(eventType)) {
                 handleInstallationRepositoriesEvent(installationId, payload);
+            } else if ("pull_request".equals(eventType) && prScannerService != null) {
+                prScannerService.submitPullRequestWebhook(installationId, payload);
             }
         } catch (Exception ex) {
             log.warn("Error procesando webhook GitHub ({}): {}", eventType, ex.getClass().getSimpleName());
