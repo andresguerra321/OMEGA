@@ -13,11 +13,13 @@ from datetime import datetime, timezone
 import gzip
 import io
 import json
+import math
 from pathlib import Path
 import re
 import tarfile
 import time
 import uuid
+import xml.etree.ElementTree as ET
 import zipfile
 from typing import Any, Callable
 
@@ -41,6 +43,23 @@ _PY_SETUP_EXEC_RE = re.compile(
 _EXFIL_RE = re.compile(
     r"(?i)(discord(app)?\.com/api/webhooks|api\.telegram\.org/bot|ngrok\.io|requestbin)"
 )
+_OBFUSCATION_EXEC_B64_RE = re.compile(
+    r"(?i)(eval|exec|Function)\s*\([^)\n]{0,80}[A-Za-z0-9+/]{64,}={0,2}"
+)
+_RAW_IP_URL_RE = re.compile(
+    r"https?://(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?:/[^\s\"'`]*)?"
+)
+
+_POPULAR_NPM = (
+    "lodash", "express", "react", "react-dom", "axios", "chalk", "commander",
+    "debug", "moment", "typescript", "webpack", "eslint", "prettier", "dotenv",
+    "jsonwebtoken", "bcrypt", "mongoose", "sequelize", "tailwindcss", "vite",
+)
+_POPULAR_PYPI = (
+    "requests", "numpy", "pandas", "flask", "django", "fastapi", "uvicorn",
+    "pydantic", "urllib3", "boto3", "cryptography", "pytest", "sqlalchemy",
+    "httpx", "pillow", "scipy", "beautifulsoup4", "pyyaml", "celery", "redis",
+)
 
 _EPHEMERAL_SCANS: dict[str, tuple[float, ScanStatus]] = {}
 
@@ -54,6 +73,9 @@ def load_scanner_weights() -> dict[str, int]:
             "NPM-POSTINSTALL-EXEC-01": 35,
             "PYPI-SETUP-EXEC-01": 35,
             "SECRET-EXFIL-01": 25,
+            "CODE-OBFUSCATION-01": 30,
+            "PKG-TYPOSQUAT-01": 25,
+            "SCRIPT-NET-INDICATOR-01": 20,
             "PKG-NEW-OR-RECENT-01": 15,
             "PKG-MAINTAINER-CHANGE-01": 25,
             "PKG-MALICIOUS-ADVISORY-01": 50,
@@ -124,6 +146,8 @@ def scan_archive_bytes(
         if dep_key in seen_deps:
             continue
         seen_deps.add(dep_key)
+
+        _check_typosquatting(ecosystem, pkg_name, location, findings)
 
         if advisory_lookup:
             adv = advisory_lookup(ecosystem, pkg_name)
@@ -245,6 +269,63 @@ def _run_static_content_detectors(
                     for dep_name in deps.keys():
                         dependencies.append(("npm", str(dep_name), f"{rel_path}:{section}.{dep_name}"))
 
+    elif base == "package-lock.json":
+        try:
+            lock = json.loads(text)
+        except Exception:
+            lock = None
+        if isinstance(lock, dict):
+            packages = lock.get("packages") or {}
+            if isinstance(packages, dict):
+                for pkg_path in packages.keys():
+                    if not pkg_path or "node_modules/" not in str(pkg_path):
+                        continue
+                    dep_name = str(pkg_path).rsplit("node_modules/", 1)[-1].strip()
+                    if dep_name:
+                        dependencies.append(("npm", dep_name, f"{rel_path}:{dep_name}"))
+            legacy_deps = lock.get("dependencies") or {}
+            if isinstance(legacy_deps, dict):
+                for dep_name in legacy_deps.keys():
+                    dependencies.append(("npm", str(dep_name), f"{rel_path}:{dep_name}"))
+
+    elif base == "pom.xml":
+        try:
+            root = ET.fromstring(text)
+            for dep in root.iter():
+                if dep.tag.endswith("dependency"):
+                    gid = ""
+                    aid = ""
+                    for child in dep:
+                        if child.tag.endswith("groupId") and child.text:
+                            gid = child.text.strip()
+                        elif child.tag.endswith("artifactId") and child.text:
+                            aid = child.text.strip()
+                    if gid and aid:
+                        dependencies.append(("maven", f"{gid}:{aid}", rel_path))
+        except Exception:
+            pass
+
+    elif base == "go.mod":
+        in_require = False
+        for idx, line in enumerate(text.splitlines(), start=1):
+            stripped = line.split("//", 1)[0].strip()
+            if not stripped:
+                continue
+            if stripped.startswith("require ("):
+                in_require = True
+                continue
+            if in_require and stripped == ")":
+                in_require = False
+                continue
+            if stripped.startswith("require "):
+                mod = stripped[len("require "):].strip().split()[0]
+                if mod:
+                    dependencies.append(("go", mod, f"{rel_path}:{idx}"))
+            elif in_require:
+                mod = stripped.split()[0]
+                if mod:
+                    dependencies.append(("go", mod, f"{rel_path}:{idx}"))
+
     elif base == "requirements.txt":
         for idx, line in enumerate(text.splitlines(), start=1):
             cleaned = line.split("#", 1)[0].strip()
@@ -286,6 +367,100 @@ def _run_static_content_detectors(
                 ),
             )
         )
+
+    if base in ("package.json", "setup.py") or rel_path.endswith((".sh", ".ps1")):
+        ip_match = _RAW_IP_URL_RE.search(text)
+        if ip_match:
+            findings.append(
+                ScanFinding(
+                    rule_id="SCRIPT-NET-INDICATOR-01",
+                    severity="HIGH",
+                    confidence=0.80,
+                    evidence=ip_match.group(0)[:240],
+                    location=rel_path,
+                    explanation=(
+                        "El script apunta directamente a una dirección IP literal en lugar de un "
+                        "dominio verificable, patrón común en descargas de payloads."
+                    ),
+                )
+            )
+
+    lower_rel = rel_path.lower()
+    if (
+        not lower_rel.endswith(".min.js")
+        and "/dist/" not in f"/{lower_rel}"
+        and "/build/" not in f"/{lower_rel}"
+        and lower_rel.endswith((".js", ".mjs", ".cjs", ".ts", ".py"))
+    ):
+        obf_match = _OBFUSCATION_EXEC_B64_RE.search(text)
+        if obf_match:
+            findings.append(
+                ScanFinding(
+                    rule_id="CODE-OBFUSCATION-01",
+                    severity="HIGH",
+                    confidence=0.84,
+                    evidence=obf_match.group(0)[:240],
+                    location=rel_path,
+                    explanation=(
+                        "Se detectó ejecución dinámica (eval/exec/Function) combinada con una "
+                        "carga extensa codificada en base64."
+                    ),
+                )
+            )
+
+
+def _edit_distance_is_one(a: str, b: str) -> bool:
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        diffs = [i for i, (ca, cb) in enumerate(zip(a, b)) if ca != cb]
+        if len(diffs) == 1:
+            return True
+        if len(diffs) == 2 and diffs[1] == diffs[0] + 1:
+            return a[diffs[0]] == b[diffs[1]] and a[diffs[1]] == b[diffs[0]]
+        return False
+    short, long = (a, b) if len(a) < len(b) else (b, a)
+    i = j = diffs = 0
+    while i < len(short) and j < len(long):
+        if short[i] != long[j]:
+            diffs += 1
+            if diffs > 1:
+                return False
+            j += 1
+        else:
+            i += 1
+            j += 1
+    return True
+
+
+def _check_typosquatting(
+    ecosystem: str,
+    pkg_name: str,
+    location: str,
+    findings: list[ScanFinding],
+) -> None:
+    clean = pkg_name.strip().lower()
+    if len(clean) < 5:
+        return
+    popular = _POPULAR_NPM if ecosystem == "npm" else _POPULAR_PYPI if ecosystem == "pypi" else ()
+    if not popular or clean in popular:
+        return
+    for target in popular:
+        if _edit_distance_is_one(clean, target):
+            findings.append(
+                ScanFinding(
+                    rule_id="PKG-TYPOSQUAT-01",
+                    severity="HIGH",
+                    confidence=0.79,
+                    evidence=f"{ecosystem}:{pkg_name} similar a {target}",
+                    location=location,
+                    explanation=(
+                        f"El paquete '{pkg_name}' tiene distancia de edición 1 respecto al paquete "
+                        f"popular '{target}' (posible typosquatting)."
+                    ),
+                )
+            )
+            return
 
 
 def _run_metadata_context_detectors(
