@@ -86,6 +86,9 @@ const AccountSettingsPanel = lazy(() =>
 const RepoScannerPanel = lazy(() =>
   import('./components/RepoScannerPanel').then((m) => ({ default: m.RepoScannerPanel }))
 );
+const DevCliModulePanel = lazy(() =>
+  import('./components/DevCliModulePanel').then((m) => ({ default: m.DevCliModulePanel }))
+);
 const AuthModal = lazy(() =>
   import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
 );
@@ -161,7 +164,7 @@ export default function App() {
     const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
     if (!authSession || !profileConfig?.defaultView || appliedProfileDefaultRef.current === profileKey) return;
     appliedProfileDefaultRef.current = profileKey;
-    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'preguntar', 'cuenta'].includes(profileConfig.defaultView)) {
+    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'dev_cli', 'preguntar', 'cuenta'].includes(profileConfig.defaultView)) {
       setActiveNav(profileConfig.defaultView);
     }
   }, [authSession, profileConfig?.profile, profileConfig?.defaultView]);
@@ -1513,6 +1516,8 @@ export default function App() {
                   </div>
                 ) : activeNav === 'repo_scanner' ? (
                   <RepoScannerPanel authSession={authSession} />
+                ) : activeNav === 'dev_cli' ? (
+                  <DevCliModulePanel authSession={authSession} />
                 ) : (
                   <AccountSettingsPanel
                     authSession={authSession}

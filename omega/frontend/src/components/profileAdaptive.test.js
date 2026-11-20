@@ -8,27 +8,31 @@ const BASE_NAV_ITEMS = [
   { id: 'equipo', label: 'Equipos' },
   { id: 'exposicion', label: 'Enlaces y OSINT' },
   { id: 'amenazas', label: 'Amenazas' },
-  { id: 'repo_scanner', label: 'Repositorios' },
+  { id: 'repo_scanner', label: 'Proyectos' },
+  { id: 'dev_cli', label: 'CLI y CI' },
   { id: 'preguntar', label: 'Asistente' },
   { id: 'cuenta', label: 'Cuenta y Ajustes' },
 ];
 
-test('perfil DEVELOPER muestra repo_scanner y oculta módulos no listados manteniendo cuenta', () => {
+test('perfil DEVELOPER muestra repo_scanner y dev_cli y oculta módulos no listados manteniendo cuenta', () => {
   const visible = resolveVisibleNavItems(BASE_NAV_ITEMS, {
     profile: 'DEVELOPER',
-    visibleModules: ['inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'repo_scanner', 'cuenta'],
+    visibleModules: ['repo_scanner', 'dev_cli', 'amenazas', 'preguntar', 'cuenta'],
   });
   const ids = visible.map((i) => i.id);
   assert.ok(ids.includes('repo_scanner'));
+  assert.ok(ids.includes('dev_cli'));
   assert.ok(ids.includes('cuenta'));
+  assert.equal(ids.includes('equipo'), false);
 });
 
-test('perfil LEGAL y GENERAL ocultan repo_scanner y conservan módulos estándar y cuenta', () => {
+test('perfil LEGAL y GENERAL ocultan repo_scanner y dev_cli y conservan módulos estándar y cuenta', () => {
   const legal = resolveVisibleNavItems(BASE_NAV_ITEMS, {
     profile: 'LEGAL',
-    visibleModules: ['inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'expedientes', 'cuenta'],
+    visibleModules: ['cuenta', 'preguntar', 'amenazas', 'expedientes'],
   });
   assert.equal(legal.some((i) => i.id === 'repo_scanner'), false);
+  assert.equal(legal.some((i) => i.id === 'dev_cli'), false);
   assert.ok(legal.some((i) => i.id === 'cuenta'));
 
   const general = resolveVisibleNavItems(BASE_NAV_ITEMS, {
@@ -36,6 +40,7 @@ test('perfil LEGAL y GENERAL ocultan repo_scanner y conservan módulos estándar
     visibleModules: ['inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
   });
   assert.equal(general.some((i) => i.id === 'repo_scanner'), false);
+  assert.equal(general.some((i) => i.id === 'dev_cli'), false);
   assert.ok(general.some((i) => i.id === 'inicio'));
   assert.ok(general.some((i) => i.id === 'cuenta'));
 });
