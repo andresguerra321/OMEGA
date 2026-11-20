@@ -4,6 +4,7 @@ import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.domain.ClassificationLevel;
 import com.omega.platform.domain.ExpedienteEntity;
 import com.omega.platform.domain.TenantEntity;
+import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.domain.UserEntity;
 import com.omega.platform.repository.ExpedienteRepository;
 import com.omega.platform.repository.TenantRepository;
@@ -96,7 +97,8 @@ public class AuthService {
         String orgName = orgSource.length() > 200 ? orgSource.substring(0, 200) : orgSource;
         String uniqueSlug = allocateUniqueTenantSlug(orgSource);
 
-        TenantEntity tenant = tenantRepository.save(new TenantEntity(uniqueSlug, orgName));
+        TenantProfile selectedProfile = request.profile() != null ? request.profile() : TenantProfile.GENERAL;
+        TenantEntity tenant = tenantRepository.save(new TenantEntity(uniqueSlug, orgName, selectedProfile));
         UserEntity adminUser = userRepository.save(new UserEntity(
                 tenant.getId(),
                 normalizedEmail,
@@ -122,7 +124,9 @@ public class AuthService {
             throw new ConflictException("Ya existe un tenant registrado con ese slug");
         }
 
-        TenantEntity tenant = tenantRepository.save(new TenantEntity(normalizedSlug, request.tenantName().trim()));
+        TenantProfile selectedProfile = request.profile() != null ? request.profile() : TenantProfile.GENERAL;
+        TenantEntity tenant = tenantRepository.save(
+                new TenantEntity(normalizedSlug, request.tenantName().trim(), selectedProfile));
         String normalizedEmail = request.adminEmail().trim().toLowerCase(Locale.ROOT);
         UserEntity adminUser = userRepository.save(new UserEntity(
                 tenant.getId(),

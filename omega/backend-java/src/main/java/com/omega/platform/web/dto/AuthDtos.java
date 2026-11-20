@@ -1,5 +1,6 @@
 package com.omega.platform.web.dto;
 
+import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.security.Role;
 import com.omega.platform.web.ValidationPatterns;
 import jakarta.validation.constraints.NotBlank;
@@ -34,8 +35,18 @@ public final class AuthDtos {
             @NotBlank(message = "El nombre completo es obligatorio")
             @Size(min = 2, max = 200, message = "El nombre debe tener entre 2 y 200 caracteres")
             @Pattern(regexp = ValidationPatterns.PERSON_NAME_REGEX, message = "Ingresa un nombre completo válido (solo letras, espacios, apóstrofo o guion; sin números ni símbolos)")
-            String adminFullName
+            String adminFullName,
+            TenantProfile profile
     ) {
+        public RegisterTenantRequest(
+                String tenantSlug,
+                String tenantName,
+                String adminEmail,
+                String adminPassword,
+                String adminFullName
+        ) {
+            this(tenantSlug, tenantName, adminEmail, adminPassword, adminFullName, TenantProfile.GENERAL);
+        }
     }
 
     public record RegisterAccountRequest(
@@ -53,8 +64,12 @@ public final class AuthDtos {
             String password,
             @Size(max = 200, message = "La organización no puede superar 200 caracteres")
             @Pattern(regexp = ValidationPatterns.OPTIONAL_ORGANIZATION_NAME_REGEX, message = "Ingresa un nombre de organización válido (al menos 2 letras, sin símbolos especiales)")
-            String organizationName
+            String organizationName,
+            TenantProfile profile
     ) {
+        public RegisterAccountRequest(String fullName, String email, String password, String organizationName) {
+            this(fullName, email, password, organizationName, TenantProfile.GENERAL);
+        }
     }
 
     public record LoginRequest(

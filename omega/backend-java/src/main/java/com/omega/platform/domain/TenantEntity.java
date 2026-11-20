@@ -2,6 +2,8 @@ package com.omega.platform.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -27,6 +29,10 @@ public class TenantEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "profile", nullable = false, length = 20)
+    private TenantProfile profile = TenantProfile.GENERAL;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -34,9 +40,14 @@ public class TenantEntity {
     }
 
     public TenantEntity(String slug, String name) {
+        this(slug, name, TenantProfile.GENERAL);
+    }
+
+    public TenantEntity(String slug, String name, TenantProfile profile) {
         this.slug = slug;
         this.name = name;
         this.active = true;
+        this.profile = profile != null ? profile : TenantProfile.GENERAL;
         this.createdAt = Instant.now();
     }
 
@@ -58,6 +69,14 @@ public class TenantEntity {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public TenantProfile getProfile() {
+        return profile;
+    }
+
+    public void setProfile(TenantProfile profile) {
+        this.profile = profile != null ? profile : TenantProfile.GENERAL;
     }
 
     public Instant getCreatedAt() {
