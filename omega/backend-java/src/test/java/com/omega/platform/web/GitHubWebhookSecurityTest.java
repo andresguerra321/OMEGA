@@ -1,5 +1,6 @@
 package com.omega.platform.web;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -94,7 +95,7 @@ class GitHubWebhookSecurityTest {
         byte[] body = "{\"action\":\"suspend\",\"installation\":{\"id\":123}}".getBytes(StandardCharsets.UTF_8);
         String sig = sign(body, "test-webhook-secret-123");
 
-        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt())).thenReturn(true);
+        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt(), anyString(), any())).thenReturn(true);
 
         mvc.perform(post("/api/v1/integrations/github/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -106,7 +107,7 @@ class GitHubWebhookSecurityTest {
                 .andExpect(jsonPath("$.accepted").value(true));
 
         // Replay con mismo deliveryId -> 200 OK idempotente
-        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt())).thenReturn(false);
+        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt(), anyString(), any())).thenReturn(false);
         mvc.perform(post("/api/v1/integrations/github/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Hub-Signature-256", sig)
@@ -134,7 +135,7 @@ class GitHubWebhookSecurityTest {
                         .header("X-GitHub-Event", "installation")
                         .content(body))
                 .andExpect(status().isForbidden());
-        verify(deliveryRepository, never()).tryRecordDelivery(eq("deliv-invalid-sig"), anyInt());
+        verify(deliveryRepository, never()).tryRecordDelivery(eq("deliv-invalid-sig"), anyInt(), anyString(), any());
     }
 
     @Test

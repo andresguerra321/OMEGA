@@ -30,6 +30,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -184,22 +185,46 @@ public class GitHubAppIntegrationService {
         if (deliveryId == null || deliveryId.isBlank() || deliveryId.length() > 128) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta cabecera X-GitHub-Delivery válida");
         }
-        if (!deliveryRepository.tryRecordDelivery(deliveryId.trim(), DELIVERY_TTL_HOURS)) {
+        final String safeEvent = eventType != null ? eventType.trim() : "";
+        if (!deliveryRepository.tryRecordDelivery(deliveryId.trim(), DELIVERY_TTL_HOURS, safeEvent, rawBody)) {
             return false;
         }
 
         final String safeDeliveryId = deliveryId.trim();
-        final String safeEvent = eventType != null ? eventType.trim() : "";
         CompletableFuture.runAsync(() -> {
             try {
                 processWebhookPayload(rawBody, safeEvent);
                 deliveryRepository.markProcessed(safeDeliveryId);
             } catch (Exception ex) {
                 deliveryRepository.markFailed(safeDeliveryId);
-                log.warn("Fallo procesando webhook {} ({}): {}", safeDeliveryId, safeEvent, ex.getClass().getSimpleName());
+                log.error("Alerta webhook GitHub FAILED ({} / {}): {}", safeDeliveryId, safeEvent, ex.getClass().getSimpleName());
             }
         });
         return true;
+    }
+
+    /**
+     * Reconciliación periódica: GitHub no reintenta entregas fallidas automáticamente,
+     * por lo que OMEGA reintenta eventos en estado FAILED y emite alerta si vuelven a fallar.
+     */
+    @Scheduled(fixedDelay = 60_000)
+    public void reconcileFailedDeliveries() {
+        List<GitHubWebhookDeliveryRepository.FailedDeliveryRecord> pending =
+                deliveryRepository.findRetryableFailedDeliveries(3, 20);
+        for (GitHubWebhookDeliveryRepository.FailedDeliveryRecord rec : pending) {
+            if (!deliveryRepository.tryRecordDelivery(rec.deliveryId(), DELIVERY_TTL_HOURS)) {
+                continue;
+            }
+            try {
+                byte[] bytes = rec.payloadJson().getBytes(StandardCharsets.UTF_8);
+                processWebhookPayload(bytes, rec.eventType() != null ? rec.eventType() : "");
+                deliveryRepository.markProcessed(rec.deliveryId());
+            } catch (Exception ex) {
+                deliveryRepository.markFailed(rec.deliveryId());
+                log.error("ALERTA reconciliación webhook GitHub FAILED (delivery={}, retry={}): {}",
+                        rec.deliveryId(), rec.retryCount() + 1, ex.getClass().getSimpleName());
+            }
+        }
     }
 
     @Transactional

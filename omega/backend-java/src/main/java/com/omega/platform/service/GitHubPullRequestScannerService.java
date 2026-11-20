@@ -2,6 +2,7 @@ package com.omega.platform.service;
 
 import com.omega.platform.domain.GitHubAppInstallationEntity;
 import com.omega.platform.repository.GitHubAppInstallationRepository;
+import com.omega.platform.repository.GitHubRepoDailyUsageRepository;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -69,24 +70,27 @@ public class GitHubPullRequestScannerService {
     private final GitHubApiClient gitHubApiClient;
     private final RestClient forensicWorkerRestClient;
     private final ApiTokenService apiTokenService;
+    private final GitHubRepoDailyUsageRepository dailyUsageRepository;
     private final boolean collaboratorsOnly;
     private final int maxScansPerRepoPerDay;
     private final ConcurrentHashMap<String, Future<?>> activePrScans = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Semaphore> installSemaphores = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, AtomicInteger> dailyRepoCounters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicInteger> fallbackDailyCounters = new ConcurrentHashMap<>();
 
     public GitHubPullRequestScannerService(
             GitHubAppInstallationRepository installationRepository,
             GitHubApiClient gitHubApiClient,
             @Qualifier("forensicWorkerRestClient") ObjectProvider<RestClient> forensicWorkerRestClientProvider,
             ObjectProvider<ApiTokenService> apiTokenServiceProvider,
-            @Value("${omega.github.collaborators-only:false}") boolean collaboratorsOnly,
+            ObjectProvider<GitHubRepoDailyUsageRepository> dailyUsageRepoProvider,
+            @Value("${omega.github.collaborators-only:true}") boolean collaboratorsOnly,
             @Value("${omega.github.max-scans-per-repo-per-day:" + MAX_SCANS_PER_REPO_PER_DAY + "}") int maxScansPerRepoPerDay
     ) {
         this.installationRepository = installationRepository;
         this.gitHubApiClient = gitHubApiClient;
         this.forensicWorkerRestClient = forensicWorkerRestClientProvider.getIfAvailable();
         this.apiTokenService = apiTokenServiceProvider.getIfAvailable();
+        this.dailyUsageRepository = dailyUsageRepoProvider != null ? dailyUsageRepoProvider.getIfAvailable() : null;
         this.collaboratorsOnly = collaboratorsOnly;
         this.maxScansPerRepoPerDay = Math.max(1, maxScansPerRepoPerDay);
     }
@@ -105,7 +109,7 @@ public class GitHubPullRequestScannerService {
         String headSha = prMap.get("head") instanceof Map<?, ?> headMap
                 ? String.valueOf(headMap.get("sha"))
                 : "";
-        String authorAssoc = String.valueOf(prMap.getOrDefault("author_association", ""));
+        String authorAssoc = prMap.get("author_association") instanceof String assoc ? assoc : "";
         if (repoFullName.isBlank() || prNumber <= 0 || headSha.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -144,6 +148,9 @@ public class GitHubPullRequestScannerService {
             return;
         }
 
+        boolean reservedDaily = false;
+        boolean reservedMonthly = false;
+        boolean scanCompleted = false;
         try {
             if (Thread.currentThread().isInterrupted()) {
                 return;
@@ -166,16 +173,30 @@ public class GitHubPullRequestScannerService {
                 return;
             }
 
-            if (!tryAcquireDailyRepoSlot(repoFullName)
-                    || (apiTokenService != null && !apiTokenService.hasAvailableMonthlyQuota(install.getTenantId()))) {
+            reservedDaily = tryAcquireDailyRepoSlot(repoFullName);
+            if (!reservedDaily) {
                 gitHubApiClient.upsertPullRequestComment(
                         installationToken,
                         repoFullName,
                         prNumber,
                         PR_COMMENT_MARKER,
-                        buildNoticeComment("Cuota de escaneos OMEGA alcanzada para este periodo o repositorio; análisis omitido sin bloquear el PR.")
+                        buildNoticeComment("Cuota diaria de escaneos OMEGA alcanzada para este repositorio; análisis omitido sin bloquear el PR.")
                 );
                 return;
+            }
+
+            if (apiTokenService != null) {
+                reservedMonthly = apiTokenService.tryReserveMonthlyScanQuota(install.getTenantId());
+                if (!reservedMonthly) {
+                    gitHubApiClient.upsertPullRequestComment(
+                            installationToken,
+                            repoFullName,
+                            prNumber,
+                            PR_COMMENT_MARKER,
+                            buildNoticeComment("Cuota mensual de escaneos OMEGA alcanzada para el plan del tenant; análisis omitido sin bloquear el PR.")
+                    );
+                    return;
+                }
             }
 
             if (Thread.currentThread().isInterrupted()) {
@@ -192,25 +213,52 @@ public class GitHubPullRequestScannerService {
                 return;
             }
 
-            // Descontar cuota mensual del tenant SOLO tras completar el escaneo (sin tocar tokens de API ni cobrar cancelaciones/fallos)
-            if (apiTokenService != null) {
-                apiTokenService.consumeTenantMonthlyScanQuota(install.getTenantId());
-            }
-
+            scanCompleted = true;
             String commentBody = buildPullRequestComment(scanResult);
             gitHubApiClient.upsertPullRequestComment(
                     installationToken, repoFullName, prNumber, PR_COMMENT_MARKER, commentBody);
         } catch (Exception ex) {
             log.warn("Fallo en escaneo de PR {}#{}: {}", repoFullName, prNumber, ex.getClass().getSimpleName());
         } finally {
+            if (!scanCompleted) {
+                if (reservedMonthly && apiTokenService != null) {
+                    apiTokenService.releaseMonthlyScanQuota(install.getTenantId());
+                }
+                if (reservedDaily) {
+                    releaseDailyRepoSlot(repoFullName);
+                }
+            }
             sem.release();
         }
     }
 
     private boolean tryAcquireDailyRepoSlot(String repoFullName) {
+        if (dailyUsageRepository != null) {
+            return dailyUsageRepository.tryReserveDailySlot(repoFullName, maxScansPerRepoPerDay);
+        }
         String key = LocalDate.now(ZoneOffset.UTC) + ":" + repoFullName.toLowerCase();
-        AtomicInteger counter = dailyRepoCounters.computeIfAbsent(key, ignored -> new AtomicInteger(0));
-        return counter.incrementAndGet() <= maxScansPerRepoPerDay;
+        AtomicInteger counter = fallbackDailyCounters.computeIfAbsent(key, ignored -> new AtomicInteger(0));
+        while (true) {
+            int current = counter.get();
+            if (current >= maxScansPerRepoPerDay) {
+                return false;
+            }
+            if (counter.compareAndSet(current, current + 1)) {
+                return true;
+            }
+        }
+    }
+
+    private void releaseDailyRepoSlot(String repoFullName) {
+        if (dailyUsageRepository != null) {
+            dailyUsageRepository.releaseDailySlot(repoFullName);
+            return;
+        }
+        String key = LocalDate.now(ZoneOffset.UTC) + ":" + repoFullName.toLowerCase();
+        AtomicInteger counter = fallbackDailyCounters.get(key);
+        if (counter != null) {
+            counter.updateAndGet(v -> Math.max(0, v - 1));
+        }
     }
 
     public static boolean shouldScanChangedFiles(List<String> changedFiles) {

@@ -519,6 +519,7 @@ def run_host_infostealer_scan():
 
 @app.post("/api/repo/scan", response_model=ScanStatus)
 async def run_repo_scan(
+    request: Request,
     file: UploadFile = File(...),
     max_files: int = Form(5000),
     timeout_seconds: float = Form(30.0),
@@ -527,6 +528,8 @@ async def run_repo_scan(
     from repo_scanner import DEFAULT_MAX_BYTES, scan_archive_bytes
 
     raw = await file.read(DEFAULT_MAX_BYTES + 1)
+    if await request.is_disconnected():
+        raise HTTPException(status_code=499, detail="Cliente desconectado; escaneo cancelado.")
     if len(raw) > DEFAULT_MAX_BYTES:
         raise HTTPException(status_code=413, detail="El archivo supera el límite máximo permitido (50 MiB).")
     try:

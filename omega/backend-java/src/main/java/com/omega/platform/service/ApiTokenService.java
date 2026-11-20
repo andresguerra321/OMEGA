@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,9 @@ public class ApiTokenService {
 
     @Autowired(required = false)
     private CommercialSaasService commercialSaasService;
+
+    @Autowired(required = false)
+    private NamedParameterJdbcTemplate jdbc;
 
     public ApiTokenService(
             ApiTokenRepository apiTokenRepository,
@@ -190,6 +194,70 @@ public class ApiTokenService {
         return repoScanUsageRepository.findByTenantIdAndPeriodYm(tenantId, periodYm)
                 .map(u -> u.getScansUsed() < monthlyQuota)
                 .orElse(true);
+    }
+
+    @Transactional
+    public boolean tryReserveMonthlyScanQuota(UUID tenantId) {
+        int monthlyQuota = resolveMonthlyScanQuota(tenantId);
+        String periodYm = YearMonth.now(ZoneOffset.UTC).toString();
+        Instant now = Instant.now();
+        if (jdbc != null) {
+            int updated = jdbc.update(
+                    """
+                    INSERT INTO omega_rag.repo_scan_usage (id, tenant_id, period_ym, scans_used, updated_at)
+                    VALUES (:id, :tenantId, :periodYm, 1, :now)
+                    ON CONFLICT (tenant_id, period_ym) DO UPDATE
+                        SET scans_used = omega_rag.repo_scan_usage.scans_used + 1,
+                            updated_at = EXCLUDED.updated_at
+                        WHERE omega_rag.repo_scan_usage.scans_used < :quota
+                    """,
+                    Map.of(
+                            "id", UUID.randomUUID(),
+                            "tenantId", tenantId,
+                            "periodYm", periodYm,
+                            "now", java.sql.Timestamp.from(now),
+                            "quota", monthlyQuota
+                    )
+            );
+            return updated == 1;
+        }
+        RepoScanUsageEntity usage = repoScanUsageRepository.findByTenantIdAndPeriodYm(tenantId, periodYm)
+                .orElseGet(() -> new RepoScanUsageEntity(UUID.randomUUID(), tenantId, periodYm, 0, now));
+        if (usage.getScansUsed() >= monthlyQuota) {
+            return false;
+        }
+        usage.setScansUsed(usage.getScansUsed() + 1);
+        usage.setUpdatedAt(now);
+        repoScanUsageRepository.save(usage);
+        return true;
+    }
+
+    @Transactional
+    public void releaseMonthlyScanQuota(UUID tenantId) {
+        String periodYm = YearMonth.now(ZoneOffset.UTC).toString();
+        Instant now = Instant.now();
+        if (jdbc != null) {
+            jdbc.update(
+                    """
+                    UPDATE omega_rag.repo_scan_usage
+                    SET scans_used = GREATEST(0, scans_used - 1), updated_at = :now
+                    WHERE tenant_id = :tenantId AND period_ym = :periodYm
+                    """,
+                    Map.of(
+                            "tenantId", tenantId,
+                            "periodYm", periodYm,
+                            "now", java.sql.Timestamp.from(now)
+                    )
+            );
+            return;
+        }
+        repoScanUsageRepository.findByTenantIdAndPeriodYm(tenantId, periodYm).ifPresent(u -> {
+            if (u.getScansUsed() > 0) {
+                u.setScansUsed(u.getScansUsed() - 1);
+                u.setUpdatedAt(now);
+                repoScanUsageRepository.save(u);
+            }
+        });
     }
 
     @Transactional

@@ -197,6 +197,9 @@ public interface GitHubApiClient {
                 String marker,
                 String bodyMarkdown
         ) {
+            if (expectedBotLogin.isBlank()) {
+                throw new IllegalStateException("OMEGA_GITHUB_APP_BOT_LOGIN no configurado; filtro de comentario falla cerrado");
+            }
             List<Map<String, Object>> comments = restClient.get()
                     .uri("/repos/{repo}/issues/{pr}/comments?per_page=100", repoFullName, prNumber)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
@@ -207,13 +210,11 @@ public interface GitHubApiClient {
             if (comments != null) {
                 for (Map<String, Object> c : comments) {
                     if (c.get("body") instanceof String b && b.contains(marker) && c.get("id") instanceof Number n) {
-                        if (!expectedBotLogin.isBlank()) {
-                            String authorLogin = c.get("user") instanceof Map<?, ?> u && u.get("login") instanceof String l
-                                    ? l.trim()
-                                    : "";
-                            if (!expectedBotLogin.equalsIgnoreCase(authorLogin)) {
-                                continue;
-                            }
+                        String authorLogin = c.get("user") instanceof Map<?, ?> u && u.get("login") instanceof String l
+                                ? l.trim()
+                                : "";
+                        if (!expectedBotLogin.equalsIgnoreCase(authorLogin)) {
+                            continue;
                         }
                         existingId = n.longValue();
                         break;
