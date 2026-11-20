@@ -376,6 +376,9 @@ export function SettingsPanel({
   initialSection = '',
   initialSectionKey = 0,
   onAiConfigured,
+  embedded = false,
+  saveTrigger = 0,
+  onSavedFeedback,
 }) {
   const [activeSection, setActiveSection] = useState(initialSection || 'cuenta');
   const [gov, setGov] = useState(null);
@@ -871,12 +874,23 @@ export function SettingsPanel({
     setSavedPassiveLinks(passiveLinks);
     setSavedExplicitConsent(explicitConsent);
     setSavedFeedback(true);
+    onSavedFeedback?.(true);
     setActionBanner({
       tone: 'clean',
       message: `Preferencias guardadas en sesión local (Top-${topK} · ${sourceScope}).`,
     });
-    setTimeout(() => setSavedFeedback(false), 1800);
+    setTimeout(() => {
+      setSavedFeedback(false);
+      onSavedFeedback?.(false);
+    }, 1800);
   }
+
+  useEffect(() => {
+    if (saveTrigger > 0) {
+      handleSaveChanges();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveTrigger]);
 
   function handleDiscardChanges() {
     onChangeTopK?.(savedTopK);
@@ -899,81 +913,117 @@ export function SettingsPanel({
     CONFIG_SECTIONS.find((sec) => sec.id === activeSection) || CONFIG_SECTIONS[0];
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      {/* Cabecera estilo referencia: Breadcrumb Ajustes > Sección + acciones */}
-      <div className="shrink-0 border-b border-white/[0.08] bg-[#0A0A0C]/65 px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[15px] sm:text-[17px]">
-          <span className="font-semibold tracking-[-0.02em] text-[#F2F2F4]">Ajustes</span>
-          <span className="text-[#7C7D87]">›</span>
-          <span className="text-[#9FA6B8] font-medium">{activeSectionMeta.label}</span>
-        </div>
+    <div className={embedded ? 'space-y-4' : 'h-full flex flex-col min-h-0'}>
+      {!embedded && (
+        <div className="shrink-0 border-b border-white/[0.08] bg-[#0A0A0C]/65 px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-[15px] sm:text-[17px]">
+            <span className="font-semibold tracking-[-0.02em] text-[#F2F2F4]">Ajustes</span>
+            <span className="text-[#7C7D87]">›</span>
+            <span className="text-[#9FA6B8] font-medium">{activeSectionMeta.label}</span>
+          </div>
 
-        <div className="flex items-center justify-end gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={handleDiscardChanges}
-            className="rounded-lg text-[12.5px] text-[#9A9AA2] hover:text-[#F2F2F4] px-2.5 py-1.5 transition-colors cursor-pointer"
-          >
-            Descartar
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveChanges}
-            className="rounded-lg bg-[#2F6FED] hover:bg-[#2F6FED]/90 text-white px-3.5 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            {savedFeedback ? (
-              <>
-                <Check className="h-3.5 w-3.5" strokeWidth={1.75} />
-                <span>Guardado</span>
-              </>
-            ) : (
-              <span>Guardar cambios</span>
-            )}
-          </button>
+          <div className="flex items-center justify-end gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleDiscardChanges}
+              className="rounded-lg text-[12.5px] text-[#9A9AA2] hover:text-[#F2F2F4] px-2.5 py-1.5 transition-colors cursor-pointer"
+            >
+              Descartar
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveChanges}
+              className="rounded-lg bg-[#2F6FED] hover:bg-[#2F6FED]/90 text-white px-3.5 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {savedFeedback ? (
+                <>
+                  <Check className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span>Guardado</span>
+                </>
+              ) : (
+                <span>Guardar cambios</span>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {embedded && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-1.5">
+          {CONFIG_SECTIONS.map((sec) => {
+            const Icon = sec.icon;
+            const isActive = activeSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => scrollToSection(sec.id)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-[#2F6FED] text-white'
+                    : 'text-[#8E95A5] hover:text-white hover:bg-[#141923]/75'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                <span>{sec.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Área Scrollable dividida en 2 columnas (Sidebar Untitled UI + Contenido Split-Row) */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-transparent px-4 sm:px-8 py-6">
-        <div className="animate-fade-up mx-auto max-w-[1120px] grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8 lg:gap-12 pb-24">
+      <div
+        ref={scrollContainerRef}
+        className={embedded ? 'bg-transparent' : 'flex-1 overflow-y-auto bg-transparent px-4 sm:px-8 py-6'}
+      >
+        <div
+          className={
+            embedded
+              ? 'animate-fade-up'
+              : 'animate-fade-up mx-auto max-w-[1120px] grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8 lg:gap-12 pb-24'
+          }
+        >
           {/* Columna izquierda: Navegación categorizada */}
-          <aside className="md:sticky md:top-0 md:self-start space-y-6">
-            {['CUENTA', 'ESPACIO DE TRABAJO'].map((groupName) => {
-              const items = CONFIG_SECTIONS.filter((sec) => sec.group === groupName);
-              return (
-                <div key={groupName} className="space-y-1.5">
-                  <div className="px-3 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-[#7C7D87]">
-                    {groupName}
-                  </div>
-                  <div className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar">
-                    {items.map((sec) => {
-                      const Icon = sec.icon;
-                      const isActive = activeSection === sec.id;
-                      return (
-                        <button
-                          key={sec.id}
-                          type="button"
-                          onClick={() => scrollToSection(sec.id)}
-                          className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-left shrink-0 transition-colors duration-150 cursor-pointer ${
-                            isActive
-                              ? 'bg-[#2F6FED]/12 text-white font-medium'
-                              : 'text-[#8E95A5] hover:text-white hover:bg-white/[0.04]'
-                          }`}
-                        >
-                          <Icon
-                            className={`h-4 w-4 shrink-0 ${
-                              isActive ? 'text-[#2F6FED]' : 'text-[#7C7D87]'
+          {!embedded && (
+            <aside className="md:sticky md:top-0 md:self-start space-y-6">
+              {['CUENTA', 'ESPACIO DE TRABAJO'].map((groupName) => {
+                const items = CONFIG_SECTIONS.filter((sec) => sec.group === groupName);
+                return (
+                  <div key={groupName} className="space-y-1.5">
+                    <div className="px-3 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-[#7C7D87]">
+                      {groupName}
+                    </div>
+                    <div className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar">
+                      {items.map((sec) => {
+                        const Icon = sec.icon;
+                        const isActive = activeSection === sec.id;
+                        return (
+                          <button
+                            key={sec.id}
+                            type="button"
+                            onClick={() => scrollToSection(sec.id)}
+                            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-left shrink-0 transition-colors duration-150 cursor-pointer ${
+                              isActive
+                                ? 'bg-[#2F6FED]/12 text-white font-medium'
+                                : 'text-[#8E95A5] hover:text-white hover:bg-white/[0.04]'
                             }`}
-                          />
-                          <span className="whitespace-nowrap">{sec.label}</span>
-                        </button>
-                      );
-                    })}
+                          >
+                            <Icon
+                              className={`h-4 w-4 shrink-0 ${
+                                isActive ? 'text-[#2F6FED]' : 'text-[#7C7D87]'
+                              }`}
+                            />
+                            <span className="whitespace-nowrap">{sec.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </aside>
+                );
+              })}
+            </aside>
+          )}
 
           {/* Columna derecha: Header con breadcrumb, banner de estado y filas Split-Row */}
           <div className="min-w-0 rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-5 sm:p-6">

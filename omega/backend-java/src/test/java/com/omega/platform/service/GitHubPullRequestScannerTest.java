@@ -8,6 +8,7 @@ import com.omega.platform.domain.GitHubAppInstallationEntity;
 import com.omega.platform.repository.GitHubAppInstallationRepository;
 import com.omega.platform.repository.GitHubRepoDailyUsageRepository;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,8 +23,39 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.mock.http.client.MockClientHttpRequest;
+import org.springframework.test.web.client.MockRestServiceServer;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class GitHubPullRequestScannerTest {
+    @Test
+    void sendsTarballToWorkerAsMultipartWithoutReactiveDependencies() {
+        var builder = RestClient.builder().baseUrl("http://worker:8000");
+        var server = MockRestServiceServer.bindTo(builder).build();
+        ObjectProvider<RestClient> workerProvider = mock(ObjectProvider.class);
+        when(workerProvider.getIfAvailable()).thenReturn(builder.build());
+        ObjectProvider<ApiTokenService> tokenProvider = mock(ObjectProvider.class);
+        var scanner = new GitHubPullRequestScannerService(
+                mock(GitHubAppInstallationRepository.class), mock(GitHubApiClient.class),
+                workerProvider, tokenProvider, null, true, 10);
+        server.expect(requestTo("http://worker:8000/api/repo/scan"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Tenant-Id", "tenant"))
+                .andExpect(request -> {
+                    assertTrue(request.getHeaders().getContentType().isCompatibleWith(MediaType.MULTIPART_FORM_DATA));
+                    String body = ((MockClientHttpRequest) request).getBodyAsString();
+                    assertTrue(body.contains("filename=\"pr.tar.gz\""));
+                    assertTrue(body.contains("tarball-test"));
+                })
+                .andRespond(withSuccess(
+                        "{\"score\":0,\"findings\":[]}", MediaType.APPLICATION_JSON));
+        assertEquals(0, scanner.sendTarballToWorker("tenant", "tarball-test".getBytes(StandardCharsets.UTF_8)).get("score"));
+        server.verify();
+    }
+
 
         @Test
         void commentUsesStrictAllowlistNeverIncludesEvidenceOrUnknownSecretsAndEscapesHostileInput() {

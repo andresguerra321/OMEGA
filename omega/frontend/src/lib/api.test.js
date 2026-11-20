@@ -97,6 +97,43 @@ function makeFutureJwt() {
   return `${header}.${payload}.sig`;
 }
 
+test('unauthenticated requests do not repeatedly expire the login screen', async () => {
+  const env = installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js?guest-unauthorized');
+  globalThis.fetch = async () => new Response('{}', { status: 401 });
+  await assert.rejects(api.fetchCurrentPrincipal(), error => error.status === 401);
+  await assert.rejects(api.fetchCurrentPrincipal(), error => error.status === 401);
+  assert.equal(env.events.filter(event => event === 'omega:auth-required').length, 0);
+  assert.equal(env.events.filter(event => event === 'omega:auth-changed').length, 0);
+});
+
+test('a late unauthorized response cannot clear a newly signed-in session', async () => {
+  const env = installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js?stale-unauthorized');
+  api.saveAuthSession({ accessToken: makeFutureJwt(), expiresInSeconds: 3600 });
+  let completeRequest;
+  globalThis.fetch = () => new Promise(resolve => { completeRequest = resolve; });
+  const pending = api.fetchCurrentPrincipal();
+  const next = api.saveAuthSession({ accessToken: makeFutureJwt(), expiresInSeconds: 3600 });
+  completeRequest(new Response('{}', { status: 401 }));
+  await assert.rejects(pending, error => error.status === 401);
+  assert.equal(api.getAuthSession(), next);
+  assert.equal(env.events.filter(event => event === 'omega:auth-required').length, 0);
+});
+
+test('concurrent unauthorized responses expire the active session once', async () => {
+  const env = installMockBrowserEnvironment({ seedLegacy: false });
+  const api = await import('./api.js?active-unauthorized');
+  api.saveAuthSession({ accessToken: makeFutureJwt(), expiresInSeconds: 3600 });
+  const responses = [];
+  globalThis.fetch = () => new Promise(resolve => { responses.push(resolve); });
+  const pending = [api.fetchCurrentPrincipal(), api.fetchCurrentPrincipal()];
+  responses.forEach(resolve => resolve(new Response('{}', { status: 401 })));
+  await Promise.all(pending.map(request => assert.rejects(request, error => error.status === 401)));
+  assert.equal(api.getAuthSession(), null);
+  assert.equal(env.events.filter(event => event === 'omega:auth-required').length, 1);
+});
+
 test('cookie writes obtain a fresh CSRF token and send it with credentials', async () => {
   installMockBrowserEnvironment({ seedLegacy: false });
   const api = await import('./api.js?csrf-cookie');

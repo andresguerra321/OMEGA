@@ -118,7 +118,7 @@ public interface GitHubApiClient {
         @SuppressWarnings("unchecked")
         public List<String> listPullRequestFiles(String installationToken, String repoFullName, int prNumber) {
             List<Map<String, Object>> files = restClient.get()
-                    .uri("/repos/{repo}/pulls/{pr}/files?per_page=100", repoFullName, prNumber)
+                    .uri(repositoryPath(repoFullName) + "/pulls/{pr}/files?per_page=100", prNumber)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
                     .retrieve()
                     .body(List.class);
@@ -141,7 +141,7 @@ public interface GitHubApiClient {
                 String refSha,
                 int maxBytes
         ) {
-            URI currentUri = URI.create("https://api.github.com/repos/" + repoFullName + "/tarball/" + refSha);
+            URI currentUri = URI.create("https://api.github.com" + repositoryPath(repoFullName) + "/tarball/" + refSha);
             for (int hop = 0; hop <= 2; hop++) {
                 validateAllowedTarballUri(currentUri);
                 HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(currentUri)
@@ -201,7 +201,7 @@ public interface GitHubApiClient {
                 throw new IllegalStateException("OMEGA_GITHUB_APP_BOT_LOGIN no configurado; filtro de comentario falla cerrado");
             }
             List<Map<String, Object>> comments = restClient.get()
-                    .uri("/repos/{repo}/issues/{pr}/comments?per_page=100", repoFullName, prNumber)
+                    .uri(repositoryPath(repoFullName) + "/issues/{pr}/comments?per_page=100", prNumber)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
                     .retrieve()
                     .body(List.class);
@@ -224,7 +224,7 @@ public interface GitHubApiClient {
 
             if (existingId != null) {
                 restClient.patch()
-                        .uri("/repos/{repo}/issues/comments/{commentId}", repoFullName, existingId)
+                        .uri(repositoryPath(repoFullName) + "/issues/comments/{commentId}", existingId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(Map.of("body", bodyMarkdown))
@@ -232,13 +232,22 @@ public interface GitHubApiClient {
                         .toBodilessEntity();
             } else {
                 restClient.post()
-                        .uri("/repos/{repo}/issues/{pr}/comments", repoFullName, prNumber)
+                        .uri(repositoryPath(repoFullName) + "/issues/{pr}/comments", prNumber)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(Map.of("body", bodyMarkdown))
                         .retrieve()
                         .toBodilessEntity();
             }
+        }
+
+        private static String repositoryPath(String repoFullName) {
+            if (repoFullName == null || !repoFullName.matches("[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+")
+                    || repoFullName.endsWith("/.") || repoFullName.endsWith("/..")) {
+                throw new IllegalArgumentException("Repositorio inválido; se requiere propietario/repositorio");
+            }
+            // Keep the owner/repository separator out of URI variables, which encode it as %2F.
+            return "/repos/" + repoFullName;
         }
 
         public static void validateAllowedTarballUri(URI uri) {

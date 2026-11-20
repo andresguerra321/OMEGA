@@ -25,8 +25,8 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -367,11 +367,11 @@ public class GitHubPullRequestScannerService {
         if (forensicWorkerRestClient == null) {
             throw new IllegalStateException("forensicWorkerRestClient no disponible");
         }
-        MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        var body = new LinkedMultiValueMap<String, Object>();
         HttpHeaders partHeaders = new HttpHeaders();
         partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename("pr.tar.gz").build());
         partHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        bodyBuilder.part("file", new HttpEntity<>(new ByteArrayResource(tarballBytes) {
+        body.add("file", new HttpEntity<>(new ByteArrayResource(tarballBytes) {
             @Override
             public String getFilename() {
                 return "pr.tar.gz";
@@ -382,7 +382,7 @@ public class GitHubPullRequestScannerService {
                 .uri("/api/repo/scan")
                 .header("X-Tenant-Id", tenantId)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(bodyBuilder.build())
+                .body(body)
                 .retrieve()
                 .body(Map.class);
     }

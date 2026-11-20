@@ -2213,7 +2213,7 @@ dependencies = [
 
 [[package]]
 name = "omega-desktop-tauri"
-version = "2.0.8"
+version = "2.0.9"
 dependencies = [
  "getrandom 0.3.4",
  "serde",
