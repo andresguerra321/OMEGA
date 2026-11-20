@@ -13,6 +13,7 @@ import com.omega.platform.saas.CommercialSaasService;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
+import com.omega.platform.service.TenantProfileConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -56,6 +57,9 @@ public class HybridRagQueryService {
 
     @Autowired(required = false)
     private TenantRepository tenantRepository;
+
+    @Autowired(required = false)
+    private TenantProfileConfigService profileConfigService;
 
     public HybridRagQueryService(
             ExpedienteAuthorizationService authorizationService,
@@ -235,7 +239,12 @@ public class HybridRagQueryService {
             }
         }
 
-        String answer = answerGenerator.generateGroundedAnswer(RagConversation.generationQuestion(request.question(), request.history()), ranked, request.analysisContext());
+        String effectiveAnalysisContext = resolveProfileAnalysisContext(principal, request.analysisContext());
+        String answer = answerGenerator.generateGroundedAnswer(
+                RagConversation.generationQuestion(request.question(), request.history()),
+                ranked,
+                effectiveAnalysisContext
+        );
         List<RagCitationDto> citations = ranked.stream()
                 .map(c -> new RagCitationDto(
                         c.documentId(),
@@ -272,6 +281,22 @@ public class HybridRagQueryService {
         String responseModel = answer.startsWith("Resumen extractivo sin síntesis LLM")
                 ? "omega-extractive-fallback" : answerGenerator.resolveActiveGeneratorModel();
         return new RagQueryResponse(status, responseModel, answer, warnings, reindexNotices, citations);
+    }
+
+    private String resolveProfileAnalysisContext(OmegaPrincipal principal, String requestAnalysisContext) {
+        if (profileConfigService == null || tenantRepository == null || principal == null || principal.tenantId() == null) {
+            return requestAnalysisContext;
+        }
+        String instructions = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                .map(t -> profileConfigService.getConfig(t.getProfile() != null ? t.getProfile() : TenantProfile.GENERAL).copilotInstructions())
+                .orElse("");
+        if (instructions == null || instructions.isBlank()) {
+            return requestAnalysisContext;
+        }
+        if (requestAnalysisContext == null || requestAnalysisContext.isBlank()) {
+            return instructions;
+        }
+        return instructions + "\n" + requestAnalysisContext;
     }
 
     private String resolveCorpusScope(OmegaPrincipal principal) {
