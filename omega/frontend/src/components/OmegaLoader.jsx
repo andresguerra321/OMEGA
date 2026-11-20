@@ -222,6 +222,7 @@ export function OmegaLoader({
   label = 'Iniciando OMEGA',
   stepIntervalMs = 1400,
   variant = 'eclipse',
+  statusMessage = '',
 }) {
   const [stepIdx, setStepIdx] = useState(0);
   const canvasRef = useRef(null);
@@ -274,25 +275,44 @@ export function OmegaLoader({
         <canvas ref={canvasRef} className="h-full w-full block" aria-hidden="true" />
       </div>
 
-      {variant !== 'startup' && <div className="flex flex-col items-center gap-2">
-        <span className="font-display text-[13px] font-semibold tracking-[0.44em] text-[#F2F2F4] pl-[0.44em]">
-          OMEGA
-        </span>
-
-        <div className="h-[16px] overflow-hidden">
+      {variant === 'startup' ? (
+        <div className="flex flex-col items-center gap-2 max-w-sm px-4 text-center">
+          <span className="font-display text-[12px] font-semibold tracking-[0.44em] text-[#F2F2F4] pl-[0.44em]">
+            OMEGA
+          </span>
           <AnimatePresence mode="wait">
             <motion.span
-              key={stepIdx}
-              initial={{ opacity: 0, y: 6 }}
+              key={statusMessage || 'init'}
+              initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE_OUT } }}
-              exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
-              className="block font-tech text-[11px] uppercase tracking-[0.14em] text-[#8A8B94]"
+              exit={{ opacity: 0, y: -5, transition: { duration: 0.15 } }}
+              className="block text-[13px] leading-relaxed text-[#9A9AA2]"
             >
-              {steps[stepIdx]}…
+              {statusMessage || 'Preparando entorno local de OMEGA…'}
             </motion.span>
           </AnimatePresence>
         </div>
-      </div>}
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          <span className="font-display text-[13px] font-semibold tracking-[0.44em] text-[#F2F2F4] pl-[0.44em]">
+            OMEGA
+          </span>
+
+          <div className="h-[16px] overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={stepIdx}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE_OUT } }}
+                exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
+                className="block font-tech text-[11px] uppercase tracking-[0.14em] text-[#8A8B94]"
+              >
+                {steps[stepIdx]}…
+              </motion.span>
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

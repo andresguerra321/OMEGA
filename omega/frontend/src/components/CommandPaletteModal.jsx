@@ -1,4 +1,4 @@
-import { BookOpen, Gauge, MessageSquare, Search, Sparkles } from 'lucide-react';
+import { BookOpen, MessageSquare, Search, Sparkles } from 'lucide-react';
 import { sanitizeSearchInput } from '../lib/validators';
 
 export function CommandPaletteModal({
@@ -9,8 +9,6 @@ export function CommandPaletteModal({
   navItems,
   onNavigate,
   onOpenCopilot,
-  technicalMode,
-  onToggleTechnicalMode,
   onOpenOnboarding,
   sessions,
   onSelectSession,
@@ -89,22 +87,6 @@ export function CommandPaletteModal({
               <span>Abrir Copiloto lateral</span>
             </span>
             <span className="font-tech text-[11px] text-[#9A9AA2]">⌘J</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onToggleTechnicalMode();
-              onClose();
-            }}
-            className="w-full flex items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
-          >
-            <span className="inline-flex items-center gap-3">
-              <Gauge className="h-4 w-4 text-[#2F6FED]" />
-              <span>
-                Cambiar a modo {technicalMode ? 'Simple (lenguaje claro)' : 'Técnico'}
-              </span>
-            </span>
-            <span className="text-[11.5px] text-[#9A9AA2]">Vista actual</span>
           </button>
           <button
             type="button"

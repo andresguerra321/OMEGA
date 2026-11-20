@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   Copy,
   Link2,
   Loader2,
   RefreshCw,
+  Search,
   Shield,
   Smartphone,
   X,
@@ -36,15 +38,19 @@ export function OsintPanel({
   onVerifyLink,
   onAuditDevice,
   onOpenThreat,
+  onSwitchMode,
   initialAsset = null,
   initialJumpKey = 0,
 }) {
   const [assets, setAssets] = useState([]);
   const [loadingAssets, setLoadingAssets] = useState(true);
   const [loadAssetsError, setLoadAssetsError] = useState('');
-  const [assetType, setAssetType] = useState('institutional_email');
-  const [assetValue, setAssetValue] = useState('');
+  const [assetType, setAssetType] = useState(
+    initialAsset?.type === 'domain' ? 'domain' : 'institutional_email'
+  );
+  const [assetValue, setAssetValue] = useState(initialAsset?.value || '');
   const [consentChecked, setConsentChecked] = useState(false);
+  const [showConfigPopover, setShowConfigPopover] = useState(false);
 
   const [isScanning, setIsScanning] = useState(false);
   const [activeAsset, setActiveAsset] = useState(null);
@@ -57,7 +63,7 @@ export function OsintPanel({
   const reportContainerRef = useRef(null);
 
   useEffect(() => {
-    if (!initialJumpKey || !initialAsset?.value || initialJumpKey === lastJumpKeyRef.current) {
+    if (!initialJumpKey || !initialAsset || initialJumpKey === lastJumpKeyRef.current) {
       return undefined;
     }
     lastJumpKeyRef.current = initialJumpKey;
@@ -66,7 +72,9 @@ export function OsintPanel({
       setActiveAsset(null);
       setErrorMsg('');
       setAssetType(initialAsset.type === 'institutional_email' ? 'institutional_email' : 'domain');
-      setAssetValue(String(initialAsset.value).trim());
+      if (initialAsset.value) {
+        setAssetValue(String(initialAsset.value).trim());
+      }
       setConsentChecked(false);
     }, 0);
     return () => clearTimeout(timer);
@@ -535,105 +543,192 @@ export function OsintPanel({
     );
   }
 
-  // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente, max-w-[620px]) ---
+  // --- ESTADO 1: COMMAND BOX MODERNA DE 2 NIVELES ---
+  const filteredAssets = assets
+    .filter((asset) => asset.asset_type === assetType)
+    .slice(0, 4);
+
   return (
-    <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-6">
-      <div className="w-full max-w-[620px]">
-        <header className="text-center mb-6 sm:mb-7">
-          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
+    <div className="relative animate-fade-up flex-1 flex flex-col items-center pt-14 sm:pt-16 pb-12 px-3 sm:px-6 overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl mt-[4vh]">
+        {/* Selector limpio tipo píldora centrado encima del título */}
+        <div className="mb-5 flex justify-center">
+          <div className="inline-flex rounded-full border border-white/[0.07] bg-[#0F131B]/80 backdrop-blur-xl p-1">
+            <button
+              type="button"
+              onClick={() => onSwitchMode?.('link')}
+              className="rounded-full border border-transparent px-3.5 py-1 text-xs font-medium text-[#8E95A5] hover:text-white transition-colors cursor-pointer"
+            >
+              Enlace URL
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAssetType('institutional_email');
+                setErrorMsg('');
+              }}
+              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                assetType === 'institutional_email'
+                  ? 'bg-[#2F6FED]/20 border border-[#2F6FED]/45 text-white'
+                  : 'border border-transparent text-[#8E95A5] hover:text-white'
+              }`}
+            >
+              Correo
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAssetType('domain');
+                setErrorMsg('');
+              }}
+              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                assetType === 'domain'
+                  ? 'bg-[#2F6FED]/20 border border-[#2F6FED]/45 text-white'
+                  : 'border border-transparent text-[#8E95A5] hover:text-white'
+              }`}
+            >
+              Dominio
+            </button>
+          </div>
+        </div>
+
+        <header className="text-center mb-6">
+          <h1 className="text-[26px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
             Exposición pública
           </h1>
-          <p className="mt-2 text-[13.5px] text-[#9A9AA2] max-w-[440px] mx-auto">
+          <p className="mt-2 text-sm text-[#9A9AA2] max-w-md mx-auto">
             Consulta filtraciones y registros DNS autorizados.
           </p>
         </header>
 
-        {/* Barra de Consulta Spotlight */}
+        {/* Command Box de 2 Niveles */}
         <form
           noValidate
           onSubmit={handleSubmitAudit}
-          style={{ animationDelay: '60ms' }}
-          className="animate-scale-in omega-capsule rounded-[16px] p-3"
+          className="relative rounded-2xl bg-[#0F131B]/80 backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.45)] focus-within:border-blue-500/60 focus-within:shadow-[0_0_32px_rgba(47,111,237,0.16)] transition-all"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
-            <div className="apple-segmented inline-flex self-start sm:self-auto rounded-[9px] p-0.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setAssetType('institutional_email');
-                  setErrorMsg('');
-                }}
-                className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                  assetType === 'institutional_email'
-                    ? 'apple-segmented-active'
-                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-              >
-                Correo
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAssetType('domain');
-                  setErrorMsg('');
-                }}
-                className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150 cursor-pointer ${
-                  assetType === 'domain'
-                    ? 'apple-segmented-active'
-                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-              >
-                Dominio
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <input
-                type="text"
-                maxLength={254}
-                value={assetValue}
-                onChange={(e) => {
-                  setAssetValue(stripUnsafeChars(e.target.value, 254));
-                  if (errorMsg) setErrorMsg('');
-                }}
-                aria-invalid={Boolean(errorMsg)}
-                placeholder={
-                  assetType === 'institutional_email'
-                    ? 'prensa@organizacion.org'
-                    : 'organizacion.org'
-                }
-                className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 text-[13.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
-              />
-
-              <button
-                type="submit"
-                disabled={!assetValue.trim() || !consentChecked || isScanning}
-                className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
-              >
-                {isScanning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                <span>Auditar</span>
-              </button>
-            </div>
+          {/* Zona superior: Máximo 4 chips filtrados por modo en una sola fila */}
+          <div className="px-4 pt-3 pb-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {filteredAssets.length > 0 ? (
+              filteredAssets.map((asset) => (
+                <span
+                  key={asset.id}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 font-tech text-[11px] text-[#D2D6E2]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => executeScan(asset)}
+                    className="hover:text-white cursor-pointer truncate max-w-[180px]"
+                  >
+                    {asset.asset_value}
+                  </button>
+                  <button
+                    type="button"
+                    title="Eliminar de la sesión"
+                    onClick={(e) => handleRevokeAsset(e, asset)}
+                    className="text-[#8E95A5] hover:text-[#FF6961] cursor-pointer shrink-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))
+            ) : (
+              <span className="text-[11px] text-[#8E95A5] truncate">
+                {assetType === 'institutional_email'
+                  ? 'Ingresa un correo autorizado para auditar.'
+                  : 'Ingresa un dominio autorizado para auditar.'}
+              </span>
+            )}
           </div>
 
-          <div className="pt-2.5 mt-2.5 border-t border-white/[0.065]">
-            <label className="inline-flex items-start sm:items-center gap-2.5 text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={consentChecked}
-                onChange={(e) => setConsentChecked(e.target.checked)}
-                className="mt-0.5 sm:mt-0 h-3.5 w-3.5 rounded-[4px] accent-[#2F6FED] cursor-pointer shrink-0"
-              />
-              <span>Confirmo titularidad o autorización explícita.</span>
-            </label>
+          {/* Zona media: Input limpio sin bordes internos */}
+          <div className="px-4 py-3 flex items-center">
+            <input
+              type="text"
+              maxLength={254}
+              value={assetValue}
+              onChange={(e) => {
+                setAssetValue(stripUnsafeChars(e.target.value, 254));
+                if (errorMsg) setErrorMsg('');
+              }}
+              aria-invalid={Boolean(errorMsg)}
+              placeholder={
+                assetType === 'institutional_email'
+                  ? 'prensa@organizacion.org'
+                  : 'organizacion.org'
+              }
+              className="font-tech flex-1 min-w-0 bg-transparent border-0 text-[15px] text-white placeholder-[#7E869A] focus:outline-none"
+            />
+          </div>
+
+          {/* Barra inferior integrada (Toolbar) */}
+          <div className="px-4 py-2.5 border-t border-white/[0.06] flex items-center justify-between gap-3">
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={showConfigPopover}
+                onClick={() => setShowConfigPopover((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] px-2.5 py-1.5 text-xs font-medium text-[#D2D6E2] hover:text-white transition-colors cursor-pointer"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${consentChecked ? 'bg-[#30D158]' : 'bg-[#FF9F0A]'}`} />
+                <Search className="h-3.5 w-3.5 text-[#8E95A5]" />
+                <span>OSINT + HIBP</span>
+              </button>
+
+              {showConfigPopover && (
+                <div className="absolute left-0 bottom-full mb-2 z-30 w-76 rounded-xl bg-[#161B26] border border-white/10 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.75)] space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-white">
+                        Confirmación de titularidad autorizada
+                      </div>
+                      <div className="text-[11px] text-[#8E95A5]">
+                        Requerida antes de consultar filtraciones o DNS.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={consentChecked}
+                      aria-label="Confirmación de titularidad autorizada"
+                      onClick={() => setConsentChecked((v) => !v)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                        consentChecked ? 'bg-[#2F6FED]' : 'bg-white/[0.12]'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                          consentChecked ? 'translate-x-4.5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={!assetValue.trim() || !consentChecked || isScanning}
+              title={!consentChecked ? 'Activa la confirmación de titularidad en «OSINT + HIBP»' : undefined}
+              className="h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-sm disabled:bg-white/[0.07] disabled:text-[#8E95A5] disabled:shadow-none px-4 text-xs font-semibold inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            >
+              {isScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              <span>Auditar</span>
+              {!isScanning && <ArrowRight className="h-3.5 w-3.5" />}
+            </button>
           </div>
         </form>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Consulta en tiempo real · Cero retención en disco · Fuentes OSINT verificadas
+        </p>
 
         {errorMsg && (
           <PanelErrorBanner
             message={errorMsg}
             onDismiss={() => setErrorMsg('')}
-            className="mt-3"
+            className="mt-4"
           />
         )}
 
@@ -642,47 +737,23 @@ export function OsintPanel({
             message={confirmationNote.message}
             tone={confirmationNote.tone}
             onDismiss={() => setConfirmationNote(null)}
-            className="mt-3"
+            className="mt-4"
           />
         )}
 
-        {loadingAssets ? (
+        {loadingAssets && (
           <PanelSkeleton
             label="Cargando activos autorizados en sesión..."
             lines={2}
-            className="mt-5"
+            className="mt-4"
           />
-        ) : loadAssetsError ? (
+        )}
+        {!loadingAssets && loadAssetsError && (
           <PanelErrorBanner
             message={loadAssetsError}
             onRetry={loadSessionAssets}
-            className="mt-5"
+            className="mt-4"
           />
-        ) : assets.length === 0 ? (
-          <p className="mt-4 text-center text-[12px] text-[#9A9AA2]">
-            Ingresa un correo o dominio autorizado para auditar.
-          </p>
-        ) : (
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {assets.map((asset, idx) => (
-              <div
-                key={asset.id}
-                onClick={() => executeScan(asset)}
-                style={{ animationDelay: `${100 + idx * 35}ms` }}
-                className="animate-fade-up font-tech inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED]/55 hover:bg-[rgba(28,36,56,0.65)] hover:shadow-[0_0_20px_rgba(47,111,237,0.2)] hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer transition-all max-w-full"
-              >
-                <span className="truncate">{asset.asset_value}</span>
-                <button
-                  type="button"
-                  title="Eliminar de la sesión"
-                  onClick={(e) => handleRevokeAsset(e, asset)}
-                  className="text-[#9A9AA2] hover:text-[#FF453A] cursor-pointer shrink-0"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
         )}
       </div>
     </div>

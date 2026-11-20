@@ -10,7 +10,7 @@ import {
 
 const PLAN_OPTIONS = ['PERSONAL', 'PRO', 'ENTERPRISE'];
 
-export function SaasFleetCard({ authSession }) {
+export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState('');
@@ -124,12 +124,12 @@ export function SaasFleetCard({ authSession }) {
       ? Math.min(100, Math.round((quota.cloudUsed / quota.cloudLimit) * 100))
       : 0;
 
-  return (
-    <section
-      aria-label="Suscripción, cuota de IA y flota de dispositivos"
-      className="mx-auto w-full max-w-5xl px-4 pb-10 sm:px-6"
-    >
-      <div className="rounded-[18px] border border-white/[0.08] bg-[#101218]/85 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
+  const showQuota = mode === 'full' || mode === 'quota';
+  const showFleet = mode === 'full' || mode === 'fleet';
+
+  const content = (
+    <>
+      {!embedded && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
           <div className="flex items-center gap-2.5">
             <ShieldCheck className="h-5 w-5 text-[#2F6FED]" />
@@ -173,141 +173,244 @@ export function SaasFleetCard({ authSession }) {
             </button>
           </div>
         </div>
+      )}
 
-        {notice && (
-          <div className="mt-3 rounded-[10px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-200">
-            {notice}
-          </div>
-        )}
-        {error && (
-          <div className="mt-3 rounded-[10px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
-            {error}
-          </div>
-        )}
+      {notice && (
+        <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-200">
+          {notice}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-200">
+          {error}
+        </div>
+      )}
 
-        {sub && quota && (
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-[12px] border border-white/[0.07] bg-white/[0.02] p-3.5">
-              <div className="text-[11px] uppercase tracking-wider text-[#8E93A4]">Plan activo</div>
-              <div className="mt-1 flex items-baseline justify-between">
-                <span className="text-[18px] font-semibold text-white">{sub.planCode}</span>
-                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                  {sub.status}
-                </span>
+      {showQuota && (
+        <div>
+          <div className="pb-5 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-white">Plan comercial activo</div>
+              <p className="mt-0.5 text-xs text-[#8E95A5]">
+                {sub ? (
+                  <>
+                    Plan <strong className="text-white">{sub.planCode}</strong> · Estado{' '}
+                    <span className="text-emerald-300">{sub.status}</span> · Límite {sub.activeDevices}/{sub.maxDevices} equipos
+                  </>
+                ) : (
+                  'Cargando información del plan...'
+                )}
+              </p>
+            </div>
+            {isAdmin && sub && (
+              <div className="flex items-center gap-1.5">
+                {PLAN_OPTIONS.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => handlePlanChange(code)}
+                    disabled={busyAction === code || sub.planCode === code}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                      sub.planCode === code
+                        ? 'bg-[#2F6FED] text-white'
+                        : 'border border-white/[0.08] bg-white/[0.03] text-[#B8BCC8] hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {code}
+                  </button>
+                ))}
               </div>
-              <div className="mt-2 text-[12px] text-[#9A9AA2]">
-                Equipos activos: <strong className="text-white">{sub.activeDevices}</strong> / {sub.maxDevices}
+            )}
+          </div>
+
+          <div className="py-5 border-b border-white/[0.07] space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium text-white">
+                  Cuota IA Cloud {quota ? `(${quota.periodYm})` : ''}
+                </div>
+                <p className="mt-0.5 text-xs text-[#8E95A5]">
+                  Consultas acumuladas en proveedores cloud durante el periodo actual.
+                </p>
               </div>
-              {isAdmin && (
-                <div className="mt-3 flex gap-1.5">
-                  {PLAN_OPTIONS.map((code) => (
-                    <button
-                      key={code}
-                      type="button"
-                      onClick={() => handlePlanChange(code)}
-                      disabled={busyAction === code || sub.planCode === code}
-                      className={`rounded-[7px] px-2 py-1 text-[10px] font-medium transition cursor-pointer ${
-                        sub.planCode === code
-                          ? 'bg-[#2F6FED] text-white'
-                          : 'bg-white/[0.05] text-[#B8BCC8] hover:bg-white/[0.1]'
-                      }`}
-                    >
-                      {code}
-                    </button>
-                  ))}
+              {quota && (
+                <div className="font-tech text-sm font-semibold text-white">
+                  {quota.cloudUsed} <span className="text-xs font-normal text-[#8E95A5]">/ {quota.cloudLimit}</span>
                 </div>
               )}
             </div>
-
-            <div className="rounded-[12px] border border-white/[0.07] bg-white/[0.02] p-3.5">
-              <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-[#8E93A4]">
-                <span>Cuota IA Cloud ({quota.periodYm})</span>
-                <Cpu className="h-3.5 w-3.5 text-[#2F6FED]" />
-              </div>
-              <div className="mt-1 text-[18px] font-semibold text-white">
-                {quota.cloudUsed} <span className="text-[12px] font-normal text-[#9A9AA2]">/ {quota.cloudLimit}</span>
-              </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
-                <div
-                  className="h-full rounded-full bg-[#2F6FED] transition-all"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div className="mt-2 text-[11px] text-[#9A9AA2]">
-                Modo Soberano (Ollama): <strong className="text-emerald-300">Ilimitado</strong> ({quota.sovereignUsed} usadas)
-              </div>
-            </div>
-
-            <div className="rounded-[12px] border border-white/[0.07] bg-white/[0.02] p-3.5">
-              <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-[#8E93A4]">
-                <span>Alertas recientes</span>
-                <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
-              </div>
-              <div className="mt-2 space-y-1.5 text-[11px] text-[#B8BCC8]">
-                {(summary?.recentAlerts || []).slice(0, 3).map((a) => (
-                  <div key={a.id} className="truncate">
-                    <span className={a.delivered ? 'text-emerald-300' : 'text-amber-300'}>[{a.channel}]</span>{' '}
-                    {a.title}
-                  </div>
-                ))}
-                {(!summary?.recentAlerts || summary.recentAlerts.length === 0) && (
-                  <div className="text-[#7E8290]">Sin alertas externas despachadas aún.</div>
-                )}
-              </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.08]">
+              <div
+                className="h-full rounded-full bg-[#2F6FED] transition-all"
+                style={{ width: `${pct}%` }}
+              />
             </div>
           </div>
-        )}
 
-        {devices.length > 0 && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-[12px] text-[#D4D7E0]">
-              <thead className="border-b border-white/[0.07] text-[11px] uppercase text-[#8E93A4]">
-                <tr>
-                  <th className="py-2 pr-3">Equipo</th>
-                  <th className="py-2 pr-3">Plataforma</th>
-                  <th className="py-2 pr-3">Estado</th>
-                  <th className="py-2 pr-3">Último heartbeat</th>
-                  {isAdmin && <th className="py-2 text-right">Acción</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.05]">
-                {devices.map((d) => (
-                  <tr key={d.id}>
-                    <td className="py-2 pr-3 font-medium text-white">{d.hostname}</td>
-                    <td className="py-2 pr-3 text-[#9A9AA2]">{d.osPlatform}</td>
-                    <td className="py-2 pr-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          d.status === 'ACTIVE'
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'bg-red-500/15 text-red-300'
-                        }`}
-                      >
-                        {d.status}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3 text-[#9A9AA2]">{d.lastHeartbeatAt}</td>
-                    {isAdmin && (
-                      <td className="py-2 text-right">
-                        {d.status === 'ACTIVE' && (
-                          <button
-                            type="button"
-                            onClick={() => handleRevoke(d.id)}
-                            disabled={busyAction === d.id}
-                            className="inline-flex items-center gap-1 rounded-[7px] border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/20 cursor-pointer"
+          <div className="pt-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-medium text-white">
+                <Cpu className="h-4 w-4 text-[#2F6FED]" />
+                <span>Modo Soberano Local (Ollama)</span>
+              </div>
+              <p className="mt-0.5 text-xs text-[#8E95A5]">
+                Ejecución local sin consumo de cuota cloud ni envío de datos fuera de tu equipo.
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
+                Ilimitado
+              </span>
+              {quota && (
+                <div className="font-tech mt-1 text-[11px] text-[#8E95A5]">
+                  {quota.sovereignUsed} consultas locales
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showFleet && (
+        <div>
+          <div className="pb-5 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-white">Equipos vinculados</div>
+              <p className="mt-0.5 text-xs text-[#8E95A5]">
+                {sub
+                  ? `${sub.activeDevices} de ${sub.maxDevices} dispositivos permitidos en tu plan ${sub.planCode}.`
+                  : 'Registra este equipo para habilitar el monitoreo y revocación remota.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleHeartbeatCurrent}
+                disabled={busyAction === 'heartbeat'}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2F6FED]/40 bg-[#2F6FED]/15 px-3 py-1.5 text-xs font-medium text-[#DCE8FF] hover:bg-[#2F6FED]/25 cursor-pointer disabled:opacity-50"
+              >
+                <Laptop className="h-3.5 w-3.5" />
+                <span>Registrar este equipo</span>
+              </button>
+              <button
+                type="button"
+                onClick={loadSummary}
+                disabled={loading}
+                aria-label="Actualizar flota"
+                className="inline-flex items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.04] p-1.5 text-[#9A9AA2] hover:text-white cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          <div className="py-5 border-b border-white/[0.07]">
+            {devices.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-[#D4D7E0]">
+                  <thead className="border-b border-white/[0.07] text-[11px] uppercase text-[#8E95A5]">
+                    <tr>
+                      <th className="py-2 pr-3">Equipo</th>
+                      <th className="py-2 pr-3">Plataforma</th>
+                      <th className="py-2 pr-3">Estado</th>
+                      <th className="py-2 pr-3">Último heartbeat</th>
+                      {isAdmin && <th className="py-2 text-right">Acción</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.05]">
+                    {devices.map((d) => (
+                      <tr key={d.id}>
+                        <td className="py-2.5 pr-3 font-medium text-white">{d.hostname}</td>
+                        <td className="py-2.5 pr-3 text-[#8E95A5]">{d.osPlatform}</td>
+                        <td className="py-2.5 pr-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              d.status === 'ACTIVE'
+                                ? 'bg-emerald-500/15 text-emerald-300'
+                                : 'bg-red-500/15 text-red-300'
+                            }`}
                           >
-                            <Trash2 className="h-3 w-3" />
-                            Revocar
-                          </button>
+                            {d.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-3 font-tech text-[11px] text-[#8E95A5]">{d.lastHeartbeatAt}</td>
+                        {isAdmin && (
+                          <td className="py-2.5 text-right">
+                            {d.status === 'ACTIVE' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRevoke(d.id)}
+                                disabled={busyAction === d.id}
+                                className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/20 cursor-pointer"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                <span>Revocar</span>
+                              </button>
+                            )}
+                          </td>
                         )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-xs text-[#8E95A5]">
+                No hay equipos registrados aún. Pulsa «Registrar este equipo» para vincular el dispositivo actual.
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="pt-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium text-white">
+                  <ShieldAlert className="h-4 w-4 text-amber-400" />
+                  <span>Alertas fuera de banda</span>
+                </div>
+                <p className="mt-0.5 text-xs text-[#8E95A5]">
+                  Comprueba la entrega de alertas críticas hacia tus canales configurados.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleTestAlert}
+                disabled={busyAction === 'alert'}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-[#E5E7EB] hover:bg-white/[0.08] cursor-pointer disabled:opacity-50"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                <span>Probar alerta</span>
+              </button>
+            </div>
+
+            <div className="space-y-1.5 text-xs text-[#B8BCC8]">
+              {(summary?.recentAlerts || []).slice(0, 4).map((a) => (
+                <div key={a.id} className="truncate">
+                  <span className={a.delivered ? 'text-emerald-300' : 'text-amber-300'}>[{a.channel}]</span>{' '}
+                  {a.title}
+                </div>
+              ))}
+              {(!summary?.recentAlerts || summary.recentAlerts.length === 0) && (
+                <div className="text-xs text-[#7E8290]">Sin alertas externas despachadas aún.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <section
+      aria-label="Suscripción, cuota de IA y flota de dispositivos"
+      className="mx-auto w-full max-w-5xl px-4 pb-10 sm:px-6"
+    >
+      <div className="rounded-[18px] border border-white/[0.08] bg-[#101218]/85 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
+        {content}
       </div>
     </section>
   );

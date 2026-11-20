@@ -1,13 +1,16 @@
 import DossierExportButtons from './DossierExportButtons';
+import { SaasFleetCard } from './SaasFleetCard';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  Cpu,
   Eye,
   EyeOff,
   FileText,
   KeyRound,
+  Laptop,
   Lock,
   LogIn,
   LogOut,
@@ -36,7 +39,7 @@ import {
   validateAuthRegisterForm,
 } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
-import { OmegaLogo } from './OmegaLogo';
+import { OmegaBrandMark } from './OmegaBrandMark';
 
 function shortHash(value) {
   const s = String(value || '').trim();
@@ -1406,6 +1409,27 @@ export function AuthAccessForm({
 /**
  * Módulo dedicado de Registro, Inicio de Sesión y Biblioteca Privada Zero-Retention.
  */
+function buildProfileInitials(authSession) {
+  const fullName = String(authSession?.fullName || '').trim();
+  if (fullName) {
+    const words = fullName.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return `${words[0][0]}${words[1][0]}`.toUpperCase();
+    }
+    return words[0].slice(0, 2).toUpperCase();
+  }
+  const emailLocal = String(authSession?.email || '').split('@')[0].trim();
+  if (emailLocal) {
+    const tokens = emailLocal.split(/[._-]+/).filter(Boolean);
+    if (tokens.length >= 2) {
+      return `${tokens[0][0]}${tokens[1][0]}`.toUpperCase();
+    }
+    return emailLocal.slice(0, 2).toUpperCase();
+  }
+  const slug = String(authSession?.tenantSlug || '').trim();
+  return slug ? slug.slice(0, 2).toUpperCase() : 'OM';
+}
+
 export function AuthModulePanel({
   authSession,
   onAuthenticated,
@@ -1423,6 +1447,7 @@ export function AuthModulePanel({
   onOpenChat,
   onOpenSettings,
   onOpenAuth,
+  onPanicPurge,
   reasonMessage = '',
   gateMode = false,
   apiOnline = true,
@@ -1430,8 +1455,18 @@ export function AuthModulePanel({
 }) {
   const fileInputRef = useRef(null);
   const [gateTab, setGateTab] = useState('login');
+  const [workspaceTab, setWorkspaceTab] = useState('perfil');
   const tenantStats = govStats?.tenant_usage || null;
   const indexedCount = privateDocs.filter((d) => d.status === 'INDEXED').length;
+
+  const WORKSPACE_TABS = [
+    { id: 'perfil', label: 'Perfil y Sesión', icon: User },
+    { id: 'biblioteca', label: 'Biblioteca PDF', icon: FileText },
+    { id: 'cuota', label: 'Plan y Cuota IA', icon: Cpu },
+    { id: 'flota', label: 'Flota y Alertas', icon: Laptop },
+  ];
+  const activeWorkspaceTabMeta =
+    WORKSPACE_TABS.find((t) => t.id === workspaceTab) || WORKSPACE_TABS[0];
 
   return (
     <div
@@ -1481,7 +1516,7 @@ export function AuthModulePanel({
 
               <div className="relative space-y-5">
                 <div className="flex items-center gap-3.5 motion-safe:animate-fade-up motion-safe:[animation-delay:70ms]">
-                  <OmegaLogo size={40} />
+                  <OmegaBrandMark showText={false} />
                   <div key={gateTab} className="min-w-0 motion-safe:animate-fade-in">
                     <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#F2F2F4] leading-tight">
                       {gateTab === 'register'
@@ -1540,243 +1575,323 @@ export function AuthModulePanel({
             </p>
           </div>
         ) : (
-          <>
-            {/* Encabezado de sesión activa glassmórfico */}
-            <section className="omega-glass-panel motion-safe:animate-fade-up rounded-[22px] p-6 flex flex-wrap items-center justify-between gap-5">
-              <div className="flex items-center gap-4 min-w-0">
-                <OmegaLogo size={60} framed />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2.5 py-0.5 font-tech text-[10.5px] text-[#30D158]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#30D158] motion-safe:animate-pulse" />
-                      Sesión activa
-                    </span>
-                    <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[10.5px] text-[#F2F2F4]">
-                      {authSession.role || 'ANALYST'}
-                    </span>
-                    {authSession.tenantSlug && (
-                      <span className="font-tech text-[11px] text-[#9A9AA2]">
-                        @{authSession.tenantSlug}
-                      </span>
-                    )}
-                  </div>
-                  <h1 className="mt-1.5 text-[20px] sm:text-[22px] font-semibold tracking-[-0.02em] text-[#F2F2F4] truncate">
-                    {authSession.email}
-                  </h1>
+          <div className="space-y-6">
+            {/* 1. Barra superior compacta (Header con breadcrumb + único CTA primario) */}
+            <header className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-white/[0.07]">
+              <div className="min-w-0 space-y-1">
+                <div className="text-xs text-[#8E95A5]">
+                  Cabina <span className="mx-1 text-white/25">/</span>{' '}
+                  <span className="text-[#F2F2F4]">Cuenta y Workspace</span>
                 </div>
+                <h1 className="text-2xl font-semibold tracking-tight text-white">
+                  {activeWorkspaceTabMeta.label}
+                </h1>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onOpenChat?.(indexedCount > 0)}
-                  className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#2F6FED] hover:brightness-110 hover:shadow-[0_0_24px_rgba(47,111,237,0.28)] px-3.5 py-2 text-[12.5px] font-medium text-white transition-all cursor-pointer"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Abrir Asistente</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenAuth?.('Inicia sesión con otra cuenta registrada.')}
-                  className="inline-flex items-center gap-1.5 rounded-[10px] bg-white/[0.05] border border-white/[0.09] hover:bg-white/[0.09] px-3 py-2 text-[12.5px] text-[#F2F2F4] transition-colors cursor-pointer"
-                >
-                  <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
-                  <span>Cambiar cuenta</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onLogout?.()}
-                  className="inline-flex items-center gap-1.5 rounded-[10px] border border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 px-3 py-2 text-[12.5px] text-[#FFDAD6] transition-colors cursor-pointer"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span>Cerrar sesión</span>
-                </button>
-              </div>
-            </section>
+              <button
+                type="button"
+                onClick={() => onOpenChat?.(indexedCount > 0)}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#2F6FED] hover:brightness-110 hover:shadow-[0_0_24px_rgba(47,111,237,0.3)] px-4 py-2 text-xs font-medium text-white transition-all cursor-pointer shrink-0"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Abrir Asistente</span>
+              </button>
+            </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-5">
-              {/* Biblioteca privada Zero-Retention */}
-              <section className="apple-group rounded-[20px] p-5 sm:p-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                      Biblioteca privada de PDFs
-                    </h2>
-                    <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
-                      Consultable desde <span className="text-[#F2F2F4]">Mis PDFs</span> en el Asistente.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = '';
-                        if (file) void onUploadPdf?.(file);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={uploadingPdf}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] hover:brightness-110 disabled:opacity-50 px-3 py-1.5 text-[12px] font-medium text-white transition-all cursor-pointer"
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      <span>{uploadingPdf ? 'Procesando en RAM...' : 'Subir PDF'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loadingDocs}
-                      onClick={() => onRefreshDocs?.()}
-                      aria-label="Actualizar biblioteca privada"
-                      className="h-8 w-8 inline-flex items-center justify-center rounded-[9px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.09] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${loadingDocs ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                </div>
-
-                {(docNotice || docError) && (
-                  <div
-                    className={`flex items-center justify-between gap-2 rounded-[10px] border px-3 py-2 text-[12px] ${
-                      docError
-                        ? 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FFDAD6]'
-                        : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#B8F2C7]'
-                    }`}
-                  >
-                    <span className="truncate">{docError || docNotice}</span>
-                    {onDismissDocBanner && (
+            {/* 2. Submenú lateral flotante (izquierda) + Panel principal (derecha, una categoría a la vez) */}
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+              <aside className="w-full lg:w-60 shrink-0 rounded-2xl bg-[#0F131B]/80 backdrop-blur-xl border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.45)] p-2">
+                <nav aria-label="Secciones de Cuenta y Workspace" className="flex lg:flex-col gap-1 overflow-x-auto no-scrollbar">
+                  {WORKSPACE_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const active = workspaceTab === tab.id;
+                    return (
                       <button
+                        key={tab.id}
                         type="button"
-                        aria-label="Cerrar aviso"
-                        onClick={onDismissDocBanner}
-                        className="shrink-0 opacity-75 hover:opacity-100 cursor-pointer"
+                        onClick={() => setWorkspaceTab(tab.id)}
+                        className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-left shrink-0 transition-colors cursor-pointer ${
+                          active
+                            ? 'bg-[#2F6FED]/15 text-white font-medium'
+                            : 'text-[#8E95A5] hover:text-white hover:bg-white/[0.04]'
+                        }`}
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#2F6FED]' : 'text-[#7C7D87]'}`} />
+                        <span className="whitespace-nowrap">{tab.label}</span>
                       </button>
-                    )}
+                    );
+                  })}
+                </nav>
+
+                <div className="my-2 border-t border-white/[0.07]" />
+
+                <button
+                  type="button"
+                  onClick={() => (onPanicPurge ? void onPanicPurge() : onLogout?.())}
+                  className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] text-left text-[#FF7A73] hover:bg-[#FF453A]/10 transition-colors cursor-pointer"
+                >
+                  <LogOut className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">Cerrar sesión / Purga</span>
+                </button>
+              </aside>
+
+              {/* 3. Panel principal derecho */}
+              <main className="flex-1 min-w-0 w-full rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.45)] p-6">
+                {workspaceTab === 'perfil' && (
+                  <div>
+                    {/* Bloque 1: Identidad y espacio */}
+                    <div className="pb-5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div
+                          aria-label={`Avatar de ${authSession.email || 'cuenta activa'}`}
+                          className="relative h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-full bg-gradient-to-b from-[#1A2234] to-[#111622] border border-[#2F6FED]/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_16px_rgba(47,111,237,0.12)] select-none"
+                        >
+                          <span className="font-semibold tracking-wider text-sm text-slate-100">
+                            {buildProfileInitials(authSession)}
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0F131B]"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 font-tech text-[10.5px] text-emerald-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                              Sesión activa
+                            </span>
+                            <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-2 py-0.5 text-[10.5px] text-[#F2F2F4]">
+                              {authSession.role || 'ANALYST'}
+                            </span>
+                            {authSession.tenantSlug && (
+                              <span className="font-tech text-[11px] text-[#8E95A5]">
+                                @{authSession.tenantSlug}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-white truncate">
+                            {authSession.email}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onOpenAuth?.('Inicia sesión con otra cuenta registrada.')}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.04] border border-white/[0.09] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+                        >
+                          <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                          <span>Cambiar cuenta</span>
+                        </button>
+                        {onOpenSettings && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenSettings('cuenta')}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.04] border border-white/[0.09] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+                          >
+                            <span>Ajustes avanzados</span>
+                            <ArrowRight className="h-3.5 w-3.5 text-[#2F6FED]" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bloque 2: 4 KPIs compactos de Resumen de cuenta en fila horizontal */}
+                    <div className="pt-5">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-medium text-white">Resumen de cuenta</h2>
+                        <span className="text-xs text-[#8E95A5]">Actividad en tu espacio</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="rounded-xl border border-white/[0.06] bg-[#111318] px-3.5 py-3">
+                          <div className="text-[11px] text-[#8E95A5]">PDFs indexados</div>
+                          <div className="font-tech mt-1 text-lg font-semibold text-white">
+                            {Number(tenantStats?.documents ?? indexedCount)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/[0.06] bg-[#111318] px-3.5 py-3">
+                          <div className="text-[11px] text-[#8E95A5]">Archivos eliminados</div>
+                          <div className="font-tech mt-1 text-lg font-semibold text-[#30D158]">
+                            {Number(tenantStats?.zero_retention_purged_pdfs ?? indexedCount)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/[0.06] bg-[#111318] px-3.5 py-3">
+                          <div className="text-[11px] text-[#8E95A5]">Activos monitoreados</div>
+                          <div className="font-tech mt-1 text-lg font-semibold text-white">
+                            {Number(tenantStats?.osint_assets || 0)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/[0.06] bg-[#111318] px-3.5 py-3">
+                          <div className="text-[11px] text-[#8E95A5]">Sesión</div>
+                          <div className="mt-1 text-sm font-semibold text-[#30D158]">
+                            Protegida
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                <DossierExportButtons expedienteId={activeExpedienteId} />
-                {privateDocs.length === 0 ? (
-                  <div className="rounded-[13px] border border-dashed border-white/[0.12] bg-black/25 p-6 text-center space-y-2">
-                    <FileText className="h-6 w-6 text-[#2F6FED] mx-auto" />
-                    <div className="text-[13px] font-medium text-[#F2F2F4]">
-                      Tu biblioteca privada está vacía
-                    </div>
-                    <p className="text-[12px] text-[#9A9AA2] max-w-md mx-auto">
-                      Adjunta informes técnicos, peritajes o reportes internos en PDF para citarlos por página en el chat con cero retención del archivo fuente.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-white/[0.06] rounded-[13px] border border-white/[0.08] bg-black/25 overflow-hidden">
-                    {privateDocs.map((doc) => {
-                      const isIndexed = doc.status === 'INDEXED';
-                      const isFailed = doc.status === 'FAILED';
-                      return (
-                        <div
-                          key={doc.id}
-                          className="px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                {workspaceTab === 'biblioteca' && (
+                  <div>
+                    {/* Bloque 1: Cabecera Biblioteca PDF + Subir PDF */}
+                    <div className="pb-5 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-medium text-white">
+                            Biblioteca privada de PDFs
+                          </h2>
+                          <span className="rounded-full border border-[#30D158]/35 bg-[#30D158]/10 px-2 py-0.5 font-tech text-[10.5px] text-[#30D158]">
+                            Zero-Retention
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-[#8E95A5]">
+                          Consultable desde <span className="text-white">Mis PDFs</span> en el Asistente sin guardar el archivo original.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = '';
+                            if (file) void onUploadPdf?.(file);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={uploadingPdf}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] hover:brightness-110 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white transition-all cursor-pointer"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span
-                              className={`h-2 w-2 rounded-full shrink-0 ${
-                                isIndexed
-                                  ? 'bg-[#30D158]'
-                                  : isFailed
-                                    ? 'bg-[#FF453A]'
-                                    : 'bg-[#FF9F0A] animate-pulse'
-                              }`}
-                            />
-                            <div className="min-w-0">
-                              <div className="text-[13px] font-medium text-[#F2F2F4] truncate">
-                                {doc.originalFilename}
-                              </div>
-                              <div className="font-tech text-[11px] text-[#9A9AA2] flex flex-wrap items-center gap-2 mt-0.5">
-                                <span>{doc.status}</span>
-                                <span>·</span>
-                                <span>{doc.chunkCount || 0} fragmentos</span>
-                                {doc.sha256Hash && (
-                                  <>
-                                    <span>·</span>
-                                    <span>SHA-256: {shortHash(doc.sha256Hash)}</span>
-                                  </>
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>{uploadingPdf ? 'Procesando en RAM...' : 'Subir PDF'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={loadingDocs}
+                          onClick={() => onRefreshDocs?.()}
+                          aria-label="Actualizar biblioteca privada"
+                          className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.09] text-[#9A9AA2] hover:text-white cursor-pointer"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${loadingDocs ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {(docNotice || docError) && (
+                      <div
+                        className={`mt-4 flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-xs ${
+                          docError
+                            ? 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FFDAD6]'
+                            : 'border-[#30D158]/35 bg-[#30D158]/10 text-[#B8F2C7]'
+                        }`}
+                      >
+                        <span className="truncate">{docError || docNotice}</span>
+                        {onDismissDocBanner && (
+                          <button
+                            type="button"
+                            aria-label="Cerrar aviso"
+                            onClick={onDismissDocBanner}
+                            className="shrink-0 opacity-75 hover:opacity-100 cursor-pointer"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Bloque 2: Descargar informe PDF y exportar evidencia JSON */}
+                    <div className="py-5 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-white">Exportación de expediente</div>
+                        <p className="mt-0.5 text-xs text-[#8E95A5]">
+                          Descarga el informe en PDF o exporta la evidencia estructurada en JSON.
+                        </p>
+                      </div>
+                      <DossierExportButtons expedienteId={activeExpedienteId} />
+                    </div>
+
+                    {/* Bloque 3: Listado de documentos */}
+                    <div className="pt-5">
+                      {privateDocs.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-white/[0.1] bg-[#111318] p-6 text-center space-y-2">
+                          <FileText className="h-6 w-6 text-[#2F6FED] mx-auto" />
+                          <div className="text-sm font-medium text-white">
+                            Tu biblioteca privada está vacía
+                          </div>
+                          <p className="text-xs text-[#8E95A5] max-w-md mx-auto">
+                            Adjunta informes técnicos o peritajes en PDF para citarlos por página en el chat con cero retención del archivo fuente.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-white/[0.06]">
+                          {privateDocs.map((doc) => {
+                            const isIndexed = doc.status === 'INDEXED';
+                            const isFailed = doc.status === 'FAILED';
+                            return (
+                              <div
+                                key={doc.id}
+                                className="py-3 flex flex-wrap items-center justify-between gap-3"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span
+                                    className={`h-2 w-2 rounded-full shrink-0 ${
+                                      isIndexed
+                                        ? 'bg-[#30D158]'
+                                        : isFailed
+                                          ? 'bg-[#FF453A]'
+                                          : 'bg-[#FF9F0A] animate-pulse'
+                                    }`}
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-white truncate">
+                                      {doc.originalFilename}
+                                    </div>
+                                    <div className="font-tech text-[11px] text-[#8E95A5] flex flex-wrap items-center gap-2 mt-0.5">
+                                      <span>{doc.status}</span>
+                                      <span>·</span>
+                                      <span>{doc.chunkCount || 0} fragmentos</span>
+                                      {doc.sha256Hash && (
+                                        <>
+                                          <span>·</span>
+                                          <span>SHA-256: {shortHash(doc.sha256Hash)}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {isIndexed && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-[#30D158]/30 bg-[#30D158]/10 px-2.5 py-0.5 font-tech text-[10.5px] text-[#30D158]">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Listo para RAG
+                                  </span>
                                 )}
                               </div>
-                            </div>
-                          </div>
-
-                          {isIndexed && (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-[#30D158]/30 bg-[#30D158]/10 px-2.5 py-0.5 font-tech text-[10.5px] text-[#30D158]">
-                              <CheckCircle2 className="h-3 w-3" />
-                              Listo para RAG
-                            </span>
-                          )}
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
                   </div>
                 )}
-              </section>
 
-              {/* Telemetría y enlaces a gobernanza */}
-              <section className="apple-group rounded-[20px] p-5 sm:p-6 flex flex-col justify-between gap-4">
-                <div className="space-y-4">
-                  <div>
-                    <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[#F2F2F4]">
-                      Resumen de cuenta
-                    </h2>
-                    <p className="mt-0.5 text-[12px] text-[#9A9AA2]">
-                      Resumen de documentos y actividad de tu cuenta.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">PDFs indexados</div>
-                      <div className="font-tech mt-1 text-[17px] font-semibold text-[#F2F2F4]">
-                        {Number(tenantStats?.documents ?? indexedCount)}
-                      </div>
-                    </div>
-                    <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">Archivos eliminados</div>
-                      <div className="font-tech mt-1 text-[17px] font-semibold text-[#30D158]">
-                        {Number(tenantStats?.zero_retention_purged_pdfs ?? indexedCount)}
-                      </div>
-                    </div>
-                    <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">Activos monitoreados</div>
-                      <div className="font-tech mt-1 text-[17px] font-semibold text-[#F2F2F4]">
-                        {Number(tenantStats?.osint_assets || 0)}
-                      </div>
-                    </div>
-                    <div className="rounded-[11px] border border-white/[0.07] bg-black/25 p-3">
-                      <div className="text-[11px] text-[#9A9AA2]">Sesión</div>
-                      <div className="mt-1 text-[14px] font-semibold text-[#F2F2F4]">
-                        Protegida
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {onOpenSettings && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenSettings('cuenta')}
-                    className="w-full rounded-[10px] border border-white/[0.09] bg-white/[0.04] hover:bg-white/[0.08] px-3.5 py-2.5 text-[12px] font-medium text-[#F2F2F4] flex items-center justify-between transition-colors cursor-pointer"
-                  >
-                    <span>Ajustes, equipo y registro de actividad</span>
-                    <ArrowRight className="h-3.5 w-3.5 text-[#2F6FED]" />
-                  </button>
+                {workspaceTab === 'cuota' && (
+                  <SaasFleetCard authSession={authSession} mode="quota" embedded />
                 )}
-              </section>
+
+                {workspaceTab === 'flota' && (
+                  <SaasFleetCard authSession={authSession} mode="fleet" embedded />
+                )}
+              </main>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

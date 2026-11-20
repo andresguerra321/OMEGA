@@ -1,8 +1,17 @@
 import { RefreshCw, TriangleAlert } from 'lucide-react';
 import { OmegaLoader } from './OmegaLoader';
 
+function resolveStartupMessage(status) {
+  const raw = String(status?.message || '').trim();
+  if (raw) return raw;
+  if (status?.state === 'checking') return 'Verificando Docker y servicios locales…';
+  if (status?.state === 'starting') return 'Iniciando servicios y base de datos de OMEGA…';
+  return 'Inicializando OMEGA…';
+}
+
 export function DesktopStartupGate({ bootstrap, children }) {
   if (!bootstrap.blocking) return children;
+  const liveMessage = resolveStartupMessage(bootstrap.status);
 
   return (
     <main className="flex min-h-dvh w-full items-center justify-center bg-obsidian px-6 text-ink-primary"
@@ -19,7 +28,11 @@ export function DesktopStartupGate({ bootstrap, children }) {
           </button>
         </div>
       ) : (
-        <OmegaLoader variant="startup" label="Preparando OMEGA. El inicio de sesión aparecerá cuando esté listo." />
+        <OmegaLoader
+          variant="startup"
+          label={liveMessage}
+          statusMessage={liveMessage}
+        />
       )}
     </main>
   );

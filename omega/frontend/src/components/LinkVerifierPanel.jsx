@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  X,
 } from 'lucide-react';
 import { lookupExternalReputation, verifySuspiciousLink } from '../lib/api';
 import { InfrastructureBadges, EmergencyGuidance } from './ContainmentPanel';
@@ -25,20 +26,91 @@ function getVerdictPresentation(result) {
     return {
       dotColor: 'bg-[#FF453A] shadow-[0_0_10px_rgba(255,69,58,0.55)]',
       titleColor: 'text-[#FF6961]',
-      headline: 'Riesgo elevado — Revisa la evidencia y evita abrirlo',
+      headline: 'Enlace peligroso — No lo abras',
     };
   }
   if (result.risk_level === 'MEDIUM') {
     return {
       dotColor: 'bg-[#FF9F0A] shadow-[0_0_10px_rgba(255,159,10,0.45)]',
       titleColor: 'text-[#FFD60A]',
-      headline: 'Precaución — Señales estructurales sospechosas',
+      headline: 'Precaución — Este enlace tiene señales sospechosas',
     };
   }
   return {
     dotColor: 'bg-[#30D158] shadow-[0_0_10px_rgba(48,209,88,0.45)]',
     titleColor: 'text-[#F2F2F4]',
-    headline: 'Sin coincidencias conocidas · Mantén precaución',
+    headline: 'Sin señales de peligro conocidas',
+  };
+}
+
+function getNaturalBannerMessage(result, traceResult, finalCheckResult) {
+  if (traceResult) {
+    const destRisk = finalCheckResult?.risk_level || result.risk_level;
+    return ['HIGH', 'CRITICAL'].includes(destRisk)
+      ? 'Seguimos el enlace de forma segura y lleva a un destino riesgoso.'
+      : 'Seguimos el enlace de forma segura sin abrirlo en tu equipo.';
+  }
+  if (['HIGH', 'CRITICAL'].includes(result.risk_level)) {
+    return 'Revisión completada · Detectamos señales de riesgo alto, evita abrir este enlace.';
+  }
+  if (result.risk_level === 'MEDIUM') {
+    return 'Revisión completada · Hay señales que requieren precaución antes de abrirlo.';
+  }
+  return 'Revisión completada · No encontramos reportes negativos conocidos.';
+}
+
+function getNaturalReputationSummary(rep) {
+  if (!rep) return null;
+  const vt = rep.virustotal;
+  const abuse = rep.abuseipdb;
+  const vtMal = Number(vt?.malicious || 0);
+  const vtSusp = Number(vt?.suspicious || 0);
+  const abuseScore = Number(abuse?.abuse_confidence_score || 0);
+
+  if (vt?.status === 'ok' && vtMal > 0) {
+    return {
+      tone: 'danger',
+      text: 'Varios análisis externos coinciden en que este enlace es peligroso.',
+    };
+  }
+  if ((vt?.status === 'ok' && vtSusp > 0) || (abuse?.status === 'ok' && abuseScore >= 25)) {
+    return {
+      tone: 'warn',
+      text: 'Algunas fuentes externas reportan actividad sospechosa en este destino.',
+    };
+  }
+  if (vt?.status === 'ok' || abuse?.status === 'ok') {
+    return {
+      tone: 'clean',
+      text: 'Sin reportes negativos en las fuentes externas consultadas.',
+    };
+  }
+  return null;
+}
+
+function getNaturalCertSummary(result) {
+  if (result.scheme === 'http') {
+    return {
+      label: 'Sin cifrado (HTTP)',
+      detail: 'No usa certificado seguro',
+    };
+  }
+  const count = result.passive_ct_certificates;
+  if (count === null || count === undefined) {
+    return {
+      label: 'No disponible',
+      detail: 'No se pudo consultar el registro',
+    };
+  }
+  if (count > 0) {
+    return {
+      label: 'Certificado registrado',
+      detail: `${count} registro(s) públicos`,
+    };
+  }
+  return {
+    label: 'Sin certificado público',
+    detail: 'No aparece emitido para este dominio',
   };
 }
 
@@ -47,14 +119,23 @@ export function LinkVerifierPanel({
   onAuditDomain,
   onAuditDevice,
   onOpenThreat,
+  onSwitchMode,
   initialUrl = '',
   initialCheckKey = 0,
   onLinkVerified,
 }) {
-  const [urlInput, setUrlInput] = useState(initialUrl || '');
+  const [scheme, setScheme] = useState(() => {
+    const raw = (initialUrl || '').trim();
+    return /^http:\/\//i.test(raw) ? 'http://' : 'https://';
+  });
+  const [urlInput, setUrlInput] = useState(() =>
+    (initialUrl || '').trim().replace(/^https?:\/\//i, '')
+  );
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeProbe, setActiveProbe] = useState(false);
+  const [showConfigPopover, setShowConfigPopover] = useState(false);
+  const [recentLinks, setRecentLinks] = useState([]);
   const [error, setError] = useState('');
   const [traceLoading, setTraceLoading] = useState(false);
   const [traceResult, setTraceResult] = useState(null);
@@ -80,7 +161,8 @@ export function LinkVerifierPanel({
 
     const timer = setTimeout(() => {
       if (cancelled) return;
-      setUrlInput(cleaned);
+      setScheme(/^http:\/\//i.test(cleaned) ? 'http://' : 'https://');
+      setUrlInput(cleaned.replace(/^https?:\/\//i, ''));
       setLoading(true);
       setError('');
       setTraceResult(null);
@@ -112,7 +194,11 @@ export function LinkVerifierPanel({
   async function handleCheck(e) {
     e.preventDefault();
     if (loading) return;
-    const validation = validateUrlInput(urlInput, { allowBareDomain: true });
+    const rawTrimmed = urlInput.trim();
+    const withScheme = /^(?:https?|hxxps?):\/\//i.test(rawTrimmed)
+      ? rawTrimmed
+      : `${scheme}${rawTrimmed}`;
+    const validation = validateUrlInput(withScheme, { allowBareDomain: true });
     if (!validation.valid) {
       setError(validation.error);
       return;
@@ -148,6 +234,10 @@ export function LinkVerifierPanel({
           ...(reputation ? { external_reputation: reputation } : {}),
         };
         setResult(enriched);
+        setRecentLinks((prev) => {
+          const hostLabel = enriched?.host || rawTrimmed.replace(/^https?:\/\//i, '');
+          return [hostLabel, ...prev.filter((item) => item !== hostLabel)].slice(0, 4);
+        });
         onLinkVerified?.(enriched);
       } catch (err) {
         setError(err?.message || 'No se pudo inspeccionar el enlace.');
@@ -178,11 +268,13 @@ export function LinkVerifierPanel({
     const verdictMeta = getVerdictPresentation(result);
     const heuristics = result.heuristics || [];
     const ctiMatches = result.cti_matches || [];
+    const reputationSummary = getNaturalReputationSummary(result.external_reputation);
+    const certSummary = getNaturalCertSummary(result);
 
     return (
       <div
         ref={resultContainerRef}
-        className="animate-fade-up w-full max-w-[660px] mx-auto pt-2 pb-12 space-y-5"
+        className="animate-fade-up w-full max-w-[780px] mx-auto px-2 sm:px-4 pt-2 pb-12 space-y-5"
       >
         {/* Barra superior */}
         <header className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
@@ -210,10 +302,8 @@ export function LinkVerifierPanel({
           const confirmKey = `${result.normalized_url}|${traceResult?.final_url || ''}`;
           if (dismissedConfirmKey === confirmKey) return null;
           const bannerTone =
-            result.risk_level === 'HIGH' ? 'alert' : result.risk_level === 'SAFE' ? 'clean' : 'info';
-          const bannerMsg = traceResult
-            ? `Trazado efímero en RAM completado (${traceResult.redirects?.length || 0} salto(s), 0 JS, 0 imágenes) · Destino: ${finalCheckResult?.risk_level || result.risk_level}.`
-            : `${result.infrastructure_intelligence?.activeProbeRequested ? 'Comparación HTTP solicitada' : 'Inspección pasiva completada (sin contactar al destino)'} · Nivel ${result.risk_level} · ${ctiMatches.length} coincidencia(s) CTI y ${heuristics.length} alerta(s) estructural(es).`;
+            ['HIGH', 'CRITICAL'].includes(result.risk_level) ? 'alert' : result.risk_level === 'SAFE' ? 'clean' : 'info';
+          const bannerMsg = getNaturalBannerMessage(result, traceResult, finalCheckResult);
           return (
             <ActionConfirmationBanner
               tone={bannerTone}
@@ -351,37 +441,31 @@ export function LinkVerifierPanel({
             </div>
           </div>
 
-          <div className="p-4 min-w-0">
-            <div className="text-[11.5px] font-medium text-[#9A9AA2]">Certificados crt.sh</div>
-            <div className="font-tech mt-1.5 text-[12.5px] text-[#F2F2F4]">
-              {result.passive_ct_certificates !== null && result.passive_ct_certificates !== undefined
-                ? `${result.passive_ct_certificates} registros`
-                : 'N/D'}
+          <div className="p-4 sm:p-5 min-w-0">
+            <div className="text-[12.5px] font-medium text-[#9A9AA2]">Certificado de seguridad</div>
+            <div className="mt-1.5 text-[14px] font-medium text-[#F2F2F4]">
+              {certSummary.label}
+            </div>
+            <div className="mt-0.5 text-[12px] text-[#9A9AA2]">
+              {certSummary.detail}
             </div>
           </div>
         </section>
 
-        {result.external_reputation && (
-          <section className="apple-group rounded-[13px] p-4 space-y-2">
-            <div className="text-[12.5px] font-semibold text-[#F2F2F4]">
-              Reputación externa (VirusTotal / AbuseIPDB)
+        {reputationSummary && (
+          <section className="apple-group rounded-[13px] p-4 sm:p-5 space-y-1.5">
+            <div className="text-[13.5px] font-semibold text-[#F2F2F4]">
+              Resultado
             </div>
-            <div className="flex flex-wrap gap-3 text-[12px] text-[#C2C7D6]">
-              <span>
-                VirusTotal:{' '}
-                {result.external_reputation.virustotal?.status === 'ok'
-                  ? `${result.external_reputation.virustotal.malicious} maliciosos / ${result.external_reputation.virustotal.suspicious} sospechosos`
-                  : result.external_reputation.virustotal?.message || result.external_reputation.virustotal?.status || 'N/D'}
-              </span>
-              {result.external_reputation.abuseipdb?.status && result.external_reputation.abuseipdb.status !== 'skipped' && (
-                <span>
-                  AbuseIPDB:{' '}
-                  {result.external_reputation.abuseipdb.status === 'ok'
-                    ? `Score ${result.external_reputation.abuseipdb.abuse_confidence_score}% (${result.external_reputation.abuseipdb.total_reports} reportes)`
-                    : result.external_reputation.abuseipdb.message || result.external_reputation.abuseipdb.status}
-                </span>
-              )}
-            </div>
+            <p className={`text-[14px] leading-relaxed ${
+              reputationSummary.tone === 'danger'
+                ? 'text-[#FF6961]'
+                : reputationSummary.tone === 'warn'
+                  ? 'text-[#FFD60A]'
+                  : 'text-[#C2C7D6]'
+            }`}>
+              {reputationSummary.text}
+            </p>
           </section>
         )}
 
@@ -555,52 +639,199 @@ export function LinkVerifierPanel({
     );
   }
 
-  // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente, max-w-[620px]) ---
+  // --- ESTADO 1: COMMAND BOX MODERNA DE 2 NIVELES ---
   return (
-    <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-6">
-      <div className="w-full max-w-[620px]">
-        <header className="text-center mb-6 sm:mb-7">
-          <h1 className="text-[24px] sm:text-[31px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
+    <div className="relative animate-fade-up flex-1 flex flex-col items-center pt-14 sm:pt-16 pb-12 px-3 sm:px-6 overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl mt-[4vh]">
+        {/* Selector limpio tipo píldora centrado encima del título */}
+        <div className="mb-5 flex justify-center">
+          <div className="inline-flex rounded-full border border-white/[0.07] bg-[#0F131B]/80 backdrop-blur-xl p-1">
+            <button
+              type="button"
+              className="rounded-full bg-[#2F6FED]/20 border border-[#2F6FED]/45 px-3.5 py-1 text-xs font-medium text-white cursor-pointer"
+            >
+              Enlace URL
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchMode?.('institutional_email')}
+              className="rounded-full border border-transparent px-3.5 py-1 text-xs font-medium text-[#8E95A5] hover:text-white transition-colors cursor-pointer"
+            >
+              Correo
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchMode?.('domain')}
+              className="rounded-full border border-transparent px-3.5 py-1 text-xs font-medium text-[#8E95A5] hover:text-white transition-colors cursor-pointer"
+            >
+              Dominio
+            </button>
+          </div>
+        </div>
+
+        <header className="text-center mb-6">
+          <h1 className="text-[26px] sm:text-[32px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
             Verificar enlace
           </h1>
-          <p className="mt-2 text-[13.5px] text-[#9A9AA2] max-w-[440px] mx-auto">
-            Análisis pasivo sin peticiones HTTP al destino.
+          <p className="mt-2 text-sm text-[#9A9AA2] max-w-md mx-auto">
+            Revisa si una URL o dominio es seguro antes de abrirlo.
           </p>
         </header>
 
+        {/* Command Box de 2 Niveles */}
         <form
           noValidate
           onSubmit={handleCheck}
-          style={{ animationDelay: '60ms' }}
-          className="animate-scale-in omega-capsule rounded-[15px] p-2 sm:p-2.5 flex items-center gap-2 sm:gap-2.5"
+          className="relative rounded-2xl bg-[#0F131B]/80 backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.45)] focus-within:border-blue-500/60 focus-within:shadow-[0_0_32px_rgba(47,111,237,0.16)] transition-all"
         >
-          <input
-            type="text"
-            maxLength={2048}
-            value={urlInput}
-            onChange={(e) => {
-              setUrlInput(stripUnsafeChars(e.target.value, 2048));
-              if (error) setError('');
-            }}
-            aria-invalid={Boolean(error)}
-            placeholder="https://enlace-sospechoso.ejemplo/ruta"
-            className="font-tech flex-1 min-w-0 h-9 bg-transparent px-2 sm:px-2.5 text-[13.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
-          />
+          {/* Zona superior: Máximo 4 chips en una sola fila */}
+          <div className="px-4 pt-3 pb-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => {
+                setScheme('https://');
+                setUrlInput('verify-icloud-session.example/auth');
+                setError('');
+              }}
+              className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] px-2.5 py-0.5 text-[11px] text-[#9A9AA2] hover:text-white transition-colors cursor-pointer"
+            >
+              Probar enlace de ejemplo
+            </button>
 
-          <button
-            type="submit"
-            disabled={loading || !urlInput.trim()}
-            className="h-9 rounded-[10px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none px-3.5 sm:px-4 text-[13px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
-          >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            <span>Verificar</span>
-          </button>
+            {recentLinks.slice(0, 3).map((item) => (
+              <span
+                key={item}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 font-tech text-[11px] text-[#D2D6E2]"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUrlInput(item);
+                    setError('');
+                  }}
+                  className="hover:text-white cursor-pointer"
+                >
+                  {item}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Quitar ${item}`}
+                  onClick={() => setRecentLinks((prev) => prev.filter((x) => x !== item))}
+                  className="text-[#8E95A5] hover:text-[#FF6961] cursor-pointer"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+
+          {/* Zona media: Input limpio con prefijo minimalista inline */}
+          <div className="px-4 py-3 flex items-center gap-1.5">
+            <button
+              type="button"
+              title="Cambiar entre https:// y http://"
+              onClick={() => setScheme((s) => (s === 'https://' ? 'http://' : 'https://'))}
+              className="font-tech text-[14.5px] text-[#6EA0FF] hover:text-white transition-colors cursor-pointer shrink-0 select-none"
+            >
+              {scheme}
+            </button>
+            <input
+              type="text"
+              maxLength={2048}
+              value={urlInput}
+              onChange={(e) => {
+                const raw = stripUnsafeChars(e.target.value, 2048);
+                if (/^https:\/\//i.test(raw)) {
+                  setScheme('https://');
+                  setUrlInput(raw.replace(/^https:\/\//i, ''));
+                } else if (/^http:\/\//i.test(raw)) {
+                  setScheme('http://');
+                  setUrlInput(raw.replace(/^http:\/\//i, ''));
+                } else {
+                  setUrlInput(raw);
+                }
+                if (error) setError('');
+              }}
+              aria-invalid={Boolean(error)}
+              placeholder="enlace.com/ruta"
+              className="font-tech flex-1 min-w-0 bg-transparent border-0 text-[15px] text-white placeholder-[#7E869A] focus:outline-none"
+            />
+          </div>
+
+          {/* Barra inferior integrada (Toolbar) */}
+          <div className="px-4 py-2.5 border-t border-white/[0.06] flex items-center justify-between gap-3">
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={showConfigPopover}
+                onClick={() => setShowConfigPopover((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] px-2.5 py-1.5 text-xs font-medium text-[#D2D6E2] hover:text-white transition-colors cursor-pointer"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${activeProbe ? 'bg-[#30D158]' : 'bg-[#2F6FED]'}`} />
+                <Shield className="h-3.5 w-3.5 text-[#8E95A5]" />
+                <span>{activeProbe ? 'OWASP + Live' : 'OWASP Pasivo'}</span>
+              </button>
+
+              {showConfigPopover && (
+                <div className="absolute left-0 bottom-full mb-2 z-30 w-72 rounded-xl bg-[#161B26] border border-white/10 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.75)] space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-white">Visita aislada en vivo</div>
+                      <div className="text-[11px] text-[#8E95A5]">Comprueba respuesta HTTP sin JS ni cookies.</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={activeProbe}
+                      aria-label="Visita aislada en vivo"
+                      onClick={() => setActiveProbe((v) => !v)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                        activeProbe ? 'bg-[#2F6FED]' : 'bg-white/[0.12]'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                          activeProbe ? 'translate-x-4.5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-white/[0.07] flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-white">Análisis de cabeceras OWASP</div>
+                      <div className="text-[11px] text-[#8E95A5]">Inspección estructural y certificados.</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={true}
+                      disabled
+                      aria-label="Análisis de cabeceras OWASP"
+                      className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-[#2F6FED]/70 opacity-80 cursor-not-allowed"
+                    >
+                      <span className="inline-block h-3.5 w-3.5 translate-x-4.5 rounded-full bg-white" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !urlInput.trim()}
+              className="h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-sm disabled:bg-white/[0.07] disabled:text-[#8E95A5] disabled:shadow-none px-4 text-xs font-semibold inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              <span>Verificar</span>
+              {!loading && <ArrowRight className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </form>
 
-        <label className="mt-3 flex items-start gap-2 text-sm text-[#B7B7C0]">
-          <input type="checkbox" checked={activeProbe} disabled={loading} onChange={event => setActiveProbe(event.target.checked)} />
-          Comparar respuestas móvil y genérica. Esto contactará al sitio y puede revelar la IP del servicio. No ejecuta JavaScript ni envía cookies.
-        </label>
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Inspección pasiva sin contacto · Certificados TLS en tiempo real · Reglas OWASP y CTI
+        </p>
 
         {error && (
           <PanelErrorBanner
@@ -608,18 +839,6 @@ export function LinkVerifierPanel({
             onDismiss={() => setError('')}
             className="mt-4"
           />
-        )}
-
-        {!loading && !error && !urlInput.trim() && (
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setUrlInput('https://verify-icloud-session.example/auth')}
-              className="text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] underline decoration-[#2F6FED]/55 cursor-pointer transition-colors"
-            >
-              Probar enlace de ejemplo →
-            </button>
-          </div>
         )}
       </div>
     </div>

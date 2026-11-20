@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { AuthAccessForm } from './AuthModulePanel';
-import { OmegaLogo } from './OmegaLogo';
+import { OmegaBrandMark } from './OmegaBrandMark';
 import { backdropVariants, popVariants } from '../lib/motion';
 
 export function AuthModal({
@@ -28,7 +28,7 @@ export function AuthModal({
       <motion.div variants={popVariants} initial="initial" animate="animate" exit="exit" className="omega-glass-panel w-full max-w-[440px] rounded-[20px] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
           <div className="flex items-center gap-3">
-            <OmegaLogo size={34} isThinking={false} />
+            <OmegaBrandMark showText={false} />
             <div>
               <h2 className="text-[15px] font-semibold text-[#F2F2F4] tracking-[-0.015em]">
                 Cuenta OMEGA

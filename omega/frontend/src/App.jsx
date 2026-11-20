@@ -13,6 +13,7 @@ import {
   Download,
   Trash2,
   ChevronDown,
+  ChevronRight,
   BookOpen,
   Gauge,
   UserCheck,
@@ -41,15 +42,14 @@ import { collectNativeHostSnapshot, isDesktopApp } from './lib/desktopBridge';
 import { useDesktopBootstrap } from './lib/useDesktopBootstrap';
 import { DesktopStartupGate } from './components/DesktopStartupGate';
 import { AiSetupGate } from './components/AiSetupGate';
-import { ChatAtmosphere } from './components/ChatAtmosphere';
+import { OmegaAmbientBackdrop } from './components/OmegaAmbientBackdrop';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
-import { OmegaLogo } from './components/OmegaLogo';
+import { OmegaBrandMark } from './components/OmegaBrandMark';
 import { OmegaLoader } from './components/OmegaLoader';
 import { SpatialNavPill } from './components/SpatialNavPill';
 import { AuthModulePanel } from './components/AuthModulePanel';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { HostProtectionPanel } from './components/HostProtectionPanel';
-import { SaasFleetCard } from './components/SaasFleetCard';
 import {
   formatClockTime,
   formatLinkTelemetryContext,
@@ -115,7 +115,6 @@ export default function App() {
   const [activeNav, setActiveNav] = useState('inicio');
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
-  const [technicalMode, setTechnicalMode] = useState(false);
   const [apiOnline, setApiOnline] = useState(true);
   const desktopBootstrap = useDesktopBootstrap();
   const [govStats, setGovStats] = useState(null);
@@ -1045,8 +1044,6 @@ export default function App() {
             usbStatus={usbStatus}
             lastLinkResult={lastLinkResult}
             govStats={govStats}
-            technicalMode={technicalMode}
-            onToggleTechnicalMode={setTechnicalMode}
             apiOnline={apiOnline}
             isLoadingChat={loadingChat}
             scanningPc={scanningPc}
@@ -1074,18 +1071,20 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="roam-obsidian-sheet relative flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
+            className="relative isolate flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
           >
-            <ChatAtmosphere
-              variant={activeNav === 'preguntar' && messages.length === 0 ? 'stage' : 'workspace'}
-              showWaves={activeNav !== 'preguntar' || messages.length === 0}
-              dimmed={activeNav === 'preguntar' && messages.length > 0}
+            <OmegaAmbientBackdrop
+              intensity={
+                activeNav === 'exposicion' || activeNav === 'enlace'
+                  ? 'focused'
+                  : 'workspace'
+              }
             />
 
-            {/* Barra Principal Unificada — Pill de navegación flotante separada (sin doble blur debajo) */}
+            {/* Barra Principal Unificada */}
             <header
               aria-label="Barra principal OMEGA"
-              className="relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.07] bg-[#0A0A0C]/55 flex items-center justify-between gap-2 select-none"
+              className="relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.06] bg-[#090B0E]/75 backdrop-blur-md flex items-center justify-between gap-2 select-none"
             >
               <div className="relative z-10 min-w-0 flex items-center gap-2 shrink-0">
                 <button
@@ -1094,13 +1093,10 @@ export default function App() {
                   className="titlebar-no-drag inline-flex items-center gap-2 rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
                   title="Volver a Inicio"
                 >
-                  <OmegaLogo size={22} isThinking={loadingChat} />
-                  <span className="font-display hidden sm:inline text-[14px] font-semibold tracking-[0.06em] text-[#F2F2F4]">
-                    OMEGA
-                  </span>
+                  <OmegaBrandMark />
                 </button>
 
-                <span className="hidden lg:inline text-white/20 text-[12px]">/</span>
+                <ChevronRight className="hidden lg:inline h-3.5 w-3.5 text-slate-600 shrink-0" strokeWidth={1.75} />
                 <span className="hidden lg:inline text-[13px] font-medium text-[#F2F2F4] truncate max-w-[115px] xl:max-w-[145px]">
                   {activeNavItem.label}
                 </span>
@@ -1116,85 +1112,54 @@ export default function App() {
                   apiOnline={apiOnline}
                   isLoadingChat={loadingChat}
                   authConnected={Boolean(authSession)}
-                  technicalMode={technicalMode}
                 />
               </div>
 
               {/* Controles globales derechos unificados en todas las vistas */}
               <div className="relative z-10 flex items-center gap-1.5 shrink-0">
-                <div
-                  role="group"
-                  aria-label="Modo de experiencia OMEGA"
-                  className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setTechnicalMode(false)}
-                    title="Modo Escudo: 3 flujos guiados en lenguaje natural para protección diaria"
-                    className={`px-2 py-1 rounded-[6px] text-[11px] font-medium transition-all cursor-pointer ${
-                      !technicalMode
-                        ? 'apple-segmented-active'
-                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                    }`}
-                  >
-                    Escudo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTechnicalMode(true)}
-                    title="Modo Laboratorio: STIX, OSINT, RAG documental, expedientes y dictamen PDF"
-                    className={`px-2 py-1 rounded-[6px] text-[11px] font-medium transition-all cursor-pointer ${
-                      technicalMode
-                        ? 'apple-segmented-active'
-                        : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                    }`}
-                  >
-                    Laboratorio
-                  </button>
-                </div>
-
                 <button
                   type="button"
                   onClick={() => setIsCopilotOpen((v) => !v)}
                   aria-label="Abrir o cerrar copiloto lateral"
                   title="Copiloto (Ctrl+J)"
-                  className={`omega-glass-chip h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                  className={`h-8 px-2 rounded-lg border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
                     isCopilotOpen
-                      ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.22)]'
-                      : 'text-[#F2F2F4]'
+                      ? 'border-[#2F6FED]/55 bg-[#141923] text-[#F2F2F4]'
+                      : 'border-white/[0.06] bg-[#141923]/75 text-[#F2F2F4] hover:border-white/[0.14]'
                   }`}
                 >
-                  <Bell className="h-3.5 w-3.5 text-[#2F6FED]" />
-                  <span className="hidden 2xl:inline">Copiloto</span>
+                  <Bell className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                   <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#2F6FED] text-white text-[10px] font-bold inline-flex items-center justify-center">
                     {reportsCount}
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCommandOpen(true);
-                    setCommandQuery('');
-                  }}
-                  aria-label="Abrir búsqueda rápida (⌘K)"
-                  title="Saltar a módulo o acción (⌘K)"
-                  className="omega-glass-chip h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  <span className="font-tech hidden 2xl:inline">⌘K</span>
-                </button>
+                <div className="inline-flex items-center rounded-lg bg-[#141923]/75 border border-white/[0.06] divide-x divide-white/[0.08] overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommandOpen(true);
+                      setCommandQuery('');
+                    }}
+                    aria-label="Abrir búsqueda rápida (⌘K)"
+                    title="Saltar a módulo o acción (⌘K)"
+                    className="h-8 px-2.5 inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  >
+                    <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <span className="font-tech hidden 2xl:inline">⌘K</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setOnboardingOpen(true)}
-                  aria-label="Abrir guía rápida de uso"
-                  title="Guía rápida de OMEGA"
-                  className="omega-glass-chip h-8 px-2 rounded-[9px] inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                >
-                  <BookOpen className="h-3.5 w-3.5 text-[#6FA0FF]" />
-                  <span className="hidden 2xl:inline">Guía</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingOpen(true)}
+                    aria-label="Abrir guía rápida de uso"
+                    title="Guía rápida de OMEGA"
+                    className="h-8 px-2.5 inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                  >
+                    <BookOpen className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
+                    <span className="hidden 2xl:inline">Guía</span>
+                  </button>
+                </div>
 
                 <button
                   type="button"
@@ -1204,38 +1169,41 @@ export default function App() {
                       ? `Cuenta: ${authSession.email} (${authSession.role})`
                       : 'Iniciar sesión o crear cuenta OMEGA'
                   }
-                  className={`omega-glass-chip h-8 px-2 xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
+                  className={`h-8 px-2 xl:px-2.5 rounded-lg border bg-[#141923]/75 inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
                     authSession
-                      ? 'border-[#30D158]/35 text-[#F2F2F4]'
-                      : 'border-[#2F6FED]/45 text-[#F2F2F4]'
+                      ? 'border-emerald-400/30 text-[#F2F2F4] hover:border-emerald-400/50'
+                      : 'border-[#2F6FED]/45 text-[#F2F2F4] hover:border-[#2F6FED]'
                   }`}
                 >
                   {authSession ? (
                     <>
-                      <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
                       <span className="hidden lg:inline max-w-[110px] truncate font-tech">
                         {authSession.email?.split('@')[0] || authSession.tenantSlug}
                       </span>
                     </>
                   ) : (
                     <>
-                      <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                      <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                       <span className="hidden lg:inline">Entrar</span>
                     </>
                   )}
                 </button>
 
                 {authSession && (
-                  <button
-                    type="button"
-                    onClick={() => void handlePanicPurge()}
-                    title="Purga rápida de emergencia: borra tokens, memoria volátil y caché local"
-                    aria-label="Purga rápida de emergencia"
-                    className="omega-glass-chip h-8 px-2 rounded-[9px] border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 text-[#FFDAD6] inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer transition-colors"
-                  >
-                    <Trash2 className="h-3 w-3 shrink-0" />
-                    <span className="hidden xl:inline">Purga</span>
-                  </button>
+                  <>
+                    <span aria-hidden="true" className="h-4 w-px bg-white/10 mx-0.5 shrink-0" />
+                    <button
+                      type="button"
+                      onClick={() => void handlePanicPurge()}
+                      title="Purga rápida de emergencia: borra tokens, memoria volátil y caché local"
+                      aria-label="Purga rápida de emergencia"
+                      className="h-8 px-2 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                      <span className="hidden xl:inline">Purga</span>
+                    </button>
+                  </>
                 )}
               </div>
             </header>
@@ -1460,8 +1428,8 @@ export default function App() {
                       }}
                       onOpenSettings={() => handleNavigate('ajustes')}
                       onOpenAuth={openAuthModal}
+                      onPanicPurge={handlePanicPurge}
                     />
-                    <SaasFleetCard authSession={authSession} />
                   </div>
                 ) : activeNav === 'amenazas' ? (
                   <CampaignsPanel
@@ -1485,38 +1453,20 @@ export default function App() {
                       />
                     )}
                     {activeNav === 'exposicion' && (
-                      <div className="space-y-6">
-                        <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] pb-4">
-                          <button
-                            type="button"
-                            onClick={() => setIntelTab('link')}
-                            className={`inline-flex items-center gap-2 rounded-[10px] border px-3.5 py-2 text-[12.5px] font-medium transition-all cursor-pointer ${
-                              intelTab === 'link'
-                                ? 'border-[#2F6FED]/55 bg-[#2F6FED]/15 text-[#F2F2F4]'
-                                : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:text-[#F2F2F4]'
-                            }`}
-                          >
-                            <Link2 className="h-3.5 w-3.5 text-[#6EA0FF]" />
-                            <span>Verificar enlace (URL + OWASP)</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIntelTab('osint')}
-                            className={`inline-flex items-center gap-2 rounded-[10px] border px-3.5 py-2 text-[12.5px] font-medium transition-all cursor-pointer ${
-                              intelTab === 'osint'
-                                ? 'border-[#2F6FED]/55 bg-[#2F6FED]/15 text-[#F2F2F4]'
-                                : 'border-white/[0.08] bg-white/[0.03] text-[#9A9AA2] hover:text-[#F2F2F4]'
-                            }`}
-                          >
-                            <Radar className="h-3.5 w-3.5 text-[#6EA0FF]" />
-                            <span>Dominios y correos (OSINT + HIBP)</span>
-                          </button>
-                        </div>
+                      <div className="flex-1 flex flex-col">
                         {intelTab === 'link' ? (
                           <LinkVerifierPanel
                             onAskInChat={askInChat}
                             onAuditDomain={(assetValue) => {
                               setOsintJump((prev) => ({ value: assetValue, type: 'domain', key: prev.key + 1 }));
+                              setIntelTab('osint');
+                            }}
+                            onSwitchMode={(mode) => {
+                              setOsintJump((prev) => ({
+                                value: '',
+                                type: mode === 'domain' ? 'domain' : 'institutional_email',
+                                key: prev.key + 1,
+                              }));
                               setIntelTab('osint');
                             }}
                             onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
@@ -1531,6 +1481,9 @@ export default function App() {
                             onVerifyLink={(url) => {
                               setLinkJump((prev) => ({ url, key: prev.key + 1 }));
                               setIntelTab('link');
+                            }}
+                            onSwitchMode={(mode) => {
+                              if (mode === 'link') setIntelTab('link');
                             }}
                             onAuditDevice={(tab = 'pc') => handleNavigate('equipo', { tab })}
                             onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
@@ -1603,8 +1556,6 @@ export default function App() {
         navItems={NAV_ITEMS}
         onNavigate={handleNavigate}
         onOpenCopilot={() => setIsCopilotOpen(true)}
-        technicalMode={technicalMode}
-        onToggleTechnicalMode={() => setTechnicalMode((v) => !v)}
         onOpenOnboarding={() => setOnboardingOpen(true)}
         sessions={sessions}
         onSelectSession={(sessionId) => {

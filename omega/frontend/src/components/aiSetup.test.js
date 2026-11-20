@@ -8,14 +8,14 @@ import { transformWithOxc } from 'vite';
 
 const apiUrl = new URL('../lib/api.js', import.meta.url).href;
 const jsxSources = new Map();
-for (const name of ['AiSetupGate', 'TwoFactorSettingsCard']) {
+for (const name of ['AiSetupGate', 'TwoFactorSettingsCard', 'OmegaBrandMark']) {
   const url = new URL(`./${name}.jsx`, import.meta.url);
   jsxSources.set(url.href, (await transformWithOxc(await fs.readFile(url, 'utf8'), fileURLToPath(url), { jsx: { runtime: 'automatic' } })).code);
 }
 const api = {}; globalThis.__omegaSetupApi = api;
 const hooks = registerHooks({
   resolve(specifier, context, next) {
-    if (jsxSources.has(context.parentURL) && specifier.startsWith('.')) return {url:new URL(specifier + (specifier === './TwoFactorSettingsCard' ? '.jsx' : '.js'), context.parentURL).href, shortCircuit:true};
+    if (jsxSources.has(context.parentURL) && specifier.startsWith('.')) return {url:new URL(specifier + (specifier === './TwoFactorSettingsCard' || specifier === './OmegaBrandMark' ? '.jsx' : '.js'), context.parentURL).href, shortCircuit:true};
     return next(specifier,context);
   },
   load(url,context,next) {

@@ -60,6 +60,7 @@ services:
       OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-auto}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
       OMEGA_STIX_MANIFEST_PATH: /app/corpus_mvp/iocs/stix_manifest.json
       OMEGA_CONTAINMENT_DIR: /var/lib/omega/quarantine
     volumes:
@@ -70,6 +71,7 @@ services:
     expose:
       - "8000"
     networks:
+      omega-public: {}
       omega-private:
         aliases:
           - omega-api

@@ -24,6 +24,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { OmegaShaderOrb } from './OmegaShaderOrb';
+import { OmegaCoreOrb } from './OmegaCoreOrb';
 import { StructuredResponse } from './StructuredResponse';
 import { SourcesPanel } from './SourcesPanel';
 import { stripUnsafeChars, validateChatMessage, validateIocInput, validateUploadFile } from '../lib/validators';
@@ -558,7 +559,7 @@ export function ChatWorkspace({
                   : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
               }`}
             >
-              <FileText className="h-3 w-3 text-[#30D158]" />
+              <FileText className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
               <span>
                 Mis PDFs
                 {authSession && privateDocs.length > 0 ? ` (${privateDocs.length})` : ''}
@@ -606,7 +607,7 @@ export function ChatWorkspace({
               compact ? 'px-2.5 py-1 text-[11.5px]' : 'px-2.5 py-1.5 text-[11.5px]'
             }`}
           >
-            <FileUp className="h-3.5 w-3.5 text-[#2F6FED]" />
+            <FileUp className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
             <span>{uploadingPdf ? 'Extrayendo...' : 'Adjuntar PDF'}</span>
           </button>
 
@@ -638,7 +639,7 @@ export function ChatWorkspace({
               compact ? 'px-2.5 py-1 text-[11.5px]' : 'px-2.5 py-1.5 text-[11.5px]'
             }`}
           >
-            <ImagePlus className="h-3.5 w-3.5 text-[#6EA0FF]" />
+            <ImagePlus className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
             <span>Imagen</span>
           </button>
 
@@ -714,10 +715,10 @@ export function ChatWorkspace({
             <div className="flex-1 min-h-[10px] max-h-[56px]" />
 
             <div className="relative z-10 w-full max-w-[680px] flex flex-col items-center">
-              {/* Emblema Glassmórfico Compacto + Saludo */}
+              {/* Emblema Óptico OMEGA Core Orb + Saludo */}
               <div className="animate-kowalski-in flex flex-col items-center text-center mb-5">
                 <div className="mb-3.5">
-                  <OmegaShaderOrb size={62} isThinking={loading} />
+                  <OmegaCoreOrb size={76} state={loading ? 'thinking' : 'idle'} />
                 </div>
 
                 <h1 className="text-[25px] sm:text-[31px] font-semibold tracking-[-0.025em] leading-[1.14] text-[#F2F2F4]">
@@ -828,7 +829,7 @@ export function ChatWorkspace({
                           : 'border-white/[0.09] bg-[rgba(20,20,24,0.62)] text-[#9A9AA2] hover:border-white/[0.16] hover:bg-[rgba(28,36,56,0.45)] hover:text-[#F2F2F4]'
                       }`}
                     >
-                      <Icon className={`h-3.5 w-3.5 ${active ? 'text-[#2F6FED]' : 'text-[#9A9AA2]'}`} />
+                      <Icon className={`h-3.5 w-3.5 ${active ? 'text-[#2F6FED]' : 'text-[#9A9AA2]'}`} strokeWidth={1.75} />
                       <span>{preset.label}</span>
                     </button>
                   );

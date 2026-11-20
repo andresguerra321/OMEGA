@@ -27,7 +27,7 @@ function formatSecretGroups(secret) {
     ?.join(' ') || '';
 }
 
-export function TwoFactorSettingsCard({ authSession, required = false, onReadyChange }) {
+export function TwoFactorSettingsCard({ authSession, required = false, onReadyChange, embedded = false }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -254,61 +254,115 @@ export function TwoFactorSettingsCard({ authSession, required = false, onReadyCh
   const currentMethod = status?.method || 'NONE';
 
   return (
-    <div className="pt-4 border-t border-white/[0.06] space-y-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13.5px] font-semibold text-[#F2F2F4]">
-              Verificación en dos pasos (2FA)
-            </span>
-            {mfaEnabled && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium border border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
-                {currentMethod === 'EMAIL' ? 'Correo electrónico' : 'App Autenticadora (TOTP)'}
+    <div className={embedded ? 'space-y-3.5' : 'pt-4 border-t border-white/[0.06] space-y-3'}>
+      <div className="space-y-3">
+        {/* Fila switch 1: App Autenticadora (TOTP) */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13.5px] font-medium text-[#F2F2F4]">
+                App Autenticadora (TOTP)
               </span>
-            )}
+              {mfaEnabled && currentMethod !== 'EMAIL' && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium border border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
+                  Activa
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[#8E95A5]">
+              {embedded
+                ? 'Códigos temporales desde Google Authenticator, 1Password o Authy.'
+                : 'Mantén tu cuenta segura activando 2FA mediante aplicación autenticadora (TOTP) o correo.'}
+            </p>
           </div>
-          <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
-            Mantén tu cuenta segura activando 2FA mediante código al correo o aplicación autenticadora (TOTP).
-          </p>
-          {mfaEnabled && !required && (
-            <button
-              type="button"
-              onClick={() => openSetupWizard(currentMethod === 'EMAIL' ? 'EMAIL' : 'TOTP')}
-              className="text-[11.5px] font-medium text-[#6EA0FF] hover:text-white transition-colors cursor-pointer pt-0.5"
-            >
-              Cambiar método 2FA →
-            </button>
-          )}
+
+          <button
+            type="button"
+            role="switch"
+            disabled={loading || (required && (!status || mfaEnabled))}
+            aria-checked={mfaEnabled && currentMethod !== 'EMAIL'}
+            aria-label="Activar o desactivar verificación en dos pasos"
+            onClick={() => {
+              if (mfaEnabled) {
+                setErrorMsg('');
+                setDisablePwd('');
+                setModalStep('disable');
+              } else {
+                openSetupWizard('TOTP');
+              }
+            }}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer ${
+              mfaEnabled && currentMethod !== 'EMAIL'
+                ? 'bg-[#2F6FED] border-[#6EA0FF]/60 shadow-[0_0_16px_rgba(47,111,237,0.45)]'
+                : 'bg-white/[0.08] border-white/[0.14] hover:bg-white/[0.14]'
+            }`}
+          >
+            <span
+              className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                mfaEnabled && currentMethod !== 'EMAIL' ? 'translate-x-5.5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
         </div>
 
-        <button
-          type="button"
-          role="switch"
-          disabled={loading || (required && (!status || mfaEnabled))}
-          aria-checked={mfaEnabled}
-          aria-label="Activar o desactivar verificación en dos pasos"
-          onClick={() => {
-            if (mfaEnabled) {
-              setErrorMsg('');
-              setDisablePwd('');
-              setModalStep('disable');
-            } else {
-              openSetupWizard('TOTP');
-            }
-          }}
-          className={`relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer ${
-            mfaEnabled
-              ? 'bg-[#2F6FED] border-[#6EA0FF]/60 shadow-[0_0_16px_rgba(47,111,237,0.45)]'
-              : 'bg-white/[0.08] border-white/[0.14] hover:bg-white/[0.14]'
-          }`}
-        >
-          <span
-            className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-              mfaEnabled ? 'translate-x-5.5' : 'translate-x-0.5'
+        {/* Fila switch 2: Código por correo */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13.5px] font-medium text-[#F2F2F4]">
+                Código por correo
+              </span>
+              {mfaEnabled && currentMethod === 'EMAIL' && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium border border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
+                  Activo
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[#8E95A5]">
+              Envía un código de 6 dígitos a tu correo configurado al iniciar sesión.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            disabled={loading || (required && (!status || mfaEnabled))}
+            aria-checked={mfaEnabled && currentMethod === 'EMAIL'}
+            aria-label="Activar o desactivar código 2FA por correo"
+            onClick={() => {
+              if (mfaEnabled && currentMethod === 'EMAIL') {
+                setErrorMsg('');
+                setDisablePwd('');
+                setModalStep('disable');
+              } else {
+                openSetupWizard('EMAIL');
+              }
+            }}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer ${
+              mfaEnabled && currentMethod === 'EMAIL'
+                ? 'bg-[#2F6FED] border-[#6EA0FF]/60 shadow-[0_0_16px_rgba(47,111,237,0.45)]'
+                : 'bg-white/[0.08] border-white/[0.14] hover:bg-white/[0.14]'
             }`}
-          />
-        </button>
+          >
+            <span
+              className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                mfaEnabled && currentMethod === 'EMAIL' ? 'translate-x-5.5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        {mfaEnabled && !required && (
+          <button
+            type="button"
+            onClick={() => openSetupWizard(currentMethod === 'EMAIL' ? 'EMAIL' : 'TOTP')}
+            className="text-[11.5px] font-medium text-[#6EA0FF] hover:text-white transition-colors cursor-pointer"
+          >
+            Cambiar método 2FA →
+          </button>
+        )}
       </div>
 
       {required && errorMsg && !modalStep && <div role="alert" className="space-y-2 text-sm text-ink-primary">

@@ -14,6 +14,7 @@ import {
   Smartphone,
   FileCode2,
   Terminal,
+  ChevronDown,
 } from 'lucide-react';
 import {
   fetchCampaigns,
@@ -48,6 +49,7 @@ export function CampaignsPanel({
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [actionNote, setActionNote] = useState('');
   const [exportError, setExportError] = useState('');
@@ -407,22 +409,22 @@ export function CampaignsPanel({
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-      {/* Master List estilo macOS Mail / Notes Split View — ancho completo en móvil hasta elegir campaña */}
+      {/* Master List Split View — ancho completo en móvil hasta elegir campaña */}
       <aside
         className={`${
           mobileShowDetail ? 'hidden md:flex' : 'flex'
-        } w-full md:w-[296px] lg:w-[316px] shrink-0 apple-vibrancy md:border-r border-white/[0.07] flex-col min-h-0`}
+        } w-full md:w-[296px] lg:w-[316px] shrink-0 bg-[#0F131B]/85 backdrop-blur-md md:border-r border-white/[0.07] flex-col min-h-0`}
       >
         <div className="p-3 border-b border-white/[0.06] space-y-2.5">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#9A9AA2]" />
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
             <input
               type="text"
               maxLength={120}
               value={searchQuery}
               onChange={(e) => setSearchQuery(sanitizeSearchInput(e.target.value, 120))}
               placeholder="Buscar amenaza o CVE..."
-              className="apple-well w-full h-9 rounded-[9px] pl-8 pr-3 text-[13px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:shadow-[0_0_24px_rgba(47,111,237,0.2)] focus:outline-none transition-all"
+              className="w-full h-9 rounded-lg bg-[#141923]/75 border border-white/[0.05] pl-8 pr-3 text-[13px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/60 focus:outline-none transition-colors"
             />
           </div>
 
@@ -435,10 +437,10 @@ export function CampaignsPanel({
                     key={fam}
                     type="button"
                     onClick={() => setFamilyFilter(fam)}
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-all duration-150 active:scale-95 cursor-pointer ${
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors cursor-pointer ${
                       active
-                        ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] ring-1 ring-inset ring-[#2F6FED]/55 shadow-[0_0_20px_rgba(47,111,237,0.2)]'
-                        : 'text-[#9A9AA2] hover:bg-white/[0.06] hover:text-[#F2F2F4]'
+                        ? 'bg-[#2F6FED] text-white'
+                        : 'bg-[#141923]/75 border border-white/[0.05] text-[#9A9AA2] hover:text-[#F2F2F4]'
                     }`}
                   >
                     {fam === 'ALL' ? `Todas (${campaigns.length})` : fam}
@@ -454,7 +456,7 @@ export function CampaignsPanel({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
           {filteredCampaigns.length === 0 ? (
             <PanelEmptyState
               title="Sin amenazas coincidentes"
@@ -483,15 +485,16 @@ export function CampaignsPanel({
                     setIocTypeFilter('ALL');
                     setActionNote('');
                     setDetailError('');
+                    setShowAdvancedMenu(false);
                     if (camp.id !== selectedId) setLoadingDetail(true);
                     setSelectedId(camp.id);
                     setMobileShowDetail(true);
                   }}
                   style={{ animationDelay: `${Math.min(idx * 25, 200)}ms` }}
-                  className={`animate-fade-up w-full rounded-[10px] px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer block ${
+                  className={`animate-fade-up w-full px-3.5 py-3 text-left transition-colors cursor-pointer block ${
                     isSelected
-                      ? 'bg-[rgba(28,36,56,0.65)] ring-1 ring-inset ring-[#2F6FED]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_20px_rgba(47,111,237,0.2)]'
-                      : 'bg-transparent hover:bg-white/[0.05]'
+                      ? 'bg-[#141923] border-l-2 border-l-[#2F6FED]'
+                      : 'bg-transparent hover:bg-[#141923]/55'
                   }`}
                 >
                   <p className="text-[13.5px] font-medium tracking-[-0.01em] leading-[1.4] text-[#F2F2F4] line-clamp-2">
@@ -521,18 +524,18 @@ export function CampaignsPanel({
         } flex-1 flex-col min-w-0 overflow-y-auto px-4 sm:px-6 md:px-8 py-5 md:py-7`}
       >
         {/* Regreso rápido a la lista en teléfonos */}
-        <div className="md:hidden mb-4 pb-3 border-b border-white/[0.07] flex items-center justify-between gap-2">
+        <div className="md:hidden mb-4 pb-3 border-b border-white/[0.06] flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setMobileShowDetail(false)}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.1] bg-white/[0.05] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.09] active:scale-[0.96] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:border-white/[0.14] transition-colors cursor-pointer"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#2F6FED]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
             <span>Todas las amenazas</span>
           </button>
 
           {detail?.spyware_family && (
-            <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[11px] text-[#F2F2F4] truncate">
+            <span className="font-tech rounded-full border border-rose-500/35 bg-rose-500/12 px-2.5 py-0.5 text-[11px] text-rose-400 truncate">
               {detail.spyware_family}
             </span>
           )}
@@ -577,7 +580,7 @@ export function CampaignsPanel({
               <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5 font-tech text-[12px]">
                   {detail.spyware_family && (
-                    <span className="rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-0.5 text-[#F2F2F4]">
+                    <span className="rounded-full border border-rose-500/35 bg-rose-500/12 px-2.5 py-0.5 text-rose-400">
                       {detail.spyware_family}
                     </span>
                   )}
@@ -590,64 +593,86 @@ export function CampaignsPanel({
                 </h1>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowWebExtractor((prev) => !prev)}
-                  title="Extraer indicadores de amenaza desde un artículo web sin guardarlo en disco"
-                  className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3 py-1.5 text-[12.5px] active:scale-[0.97] transition-all cursor-pointer ${
-                    showWebExtractor
-                      ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] shadow-[0_0_20px_rgba(47,111,237,0.2)]'
-                      : 'border-white/[0.08] bg-white/[0.045] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4]'
-                  }`}
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  <span>URL (RAM)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleExportDossier}
-                  title="Exportar ficha en Markdown"
-                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>.md</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleExportYara}
-                  disabled={Boolean(exportingType)}
-                  title="Descargar regla YARA-X para detección local"
-                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <FileCode2 className="h-3.5 w-3.5 text-[#2F6FED]" />
-                  <span>{exportingType === 'yara' ? '...' : 'YARA'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleExportMvt}
-                  disabled={Boolean(exportingType)}
-                  title="Exportar script bash MVT con STIX2 embebidos"
-                  className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <Terminal className="h-3.5 w-3.5 text-[#30D158]" />
-                  <span>{exportingType === 'mvt' ? '...' : 'MVT'}</span>
-                </button>
-
-                {onAuditDevice && (
+              <div className="relative flex flex-wrap items-center gap-2 shrink-0">
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => onAuditDevice('android')}
-                    title="Auditar tu móvil o equipo frente a los IOCs de esta campaña"
-                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:bg-white/[0.08] hover:text-[#F2F2F4] active:scale-[0.97] transition-all cursor-pointer"
+                    onClick={() => setShowAdvancedMenu((prev) => !prev)}
+                    aria-expanded={showAdvancedMenu}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12.5px] text-[#F2F2F4]/85 hover:border-white/[0.14] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                   >
-                    <Smartphone className="h-3.5 w-3.5 text-[#2F6FED]" />
-                    <span>Revisar equipo</span>
+                    <span>Opciones avanzadas</span>
+                    <ChevronDown className={`h-3.5 w-3.5 text-[#9A9AA2] transition-transform ${showAdvancedMenu ? 'rotate-180' : ''}`} strokeWidth={1.75} />
                   </button>
-                )}
+
+                  {showAdvancedMenu && (
+                    <div className="absolute right-0 mt-1.5 w-56 rounded-xl border border-white/[0.07] bg-[#141923] shadow-[0_12px_32px_rgba(0,0,0,0.55)] p-1.5 z-20 space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWebExtractor((prev) => !prev);
+                          setShowAdvancedMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#F2F2F4] hover:bg-white/[0.06] transition-colors cursor-pointer"
+                      >
+                        <Globe className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
+                        <span>{showWebExtractor ? 'Ocultar extractor URL' : 'Extraer de URL (RAM)'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleExportDossier();
+                          setShowAdvancedMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#F2F2F4] hover:bg-white/[0.06] transition-colors cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
+                        <span>Exportar ficha (.md)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={Boolean(exportingType)}
+                        onClick={() => {
+                          handleExportYara();
+                          setShowAdvancedMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#F2F2F4] hover:bg-white/[0.06] disabled:opacity-50 transition-colors cursor-pointer"
+                      >
+                        <FileCode2 className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
+                        <span>{exportingType === 'yara' ? 'Exportando YARA...' : 'Descargar regla YARA'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={Boolean(exportingType)}
+                        onClick={() => {
+                          handleExportMvt();
+                          setShowAdvancedMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#F2F2F4] hover:bg-white/[0.06] disabled:opacity-50 transition-colors cursor-pointer"
+                      >
+                        <Terminal className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
+                        <span>{exportingType === 'mvt' ? 'Exportando MVT...' : 'Exportar script MVT'}</span>
+                      </button>
+
+                      {onAuditDevice && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAuditDevice('android');
+                            setShowAdvancedMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#F2F2F4] hover:bg-white/[0.06] transition-colors cursor-pointer"
+                        >
+                          <Smartphone className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
+                          <span>Revisar equipo</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {onAskInChat && (
                   <button
@@ -657,9 +682,9 @@ export function CampaignsPanel({
                         `Analiza en detalle la campaña "${detail.name}"${detail.spyware_family ? ` (${detail.spyware_family})` : ''}.`
                       )
                     }
-                    className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] active:scale-[0.97] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#2F6FED]/90 transition-colors cursor-pointer"
                   >
-                    <MessageSquare className="h-3.5 w-3.5" />
+                    <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
                     <span>Investigar en chat</span>
                   </button>
                 )}
@@ -683,7 +708,7 @@ export function CampaignsPanel({
 
             {/* Ficha agrupada de atribución */}
             {hasAttribution && (
-              <dl className="omega-glass-panel animate-on-scroll rounded-[13px] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
+              <dl className="animate-on-scroll rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] grid gap-4 sm:grid-cols-3 p-4 text-[13.5px]">
                 {detail.suspected_actor && (
                   <div className="space-y-1 min-w-0">
                     <dt className="text-[11.5px] font-medium text-[#9A9AA2]">Actor</dt>
@@ -712,15 +737,15 @@ export function CampaignsPanel({
               </dl>
             )}
 
-            {/* Control Segmentado Glass */}
+            {/* Control Segmentado */}
             <div className="space-y-4">
-              <div className="apple-segmented inline-flex flex-wrap max-w-full gap-0.5 rounded-[10px] p-0.5">
+              <div className="inline-flex flex-wrap max-w-full gap-0.5 rounded-lg bg-[#141923]/75 border border-white/[0.05] p-0.5">
                 <button
                   type="button"
                   onClick={() => setDossierTab('cves')}
-                  className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                  className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
                     dossierTab === 'cves'
-                      ? 'apple-segmented-active'
+                      ? 'bg-[#2F6FED] text-white'
                       : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                   }`}
                 >
@@ -730,9 +755,9 @@ export function CampaignsPanel({
                 <button
                   type="button"
                   onClick={() => setDossierTab('iocs')}
-                  className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                  className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
                     dossierTab === 'iocs'
-                      ? 'apple-segmented-active'
+                      ? 'bg-[#2F6FED] text-white'
                       : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                   }`}
                 >
@@ -742,9 +767,9 @@ export function CampaignsPanel({
                 <button
                   type="button"
                   onClick={() => setDossierTab('sources')}
-                  className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-medium transition-all duration-150 cursor-pointer ${
+                  className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
                     dossierTab === 'sources'
-                      ? 'apple-segmented-active'
+                      ? 'bg-[#2F6FED] text-white'
                       : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
                   }`}
                 >
@@ -757,13 +782,13 @@ export function CampaignsPanel({
                 <div className="space-y-3">
                   {(detail.cves?.length || 0) > 10 && (
                     <div className="relative w-full sm:w-64">
-                      <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" />
+                      <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
                       <input
                         type="text"
                         value={cveSearch}
                         onChange={(e) => setCveSearch(e.target.value)}
                         placeholder="Filtrar CVE..."
-                        className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none"
+                        className="w-full h-8 rounded-lg bg-[#141923]/75 border border-white/[0.05] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/60 focus:outline-none"
                       />
                     </div>
                   )}
@@ -771,59 +796,66 @@ export function CampaignsPanel({
                   {filteredCves.length === 0 ? (
                     <p className="text-[13px] text-[#9A9AA2] py-2">Sin CVEs vinculados.</p>
                   ) : hasCveDescriptions ? (
-                    <div className="grid gap-2.5 sm:grid-cols-2">
-                      {filteredCves.map((cve, idx) => (
-                        <div
-                          key={cve.cve_code}
-                          style={{ animationDelay: `${Math.min(idx * 35, 180)}ms` }}
-                          className="apple-group animate-fade-up rounded-[12px] px-4 py-3 flex items-center justify-between gap-2.5 hover:border-white/[0.16] hover:-translate-y-0.5 transition-all duration-200"
-                        >
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  onAskInChat?.(
-                                    `¿Cómo se explotó ${cve.cve_code} en "${detail.name}"?`
-                                  )
-                                }
-                                title="Preguntar en chat"
-                                className="font-tech text-[13.5px] font-medium text-[#F2F2F4] hover:underline decoration-[#2F6FED] underline-offset-4 transition-colors cursor-pointer"
-                              >
-                                {cve.cve_code}
-                              </button>
-                              {cve.cvss_score != null && (
-                                <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2 py-0.5 text-[11px] text-[#F2F2F4]">
-                                  {cve.cvss_score}
-                                </span>
+                    <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] divide-y divide-white/[0.06] overflow-hidden">
+                      {filteredCves.map((cve) => {
+                        const score = Number(cve.cvss_score);
+                        const scoreTone =
+                          score >= 7
+                            ? 'border-rose-500/35 bg-rose-500/12 text-rose-400'
+                            : score >= 4
+                              ? 'border-amber-400/30 bg-amber-400/10 text-amber-400'
+                              : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400';
+                        return (
+                          <div
+                            key={cve.cve_code}
+                            className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#141923]/55 transition-colors"
+                          >
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onAskInChat?.(
+                                      `¿Cómo se explotó ${cve.cve_code} en "${detail.name}"?`
+                                    )
+                                  }
+                                  title="Preguntar en chat"
+                                  className="font-tech text-[13.5px] font-medium text-[#F2F2F4] hover:underline decoration-[#2F6FED] underline-offset-4 transition-colors cursor-pointer"
+                                >
+                                  {cve.cve_code}
+                                </button>
+                                {cve.cvss_score != null && (
+                                  <span className={`font-tech rounded-full border px-2 py-0.5 text-[11px] ${scoreTone}`}>
+                                    {cve.cvss_score}
+                                  </span>
+                                )}
+                              </div>
+                              {cve.description && (
+                                <p className="text-[12.5px] leading-[1.5] text-[#9A9AA2] line-clamp-2">
+                                  {cve.description}
+                                </p>
                               )}
                             </div>
-                            {cve.description && (
-                              <p className="text-[12.5px] leading-[1.5] text-[#9A9AA2] line-clamp-2">
-                                {cve.description}
-                              </p>
-                            )}
-                          </div>
 
-                          <a
-                            href={`https://nvd.nist.gov/vuln/detail/${cve.cve_code}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Abrir en NIST NVD"
-                            className="shrink-0 p-1.5 rounded-[7px] text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] transition-colors"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </div>
-                      ))}
+                            <a
+                              href={`https://nvd.nist.gov/vuln/detail/${cve.cve_code}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Abrir en NIST NVD"
+                              className="shrink-0 p-1.5 rounded-lg text-[#9A9AA2] hover:bg-white/[0.06] hover:text-[#F2F2F4] transition-colors"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            </a>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="grid gap-2 grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                      {filteredCves.map((cve, idx) => (
+                    <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-3 grid gap-2 grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                      {filteredCves.map((cve) => (
                         <div
                           key={cve.cve_code}
-                          style={{ animationDelay: `${Math.min(idx * 25, 160)}ms` }}
-                          className="apple-group animate-fade-up group rounded-[10px] h-9 px-2.5 sm:px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/50 hover:-translate-y-0.5 transition-all duration-200"
+                          className="group rounded-xl bg-[#141923]/75 border border-white/[0.05] h-9 px-3 flex items-center justify-between gap-1.5 hover:border-[#2F6FED]/45 transition-colors"
                         >
                           <button
                             type="button"
@@ -848,7 +880,7 @@ export function CampaignsPanel({
                               title="Ver en NIST NVD"
                               className="text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors"
                             >
-                              <ExternalLink className="h-3.5 w-3.5" />
+                              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
                             </a>
                           </div>
                         </div>
@@ -874,8 +906,8 @@ export function CampaignsPanel({
                               onClick={() => setIocTypeFilter(t)}
                               className={`font-tech rounded-full px-2.5 py-0.5 text-[11px] uppercase transition-colors cursor-pointer ${
                                 iocTypeFilter === t
-                                  ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] ring-1 ring-inset ring-[#2F6FED]/55 shadow-[0_0_18px_rgba(47,111,237,0.2)]'
-                                  : 'bg-white/[0.04] text-[#9A9AA2] border border-white/[0.08] hover:text-[#F2F2F4]'
+                                  ? 'bg-[#2F6FED] text-white'
+                                  : 'bg-[#141923]/75 text-[#9A9AA2] border border-white/[0.05] hover:text-[#F2F2F4]'
                               }`}
                             >
                               {t}
@@ -884,14 +916,14 @@ export function CampaignsPanel({
                         </div>
 
                         <div className="relative w-full sm:w-56">
-                          <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" />
+                          <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
                           <input
                             type="text"
                             maxLength={120}
                             value={iocSearch}
                             onChange={(e) => setIocSearch(sanitizeSearchInput(e.target.value, 120))}
                             placeholder="Filtrar indicador..."
-                            className="apple-well w-full h-8 rounded-[9px] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/70 focus:outline-none"
+                            className="w-full h-8 rounded-lg bg-[#141923]/75 border border-white/[0.05] pl-8 pr-3 font-tech text-[12px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED]/60 focus:outline-none"
                           />
                         </div>
                       </div>
@@ -905,10 +937,10 @@ export function CampaignsPanel({
                       {filteredIocs.length === 0 ? (
                         <p className="text-[13px] text-[#9A9AA2] py-2">Sin coincidencias.</p>
                       ) : (
-                        <div className="apple-group animate-fade-up rounded-[13px] overflow-hidden">
+                        <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] overflow-hidden">
                           <div className="max-h-[360px] overflow-y-auto overflow-x-auto">
                             <table className="w-full text-left border-collapse">
-                              <thead className="sticky top-0 bg-[#141418]/95 border-b border-white/[0.08] text-[12px] font-medium text-[#9A9AA2]">
+                              <thead className="sticky top-0 bg-[#141923] border-b border-white/[0.06] text-[12px] font-medium text-[#9A9AA2]">
                                 <tr>
                                   <th className="px-3 sm:px-4 py-2.5 w-20 sm:w-24">Tipo</th>
                                   <th className="px-3 sm:px-4 py-2.5">Indicador</th>
@@ -920,7 +952,7 @@ export function CampaignsPanel({
                                 {filteredIocs.map((ioc, idx) => (
                                   <tr
                                     key={`${ioc.ioc_type}-${ioc.ioc_value}-${idx}`}
-                                    className="hover:bg-white/[0.035] transition-colors"
+                                    className="hover:bg-[#141923]/55 transition-colors"
                                   >
                                     <td className="px-3 sm:px-4 py-2.5 font-tech text-[11px] sm:text-[11.5px] uppercase text-[#9A9AA2] whitespace-nowrap">
                                       {ioc.ioc_type}
@@ -941,21 +973,21 @@ export function CampaignsPanel({
                                               type="button"
                                               onClick={() => onVerifyLink(ioc.ioc_value)}
                                               title="Inspeccionar indicador en Enlaces sin contacto HTTP"
-                                              className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#2F6FED] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                                              className="inline-flex items-center justify-center rounded-lg p-1 text-[#2F6FED] hover:bg-[#141923] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                                             >
-                                              <Link2 className="h-3.5 w-3.5" />
+                                              <Link2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                                             </button>
                                           )}
                                         <button
                                           type="button"
                                           onClick={() => handleCopy(ioc.ioc_value)}
                                           title="Copiar"
-                                          className="inline-flex items-center justify-center rounded-[6px] p-1 text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+                                          className="inline-flex items-center justify-center rounded-lg p-1 text-[#9A9AA2] hover:bg-white/[0.06] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                                         >
                                           {copiedValue === ioc.ioc_value ? (
-                                            <Check className="h-3.5 w-3.5 text-[#2F6FED]" />
+                                            <Check className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
                                           ) : (
-                                            <Copy className="h-3.5 w-3.5" />
+                                            <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
                                           )}
                                         </button>
                                       </div>
@@ -978,41 +1010,42 @@ export function CampaignsPanel({
                   {!detail.reports || detail.reports.length === 0 ? (
                     <p className="text-[13px] text-[#9A9AA2] py-2">Sin fuentes vinculadas.</p>
                   ) : (
-                    detail.reports.map((rep, idx) => (
-                      <div
-                        key={rep.id}
-                        style={{ animationDelay: `${Math.min(idx * 45, 220)}ms` }}
-                        className="apple-group animate-fade-up rounded-[12px] px-4 py-3.5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between hover:border-white/[0.16] hover:-translate-y-0.5 transition-all duration-200"
-                      >
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-start sm:items-center gap-2">
-                            <FileText className="h-4 w-4 text-[#2F6FED] shrink-0 mt-0.5 sm:mt-0" />
-                            <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F2F2F4] break-words sm:truncate">
-                              {rep.title}
-                            </p>
+                    <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] divide-y divide-white/[0.06] overflow-hidden">
+                      {detail.reports.map((rep) => (
+                        <div
+                          key={rep.id}
+                          className="px-4 py-3.5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between hover:bg-[#141923]/55 transition-colors"
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-start sm:items-center gap-2">
+                              <FileText className="h-4 w-4 text-[#2F6FED] shrink-0 mt-0.5 sm:mt-0" strokeWidth={1.75} />
+                              <p className="text-[14px] font-medium tracking-[-0.01em] text-[#F2F2F4] break-words sm:truncate">
+                                {rep.title}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 font-tech text-[12px] text-[#9A9AA2]">
+                              {rep.organization && <span>{rep.organization}</span>}
+                              {rep.publication_date && <span>· {rep.publication_date}</span>}
+                              {rep.file_hash && (
+                                <span title={rep.file_hash}>· {rep.file_hash.slice(0, 12)}</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 font-tech text-[12px] text-[#9A9AA2]">
-                            {rep.organization && <span>{rep.organization}</span>}
-                            {rep.publication_date && <span>· {rep.publication_date}</span>}
-                            {rep.file_hash && (
-                              <span title={rep.file_hash}>· {rep.file_hash.slice(0, 12)}</span>
-                            )}
-                          </div>
-                        </div>
 
-                        {rep.source_url?.startsWith('http') && (
-                          <a
-                            href={rep.source_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex shrink-0 self-start sm:self-auto items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12px] text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all"
-                          >
-                            <span>Abrir</span>
-                            <ExternalLink className="h-3.5 w-3.5 text-[#9A9AA2]" />
-                          </a>
-                        )}
-                      </div>
-                    ))
+                          {rep.source_url?.startsWith('http') && (
+                            <a
+                              href={rep.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex shrink-0 self-start sm:self-auto items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12px] text-[#F2F2F4] hover:border-white/[0.14] transition-colors"
+                            >
+                              <span>Abrir</span>
+                              <ExternalLink className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}

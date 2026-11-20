@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Cable,
   Check,
+  ChevronDown,
   Clock,
   Copy,
   Download,
   ExternalLink,
   FolderOpen,
-  HelpCircle,
   KeyRound,
   Laptop,
   Link2,
@@ -29,8 +30,7 @@ import {
   verifyMvtText,
 } from '../lib/api';
 import { collectNativeHostSnapshot, getMobileDesktopBridge, isDesktopApp } from '../lib/desktopBridge';
-import { AndroidStepVisual, IosStepVisual, PcStepVisual } from './DeviceSetupVisuals';
-import { MobileUsbAuditCard } from './MobileUsbAuditCard';
+import { AndroidStepVisual, IosStepVisual } from './DeviceSetupVisuals';
 import { OmegaWebIntelCard } from './OmegaWebIntelCard';
 import { useScrollReveal } from '../lib/useScrollReveal';
 import {
@@ -42,7 +42,6 @@ import { useSingleFlight } from '../lib/useSingleFlight';
 import { ContainmentButton, EmergencyGuidance } from './ContainmentPanel';
 import {
   ActionConfirmationBanner,
-  PanelEmptyState,
   PanelErrorBanner,
   PanelSkeleton,
 } from './PanelStatePrimitives';
@@ -58,6 +57,7 @@ export function MvtVerifierPanel({
   onAuditUpdate,
 }) {
   const fileInputRef = useRef(null);
+  const offlineDropzoneRef = useRef(null);
   const lastPreloadedRef = useRef(null);
   const resultContainerRef = useRef(null);
 
@@ -81,7 +81,9 @@ export function MvtVerifierPanel({
   const [backupPassword, setBackupPassword] = useState('');
   const [unlockingBackup, setUnlockingBackup] = useState(false);
   const [backupUnlockError, setBackupUnlockError] = useState('');
-  const [showAndroidGuide, setShowAndroidGuide] = useState(true);
+  const [showAndroidGuide, setShowAndroidGuide] = useState(() => Boolean(getMobileDesktopBridge()));
+  const [expandedGuideStep, setExpandedGuideStep] = useState(null);
+  const [androidBrand, setAndroidBrand] = useState('generic');
   const [showAdvancedCmds, setShowAdvancedCmds] = useState(false);
   const [copiedHintKey, setCopiedHintKey] = useState('');
   const [hardeningReport, setHardeningReport] = useState(null);
@@ -622,18 +624,18 @@ export function MvtVerifierPanel({
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:border-white/[0.14] hover:bg-[#141923] transition-colors cursor-pointer"
           >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#9A9AA2]" />
+            <ArrowLeft className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
             <span>Nuevo análisis</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportMarkdown}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-white/[0.08] active:scale-[0.97] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12.5px] font-medium text-[#F2F2F4] hover:border-white/[0.14] hover:bg-[#141923] transition-colors cursor-pointer"
           >
-            <Download className="h-3.5 w-3.5 text-[#9A9AA2]" />
+            <Download className="h-3.5 w-3.5 text-[#9A9AA2]" strokeWidth={1.75} />
             <span>Exportar (.md)</span>
           </button>
         </div>
@@ -664,15 +666,15 @@ export function MvtVerifierPanel({
           <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#9A9AA2]">
             1 · Veredicto y contención
           </span>
-          <div className="omega-glass-panel rounded-[15px] p-4 sm:p-5 space-y-4">
+          <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 {!hasAnyThreatSignal && !incomplete ? (
-                  <ShieldCheck className="h-5 w-5 text-[#30D158] shrink-0" />
+                  <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" strokeWidth={1.75} />
                 ) : (
                   <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${verdictDot}`} />
                 )}
-                <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${isCriticalOverall ? 'text-[#FF6961]' : verdictHeadingTone}`}>
+                <h2 className={`text-[17px] font-semibold tracking-[-0.015em] ${isCriticalOverall ? 'text-rose-400' : verdictHeadingTone}`}>
                   {verdictTitle}
                 </h2>
               </div>
@@ -680,10 +682,10 @@ export function MvtVerifierPanel({
                 <span
                   className={`font-tech shrink-0 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium ${
                     isCriticalOverall
-                      ? 'border-[#FF453A]/35 bg-[#FF453A]/12 text-[#FF6961]'
+                      ? 'border-rose-500/35 bg-rose-500/12 text-rose-400'
                       : hasAnyThreatSignal || incomplete
-                        ? 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]'
-                        : 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]'
+                        ? 'border-amber-400/35 bg-amber-400/12 text-amber-400'
+                        : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400'
                   }`}
                 >
                   {result.verdictCode}
@@ -695,8 +697,8 @@ export function MvtVerifierPanel({
               {verdictBody}
             </p>
 
-            <div className="rounded-[11px] border border-[#2F6FED]/30 bg-[#1C2438]/40 px-3.5 py-2.5 text-[12px] text-[#D7DEEE] space-y-1">
-              <div className="flex flex-wrap items-center justify-between gap-2 font-tech text-[10.5px] uppercase tracking-[0.05em] text-[#9FB8F5]">
+            <div className="rounded-xl border border-white/[0.05] bg-[#141923]/75 px-3.5 py-2.5 text-[12px] text-[#D7DEEE] space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 font-tech text-[10.5px] uppercase tracking-[0.05em] text-[#9A9AA2]">
                 <span>Alcance del análisis</span>
                 <span>Corte de catálogo: {cutoffDate}</span>
               </div>
@@ -704,7 +706,7 @@ export function MvtVerifierPanel({
             </div>
 
             {result.recommendedActions?.length > 0 && (
-              <div className="rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-4 py-3 space-y-2">
+              <div className="rounded-xl border border-white/[0.05] bg-[#141923]/75 px-4 py-3 space-y-2">
                 <div className="text-[11.5px] font-semibold tracking-[-0.01em] text-[#9A9AA2]">
                   Acciones de contención recomendadas
                 </div>
@@ -762,15 +764,15 @@ export function MvtVerifierPanel({
               )}
           </div>
 
-          <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+          <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] divide-y divide-white/[0.06] overflow-hidden">
             {hardeningReport?.hardening_checks?.map((chk) => {
-              let badgeCls = 'border-white/[0.1] bg-white/[0.04] text-[#9A9AA2]';
+              let badgeCls = 'border-white/[0.08] bg-[#141923]/75 text-[#9A9AA2]';
               if (chk.status === 'OK') {
-                badgeCls = 'border-[#30D158]/35 bg-[#30D158]/12 text-[#30D158]';
+                badgeCls = 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400';
               } else if (chk.status === 'CRITICAL') {
-                badgeCls = 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]';
+                badgeCls = 'border-rose-500/35 bg-rose-500/12 text-rose-400';
               } else if (chk.status === 'WARN') {
-                badgeCls = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
+                badgeCls = 'border-amber-400/30 bg-amber-400/10 text-amber-400';
               }
 
               const showDnsAction =
@@ -795,7 +797,7 @@ export function MvtVerifierPanel({
                         {chk.detail}
                       </p>
                     </div>
-                    <span className="font-tech self-start shrink-0 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#F2F2F4]/90">
+                    <span className="font-tech self-start shrink-0 rounded-lg border border-white/[0.05] bg-[#141923]/75 px-2.5 py-1 text-[11px] text-[#F2F2F4]/90">
                       {chk.value}
                     </span>
                   </div>
@@ -806,7 +808,7 @@ export function MvtVerifierPanel({
                         <button
                           type="button"
                           onClick={() => setConfirmingDns(true)}
-                          className="rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] active:scale-[0.97] transition-all cursor-pointer"
+                          className="rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/50 transition-colors cursor-pointer"
                         >
                           Activar DNS Privado (Quad9 DoT)
                         </button>
@@ -819,16 +821,16 @@ export function MvtVerifierPanel({
                             type="button"
                             disabled={hardeningDns}
                             onClick={handleConfirmHardenDns}
-                            className="rounded-[8px] bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer"
+                            className="rounded-lg bg-[#2F6FED] px-3 py-1 text-[12px] font-medium text-white hover:bg-[#2F6FED]/90 disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                           >
-                            {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" />}
+                            {hardeningDns && <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.75} />}
                             <span>Confirmar</span>
                           </button>
                           <button
                             type="button"
                             disabled={hardeningDns}
                             onClick={() => setConfirmingDns(false)}
-                            className="rounded-[8px] border border-white/[0.1] px-2.5 py-1 text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+                            className="rounded-lg border border-white/[0.07] px-2.5 py-1 text-[12px] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                           >
                             Cancelar
                           </button>
@@ -847,8 +849,8 @@ export function MvtVerifierPanel({
                     <span
                       className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
                         al.severity === 'CRITICAL'
-                          ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
-                          : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
+                          ? 'border-rose-500/35 bg-rose-500/12 text-rose-400'
+                          : 'border-amber-400/30 bg-amber-400/10 text-amber-400'
                       }`}
                     >
                       {al.severity}
@@ -869,7 +871,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateAnomaly({ ...al, artifact: result.sourceLabel })}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/50 disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   Consultar con Copiloto
                 </button>
@@ -888,8 +890,8 @@ export function MvtVerifierPanel({
                       <span
                         className={`font-tech rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${
                           isCrit
-                            ? 'border-[#FF453A]/40 bg-[#FF453A]/15 text-[#FF6961]'
-                            : 'border-[#FF9F0A]/40 bg-[#FF9F0A]/15 text-[#FFD60A]'
+                            ? 'border-rose-500/35 bg-rose-500/12 text-rose-400'
+                            : 'border-amber-400/30 bg-amber-400/10 text-amber-400'
                         }`}
                       >
                         {anom.severity}
@@ -897,7 +899,7 @@ export function MvtVerifierPanel({
                       <span className="font-tech text-[13px] text-[#F2F2F4] break-all">
                         {anom.indicator}
                       </span>
-                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#9A9AA2]">
+                      <span className="font-tech rounded-full border border-white/[0.05] bg-[#141923]/75 px-2 py-0.5 text-[10.5px] text-[#9A9AA2]">
                         {anom.category}
                       </span>
                     </div>
@@ -913,7 +915,7 @@ export function MvtVerifierPanel({
                     type="button"
                     disabled={!onAskInChat}
                     onClick={() => handleInvestigateAnomaly(anom)}
-                    className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                    className="self-start sm:self-auto shrink-0 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/50 disabled:opacity-50 transition-colors cursor-pointer"
                   >
                     Consultar con Copiloto
                   </button>
@@ -989,25 +991,25 @@ export function MvtVerifierPanel({
           )}
 
           {result.timeline?.length > 0 && (
-            <div className="apple-group rounded-[13px] overflow-hidden">
+            <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4]">
-                  <Clock className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
+                  <Clock className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" strokeWidth={1.75} />
                   <span>
                     Línea temporal correlacionada en RAM ({result.timelineSummary?.events_total || result.timeline.length} eventos)
                   </span>
                 </span>
                 {result.timelineSummary?.chains_detected > 0 && (
-                  <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2 py-0.5 text-[10.5px] font-medium text-[#FF6961]">
+                  <span className="rounded-full border border-rose-500/35 bg-rose-500/12 px-2 py-0.5 text-[10.5px] font-medium text-rose-400">
                     {result.timelineSummary.chains_detected} cadena(s) 0-day sospechosa(s)
                   </span>
                 )}
               </div>
-              <div className="divide-y divide-white/[0.04] max-h-48 overflow-y-auto">
+              <div className="divide-y divide-white/[0.06] max-h-48 overflow-y-auto">
                 {result.timeline.slice(-8).reverse().map((ev, idx) => (
                   <div key={`${ev.timestamp}-${ev.kind}-${idx}`} className="px-4 py-2 flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-3 text-[11.5px]">
                     <div className="min-w-0 break-words">
-                      <span className={`font-medium ${ev.suspicious ? 'text-[#FF6961]' : 'text-[#F2F2F4]/90'}`}>
+                      <span className={`font-medium ${ev.suspicious ? 'text-rose-400' : 'text-[#F2F2F4]/90'}`}>
                         {ev.actor}
                       </span>{' '}
                       <span className="text-[#9A9AA2]">{ev.detail}</span>
@@ -1027,7 +1029,7 @@ export function MvtVerifierPanel({
           <span className="px-1 block text-[11px] font-medium tracking-[0.06em] uppercase text-[#9A9AA2]">
             3 · Coincidencias CTI y firmas YARA ({yaraHits.length + result.findings.length})
           </span>
-          <div className="apple-group rounded-[13px] divide-y divide-white/[0.06] overflow-hidden">
+          <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] divide-y divide-white/[0.06] overflow-hidden">
             {yaraHits.map((hit, idx) => (
               <div key={`${hit.rule_name}-${hit.artifact}-${idx}`} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-4">
                 <div className="min-w-0 space-y-1.5">
@@ -1035,11 +1037,11 @@ export function MvtVerifierPanel({
                     <span className="font-tech text-[13px] font-medium text-[#F2F2F4] break-all">
                       {hit.rule_name}
                     </span>
-                    <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
+                    <span className="rounded-full border border-rose-500/35 bg-rose-500/12 px-2.5 py-0.5 text-[11px] font-medium text-rose-400">
                       YARA · {hit.spyware_family}
                     </span>
                     {hit.cve && (
-                      <span className="font-tech rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-[#9A9AA2]">
+                      <span className="font-tech rounded-full border border-white/[0.05] bg-[#141923]/75 px-2 py-0.5 text-[10.5px] text-[#9A9AA2]">
                         {hit.cve}
                       </span>
                     )}
@@ -1051,7 +1053,7 @@ export function MvtVerifierPanel({
                     {(hit.matched_strings || []).map((tok) => (
                       <span
                         key={tok}
-                        className="font-tech rounded-[5px] border border-[#2F6FED]/40 bg-[rgba(28,36,56,0.65)] px-2 py-0.5 text-[11px] text-[#F2F2F4]"
+                        className="font-tech rounded-lg border border-white/[0.05] bg-[#141923]/75 px-2 py-0.5 text-[11px] text-[#F2F2F4]"
                       >
                         {tok}
                       </span>
@@ -1066,7 +1068,7 @@ export function MvtVerifierPanel({
                   type="button"
                   disabled={!onAskInChat}
                   onClick={() => handleInvestigateYara(hit)}
-                  className="self-start sm:self-auto shrink-0 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                  className="self-start sm:self-auto shrink-0 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/50 disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   Consultar con Copiloto
                 </button>
@@ -1083,7 +1085,7 @@ export function MvtVerifierPanel({
                     <span className="font-tech text-[13px] text-[#F2F2F4] break-all">
                       {finding.ioc_value}
                     </span>
-                    <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-0.5 text-[11px] font-medium text-[#FF6961]">
+                    <span className="rounded-full border border-rose-500/35 bg-rose-500/12 px-2.5 py-0.5 text-[11px] font-medium text-rose-400">
                       {finding.spyware_family}
                     </span>
                   </div>
@@ -1097,9 +1099,9 @@ export function MvtVerifierPanel({
                     <button
                       type="button"
                       onClick={() => onVerifyLink(finding.ioc_value)}
-                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4]/90 hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4]/90 hover:border-white/[0.14] transition-colors cursor-pointer"
                     >
-                      <Link2 className="h-3 w-3 text-[#2F6FED]" />
+                      <Link2 className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                       <span>Ver enlace</span>
                     </button>
                   )}
@@ -1108,9 +1110,9 @@ export function MvtVerifierPanel({
                     <button
                       type="button"
                       onClick={() => onOpenThreat(finding.spyware_family)}
-                      className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.1] bg-white/[0.045] px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4]/90 hover:bg-white/[0.09] active:scale-[0.97] transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-2.5 py-1.5 text-[11.5px] font-medium text-[#F2F2F4]/90 hover:border-white/[0.14] transition-colors cursor-pointer"
                     >
-                      <Shield className="h-3 w-3 text-[#2F6FED]" />
+                      <Shield className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                       <span>Campaña</span>
                     </button>
                   )}
@@ -1119,7 +1121,7 @@ export function MvtVerifierPanel({
                     type="button"
                     disabled={!onAskInChat}
                     onClick={() => handleInvestigateFinding(finding)}
-                    className="rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_24px_rgba(47,111,237,0.25)] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+                    className="rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-[12px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/50 disabled:opacity-50 transition-colors cursor-pointer"
                   >
                     Consultar con Copiloto
                   </button>
@@ -1138,776 +1140,679 @@ export function MvtVerifierPanel({
     );
   }
 
-  // --- ESTADO 1: INICIAL (Centrado vertical y horizontalmente) ---
+  // --- ESTADO 1: CONSOLA FORENSE MINIMALISTA (Linear / Raycast) ---
+  const isMac = desktopPlatform === 'darwin';
+  const installAdbCmd = isMac
+    ? 'brew install android-platform-tools'
+    : 'winget install Google.PlatformTools';
+  const installIosCmd = isMac
+    ? 'pip3 install pymobiledevice3'
+    : 'pip install pymobiledevice3';
+
+  const isAndroidMissingConnector =
+    hasDesktopBridge && deviceTab === 'android' && usbDevice?.status_code === 'ADB_NOT_FOUND';
+  const isIosMissingConnector =
+    hasDesktopBridge && deviceTab === 'ios' && iosStatus && !iosStatus.tools_available;
+
+  const isReady =
+    (deviceTab === 'android' && hasDesktopBridge && Boolean(usbDevice?.connected)) ||
+    (deviceTab === 'ios' && hasDesktopBridge && Boolean(iosStatus?.connected)) ||
+    (deviceTab === 'pc' && hasPcTelemetryBridge);
+
+  const statusText = (() => {
+    if (deviceTab === 'pc') {
+      return hasPcTelemetryBridge ? 'Auditoría de solo lectura lista' : 'Disponible en OMEGA Desktop';
+    }
+    if (!hasDesktopBridge) {
+      return deviceTab === 'ios' ? 'Sube un respaldo o archivo abajo' : 'USB disponible en OMEGA Desktop';
+    }
+    if (deviceTab === 'android') {
+      if (usbDevice?.connected) return `Conectado · ${usbDevice.model || 'Android'}`;
+      if (usbDevice?.status_code === 'UNAUTHORIZED') return 'Toca «Permitir» en tu teléfono';
+      if (usbDevice?.status_code === 'ADB_NOT_FOUND') return 'Falta conector USB en PC';
+      return 'Esperando cable USB';
+    }
+    if (iosStatus?.connected) return `Conectado · ${iosStatus.device?.name || 'iPhone'}`;
+    if (iosStatus?.status_code === 'UNPAIRED') return 'Toca «Confiar» en tu iPhone';
+    if (iosStatus?.tools_available) return 'Esperando cable USB';
+    return 'Listo para analizar respaldo o carpeta';
+  })();
+
+  const ANDROID_BRAND_HINTS = {
+    generic: 'Ajustes → Acerca del teléfono → toca 7 veces «Número de compilación» → Sistema → Opciones de desarrollador → Depuración USB.',
+    samsung: 'Ajustes → Acerca del teléfono → Información de software → toca 7 veces «Número de compilación» → Ajustes → Opciones de desarrollador → Depuración USB.',
+    xiaomi: 'Ajustes → Sobre el teléfono → toca 7 veces «Versión de MIUI / HyperOS» → Ajustes adicionales → Opciones de desarrollador → Depuración USB.',
+  };
+
+  const stepperItems =
+    deviceTab === 'android'
+      ? [
+          {
+            num: 1,
+            title: 'Paso 1 — Prepara el teléfono',
+            text: "Abre Ajustes > Acerca del teléfono, toca 7 veces en 'Número de compilación' y activa 'Depuración USB' en Opciones de desarrollador.",
+            icon: Smartphone,
+          },
+          {
+            num: 2,
+            title: 'Paso 2 — Conecta el cable a la PC',
+            text: 'Usa un cable USB que pase datos (el original del cargador funciona) y conéctalo directo al computador.',
+            icon: Cable,
+          },
+          {
+            num: 3,
+            title: 'Paso 3 — Autoriza en tu pantalla',
+            text: "Desbloquea el celular; te saldrá un aviso de seguridad. Marca 'Permitir siempre' y toca Aceptar.",
+            icon: ShieldCheck,
+          },
+        ]
+      : [
+          {
+            num: 1,
+            title: 'Paso 1 — Desbloquea tu iPhone',
+            text: 'Mantén el teléfono encendido y en la pantalla de inicio antes de conectarlo.',
+            icon: Smartphone,
+          },
+          {
+            num: 2,
+            title: 'Paso 2 — Conecta el cable',
+            text: 'Usa un cable Lightning o USB-C directo al puerto de la computadora.',
+            icon: Cable,
+          },
+          {
+            num: 3,
+            title: 'Paso 3 — Toca "Confiar"',
+            text: "Cuando aparezca el mensaje '¿Confiar en esta computadora?', pulsa Confiar e ingresa tu código.",
+            icon: ShieldCheck,
+          },
+        ];
+
   return (
-    <div className="animate-fade-up flex-1 flex flex-col items-center justify-center py-3">
-      <div className="w-full max-w-[740px]">
-        <header className="text-center mb-3.5">
-          <h1 className="text-[23px] sm:text-[29px] font-semibold tracking-[-0.028em] leading-[1.15] text-[#F2F2F4]">
-            Verificar integridad del dispositivo
-          </h1>
-          <p className="mt-1.5 text-[13px] text-[#9A9AA2] max-w-[460px] mx-auto">
-            Audita PC, Android o iPhone en RAM sin guardar archivos personales.
-          </p>
-        </header>
+    <div className="animate-fade-up flex-1 flex flex-col justify-center py-4 px-3 sm:px-6">
+      <div className="w-full max-w-[880px] mx-auto space-y-6">
+        {/* A. Header Compacto + Barra de Estado del Motor */}
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.025em] text-[#F2F2F4]">
+              Verificar integridad del dispositivo
+            </h1>
+            <p className="mt-1 text-[13.5px] text-[#9A9AA2]">
+              Audita PC, Android o iPhone en RAM sin guardar archivos personales.
+            </p>
+          </div>
 
-        <MobileUsbAuditCard />
-        {result && (result.matchesCount > 0 || result.behavioralAnomalies?.some(item => ['HIGH', 'CRITICAL'].includes(item.severity))) && <div className="my-3">
-          <EmergencyGuidance mobile={deviceTab !== 'pc'} />
-          {(result.findings || []).slice(0, 3).map(finding => <ContainmentButton key={finding.id} finding={finding} />)}
-        </div>}
-
-        {/* Disparador 1: Analizar dispositivo USB (Android + iPhone / iPad guiado) */}
-        {(() => {
-          const isMac = desktopPlatform === 'darwin';
-          const installAdbCmd = isMac
-            ? 'brew install android-platform-tools'
-            : 'winget install Google.PlatformTools';
-          const installIosCmd = isMac
-            ? 'pip3 install pymobiledevice3'
-            : 'pip install pymobiledevice3';
-
-          let statusPillLabel = 'Solo app Desktop';
-          let statusPillTone = 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2]';
-          if (deviceTab === 'pc') {
-            statusPillLabel = hasDesktopBridge ? 'Auditoría de solo lectura' : 'Solo en OMEGA Desktop';
-            statusPillTone = hasDesktopBridge
-              ? 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]'
-              : 'border-white/[0.1] bg-white/[0.04] text-[#9A9AA2]';
-          } else if (hasDesktopBridge) {
-            if (deviceTab === 'android') {
-              if (usbDevice?.connected) {
-                statusPillLabel = `Conectado · ${usbDevice.model || 'Android'}`;
-                statusPillTone = 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]';
-              } else if (usbDevice?.status_code === 'UNAUTHORIZED') {
-                statusPillLabel = 'Toca "Permitir" en tu celular';
-                statusPillTone = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
-              } else if (usbDevice?.status_code === 'ADB_NOT_FOUND') {
-                statusPillLabel = 'Falta conector USB en PC';
-                statusPillTone = 'border-[#FF9F0A]/30 bg-[#FF9F0A]/10 text-[#FFD60A]';
-              } else {
-                statusPillLabel = 'Esperando cable USB';
-              }
-            } else if (iosStatus?.connected) {
-              statusPillLabel = `Conectado · ${iosStatus.device?.name || 'iPhone'}`;
-              statusPillTone = 'border-[#30D158]/30 bg-[#30D158]/10 text-[#30D158]';
-            } else if (iosStatus?.status_code === 'UNPAIRED') {
-              statusPillLabel = 'Toca "Confiar" en tu iPhone';
-              statusPillTone = 'border-[#FF9F0A]/35 bg-[#FF9F0A]/12 text-[#FFD60A]';
-            } else if (iosStatus?.tools_available) {
-              statusPillLabel = 'Esperando cable USB';
-            } else {
-              statusPillLabel = 'Guía por archivo o copia';
-            }
-          } else if (deviceTab === 'ios') {
-            statusPillLabel = 'Sube tu archivo abajo';
-          }
-
-          return (
-            <div className="omega-glass-panel mb-3.5 rounded-[14px] p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="h-8 w-8 rounded-[9px] bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
-                    {deviceTab === 'pc' ? (
-                      <Laptop className={`h-4 w-4 ${hasDesktopBridge ? 'text-[#30D158]' : 'text-[#9A9AA2]'}`} />
-                    ) : (
-                      <Smartphone
-                        className={`h-4 w-4 ${
-                          hasDesktopBridge &&
-                          ((deviceTab === 'android' && usbDevice?.connected) ||
-                            (deviceTab === 'ios' && iosStatus?.connected))
-                            ? 'text-[#30D158]'
-                            : 'text-[#9A9AA2]'
-                        }`}
-                      />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F2F2F4]">
-                        {deviceTab === 'pc' ? 'Revisar esta computadora' : 'Analizar dispositivo USB'}
-                      </span>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${statusPillTone}`}>
-                        {statusPillLabel}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5 max-w-full">
-                  <div className="apple-segmented inline-flex max-w-full overflow-x-auto no-scrollbar rounded-[8px] p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setDeviceTab('android')}
-                      className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
-                        deviceTab === 'android'
-                          ? 'apple-segmented-active'
-                          : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                      }`}
-                    >
-                      Android
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeviceTab('ios')}
-                      className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
-                        deviceTab === 'ios'
-                          ? 'apple-segmented-active'
-                          : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                      }`}
-                    >
-                      iPhone / iPad
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeviceTab('pc')}
-                      className={`whitespace-nowrap shrink-0 rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium active:scale-[0.97] transition-all cursor-pointer ${
-                        deviceTab === 'pc'
-                          ? 'apple-segmented-active'
-                          : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                      }`}
-                    >
-                      Esta PC
-                    </button>
-                  </div>
-
-                  {hasDesktopBridge && deviceTab !== 'pc' && (
-                    <button
-                      type="button"
-                      disabled={refreshingUsb}
-                      onClick={() => fetchUsbStatuses(customAdbPath, deviceTab === 'ios', true)}
-                      title="Volver a buscar teléfono conectado"
-                      aria-label="Volver a buscar teléfono conectado"
-                      className="h-7 w-7 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#9A9AA2] hover:text-[#F2F2F4] disabled:opacity-50 transition-colors cursor-pointer"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#2F6FED]' : ''}`} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {deviceTab === 'android' ? (
-                <div className="space-y-2.5">
-                  {hasDesktopBridge && usbDevice?.connected ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[12.5px] font-medium text-[#F2F2F4]">
-                            {usbDevice.model || 'Teléfono Android'}
-                          </span>
-                          <span className="font-tech text-[11px] text-[#9A9AA2]">
-                            {selectedSerial || usbDevice.serial}
-                          </span>
-                          {usbDevice.devices?.length > 1 && (
-                            <select
-                              value={selectedSerial}
-                              onChange={(e) => setSelectedSerial(e.target.value)}
-                              className="font-tech rounded-[6px] border border-white/[0.12] bg-black/50 px-1.5 py-0.5 text-[11px] text-[#F2F2F4]/90"
-                            >
-                              {usbDevice.devices
-                                .filter((d) => d.state === 'device')
-                                .map((d) => (
-                                  <option key={d.serial} value={d.serial}>
-                                    {d.model} ({d.serial})
-                                  </option>
-                                ))}
-                            </select>
-                          )}
-                        </div>
-                        <p className="text-[12px] text-[#9A9AA2]">
-                          Teléfono listo. Análisis pasivo en RAM sin modificar el equipo.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={scanningUsb || isAnalyzing}
-                        onClick={handleLiveUsbScan}
-                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
-                      >
-                        {scanningUsb && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        <span>{scanningUsb ? 'Revisando teléfono...' : 'Iniciar revisión segura'}</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-[11px] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2.5">
-                        <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed flex-1 min-w-[220px]">
-                          {hasDesktopBridge
-                            ? usbDevice?.reason || 'Buscando Android por USB...'
-                            : 'El análisis por USB requiere OMEGA Desktop. En web puedes subir una copia abajo.'}
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowAndroidGuide((v) => !v)}
-                          className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4] hover:border-[#2F6FED]/50 hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
-                        >
-                          <HelpCircle className="h-3.5 w-3.5" />
-                          <span>
-                            {showAndroidGuide ||
-                            usbDevice?.status_code === 'ADB_NOT_FOUND' ||
-                            usbDevice?.status_code === 'UNAUTHORIZED'
-                              ? 'Ocultar pasos'
-                              : 'Ver guía visual'}
-                          </span>
-                        </button>
-                      </div>
-
-                      {(showAndroidGuide ||
-                        usbDevice?.status_code === 'ADB_NOT_FOUND' ||
-                        usbDevice?.status_code === 'UNAUTHORIZED') && (
-                        <div className="rounded-[12px] border border-white/[0.06] bg-black/30 p-3 space-y-3">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                            <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
-                              <AndroidStepVisual step={1} />
-                              <div>
-                                <div className="text-[12px] font-medium text-[#F2F2F4]">
-                                  1. Activa el modo revisión
-                                </div>
-                                <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                                  En tu teléfono ve a <span className="text-[#F2F2F4]/85">Ajustes → Acerca del teléfono</span>, toca 7 veces <span className="text-[#F2F2F4]/85">N.º de compilación</span> y enciende <span className="text-[#F2F2F4]/85">Depuración USB</span>.
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
-                              <AndroidStepVisual step={2} adbReady={Boolean(usbDevice?.adb_path)} />
-                              <div>
-                                <div className="text-[12px] font-medium text-[#F2F2F4]">
-                                  2. Conecta tu cable USB
-                                </div>
-                                <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                                  {usbDevice?.adb_path
-                                    ? 'Tu computadora ya está lista. Conecta el teléfono con cable de datos y elige "Transferir archivos".'
-                                    : 'Usa un cable USB de datos (no solo de carga) y descarga o señala el conector gratuito abajo.'}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
-                              <AndroidStepVisual step={3} />
-                              <div>
-                                <div className="text-[12px] font-medium text-[#F2F2F4]">
-                                  3. Toca “Permitir”
-                                </div>
-                                <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                                  Desbloquea la pantalla del teléfono. Cuando salga la ventana de permiso, marca confiar y pulsa <span className="text-[#F2F2F4]/85">Permitir</span>.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {hasDesktopBridge && (
-                            <div className="pt-0.5 space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={handlePickAdbBinary}
-                                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_20px_rgba(47,111,237,0.22)] transition-all cursor-pointer"
-                                >
-                                  <FolderOpen className="h-3.5 w-3.5" />
-                                  <span>
-                                    {usbDevice?.adb_path ? 'Cambiar conector adb.exe' : 'Elegir adb.exe en mi PC'}
-                                  </span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  disabled={installingAdb || scanningUsb || isAnalyzing}
-                                  onClick={handleInstallPortableAdb}
-                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4]/90 disabled:opacity-50 cursor-pointer"
-                                >
-                                  {installingAdb ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                                  <span>{installingAdb ? 'Instalando conector...' : 'Instalar conector USB'}</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    window.open(
-                                      'https://developer.android.com/tools/releases/platform-tools',
-                                      '_blank',
-                                      'noopener,noreferrer',
-                                    )
-                                  }
-                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
-                                >
-                                  <ExternalLink className="h-3 w-3" />
-                                  <span>Descargar conector oficial (Google)</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setShowAdvancedCmds((v) => !v)}
-                                  className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#9A9AA2] hover:text-[#F2F2F4]/85 transition-colors cursor-pointer"
-                                >
-                                  <span>{showAdvancedCmds ? 'Ocultar comandos' : 'Opciones para técnicos'}</span>
-                                </button>
-                              </div>
-
-                              {showAdvancedCmds && (
-                                <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#9A9AA2]">
-                                  <span>Instalar por terminal:</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopyCommand('adb', installAdbCmd)}
-                                    className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
-                                  >
-                                    {copiedHintKey === 'adb' ? (
-                                      <Check className="h-3 w-3 text-[#30D158]" />
-                                    ) : (
-                                      <Copy className="h-3 w-3 text-[#9A9AA2]" />
-                                    )}
-                                    <span>{installAdbCmd}</span>
-                                  </button>
-                                  {usbDevice?.adb_path && (
-                                    <span className="font-tech text-[#30D158] truncate max-w-full">
-                                      Detectado: {usbDevice.adb_path}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : deviceTab === 'ios' ? (
-                <div className="space-y-2.5">
-                  {hasDesktopBridge && iosStatus?.connected ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#30D158]/20 bg-[#30D158]/[0.05] px-3.5 py-2.5">
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[12.5px] font-medium text-[#F2F2F4]">
-                            {iosStatus.device?.name || 'iPhone / iPad'}
-                          </span>
-                          <span className="font-tech text-[11px] text-[#9A9AA2]">
-                            {iosStatus.device?.model} · iOS {iosStatus.device?.ios_version || 'N/D'}
-                          </span>
-                        </div>
-                        <p className="text-[12px] text-[#9A9AA2]">
-                          iPhone listo. Inspección en RAM sin tocar fotos ni mensajes.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={scanningIos || isAnalyzing}
-                        onClick={handleLiveIosScan}
-                        className="shrink-0 rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
-                      >
-                        {scanningIos && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        <span>{scanningIos ? 'Revisando iPhone...' : 'Iniciar revisión de iPhone'}</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="rounded-[12px] border border-white/[0.06] bg-black/30 p-3 space-y-3">
-                      <p className="text-[12.5px] text-[#F2F2F4]/85 leading-relaxed">
-                        {hasDesktopBridge
-                          ? iosStatus?.reason || 'Sigue estos 3 pasos para analizar tu iPhone sin riesgo:'
-                          : 'Sigue estos 3 pasos en tu iPhone y sube el archivo abajo:'}
-                      </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                        <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
-                          <IosStepVisual step={1} />
-                          <div>
-                            <div className="text-[12px] font-medium text-[#F2F2F4]">
-                              1. Genera el archivo en iPhone
-                            </div>
-                            <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                              <span className="text-[#F2F2F4]/85">Ajustes → Privacidad → Análisis y mejoras → Datos</span>, o <span className="text-[#F2F2F4]/85">Vol+ · Vol- + Lateral</span>.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
-                          <IosStepVisual step={2} />
-                          <div>
-                            <div className="text-[12px] font-medium text-[#F2F2F4]">
-                              2. O usa una copia en PC
-                            </div>
-                            <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                              Desbloquea el iPhone conectado y toca <span className="text-[#F2F2F4]/85">Confiar</span> con tu PIN.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] p-2.5 space-y-2">
-                          <IosStepVisual step={3} />
-                          <div>
-                            <div className="text-[12px] font-medium text-[#F2F2F4]">
-                              3. Súbelo en RAM
-                            </div>
-                            <p className="mt-0.5 text-[11.5px] text-[#9A9AA2] leading-snug">
-                              Envía el diagnóstico o abre la carpeta de respaldo. Cero retención.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {hasDesktopBridge && (
-                        <div className="pt-0.5 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={scanningIos || isAnalyzing}
-                              onClick={handlePickIosBackupDir}
-                              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#2F6FED]/45 bg-[rgba(28,36,56,0.65)] px-2.5 py-1 text-[11.5px] font-medium text-[#F2F2F4] hover:border-[#2F6FED]/75 hover:shadow-[0_0_20px_rgba(47,111,237,0.22)] disabled:opacity-50 transition-all cursor-pointer"
-                            >
-                              {scanningIos ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <FolderOpen className="h-3.5 w-3.5" />
-                              )}
-                              <span>Elegir carpeta de respaldo iPhone</span>
-                            </button>
-
-                            {!iosStatus?.tools_available && (
-                              <button
-                                type="button"
-                                onClick={() => setShowAdvancedCmds((v) => !v)}
-                                className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.06] bg-transparent px-2 py-1 text-[11px] text-[#9A9AA2] hover:text-[#F2F2F4]/85 transition-colors cursor-pointer"
-                              >
-                                <span>{showAdvancedCmds ? 'Ocultar comandos' : 'Opciones para técnicos (cable directo)'}</span>
-                              </button>
-                            )}
-                          </div>
-
-                          {showAdvancedCmds && !iosStatus?.tools_available && (
-                            <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 text-[11px] text-[#9A9AA2]">
-                              <span>Para conexión USB Lockdown directa (requiere Apple Devices / iTunes):</span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyCommand('ios', installIosCmd)}
-                                className="font-tech inline-flex items-center gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] text-[#F2F2F4]/90 hover:bg-white/[0.08] transition-colors cursor-pointer"
-                              >
-                                {copiedHintKey === 'ios' ? (
-                                  <Check className="h-3 w-3 text-[#30D158]" />
-                                ) : (
-                                  <Copy className="h-3 w-3 text-[#9A9AA2]" />
-                                )}
-                                <span>{installIosCmd}</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {hasDesktopBridge && iosStatus?.local_backups?.length > 0 && (
-                    <div className="rounded-[11px] border border-white/[0.06] bg-black/30 divide-y divide-white/[0.05] overflow-hidden">
-                      <div className="px-3 py-1.5 text-[11px] font-medium text-[#9A9AA2]">
-                        Copias de seguridad encontradas en tu computadora ({iosStatus.local_backups.length})
-                      </div>
-                      {iosStatus.local_backups.slice(0, 3).map((bk) => (
-                        <div key={bk.id} className="px-3 py-2 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[12px] font-medium text-[#F2F2F4] truncate">
-                                {bk.deviceName}
-                              </span>
-                              {bk.iosVersion && (
-                                <span className="font-tech text-[10.5px] text-[#9A9AA2]">
-                                  iOS {bk.iosVersion}
-                                </span>
-                              )}
-                              {bk.encrypted && (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-[#FF9F0A]/30 bg-[#FF9F0A]/10 px-1.5 py-0.5 text-[10px] text-[#FFD60A]">
-                                  <Lock className="h-2.5 w-2.5" /> Protegida con clave
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {bk.encrypted ? (
-                            <button
-                              type="button"
-                              disabled={scanningIos || isAnalyzing || unlockingBackup}
-                              onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
-                              className="shrink-0 inline-flex items-center gap-1 rounded-[7px] border border-[#FF9F0A]/35 bg-[#FF9F0A]/15 px-2.5 py-1 text-[11px] font-medium text-[#FFD60A] hover:bg-[#FF9F0A]/25 disabled:opacity-50 cursor-pointer"
-                            >
-                              <KeyRound className="h-3 w-3" />
-                              <span>Desbloquear en RAM</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={scanningIos || isAnalyzing}
-                              onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
-                              className="shrink-0 rounded-[7px] bg-[#2F6FED] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#2F6FED]/90 disabled:opacity-50 cursor-pointer"
-                            >
-                              Revisar copia ahora
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {encryptedBackupPrompt && (
-                    <form
-                      onSubmit={handleUnlockEncryptedBackup}
-                      className="rounded-[11px] border border-[#FF9F0A]/30 bg-[#141418] p-3.5 space-y-2.5"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F2F2F4]">
-                            <KeyRound className="h-3.5 w-3.5 text-[#FFD60A]" />
-                            <span>
-                              Contraseña de la copia «{encryptedBackupPrompt.meta?.deviceName || 'iPhone'}»
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[#9A9AA2]">
-                            Solo en memoria RAM para revisar SMS, Safari, DataUsage y perfiles. Nunca se guarda.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="password"
-                          autoFocus
-                          maxLength={128}
-                          value={backupPassword}
-                          onChange={(e) => setBackupPassword(stripUnsafeChars(e.target.value, 128))}
-                          placeholder="Contraseña de respaldo iTunes / Finder"
-                          className="flex-1 min-w-[200px] rounded-[8px] border border-white/[0.12] bg-black/50 px-3 py-1.5 text-[12.5px] text-[#F2F2F4] placeholder-[#9A9AA2] focus:border-[#2F6FED] focus:outline-none"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!backupPassword || unlockingBackup}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#2F6FED] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#2F6FED]/90 hover:shadow-[0_0_20px_rgba(47,111,237,0.3)] disabled:opacity-50 cursor-pointer"
-                        >
-                          {unlockingBackup && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                          <span>Desbloquear y revisar en RAM</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={unlockingBackup}
-                          onClick={() => {
-                            setEncryptedBackupPrompt(null);
-                            setBackupPassword('');
-                            setBackupUnlockError('');
-                          }}
-                          className="rounded-[8px] border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-
-                      {backupUnlockError && (
-                        <p className="text-[11.5px] text-[#FF6961]">{backupUnlockError}</p>
-                      )}
-                    </form>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-[12px] text-[#9A9AA2] leading-relaxed">
-                    Audita procesos sin firma, persistencia WMI (<span className="text-[#F2F2F4]/85">Candiru / Predator</span>) y conexiones externas en solo lectura.
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
-                      <PcStepVisual step={1} />
-                      <div className="text-[11.5px] font-medium text-[#F2F2F4]">
-                        1. Conexiones externas
-                      </div>
-                      <p className="text-[11px] text-[#9A9AA2] leading-snug">
-                        Cruza IPs activas contra campañas CTI y reglas YARA.
-                      </p>
-                    </div>
-                    <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
-                      <PcStepVisual step={2} />
-                      <div className="text-[11.5px] font-medium text-[#F2F2F4]">
-                        2. Persistencia oculta
-                      </div>
-                      <p className="text-[11px] text-[#9A9AA2] leading-snug">
-                        Revisa tareas programadas, WMI y temporales sin firma.
-                      </p>
-                    </div>
-                    <div className="rounded-[10px] border border-white/[0.07] bg-black/35 p-2.5 flex flex-col gap-2">
-                      <PcStepVisual step={3} />
-                      <div className="text-[11.5px] font-medium text-[#F2F2F4]">
-                        3. Escudos del sistema
-                      </div>
-                      <p className="text-[11px] text-[#9A9AA2] leading-snug">
-                        Comprueba Defender, Firewall, UAC y Gatekeeper.
-                      </p>
-                    </div>
-                  </div>
-
-                  {hasPcTelemetryBridge ? (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                      <span className="text-[11.5px] text-[#9A9AA2]">
-                        Solo lectura en RAM · ~2 segundos · Sin cambios en tu equipo.
-                      </span>
-                      <button
-                        type="button"
-                        disabled={scanningPc || isAnalyzing}
-                        onClick={handlePcLiveAudit}
-                        className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:opacity-50 px-3.5 py-1.5 text-[12px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer"
-                      >
-                        {scanningPc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Laptop className="h-3.5 w-3.5" />}
-                        <span>{scanningPc ? 'Revisando equipo...' : 'Analizar esta computadora'}</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-[11.5px] text-[#9A9AA2]">
-                      Auditoría local disponible en <span className="text-[#F2F2F4]/85">OMEGA Desktop</span>.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Disparador 2: Cargar respaldo / volcado */}
-        <div style={{ animationDelay: '60ms' }} className="animate-scale-in omega-capsule rounded-[16px] p-3.5 sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <span className="text-[13.5px] font-medium tracking-[-0.01em] text-[#F2F2F4]">
-              Cargar respaldo / volcado
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 font-tech text-[11px] text-[#9A9AA2]">
+              Zero-Retention · RAM Only
             </span>
-
             <button
               type="button"
               disabled={syncingStix}
               onClick={handleSyncStix}
               title="Actualizar base de amenazas conocidas en memoria"
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[#9A9AA2] hover:bg-white/[0.08] hover:text-[#F2F2F4] disabled:opacity-50 active:scale-[0.97] transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] px-3 py-1 text-[11.5px] font-medium text-[#D2D6E2] hover:text-white disabled:opacity-50 transition-colors cursor-pointer"
             >
-              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#2F6FED]' : ''}`} />
+              <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#10B981]' : 'text-[#9A9AA2]'}`} />
               <span>{stixSyncNote || (syncingStix ? 'Actualizando...' : 'Feeds STIX 2.1')}</span>
             </button>
           </div>
+        </header>
 
-          <div className="mb-3">
-            <div className="apple-segmented grid grid-cols-1 sm:inline-flex gap-1 sm:gap-0 w-full sm:w-auto rounded-[9px] p-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setInputMode('upload');
-                  setErrorMsg('');
-                }}
-                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium text-center active:scale-[0.98] transition-all duration-150 cursor-pointer ${
-                  inputMode === 'upload'
-                    ? 'apple-segmented-active'
-                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-              >
-                Subir archivo del teléfono
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInputMode('paste');
-                  setErrorMsg('');
-                }}
-                className={`rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium text-center active:scale-[0.98] transition-all duration-150 cursor-pointer ${
-                  inputMode === 'paste'
-                    ? 'apple-segmented-active'
-                    : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-              >
-                Pegar enlaces o datos sospechosos
-              </button>
+        {/* B. Módulo Central Único: Auditoría en Vivo */}
+        <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.45)] p-6 space-y-5">
+          {/* 1. Selector de Objetivo + Estado activo */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-xl bg-[#090B0E] border border-white/[0.06] p-1">
+              {[
+                { id: 'android', label: 'Android' },
+                { id: 'ios', label: 'iPhone / iPad' },
+                { id: 'pc', label: 'Esta PC' },
+              ].map((tab) => {
+                const active = deviceTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDeviceTab(tab.id)}
+                    className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-[#171B23] text-white'
+                        : 'text-[#8E95A5] hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <div className="inline-flex items-center gap-2 text-[12.5px] text-[#D2D6E2]">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    isReady ? 'bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-[#64748B]'
+                  }`}
+                />
+                <span>{statusText}</span>
+              </div>
+
+              {hasDesktopBridge && deviceTab !== 'pc' && (
+                <button
+                  type="button"
+                  disabled={refreshingUsb}
+                  onClick={() => fetchUsbStatuses(customAdbPath, deviceTab === 'ios', true)}
+                  title="Volver a buscar teléfono conectado"
+                  aria-label="Volver a buscar teléfono conectado"
+                  className="h-8 w-8 rounded-lg bg-[#171B23] hover:bg-white/[0.08] flex items-center justify-center text-[#9A9AA2] hover:text-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#10B981]' : ''}`} />
+                </button>
+              )}
             </div>
           </div>
 
-          {inputMode === 'upload' ? (
-            <div
-              onClick={() => {
-                if (!isAnalyzing) fileInputRef.current?.click();
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                if (!isAnalyzing && e.dataTransfer?.files?.length) {
-                  analyzeFiles(e.dataTransfer.files);
-                }
-              }}
-              className={`rounded-[12px] border border-dashed py-5 px-4 sm:px-6 flex flex-col items-center justify-center text-center transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
-                isDragging
-                  ? 'border-[#2F6FED] bg-[rgba(28,36,56,0.65)]'
-                  : 'border-white/[0.12] bg-black/25 hover:border-[#2F6FED]/55 hover:bg-[rgba(28,36,56,0.35)]'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".json,.db,.sqlite,.sqlite3,.txt,.log,.ips,.crash,.tar.gz,.tgz,.tar,.zip,.pkpass,.pdf,.gif"
-                onChange={(e) => analyzeFiles(e.target.files)}
-                className="hidden"
-              />
+          {/* 2. Banner de Conector (solo visible si falta conector USB en Android/iPhone) */}
+          {(isAndroidMissingConnector || isIosMissingConnector) && (
+            <div className="rounded-xl bg-[#171B23] border border-white/[0.06] px-4 py-3 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-[12.5px] text-[#E5E7EB]">
+                  {isAndroidMissingConnector
+                    ? 'Falta conector USB en PC para analizar Android por cable.'
+                    : 'Falta conector directo para iPhone por cable USB.'}
+                </span>
 
-              <div className="mb-2.5 h-10 w-10 rounded-[11px] bg-white/[0.045] border border-white/[0.08] flex items-center justify-center">
-                {isAnalyzing ? (
-                  <Loader2 className="h-5 w-5 text-[#2F6FED] animate-spin" />
-                ) : (
-                  <Upload className="h-4.5 w-4.5 text-[#9A9AA2]" />
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {isAndroidMissingConnector ? (
+                    <button
+                      type="button"
+                      disabled={installingAdb || scanningUsb || isAnalyzing}
+                      onClick={handleInstallPortableAdb}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:brightness-110 px-3 py-1.5 text-[12px] font-semibold text-[#06130E] disabled:opacity-50 cursor-pointer"
+                    >
+                      {installingAdb ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                      <span>{installingAdb ? 'Instalando conector...' : 'Instalar conector USB'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCommand('ios', installIosCmd)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:brightness-110 px-3 py-1.5 text-[12px] font-semibold text-[#06130E] cursor-pointer"
+                    >
+                      {copiedHintKey === 'ios' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedHintKey === 'ios' ? 'Comando copiado' : 'Instalar conector USB'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedCmds((v) => !v)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1.5 text-[11.5px] text-[#9A9AA2] hover:text-white cursor-pointer"
+                  >
+                    <span>Configuración avanzada</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvancedCmds ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
               </div>
 
-              <p className="text-[13.5px] font-medium text-[#F2F2F4]">
-                {isAnalyzing
-                  ? 'Analizando en memoria temporal...'
-                  : 'Arrastra aquí el archivo o respaldo de tu celular'}
-              </p>
-
-              {!isAnalyzing && (
-                <p className="mt-1 text-[11.5px] text-[#9A9AA2]">
-                  Soporta .tar.gz, .ips, .db, .zip y .json
-                </p>
+              {showAdvancedCmds && (
+                <div className="pt-2.5 border-t border-white/[0.06] flex flex-wrap items-center gap-2 text-[11.5px]">
+                  {deviceTab === 'android' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handlePickAdbBinary}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#090B0E] hover:bg-white/[0.06] px-2.5 py-1 text-[#D2D6E2] cursor-pointer"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5 text-[#9A9AA2]" />
+                        <span>{usbDevice?.adb_path ? 'Cambiar adb.exe' : 'Elegir adb.exe en mi PC'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.open(
+                            'https://developer.android.com/tools/releases/platform-tools',
+                            '_blank',
+                            'noopener,noreferrer',
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#090B0E] hover:bg-white/[0.06] px-2.5 py-1 text-[#D2D6E2] cursor-pointer"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 text-[#9A9AA2]" />
+                        <span>Descargar conector oficial (Google)</span>
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCommand(deviceTab, deviceTab === 'ios' ? installIosCmd : installAdbCmd)}
+                    className="font-tech inline-flex items-center gap-1.5 rounded-lg bg-[#090B0E] hover:bg-white/[0.06] px-2.5 py-1 text-[#9A9AA2] hover:text-white cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>{deviceTab === 'ios' ? installIosCmd : installAdbCmd}</span>
+                  </button>
+                </div>
               )}
             </div>
-          ) : (
-            <form onSubmit={handleAnalyzeText}>
-              <div className="apple-well rounded-[11px] p-3">
-                <textarea
-                  rows={4}
-                  maxLength={50000}
-                  value={manualText}
-                  onChange={(e) => {
-                    setManualText(stripUnsafeChars(e.target.value, 50000));
-                    if (errorMsg) setErrorMsg('');
-                  }}
-                  placeholder={'https://enlace-sospechoso.com\n185.220.101.44\nPega un dominio, dirección IP o texto extraño por línea'}
-                  className="font-tech w-full resize-none bg-transparent border-0 p-0 text-[12.5px] leading-relaxed text-[#F2F2F4] placeholder-[#9A9AA2] focus:outline-none"
-                />
-              </div>
+          )}
 
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5">
-                <span className="text-[12px] text-[#9A9AA2]">
-                  Uno por línea · Enlaces web, dominios, IPs o códigos
-                </span>
+          {/* 3. Área de Acción Principal + Stepper Minimalista */}
+          <div className="rounded-xl bg-[#141923]/70 border border-white/[0.05] p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              {deviceTab === 'android' && hasDesktopBridge && usbDevice?.connected ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[14px] font-medium text-white">
+                      {usbDevice.model || 'Teléfono Android'}
+                    </span>
+                    <span className="font-tech text-[11.5px] text-[#9A9AA2]">
+                      {selectedSerial || usbDevice.serial}
+                    </span>
+                    {usbDevice.devices?.length > 1 && (
+                      <select
+                        value={selectedSerial}
+                        onChange={(e) => setSelectedSerial(e.target.value)}
+                        className="font-tech rounded-md border border-white/[0.1] bg-[#090B0E] px-2 py-0.5 text-[11px] text-white"
+                      >
+                        {usbDevice.devices
+                          .filter((d) => d.state === 'device')
+                          .map((d) => (
+                            <option key={d.serial} value={d.serial}>
+                              {d.model} ({d.serial})
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                  <p className="text-[12.5px] text-[#9A9AA2]">
+                    Análisis pasivo en memoria RAM sin modificar ni copiar datos personales.
+                  </p>
+                </>
+              ) : deviceTab === 'ios' && hasDesktopBridge && iosStatus?.connected ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[14px] font-medium text-white">
+                      {iosStatus.device?.name || 'iPhone / iPad'}
+                    </span>
+                    <span className="font-tech text-[11.5px] text-[#9A9AA2]">
+                      {iosStatus.device?.model} · iOS {iosStatus.device?.ios_version || 'N/D'}
+                    </span>
+                  </div>
+                  <p className="text-[12.5px] text-[#9A9AA2]">
+                    Inspección de telemetría en RAM sin tocar fotos ni mensajes.
+                  </p>
+                </>
+              ) : deviceTab === 'pc' ? (
+                <>
+                  <div className="text-[14px] font-medium text-white">
+                    Auditoría en vivo de esta computadora
+                  </div>
+                  <p className="text-[12.5px] text-[#9A9AA2]">
+                    Revisa procesos sin firma, persistencia WMI y conexiones activas en solo lectura (~2s).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-[14px] font-medium text-white">
+                    {deviceTab === 'android' ? 'Conecta tu Android por USB' : 'Conecta tu iPhone o elige un respaldo'}
+                  </div>
+                  <p className="text-[12.5px] text-[#9A9AA2]">
+                    {hasDesktopBridge
+                      ? (deviceTab === 'android'
+                          ? usbDevice?.reason || 'Conecta un cable de datos y pulsa Detectar por USB.'
+                          : iosStatus?.reason || 'Conecta el iPhone o selecciona una carpeta de respaldo.')
+                      : 'El análisis por USB requiere OMEGA Desktop. En web puedes subir un archivo o respaldo abajo.'}
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {!hasDesktopBridge && deviceTab !== 'pc' && (
                 <button
-                  type="submit"
-                  disabled={isAnalyzing || !manualText.trim()}
-                  className="rounded-[9px] bg-[#2F6FED] shadow-[0_4px_14px_rgba(47,111,237,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] hover:bg-[#2F6FED]/90 hover:shadow-[0_0_24px_rgba(47,111,237,0.35)] disabled:bg-white/[0.07] disabled:text-[#9A9AA2] disabled:shadow-none px-4 py-1.5 text-[12.5px] font-medium text-white inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer disabled:cursor-not-allowed"
+                  type="button"
+                  onClick={() => offlineDropzoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] px-3.5 py-2 text-[12.5px] font-medium text-[#F2F2F4] transition-colors cursor-pointer"
                 >
-                  {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Revisar</span>
+                  <Upload className="h-3.5 w-3.5 text-[#10B981]" />
+                  <span>Subir archivo abajo</span>
+                </button>
+              )}
+
+              {deviceTab === 'android' && hasDesktopBridge && (
+                usbDevice?.connected ? (
+                  <button
+                    type="button"
+                    disabled={scanningUsb || isAnalyzing}
+                    onClick={handleLiveUsbScan}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
+                  >
+                    {scanningUsb && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <span>{scanningUsb ? 'Revisando teléfono...' : 'Iniciar revisión segura'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={refreshingUsb || scanningUsb}
+                    onClick={() => fetchUsbStatuses(customAdbPath, false, true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
+                  >
+                    {refreshingUsb && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <span>Detectar por USB</span>
+                  </button>
+                )
+              )}
+
+              {deviceTab === 'ios' && hasDesktopBridge && (
+                iosStatus?.connected ? (
+                  <button
+                    type="button"
+                    disabled={scanningIos || isAnalyzing}
+                    onClick={handleLiveIosScan}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
+                  >
+                    {scanningIos && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <span>{scanningIos ? 'Revisando iPhone...' : 'Iniciar revisión de iPhone'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={scanningIos || isAnalyzing}
+                    onClick={handlePickIosBackupDir}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
+                  >
+                    {scanningIos ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
+                    <span>Elegir carpeta de respaldo iPhone</span>
+                  </button>
+                )
+              )}
+
+              {deviceTab === 'pc' && hasPcTelemetryBridge && (
+                <button
+                  type="button"
+                  disabled={scanningPc || isAnalyzing}
+                  onClick={handlePcLiveAudit}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
+                >
+                  {scanningPc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Laptop className="h-4 w-4" />}
+                  <span>{scanningPc ? 'Analizando PC...' : 'Analizar esta PC'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Stepper horizontal minimalista para Android / iPhone */}
+          {deviceTab !== 'pc' && !(hasDesktopBridge && ((deviceTab === 'android' && usbDevice?.connected) || (deviceTab === 'ios' && iosStatus?.connected))) && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-[11.5px] text-[#8E95A5]">
+                <span>Pasos rápidos de conexión</span>
+                <button
+                  type="button"
+                  onClick={() => setShowAndroidGuide((v) => !v)}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  {showAndroidGuide ? 'Ocultar guía' : 'Mostrar guía'}
                 </button>
               </div>
+
+              {showAndroidGuide && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {stepperItems.map((item) => {
+                      const StepIcon = item.icon;
+                      const isExpanded = expandedGuideStep === item.num;
+                      return (
+                        <div
+                          key={item.num}
+                          className={`rounded-xl border p-3.5 flex flex-col justify-between gap-2.5 transition-colors ${
+                            isExpanded
+                              ? 'border-blue-500/40 bg-blue-500/[0.03]'
+                              : 'border-transparent bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 text-[12.5px] font-medium text-[#F2F2F4]">
+                              <StepIcon className="h-3.5 w-3.5 text-[#8E95A5] shrink-0" />
+                              <span>{item.title}</span>
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              {item.text}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setExpandedGuideStep(isExpanded ? null : item.num)}
+                            className="self-start text-[11px] font-medium text-[#6EA0FF] hover:text-white transition-colors cursor-pointer"
+                          >
+                            {isExpanded ? 'Ocultar pantalla ▴' : 'Ver pantalla de ejemplo ▾'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {expandedGuideStep && (
+                    <div className="rounded-xl bg-[#141923]/75 border border-white/[0.05] p-4 sm:p-5">
+                      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] items-center gap-6">
+                        <div className="space-y-3 min-w-0">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-medium text-white">
+                              Vista de ejemplo · {stepperItems[expandedGuideStep - 1]?.title}
+                            </span>
+
+                            {deviceTab === 'android' && expandedGuideStep === 1 && (
+                              <div className="inline-flex rounded-lg bg-[#0F131B]/80 border border-white/[0.06] p-0.5">
+                                {[
+                                  { id: 'generic', label: 'Genérico' },
+                                  { id: 'samsung', label: 'Samsung' },
+                                  { id: 'xiaomi', label: 'Xiaomi' },
+                                ].map((b) => (
+                                  <button
+                                    key={b.id}
+                                    type="button"
+                                    onClick={() => setAndroidBrand(b.id)}
+                                    className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                                      androidBrand === b.id
+                                        ? 'bg-[#2F6FED] text-white'
+                                        : 'text-[#8E95A5] hover:text-white'
+                                    }`}
+                                  >
+                                    {b.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <p className="text-[13px] text-[#D2D6E2] leading-relaxed">
+                            {deviceTab === 'android' && expandedGuideStep === 1
+                              ? ANDROID_BRAND_HINTS[androidBrand]
+                              : stepperItems[expandedGuideStep - 1]?.text}
+                          </p>
+                        </div>
+
+                        <div className="w-full max-w-[340px] shrink-0 mx-auto md:mx-0">
+                          {deviceTab === 'android' ? (
+                            <AndroidStepVisual
+                              step={expandedGuideStep}
+                              brand={androidBrand}
+                            />
+                          ) : (
+                            <IosStepVisual step={expandedGuideStep} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Respaldos locales detectados de iOS + desbloqueo cifrado */}
+          {deviceTab === 'ios' && hasDesktopBridge && iosStatus?.local_backups?.length > 0 && (
+            <div className="rounded-xl bg-[#171B23] divide-y divide-white/[0.06] overflow-hidden">
+              <div className="px-4 py-2 text-[11px] font-medium text-[#8E95A5]">
+                Copias locales detectadas ({iosStatus.local_backups.length})
+              </div>
+              {iosStatus.local_backups.slice(0, 3).map((bk) => (
+                <div key={bk.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-[12.5px] font-medium text-white truncate">{bk.deviceName}</span>
+                    {bk.iosVersion && (
+                      <span className="font-tech text-[11px] text-[#8E95A5]">iOS {bk.iosVersion}</span>
+                    )}
+                    {bk.encrypted && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.05] px-2 py-0.5 text-[10.5px] text-[#D2D6E2]">
+                        <Lock className="h-2.5 w-2.5" /> Cifrada
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={scanningIos || isAnalyzing || unlockingBackup}
+                    onClick={() => analyzeIosBackupDirectory(bk.path, bk)}
+                    className="shrink-0 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] px-3 py-1 text-[11.5px] font-medium text-white disabled:opacity-50 cursor-pointer"
+                  >
+                    {bk.encrypted ? 'Desbloquear en RAM' : 'Revisar copia'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {deviceTab === 'ios' && encryptedBackupPrompt && (
+            <form
+              onSubmit={handleUnlockEncryptedBackup}
+              className="rounded-xl bg-[#171B23] p-4 space-y-2.5"
+            >
+              <div className="flex items-center gap-2 text-[12.5px] font-medium text-white">
+                <KeyRound className="h-3.5 w-3.5 text-[#10B981]" />
+                <span>Contraseña de la copia «{encryptedBackupPrompt.meta?.deviceName || 'iPhone'}»</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="password"
+                  autoFocus
+                  maxLength={128}
+                  value={backupPassword}
+                  onChange={(e) => setBackupPassword(stripUnsafeChars(e.target.value, 128))}
+                  placeholder="Contraseña de respaldo iTunes / Finder (solo en RAM)"
+                  className="flex-1 min-w-[200px] rounded-lg border border-white/[0.1] bg-[#090B0E] px-3 py-1.5 text-[12.5px] text-white placeholder-[#8E95A5] focus:border-[#10B981] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!backupPassword || unlockingBackup}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] px-3 py-1.5 text-[12px] font-semibold text-[#06130E] disabled:opacity-50 cursor-pointer"
+                >
+                  {unlockingBackup && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>Desbloquear y revisar en RAM</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={unlockingBackup}
+                  onClick={() => {
+                    setEncryptedBackupPrompt(null);
+                    setBackupPassword('');
+                    setBackupUnlockError('');
+                  }}
+                  className="rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-[11.5px] text-[#9A9AA2] hover:text-white cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+              {backupUnlockError && (
+                <p className="text-[11.5px] text-[#FF6961]">{backupUnlockError}</p>
+              )}
             </form>
           )}
+        </section>
+
+        {/* C. Módulo Inferior: Análisis Offline (Dropzone Unificada + Input Inline) */}
+        <section
+          ref={offlineDropzoneRef}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (!isAnalyzing && e.dataTransfer?.files?.length) {
+              analyzeFiles(e.dataTransfer.files);
+            }
+          }}
+          className={`rounded-2xl border border-dashed p-6 transition-colors ${
+            isDragging
+              ? 'border-emerald-400/60 bg-[#141923]/85 backdrop-blur-md'
+              : 'border-white/[0.07] bg-[#0F131B]/85 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.45)]'
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".json,.db,.sqlite,.sqlite3,.txt,.log,.ips,.crash,.tar.gz,.tgz,.tar,.zip,.pkpass,.pdf,.gif"
+            onChange={(e) => analyzeFiles(e.target.files)}
+            className="hidden"
+          />
+
+          {/* Área central de carga */}
+          <button
+            type="button"
+            disabled={isAnalyzing}
+            onClick={() => {
+              if (!isAnalyzing) fileInputRef.current?.click();
+            }}
+            className="w-full flex flex-col items-center justify-center text-center py-2 cursor-pointer group"
+          >
+            <div className="mb-2.5 h-10 w-10 rounded-xl bg-[#171B23] flex items-center justify-center text-[#9A9AA2] group-hover:text-white transition-colors">
+              {isAnalyzing ? (
+                <Loader2 className="h-5 w-5 text-[#10B981] animate-spin" />
+              ) : (
+                <Upload className="h-4.5 w-4.5" />
+              )}
+            </div>
+            <p className="text-[13.5px] font-medium text-[#F2F2F4]">
+              {isAnalyzing ? 'Analizando en memoria temporal...' : 'Subir archivo o respaldo'}
+            </p>
+            <p className="mt-1 text-[11.5px] text-[#8E95A5]">
+              Arrastra o haz clic aquí · .tar.gz, .ips, .db, .zip y .json
+            </p>
+          </button>
+
+          {/* Entrada rápida inline dentro de la misma dropzone */}
+          <form
+            onSubmit={handleAnalyzeText}
+            className="mt-5 pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+          >
+            <input
+              type="text"
+              maxLength={50000}
+              value={manualText}
+              onChange={(e) => {
+                setManualText(stripUnsafeChars(e.target.value, 50000));
+                if (errorMsg) setErrorMsg('');
+              }}
+              placeholder="Pegar enlaces, hashes o datos sospechosos"
+              className="font-tech flex-1 min-w-0 h-10 rounded-xl bg-[#090B0E] border border-white/[0.06] px-3.5 text-[12.5px] text-white placeholder-[#8E95A5] focus:border-[#10B981] focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={isAnalyzing || !manualText.trim()}
+              className="h-10 rounded-xl bg-[#171B23] hover:bg-white/[0.1] border border-white/[0.08] disabled:opacity-45 px-4 text-[12.5px] font-medium text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:cursor-not-allowed"
+            >
+              {isAnalyzing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              <span>Analizar</span>
+            </button>
+          </form>
 
           {errorMsg && (
             <PanelErrorBanner
               message={errorMsg}
               onDismiss={() => setErrorMsg('')}
-              className="mt-3"
+              className="mt-4"
             />
           )}
 
@@ -1920,34 +1825,11 @@ export function MvtVerifierPanel({
                     ? 'Leyendo telemetría USB en RAM...'
                     : 'Analizando artefactos forenses en RAM...'
               }
-              lines={3}
-              className="mt-3"
-            />
-          )}
-
-          {!isAnalyzing && !scanningPc && !scanningUsb && !scanningIos && !errorMsg && (
-            <PanelEmptyState
-              icon={ShieldCheck}
-              title="Aún no has verificado ningún equipo"
-              description={
-                deviceTab === 'pc'
-                  ? 'Ejecuta la inspección en RAM sobre esta computadora (procesos, WMI y conexiones abiertas) o carga un archivo forense.'
-                  : 'Conecta tu celular arriba para inspección directa o carga una copia / lista de indicadores abajo. Todo corre en RAM sin guardar archivos.'
-              }
-              actionLabel={
-                deviceTab === 'pc' && hasPcTelemetryBridge
-                  ? 'Analizar esta computadora'
-                  : undefined
-              }
-              onAction={
-                deviceTab === 'pc' && hasPcTelemetryBridge
-                  ? handlePcLiveAudit
-                  : undefined
-              }
+              lines={2}
               className="mt-4"
             />
           )}
-        </div>
+        </section>
       </div>
     </div>
   );

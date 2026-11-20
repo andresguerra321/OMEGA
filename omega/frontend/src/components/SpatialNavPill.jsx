@@ -25,10 +25,10 @@ function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat, au
   if (id === 'inicio') {
     if (!apiOnline) return 'bg-[#2F6FED]';
     if (pcVerdict === 'alert' || pcVerdict === 'suspicious' || pcVerdict === 'high') {
-      return 'bg-[#EF4444]';
+      return 'bg-rose-500';
     }
-    if (pcVerdict === 'warning' || pcVerdict === 'watch') return 'bg-[#2F6FED]';
-    return 'bg-[#22C55E]';
+    if (pcVerdict === 'warning' || pcVerdict === 'watch') return 'bg-amber-400';
+    return 'bg-emerald-400';
   }
   if (id === 'equipo' && usbConnected) {
     return 'bg-[#2F6FED]';
@@ -37,12 +37,10 @@ function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat, au
     return 'bg-[#2F6FED] omega-core-pulse';
   }
   if (id === 'cuenta' && authConnected) {
-    return 'bg-[#30D158]';
+    return 'bg-emerald-400';
   }
   return null;
 }
-
-const SHIELD_MODE_NAV_IDS = new Set(['inicio', 'equipo', 'exposicion', 'cuenta', 'ajustes']);
 
 export function SpatialNavPill({
   activeNav,
@@ -53,12 +51,9 @@ export function SpatialNavPill({
   isLoadingChat = false,
   authConnected = false,
   compact = false,
-  technicalMode = true,
 }) {
   const pillId = useId();
-  const visibleItems = technicalMode
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter((item) => SHIELD_MODE_NAV_IDS.has(item.id) || item.id === activeNav);
+  const visibleItems = NAV_ITEMS;
   return (
     <nav
       aria-label="Navegación espacial OMEGA"
@@ -118,7 +113,7 @@ export function SpatialNavPill({
               {ledClass && (
                 <span
                   aria-hidden="true"
-                  className={`absolute top-1 right-1 h-1.5 w-1.5 rounded-full ${ledClass}`}
+                  className={`absolute top-1 right-1 h-1.5 w-1.5 rounded-full ring-2 ring-[#0F131B] ${ledClass}`}
                 />
               )}
 

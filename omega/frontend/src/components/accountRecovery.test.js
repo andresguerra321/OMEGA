@@ -18,14 +18,14 @@ const hooks = registerHooks({
   resolve(specifier, context, next) {
     if (context.parentURL === componentUrl.href) {
       if (specifier === '../lib/api') return { url: apiUrl, shortCircuit: true };
-      if (specifier === './DossierExportButtons' || specifier === './OmegaLogo') return { url: stubUrl, shortCircuit: true };
+      if (specifier === './DossierExportButtons' || specifier === './OmegaLogo' || specifier === './OmegaBrandMark' || specifier === './SaasFleetCard') return { url: stubUrl, shortCircuit: true };
       if (specifier.startsWith('../lib/')) return { url: new URL(`${specifier}.js`, componentUrl).href, shortCircuit: true };
     }
     return next(specifier, context);
   },
   load(url, context, next) {
     if (url === componentUrl.href) return { format: 'module', source: code, shortCircuit: true };
-    if (url === stubUrl) return { format: 'module', source: 'export default () => null; export const OmegaLogo = () => null;', shortCircuit: true };
+    if (url === stubUrl) return { format: 'module', source: 'export default () => null; export const OmegaLogo = () => null; export const OmegaBrandMark = () => null; export const SaasFleetCard = () => null;', shortCircuit: true };
     if (url === apiUrl) return { format: 'module', source: names.map(name =>
       `export const ${name} = (...args) => globalThis.__omegaRecoveryTestApi.${name}(...args);`).join('\n'), shortCircuit: true };
     return next(url, context);

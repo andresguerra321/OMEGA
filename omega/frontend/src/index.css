@@ -74,10 +74,16 @@
     overflow: hidden;
   }
 
-  html,
-  body {
+  *,
+  *::before,
+  *::after {
     user-select: none;
     -webkit-user-select: none;
+  }
+
+  img,
+  a {
+    -webkit-user-drag: none;
   }
 
   input,
@@ -997,5 +1003,15 @@ h2 {
   to {
     opacity: 0;
     transform: translate3d(135%, 35%, 0) rotate(-18deg);
+  }
+}
+
+@keyframes omega-orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
   }
 }

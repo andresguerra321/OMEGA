@@ -22,8 +22,8 @@ import {
 import { verifySuspiciousLink } from '../lib/api';
 import { stripUnsafeChars, validateUrlInput } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
-import { OmegaLogo } from './OmegaLogo';
-import { ChatAtmosphere } from './ChatAtmosphere';
+import { OmegaBrandMark } from './OmegaBrandMark';
+import { OmegaAmbientBackdrop } from './OmegaAmbientBackdrop';
 import { SpatialNavPill } from './SpatialNavPill';
 import { SecurityCenterpieceFallback } from './SecurityCenterpieceFallback';
 import { ActionConfirmationBanner, PanelErrorBanner } from './PanelStatePrimitives';
@@ -66,8 +66,6 @@ export function SecurityPostureStage({
   usbStatus,
   lastLinkResult,
   govStats,
-  technicalMode = false,
-  onToggleTechnicalMode,
   apiOnline = true,
   isLoadingChat = false,
   scanningPc = false,
@@ -131,7 +129,7 @@ export function SecurityPostureStage({
     () => ({
       windows: {
         id: 'windows',
-        kicker: technicalMode ? 'HOST LOCAL · WMI / SOCKETS RAM' : 'HOST LOCAL · OPERACIÓN EN RAM',
+        kicker: 'HOST LOCAL · WMI / SOCKETS RAM',
         lead: 'Esta PC',
         accent: 'Windows',
         statusLabel: pcWarn
@@ -151,7 +149,7 @@ export function SecurityPostureStage({
       },
       usb: {
         id: 'usb',
-        kicker: technicalMode ? 'PUERTO USB · ADB / LOCKDOWN IOS' : 'INSPECCIÓN MÓVIL POR CABLE',
+        kicker: 'PUERTO USB · ADB / LOCKDOWN IOS',
         lead: usbModel || 'Celulares',
         accent: usbConnected ? 'Conectado' : 'Android & iOS',
         statusLabel: usbConnected ? 'Cable activo' : 'USB en espera',
@@ -187,7 +185,6 @@ export function SecurityPostureStage({
       },
     }),
     [
-      technicalMode,
       pcWarn,
       pcInfo.findingsCount,
       pcHealthy,
@@ -299,10 +296,10 @@ export function SecurityPostureStage({
   return (
     <section
       aria-label="Cabina de postura OMEGA"
-      className="omega-studio-bg relative min-h-full md:h-full w-full overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col select-none text-[#F2F2F4]"
+      className="relative isolate min-h-full md:h-full w-full overflow-x-hidden overflow-y-auto md:overflow-hidden flex flex-col select-none text-[#F2F2F4]"
     >
-      {/* Campo nocturno #0A0A0C con cuadrícula punteada 24px y film grain visible tras el vidrio */}
-      <ChatAtmosphere variant="stage" />
+      {/* Fondo global en modo dashboard (opacity-15 en márgenes y detrás de tarjetas) */}
+      <OmegaAmbientBackdrop intensity="dashboard" />
 
       {/* Cabecera flotante superior — Nav pill flotante separada de los bordes */}
       <header
@@ -315,10 +312,7 @@ export function SecurityPostureStage({
           onClick={() => onSelectNav?.('inicio')}
           className="relative z-10 inline-flex items-center gap-2 text-left rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer group shrink-0"
         >
-          <OmegaLogo size={22} isThinking={isLoadingChat} />
-          <span className="font-display text-[14px] font-semibold tracking-[0.06em] text-[#F2F2F4] group-hover:text-white transition-colors">
-            OMEGA
-          </span>
+          <OmegaBrandMark />
         </button>
 
         {/* Pill flotante separada (vidrio más denso blur(20px) · Blur #1) */}
@@ -336,66 +330,44 @@ export function SecurityPostureStage({
 
         {/* Utilidades derechas unificadas */}
         <div className="relative z-10 flex items-center gap-1.5 shrink-0">
-          <div
-            role="group"
-            aria-label="Nivel de detalle"
-            className="apple-segmented hidden sm:inline-flex items-center rounded-[9px] p-0.5 h-8"
-          >
-            <button
-              type="button"
-              onClick={() => onToggleTechnicalMode?.(false)}
-              className={`kowalski-press px-2 py-1 rounded-[6px] text-[11px] font-medium cursor-pointer ${!technicalMode ? 'apple-segmented-active' : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-            >
-              Simple
-            </button>
-            <button
-              type="button"
-              onClick={() => onToggleTechnicalMode?.(true)}
-              className={`kowalski-press px-2 py-1 rounded-[6px] text-[11px] font-medium cursor-pointer ${technicalMode ? 'apple-segmented-active' : 'text-[#9A9AA2] hover:text-[#F2F2F4]'
-                }`}
-            >
-              Técnico
-            </button>
-          </div>
-
           <button
             type="button"
             onClick={() => onOpenCopilot?.({})}
             aria-label="Abrir copiloto lateral"
             title="Copiloto (Ctrl+J)"
-            className="omega-glass-chip relative h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] cursor-pointer"
+            className="h-8 px-2 rounded-lg border border-white/[0.06] bg-[#141923]/75 hover:border-white/[0.14] inline-flex items-center gap-1.5 text-[12px] font-medium text-[#F2F2F4] transition-colors cursor-pointer"
           >
-            <Bell className="h-3.5 w-3.5 text-[#2F6FED]" />
-            <span className="hidden 2xl:inline">Copiloto</span>
+            <Bell className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
             <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#2F6FED] text-white text-[10px] font-bold inline-flex items-center justify-center">
               {pcWarn ? pcInfo.findingsCount : reportsCount}
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenCommandPalette}
-            aria-label="Abrir búsqueda rápida (⌘K)"
-            title="Buscar módulo o CVE (⌘K)"
-            className="omega-glass-chip h-8 px-2 2xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span className="font-tech hidden 2xl:inline">⌘K</span>
-          </button>
-
-          {onOpenOnboarding && (
+          <div className="inline-flex items-center rounded-lg bg-[#141923]/75 border border-white/[0.06] divide-x divide-white/[0.08] overflow-hidden">
             <button
               type="button"
-              onClick={onOpenOnboarding}
-              aria-label="Abrir guía rápida de uso"
-              title="Guía rápida de OMEGA"
-              className="omega-glass-chip h-8 px-2 rounded-[9px] inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:text-[#F2F2F4] cursor-pointer"
+              onClick={onOpenCommandPalette}
+              aria-label="Abrir búsqueda rápida (⌘K)"
+              title="Buscar módulo o CVE (⌘K)"
+              className="h-8 px-2.5 inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
             >
-              <BookOpen className="h-3.5 w-3.5 text-[#6FA0FF]" />
-              <span className="hidden 2xl:inline">Guía</span>
+              <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <span className="font-tech hidden 2xl:inline">⌘K</span>
             </button>
-          )}
+
+            {onOpenOnboarding && (
+              <button
+                type="button"
+                onClick={onOpenOnboarding}
+                aria-label="Abrir guía rápida de uso"
+                title="Guía rápida de OMEGA"
+                className="h-8 px-2.5 inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+              >
+                <BookOpen className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
+                <span className="hidden 2xl:inline">Guía</span>
+              </button>
+            )}
+          </div>
 
           <button
             type="button"
@@ -405,37 +377,41 @@ export function SecurityPostureStage({
                 ? `Cuenta: ${authSession.email} (${authSession.role})`
                 : 'Iniciar sesión o crear cuenta OMEGA'
             }
-            className={`omega-glass-chip h-8 px-2 xl:px-2.5 rounded-[9px] inline-flex items-center gap-1.5 text-[11.5px] font-medium cursor-pointer ${authSession
-              ? 'text-[#F2F2F4] border-[#30D158]/35'
-              : 'text-[#F2F2F4] border-[#2F6FED]/45'
-              }`}
+            className={`h-8 px-2 xl:px-2.5 rounded-lg border bg-[#141923]/75 inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
+              authSession
+                ? 'text-[#F2F2F4] border-emerald-400/30 hover:border-emerald-400/50'
+                : 'text-[#F2F2F4] border-[#2F6FED]/45 hover:border-[#2F6FED]'
+            }`}
           >
             {authSession ? (
               <>
-                <span className="h-2 w-2 rounded-full bg-[#30D158] shrink-0" />
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
                 <span className="hidden lg:inline max-w-[88px] truncate font-tech">
                   {authSession.email?.split('@')[0] || authSession.tenantSlug}
                 </span>
               </>
             ) : (
               <>
-                <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                 <span className="hidden lg:inline">Entrar</span>
               </>
             )}
           </button>
 
           {authSession && (
-            <button
-              type="button"
-              onClick={() => void onPanicPurge?.()}
-              title="Purga rápida: destruye tokens, memoria volátil y caché local"
-              aria-label="Purga rápida"
-              className="omega-glass-chip h-8 px-2 rounded-[9px] border-[#FF453A]/35 bg-[#FF453A]/10 hover:bg-[#FF453A]/20 text-[#FFDAD6] inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer"
-            >
-              <Trash2 className="h-3 w-3 shrink-0" />
-              <span className="hidden xl:inline">Purga</span>
-            </button>
+            <>
+              <span aria-hidden="true" className="h-4 w-px bg-white/10 mx-0.5 shrink-0" />
+              <button
+                type="button"
+                onClick={() => void onPanicPurge?.()}
+                title="Purga rápida: destruye tokens, memoria volátil y caché local"
+                aria-label="Purga rápida"
+                className="h-8 px-2 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                <span className="hidden xl:inline">Purga</span>
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -456,11 +432,11 @@ export function SecurityPostureStage({
 
       {/* Superficie modular de paneles de vidrio flotando sobre la cuadrícula punteada */}
       <div className="relative z-10 mx-auto w-full max-w-[1280px] flex-1 min-h-0 flex flex-col gap-2.5 sm:gap-3 px-4 sm:px-7 pt-1.5 pb-4">
-        {/* Panel 1 — Barra compacta superior de telemetría en monospace (Blur #2) */}
+        {/* Panel 1 — Barra compacta superior de telemetría en monospace */}
         <div
           role="region"
           aria-label="Telemetría del sistema en tiempo real"
-          className="omega-glass-panel animate-kowalski-in shrink-0 rounded-[14px] px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 font-tech text-[10.5px] tracking-[0.06em] uppercase text-[#9A9AA2]"
+          className="animate-kowalski-in shrink-0 rounded-[14px] bg-[#0F131B]/75 backdrop-blur-md border border-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.45)] px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 font-tech text-[10.5px] tracking-[0.06em] uppercase text-[#9A9AA2]"
         >
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="inline-flex items-center gap-1.5 text-[#F2F2F4]">
@@ -491,14 +467,14 @@ export function SecurityPostureStage({
           <div className="flex items-center gap-2 text-[#9A9AA2]">
             <span className="hidden md:inline">CORTE CTI: {catalogCutoffDate}</span>
             <span aria-hidden="true" className="hidden md:inline text-white/15">|</span>
-            <span className="hidden sm:inline">{technicalMode ? 'TÉCNICO' : 'SIMPLE'}</span>
+            <span className="hidden sm:inline">TÉCNICO</span>
             <span aria-hidden="true" className="hidden sm:inline text-white/15">|</span>
             <span className="text-[#F2F2F4]">0 B EN DISCO</span>
           </div>
         </div>
 
-        {/* Panel 2 — Foco visual central 3D en vidrio esmerilado con blur reforzado (Blur #3) */}
-        <div className="omega-glass-panel-strong relative flex-1 min-h-[285px] md:min-h-[255px] rounded-[20px] overflow-hidden flex flex-col justify-between p-3.5 sm:p-5">
+        {/* Panel 2 — Foco visual central 3D aislado sobre fondo limpio #090B0F */}
+        <div className="relative flex-1 min-h-[285px] md:min-h-[255px] rounded-[20px] bg-[#090B0F] border border-white/[0.07] shadow-[0_18px_46px_rgba(0,0,0,0.58)] overflow-hidden flex flex-col justify-between p-3.5 sm:p-5">
           {/* Iluminación sutil detrás de la escultura 3D para dar profundidad al panel */}
           <div
             aria-hidden="true"
@@ -740,10 +716,10 @@ export function SecurityPostureStage({
           </div>
         )}
 
-        {/* Panel 3 — Hallazgos recientes y acciones rápidas con separadores finos (Blur #4) */}
+        {/* Panel 3 — Hallazgos recientes y acciones rápidas con cohesión glass */}
         <footer
           aria-label="Hallazgos recientes y acciones rápidas"
-          className="omega-glass-panel animate-kowalski-in shrink-0 rounded-[20px] overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.08]"
+          className="animate-kowalski-in shrink-0 rounded-[20px] bg-[#0F131B]/75 backdrop-blur-md border border-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.45)] overflow-hidden grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.07]"
         >
           {/* Columna 1: Equipo Local & Acción Primaria */}
           <div className="p-4 flex flex-col justify-between gap-2.5 transition-colors hover:bg-[rgba(28,36,56,0.35)]">
@@ -753,7 +729,7 @@ export function SecurityPostureStage({
                   Equipo Local
                 </h2>
                 <p className="text-[11.5px] text-[#9A9AA2]">
-                  {technicalMode ? 'WMI · Sockets RAM' : 'Procesos · WMI'}
+                  WMI · Sockets RAM
                 </p>
               </div>
               <button
@@ -837,7 +813,7 @@ export function SecurityPostureStage({
                     Celulares USB
                   </h2>
                   <p className="text-[11.5px] text-[#9A9AA2]">
-                    {technicalMode ? 'ADB · Lockdown iOS' : 'Android · iPhone'}
+                    ADB · Lockdown iOS
                   </p>
                 </div>
               </div>

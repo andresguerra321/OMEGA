@@ -2,9 +2,62 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, ExternalLink, KeyRound, LoaderCircle, Sparkles } from 'lucide-react';
 import { fetchSystemGovernance, fetchMfaStatus, testAiEngineConnection } from '../lib/api';
 import { TwoFactorSettingsCard } from './TwoFactorSettingsCard';
+import { OmegaBrandMark } from './OmegaBrandMark';
 import { isDesktopApp, saveDesktopRuntimeConfig } from '../lib/desktopBridge';
 
-const GROQ = { provider: 'groq', baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b' };
+const PROVIDER_PRESETS = [
+  {
+    id: 'groq',
+    label: 'Groq (Recomendado)',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'openai/gpt-oss-120b',
+    keyRequired: true,
+    baseEditable: false,
+    placeholder: 'gsk_…',
+    docsUrl: 'https://console.groq.com/keys',
+    docsLabel: 'Obtener mi clave de Groq',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama Local',
+    baseUrl: 'http://host.docker.internal:11434/v1',
+    model: 'llama3.2',
+    keyRequired: false,
+    baseEditable: true,
+    placeholder: 'No requiere API Key',
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    keyRequired: true,
+    baseEditable: false,
+    placeholder: 'sk-…',
+    docsUrl: 'https://platform.openai.com/api-keys',
+    docsLabel: 'Obtener clave de OpenAI',
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-2.5-flash',
+    keyRequired: true,
+    baseEditable: false,
+    placeholder: 'AIza…',
+    docsUrl: 'https://aistudio.google.com/apikey',
+    docsLabel: 'Obtener clave de Gemini',
+  },
+  {
+    id: 'custom',
+    label: 'Otro (/v1)',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'meta-llama/llama-3.3-70b-instruct',
+    keyRequired: false,
+    baseEditable: true,
+    placeholder: 'sk-or-… (opcional)',
+  },
+];
 const STEPS = ['Tu cuenta', 'Conecta la IA', 'Protege tu cuenta'];
 
 export function AiSetupGate({ enabled, accountId, authSession, forceSetup = false, onComplete, onLogout, children }) {
@@ -15,6 +68,10 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
   const [engine, setEngine] = useState(null);
   const [mfaReady, setMfaReady] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [providerId, setProviderId] = useState('groq');
+  const [customBaseUrl, setCustomBaseUrl] = useState('https://api.groq.com/openai/v1');
+  const [customModel, setCustomModel] = useState('openai/gpt-oss-120b');
+  const [showOtherProviders, setShowOtherProviders] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -43,35 +100,76 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
 
   useEffect(() => { if (phase === 'setup') heading.current?.focus(); }, [step, phase]);
 
+  const activePreset = PROVIDER_PRESETS.find((p) => p.id === providerId) || PROVIDER_PRESETS[0];
+
+  function selectProvider(id) {
+    const preset = PROVIDER_PRESETS.find((p) => p.id === id) || PROVIDER_PRESETS[0];
+    setProviderId(preset.id);
+    setCustomBaseUrl(preset.baseUrl);
+    setCustomModel(preset.model);
+    setError('');
+  }
+
   async function connect() {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true); setError('');
     try {
-      if (!isDesktopApp()) throw new Error('Configura Groq en el servidor de OMEGA y pulsa «Comprobar configuración».');
+      if (!isDesktopApp()) throw new Error('Configura tu proveedor de IA en el servidor de OMEGA y pulsa «Comprobar configuración».');
       const key = apiKey.trim();
-      if (!key || /[\r\n\0]/.test(key)) throw new Error('Pega una clave válida de Groq.');
-      const probe = await testAiEngineConnection({ ...GROQ, apiKey: key });
-      if (!probe?.ok) throw new Error(probe?.message || 'Groq no pudo responder. Revisa tu clave e intenta de nuevo.');
-      const saved = await saveDesktopRuntimeConfig({
-        clearCustomProvider: true, omniRouteEnabled: false, clearOpenAiKey: true,
-        groqApiKey: key, groqModel: GROQ.model,
-      });
+      const targetModel = (customModel || activePreset.model).trim();
+      const targetBase = (customBaseUrl || activePreset.baseUrl).trim();
+      if (activePreset.keyRequired && (!key || /[\r\n\0]/.test(key))) {
+        throw new Error(`Pega una clave válida de ${activePreset.label}.`);
+      }
+      if (/[\r\n\0]/.test(key)) throw new Error('La clave contiene caracteres inválidos.');
+
+      const probeTarget = {
+        provider: providerId,
+        baseUrl: targetBase,
+        model: targetModel,
+        ...(key ? { apiKey: key } : {}),
+      };
+      const probe = await testAiEngineConnection(probeTarget);
+      if (!probe?.ok) throw new Error(probe?.message || `${activePreset.label} no pudo responder. Revisa la configuración e intenta de nuevo.`);
+
+      let payload;
+      if (providerId === 'groq') {
+        payload = {
+          clearCustomProvider: true, omniRouteEnabled: false, clearOpenAiKey: true,
+          groqApiKey: key, groqModel: targetModel,
+        };
+      } else if (providerId === 'openai') {
+        payload = {
+          clearCustomProvider: true, omniRouteEnabled: false,
+          openAiApiKey: key, openAiChatModel: targetModel,
+        };
+      } else {
+        payload = {
+          customProvider: providerId,
+          customBaseUrl: targetBase,
+          customApiKey: key,
+          clearCustomKey: Boolean(!key && providerId === 'ollama'),
+          customModel: targetModel,
+        };
+      }
+
+      const saved = await saveDesktopRuntimeConfig(payload);
       setApiKey('');
       if (!saved?.ok) throw new Error('La clave se guardó, pero OMEGA no pudo aplicar la configuración. Intenta de nuevo.');
       let active;
       for (let retry = 0; retry < 20; retry += 1) {
         const result = await fetchSystemGovernance().catch(() => null);
         active = result?.ai_engine;
-        if (active?.configured && active.active_provider === 'groq') break;
+        if (active?.configured) break;
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      if (!active?.configured || active.active_provider !== 'groq') throw new Error('El servicio todavía no activó Groq. Espera unos segundos y comprueba la configuración.');
+      if (!active?.configured) throw new Error(`El servicio todavía no activó ${activePreset.label}. Espera unos segundos y comprueba la configuración.`);
       // Verify the saved configuration, without resending the secret from the input.
-      const liveProbe = await testAiEngineConnection(GROQ);
+      const liveProbe = await testAiEngineConnection({ provider: providerId, baseUrl: targetBase, model: targetModel });
       if (!liveProbe?.ok) throw new Error(liveProbe?.message || 'La configuración guardada no pudo generar una respuesta.');
       setEngine(active); setStep(2);
-    } catch (err) { setError(err?.message || 'No se pudo conectar Groq.'); }
+    } catch (err) { setError(err?.message || `No se pudo conectar ${activePreset.label}.`); }
     finally { setBusy(false); inFlight.current = false; }
   }
 
@@ -106,7 +204,7 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
   return <main className="flex min-h-dvh items-center justify-center bg-obsidian px-5 py-10 text-ink-primary">
     <div className="w-full max-w-4xl">
       <div className="mb-9 flex items-center justify-between gap-4">
-        <span className="font-display text-sm font-semibold tracking-[0.2em]">OMEGA</span>
+        <OmegaBrandMark />
         <button type="button" onClick={onLogout} disabled={busy} className="text-sm text-ink-secondary hover:text-ink-primary disabled:opacity-50">Cerrar sesión</button>
       </div>
       {phase === 'checking' ? <p role="status" className="flex items-center gap-3 text-ink-secondary"><LoaderCircle className="h-5 w-5 motion-safe:animate-spin text-cobalt" />Comprobando tu espacio…</p>
@@ -127,14 +225,85 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
               </> : step === 1 ? <>
                 <KeyRound className="mb-5 h-8 w-8 text-cobalt" aria-hidden="true" />
                 <h1 id="setup-title" ref={heading} tabIndex={-1} className="text-3xl font-semibold outline-none">Conecta tu IA</h1>
-                <p className="mt-3 text-ink-secondary">Crea una clave en Groq, pégala aquí y nosotros comprobamos la conexión.</p>
-                {isDesktopApp() && <form onSubmit={event => { event.preventDefault(); void connect(); }} className="mt-6 max-w-xl space-y-4">
-                  <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-ink-primary underline decoration-cobalt underline-offset-4">Obtener mi clave de Groq <ExternalLink className="h-4 w-4" /></a>
-                  <div><label htmlFor="setup-groq-key" className="mb-2 block text-sm">Clave de API de Groq</label>
-                    <input id="setup-groq-key" type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} maxLength={2048} placeholder="gsk_…" aria-describedby="setup-key-note" className="w-full rounded-xl border border-white/15 bg-obsidian px-4 py-3 outline-none focus:border-cobalt focus:ring-2 focus:ring-cobalt/30" />
+                <p className="mt-3 text-ink-secondary">
+                  {providerId === 'groq'
+                    ? 'Usa Groq gratis como opción rápida o elige otro modelo que ya tengas disponible.'
+                    : `Configura ${activePreset.label} para activar el asistente en OMEGA.`}
+                </p>
+
+                {isDesktopApp() && <form onSubmit={event => { event.preventDefault(); void connect(); }} className="mt-5 max-w-xl space-y-4">
+                  {activePreset.docsUrl && (
+                    <a href={activePreset.docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-ink-primary underline decoration-cobalt underline-offset-4">
+                      {activePreset.docsLabel} <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+
+                  <div>
+                    <label htmlFor="setup-groq-key" className="mb-2 block text-sm">
+                      Clave de API de {activePreset.label} {!activePreset.keyRequired ? '(opcional)' : ''}
+                    </label>
+                    <input id="setup-groq-key" type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} maxLength={2048} placeholder={activePreset.placeholder} aria-describedby="setup-key-note" className="w-full rounded-xl border border-white/15 bg-obsidian px-4 py-3 outline-none focus:border-cobalt focus:ring-2 focus:ring-cobalt/30" />
                   </div>
-                  <p id="setup-key-note" className="text-sm leading-relaxed text-ink-secondary">Tu clave se guarda en esta computadora. Las consultas y el contexto que adjuntes se enviarán a Groq. El uso se rige por tu cuenta de Groq.</p>
-                  <button type="submit" disabled={busy || !apiKey.trim()} className="inline-flex items-center gap-2 rounded-xl bg-cobalt px-5 py-3 font-semibold disabled:opacity-50">{busy && <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" />}{busy ? 'Conectando y comprobando…' : 'Conectar y continuar'}</button>
+
+                  {showOtherProviders && (
+                    <div className="space-y-3 rounded-2xl border border-white/10 bg-obsidian/70 p-4">
+                      <div className="text-xs font-medium text-ink-secondary">Elige tu proveedor o modelo disponible:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {PROVIDER_PRESETS.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => selectProvider(preset.id)}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                              providerId === preset.id
+                                ? 'border-cobalt bg-cobalt/20 text-white'
+                                : 'border-white/10 bg-white/[0.03] text-ink-secondary hover:text-white'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {providerId !== 'groq' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          {activePreset.baseEditable && (
+                            <div>
+                              <label htmlFor="setup-base-url" className="mb-1 block text-xs text-ink-secondary">Endpoint Base URL</label>
+                              <input id="setup-base-url" type="text" value={customBaseUrl} onChange={e => setCustomBaseUrl(e.target.value)} disabled={busy} className="w-full rounded-lg border border-white/15 bg-surface px-3 py-2 text-xs font-tech outline-none focus:border-cobalt" />
+                            </div>
+                          )}
+                          <div className={activePreset.baseEditable ? '' : 'sm:col-span-2'}>
+                            <label htmlFor="setup-model-id" className="mb-1 block text-xs text-ink-secondary">Modelo (Model ID)</label>
+                            <input id="setup-model-id" type="text" value={customModel} onChange={e => setCustomModel(e.target.value)} disabled={busy} className="w-full rounded-lg border border-white/15 bg-surface px-3 py-2 text-xs font-tech outline-none focus:border-cobalt" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <p id="setup-key-note" className="text-sm leading-relaxed text-ink-secondary">
+                    {providerId === 'ollama'
+                      ? 'Se conectará directamente a tu instancia local de Ollama sin enviar datos fuera de tu equipo.'
+                      : `Tu clave se guarda en esta computadora. Las consultas y el contexto que adjuntes se enviarán a ${activePreset.label}.`}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-4">
+                    <button type="submit" disabled={busy || (activePreset.keyRequired && !apiKey.trim())} className="inline-flex items-center gap-2 rounded-xl bg-cobalt px-5 py-3 font-semibold disabled:opacity-50 cursor-pointer">
+                      {busy && <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" />}
+                      {busy ? 'Conectando y comprobando…' : 'Conectar y continuar'}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setShowOtherProviders((v) => !v)}
+                      className="text-sm text-ink-primary underline decoration-cobalt underline-offset-4 hover:text-white cursor-pointer"
+                    >
+                      {showOtherProviders ? 'Ocultar otros modelos' : '¿Tienes otro modelo disponible?'}
+                    </button>
+                  </div>
                 </form>}
                 {(!isDesktopApp() || engine?.configured || error) && <button type="button" disabled={busy} onClick={() => void checkSaved()} className="mt-5 block text-sm underline underline-offset-4 disabled:opacity-50">Comprobar configuración guardada</button>}
                 {!isDesktopApp() && <p className="mt-4 text-sm text-ink-secondary">Pide al administrador conectar el proveedor de IA en el servidor.</p>}
