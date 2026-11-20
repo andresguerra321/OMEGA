@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "profiles": {
+    "LEGAL": {
+      "visibleModules": [
+        "inicio",
+        "equipo",
+        "exposicion",
+        "amenazas",
+        "preguntar",
+        "expedientes",
+        "cuenta"
+      ],
+      "ragCorpusScope": "legal_expedientes",
+      "copilotTone": "forensic_legal",
+      "copilotInstructions": "Prioriza lenguaje formal y citas exactas de expedientes y documentos del tenant. Si la evidencia no sustenta una afirmación, abstente explícitamente.",
+      "defaultView": "cuenta"
+    },
+    "DEVELOPER": {
+      "visibleModules": [
+        "inicio",
+        "equipo",
+        "exposicion",
+        "amenazas",
+        "preguntar",
+        "repo_scanner",
+        "cuenta"
+      ],
+      "ragCorpusScope": "dev_supply_chain_cti",
+      "copilotTone": "technical_appsec",
+      "copilotInstructions": "Usa tono técnico y directo enfocado en análisis de repositorios, dependencias, puntaje explicable y cadena de suministro. Nunca afirmes que un repositorio es seguro.",
+      "defaultView": "repo_scanner"
+    },
+    "GENERAL": {
+      "visibleModules": [
+        "inicio",
+        "equipo",
+        "exposicion",
+        "amenazas",
+        "preguntar",
+        "cuenta"
+      ],
+      "ragCorpusScope": "general_cti",
+      "copilotTone": "balanced_defensive",
+      "copilotInstructions": "Mantén el enfoque defensivo estándar de OMEGA sobre spyware, CTI y verificación pasiva en lenguaje claro.",
+      "defaultView": "inicio"
+    }
+  }
+}

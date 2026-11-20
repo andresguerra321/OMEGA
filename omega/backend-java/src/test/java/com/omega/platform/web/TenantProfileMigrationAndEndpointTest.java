@@ -16,6 +16,7 @@ import com.omega.platform.security.JwtService;
 import com.omega.platform.security.Role;
 import com.omega.platform.security.SecurityConfig;
 import com.omega.platform.security.SessionCookieHelper;
+import com.omega.platform.service.TenantProfileConfigService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -28,7 +29,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = ProfileConfigController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class, SessionCookieHelper.class, JsonSecurityHandlers.class})
+@Import({
+        SecurityConfig.class,
+        JwtAuthenticationFilter.class,
+        SessionCookieHelper.class,
+        JsonSecurityHandlers.class,
+        TenantProfileConfigService.class
+})
 class TenantProfileMigrationAndEndpointTest {
 
     @Autowired
@@ -42,6 +49,23 @@ class TenantProfileMigrationAndEndpointTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    private void mockAuth(String token, UUID tenantId, Role role, TenantProfile profile) {
+        UUID userId = UUID.randomUUID();
+        JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
+                userId, tenantId, role.name().toLowerCase() + "@omega.test", role);
+        UserEntity user = mock(UserEntity.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getTenantId()).thenReturn(tenantId);
+        when(user.isActive()).thenReturn(true);
+        when(user.getRole()).thenReturn(role);
+        when(user.getEmail()).thenReturn(claims.email());
+
+        when(jwtService.parseAndValidate(token)).thenReturn(claims);
+        when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
+        when(tenantRepository.findByIdAndActiveTrue(tenantId))
+                .thenReturn(Optional.of(new TenantEntity("org-" + profile.name().toLowerCase(), "Org", profile)));
+    }
 
     @Test
     void migrationV11IsSafeAndReversible() throws Exception {
@@ -70,55 +94,32 @@ class TenantProfileMigrationAndEndpointTest {
     }
 
     @Test
-    void profileConfigReturnsDeveloperStaticConfig() throws Exception {
-        UUID tenantId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
-                userId, tenantId, "dev@omega.test", Role.ADMIN);
-        UserEntity user = mock(UserEntity.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getTenantId()).thenReturn(tenantId);
-        when(user.isActive()).thenReturn(true);
-        when(user.getRole()).thenReturn(Role.ADMIN);
-        when(user.getEmail()).thenReturn("dev@omega.test");
-
-        when(jwtService.parseAndValidate("tok-dev")).thenReturn(claims);
-        when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
-        when(tenantRepository.findByIdAndActiveTrue(tenantId))
-                .thenReturn(Optional.of(new TenantEntity("devsec", "DevSec Lab", TenantProfile.DEVELOPER)));
-
-        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-dev"))
+    void profileConfigReturnsVersionedConfigsAcrossProfilesAndRoles() throws Exception {
+        mockAuth("tok-dev-admin", UUID.randomUUID(), Role.ADMIN, TenantProfile.DEVELOPER);
+        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-dev-admin"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile").value("DEVELOPER"))
+                .andExpect(jsonPath("$.configVersion").value("1.0.0"))
+                .andExpect(jsonPath("$.defaultView").value("repo_scanner"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("dev_supply_chain_cti"))
                 .andExpect(jsonPath("$.copilotTone").value("technical_appsec"))
                 .andExpect(jsonPath("$.visibleModules[5]").value("repo_scanner"));
-    }
 
-    @Test
-    void profileConfigReturnsLegalStaticConfig() throws Exception {
-        UUID legalTenantId = UUID.randomUUID();
-        UUID legalUserId = UUID.randomUUID();
-        JwtService.ParsedJwtClaims legalClaims = new JwtService.ParsedJwtClaims(
-                legalUserId, legalTenantId, "legal@omega.test", Role.ANALYST);
-        UserEntity legalUser = mock(UserEntity.class);
-        when(legalUser.getId()).thenReturn(legalUserId);
-        when(legalUser.getTenantId()).thenReturn(legalTenantId);
-        when(legalUser.isActive()).thenReturn(true);
-        when(legalUser.getRole()).thenReturn(Role.ANALYST);
-        when(legalUser.getEmail()).thenReturn("legal@omega.test");
-
-        when(jwtService.parseAndValidate("tok-legal")).thenReturn(legalClaims);
-        when(userRepository.findActiveUserInActiveTenant(legalUserId, legalTenantId))
-                .thenReturn(Optional.of(legalUser));
-        when(tenantRepository.findByIdAndActiveTrue(legalTenantId))
-                .thenReturn(Optional.of(new TenantEntity("bufete", "Bufete", TenantProfile.LEGAL)));
-
-        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal"))
+        mockAuth("tok-legal-analyst", UUID.randomUUID(), Role.ANALYST, TenantProfile.LEGAL);
+        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal-analyst"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile").value("LEGAL"))
+                .andExpect(jsonPath("$.defaultView").value("cuenta"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("legal_expedientes"))
                 .andExpect(jsonPath("$.copilotTone").value("forensic_legal"))
                 .andExpect(jsonPath("$.visibleModules[5]").value("expedientes"));
+
+        mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
+        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profile").value("GENERAL"))
+                .andExpect(jsonPath("$.defaultView").value("inicio"))
+                .andExpect(jsonPath("$.ragCorpusScope").value("general_cti"))
+                .andExpect(jsonPath("$.copilotTone").value("balanced_defensive"));
     }
 }
