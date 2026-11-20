@@ -371,6 +371,12 @@ export function validateAuthRegisterForm(form, { bootstrapSecretRequired = false
     fieldErrors.bootstrapSecret = 'Ingresa la clave de aprovisionamiento (Bootstrap Secret).';
   }
 
+  const normalizedProfile = ['GENERAL', 'DEVELOPER', 'LEGAL'].includes(
+    String(form?.profile ?? '').trim().toUpperCase(),
+  )
+    ? String(form.profile).trim().toUpperCase()
+    : 'GENERAL';
+
   const firstError = Object.values(fieldErrors)[0] || '';
   return {
     valid: !firstError,
@@ -382,6 +388,7 @@ export function validateAuthRegisterForm(form, { bootstrapSecretRequired = false
       organizationName: orgRes.value,
       password: pwdRes.value,
       bootstrapSecret,
+      profile: normalizedProfile,
     },
   };
 }

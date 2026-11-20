@@ -529,12 +529,18 @@ export async function registerAccount({
   password,
   organizationName,
   bootstrapSecret,
+  profile,
 }) {
   const headers = {};
   if (bootstrapSecret && String(bootstrapSecret).trim()) {
     headers['X-Omega-Bootstrap-Secret'] = String(bootstrapSecret).trim();
   }
   const normalizedOrg = String(organizationName || '').trim();
+  const normalizedProfile = ['GENERAL', 'DEVELOPER', 'LEGAL'].includes(
+    String(profile || '').trim().toUpperCase(),
+  )
+    ? String(profile).trim().toUpperCase()
+    : 'GENERAL';
   const tokenRes = await apiFetch('/auth/register', {
     method: 'POST',
     skipAuth: true,
@@ -543,10 +549,25 @@ export async function registerAccount({
       fullName: String(fullName || '').trim(),
       email: String(email || '').trim().toLowerCase(),
       password,
+      profile: normalizedProfile,
       ...(normalizedOrg ? { organizationName: normalizedOrg } : {}),
     },
   });
   return tokenRes;
+}
+
+export async function fetchProfileConfig() {
+  return apiFetch('/profile/config');
+}
+
+export async function updateTenantProfile(profile, confirmed = false) {
+  return apiFetch('/profile', {
+    method: 'PUT',
+    body: {
+      profile,
+      confirmed: Boolean(confirmed),
+    },
+  });
 }
 
 export async function registerTenant({

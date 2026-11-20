@@ -102,6 +102,7 @@ export function AuthAccessForm({
     fullName: '',
     email: '',
     organizationName: '',
+    profile: 'GENERAL',
     password: '',
     bootstrapSecret: '',
   });
@@ -1274,6 +1275,40 @@ export function AuthAccessForm({
           </div>
 
           <div>
+            <span className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}>
+              Perfil del espacio de trabajo
+            </span>
+            <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Perfil del espacio de trabajo">
+              {[
+                { id: 'GENERAL', label: 'General', hint: 'Forense, CTI y análisis integral' },
+                { id: 'DEVELOPER', label: 'Developer', hint: 'Repositorios y dependencias' },
+                { id: 'LEGAL', label: 'Legal', hint: 'Expedientes y trazabilidad' },
+              ].map((opt) => {
+                const active = regForm.profile === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setRegForm((p) => ({ ...p, profile: opt.id }))}
+                    className={`rounded-lg px-2.5 py-2 text-left border transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-[#2F6FED]/15 border-[#2F6FED] text-white'
+                        : 'bg-[#141923]/75 border-white/[0.05] text-[#9FA6B8] hover:text-white hover:border-white/[0.12]'
+                    }`}
+                  >
+                    <div className="text-[12px] font-medium leading-tight">{opt.label}</div>
+                    <div className="mt-0.5 text-[10px] leading-snug text-[#8E95A5] line-clamp-2">
+                      {opt.hint}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
             <div className="flex items-center justify-between mb-1">
               <label
                 htmlFor={`${uid}-reg-password`}
@@ -1409,7 +1444,7 @@ export function AuthAccessForm({
 /**
  * Módulo dedicado de Registro, Inicio de Sesión y Biblioteca Privada Zero-Retention.
  */
-function buildProfileInitials(authSession) {
+export function buildProfileInitials(authSession) {
   const fullName = String(authSession?.fullName || '').trim();
   if (fullName) {
     const words = fullName.split(/\s+/).filter(Boolean);

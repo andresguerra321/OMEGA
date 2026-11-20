@@ -16,6 +16,7 @@ import com.omega.platform.security.JwtService;
 import com.omega.platform.security.Role;
 import com.omega.platform.security.SecurityConfig;
 import com.omega.platform.security.SessionCookieHelper;
+import com.omega.platform.service.AuditLogService;
 import com.omega.platform.service.TenantProfileConfigService;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,6 +50,9 @@ class TenantProfileMigrationAndEndpointTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    @MockBean
+    private AuditLogService auditLogService;
 
     private void mockAuth(String token, UUID tenantId, Role role, TenantProfile profile) {
         UUID userId = UUID.randomUUID();
