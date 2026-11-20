@@ -125,3 +125,40 @@ class PersistenceAuditResponse(BaseModel):
     limitations: list[str]
     complete: bool
     notice: str
+
+
+class ScanFinding(BaseModel):
+    """Hallazgo estático individual emitido por el futuro scanner de repositorios."""
+
+    rule_id: str = Field(..., min_length=1, max_length=120)
+    severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    evidence: str = Field(..., max_length=1000)
+    location: str = Field(..., min_length=1, max_length=500)
+    explanation: str = Field(..., min_length=1, max_length=1000)
+
+
+class ScanRequest(BaseModel):
+    """Solicitud de análisis estático de repositorio en RAM/tmpfs (Fase 0: solo contrato)."""
+
+    tenant_id: str = Field(..., min_length=1, max_length=80)
+    source_type: Literal["archive_upload", "git_snapshot"] = "archive_upload"
+    ecosystems: list[Literal["npm", "pypi", "maven", "cargo", "generic"]] = Field(
+        default_factory=lambda: ["npm", "pypi", "maven"]
+    )
+    max_files: int = Field(default=5000, ge=1, le=20000)
+    max_bytes: int = Field(default=52428800, ge=1024, le=104857600)
+    timeout_seconds: int = Field(default=30, ge=5, le=120)
+
+
+class ScanStatus(BaseModel):
+    """Estado y resultados efímeros de un escaneo de repositorio."""
+
+    scan_id: str = Field(..., min_length=1, max_length=120)
+    status: Literal["QUEUED", "RUNNING", "COMPLETED", "FAILED", "EXPIRED"]
+    files_scanned: int = Field(default=0, ge=0)
+    findings: list[ScanFinding] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    zero_retention_notice: str = (
+        "Análisis estático en RAM/tmpfs; contenido purgado al finalizar."
+    )
