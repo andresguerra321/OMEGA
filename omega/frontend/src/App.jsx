@@ -40,6 +40,7 @@ import {
 } from './lib/api';
 import { collectNativeHostSnapshot, isDesktopApp } from './lib/desktopBridge';
 import { useDesktopBootstrap } from './lib/useDesktopBootstrap';
+import { useTenantProfileConfig } from './lib/useTenantProfileConfig';
 import { DesktopStartupGate } from './components/DesktopStartupGate';
 import { AiSetupGate } from './components/AiSetupGate';
 import { OmegaAmbientBackdrop } from './components/OmegaAmbientBackdrop';
@@ -79,8 +80,11 @@ const OsintPanel = lazy(() =>
 const LinkVerifierPanel = lazy(() =>
   import('./components/LinkVerifierPanel').then((m) => ({ default: m.LinkVerifierPanel }))
 );
-const SettingsPanel = lazy(() =>
-  import('./components/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
+const AccountSettingsPanel = lazy(() =>
+  import('./components/AccountSettingsPanel').then((m) => ({ default: m.AccountSettingsPanel }))
+);
+const RepoScannerPanel = lazy(() =>
+  import('./components/RepoScannerPanel').then((m) => ({ default: m.RepoScannerPanel }))
 );
 const AuthModal = lazy(() =>
   import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
@@ -95,8 +99,7 @@ const NAV_ITEMS = [
   { id: 'exposicion', label: 'Enlaces y OSINT', subtitle: 'URLs, dominios y correos', icon: Radar },
   { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
   { id: 'preguntar', label: 'Asistente', subtitle: 'Consultas con citas', icon: MessageSquare },
-  { id: 'cuenta', label: 'Cuenta', subtitle: 'Registro, sesión y PDFs privados', icon: UserCheck },
-  { id: 'ajustes', label: 'Ajustes', subtitle: 'Motor RAG, cuenta y permisos', icon: Settings },
+  { id: 'cuenta', label: 'Cuenta y Ajustes', subtitle: 'Perfil, seguridad, ajustes y configuración', icon: UserCheck },
 ];
 
 const BOOT_LOADER_STEPS = [
@@ -152,6 +155,16 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
+  const { profileConfig, switchProfile } = useTenantProfileConfig(authSession);
+  const appliedProfileDefaultRef = useRef('');
+  useEffect(() => {
+    const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
+    if (!authSession || !profileConfig?.defaultView || appliedProfileDefaultRef.current === profileKey) return;
+    appliedProfileDefaultRef.current = profileKey;
+    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'preguntar', 'cuenta'].includes(profileConfig.defaultView)) {
+      setActiveNav(profileConfig.defaultView);
+    }
+  }, [authSession, profileConfig?.profile, profileConfig?.defaultView]);
   const [verifyingSession, setVerifyingSession] = useState(true);
   const [enteringWorkspace, setEnteringWorkspace] = useState(false);
   const [authGateReason, setAuthGateReason] = useState('');
@@ -772,6 +785,10 @@ export default function App() {
     if (navId === 'exposicion' && opts?.assetValue) {
       setIntelTab('osint');
     }
+    if (navId === 'ajustes') {
+      setActiveNav('cuenta');
+      return;
+    }
     setActiveNav(navId);
   }
 
@@ -1112,6 +1129,7 @@ export default function App() {
                   apiOnline={apiOnline}
                   isLoadingChat={loadingChat}
                   authConnected={Boolean(authSession)}
+                  visibleModuleIds={profileConfig?.visibleModules}
                 />
               </div>
 
@@ -1333,6 +1351,7 @@ export default function App() {
                   apiOnline={apiOnline}
                   isLoadingChat={loadingChat}
                   authConnected={Boolean(authSession)}
+                  visibleModuleIds={profileConfig?.visibleModules}
                 />
               </div>
 
@@ -1397,40 +1416,38 @@ export default function App() {
                     onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
                   />
                 ) : activeNav === 'cuenta' ? (
-                  <div className="flex-1 min-h-0 overflow-y-auto">
-                    <AuthModulePanel
-                      authSession={authSession}
-                      onAuthenticated={(session) => {
-                        manualLogoutRef.current = false;
-                        setAuthSession(session);
-                        void refreshSystemTelemetry();
-                        void refreshPrivateWorkspace();
-                      }}
-                      onLogout={handleLogout}
-                      govStats={govStats}
-                      privateDocs={expedienteDocs}
-                      activeExpedienteId={activeExpedienteId}
-                      loadingDocs={loadingExpedientes}
-                      uploadingPdf={uploadingPdf}
-                      docNotice={expedienteNotice}
-                      docError={expedienteError}
-                      onDismissDocBanner={() => {
-                        setExpedienteNotice('');
-                        setExpedienteError('');
-                      }}
-                      onUploadPdf={handleUploadExpedientePdf}
-                      onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
-                      onOpenChat={(preferPrivate) => {
-                        if (preferPrivate && activeExpedienteId) {
-                          setUsePrivateDocs(true);
-                        }
-                        handleNavigate('preguntar');
-                      }}
-                      onOpenSettings={() => handleNavigate('ajustes')}
-                      onOpenAuth={openAuthModal}
-                      onPanicPurge={handlePanicPurge}
-                    />
-                  </div>
+                  <AccountSettingsPanel
+                    authSession={authSession}
+                    onLogout={handleLogout}
+                    onOpenAuth={openAuthModal}
+                    onPanicPurge={handlePanicPurge}
+                    govStats={govStats}
+                    privateDocs={expedienteDocs}
+                    activeExpedienteId={activeExpedienteId}
+                    loadingDocs={loadingExpedientes}
+                    uploadingPdf={uploadingPdf}
+                    docNotice={expedienteNotice}
+                    docError={expedienteError}
+                    onDismissDocBanner={() => {
+                      setExpedienteNotice('');
+                      setExpedienteError('');
+                    }}
+                    onUploadPdf={handleUploadExpedientePdf}
+                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                    onOpenChat={(preferPrivate) => {
+                      if (preferPrivate && activeExpedienteId) {
+                        setUsePrivateDocs(true);
+                      }
+                      handleNavigate('preguntar');
+                    }}
+                    topK={topK}
+                    onChangeTopK={setTopK}
+                    sourceScope={sourceScope}
+                    onChangeSourceScope={setSourceScope}
+                    initialSection={settingsJump.section}
+                    initialSectionKey={settingsJump.key}
+                    onAiConfigured={() => void refreshSystemTelemetry()}
+                  />
                 ) : activeNav === 'amenazas' ? (
                   <CampaignsPanel
                     onAskInChat={askInChat}
@@ -1495,19 +1512,44 @@ export default function App() {
                     )}
                   </div>
                 ) : (
-                  <SettingsPanel
+                  <AccountSettingsPanel
+                    authSession={authSession}
+                    onLogout={handleLogout}
+                    onOpenAuth={openAuthModal}
+                    onPanicPurge={handlePanicPurge}
+                    govStats={govStats}
+                    privateDocs={expedienteDocs}
+                    activeExpedienteId={activeExpedienteId}
+                    loadingDocs={loadingExpedientes}
+                    uploadingPdf={uploadingPdf}
+                    docNotice={expedienteNotice}
+                    docError={expedienteError}
+                    onDismissDocBanner={() => {
+                      setExpedienteNotice('');
+                      setExpedienteError('');
+                    }}
+                    onUploadPdf={handleUploadExpedientePdf}
+                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                    onOpenChat={(preferPrivate) => {
+                      if (preferPrivate && activeExpedienteId) {
+                        setUsePrivateDocs(true);
+                      }
+                      handleNavigate('preguntar');
+                    }}
                     topK={topK}
                     onChangeTopK={setTopK}
                     sourceScope={sourceScope}
                     onChangeSourceScope={setSourceScope}
-                    authSession={authSession}
-                    onOpenAuth={openAuthModal}
-                    onLogout={handleLogout}
-                    onPanicPurge={handlePanicPurge}
                     initialSection={settingsJump.section}
                     initialSectionKey={settingsJump.key}
                     onAiConfigured={() => void refreshSystemTelemetry()}
+                    profileConfig={profileConfig}
+                    onSwitchProfile={switchProfile}
                   />
+                )}
+
+                {activeNav === 'repo_scanner' && (
+                  <RepoScannerPanel authSession={authSession} />
                 )}
                 </motion.div>
                </AnimatePresence>

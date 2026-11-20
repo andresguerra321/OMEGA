@@ -6,19 +6,21 @@ import {
   Laptop,
   Layers,
   MessageSquare,
+  PackageSearch,
   Radar,
   Settings,
   UserCheck,
 } from 'lucide-react';
+import { resolveVisibleNavItems } from '../lib/useTenantProfileConfig';
 
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', ariaLabel: 'Inicio', icon: Home },
   { id: 'equipo', label: 'Equipos', ariaLabel: 'Equipos — revisar mi dispositivo', icon: Laptop },
   { id: 'exposicion', label: 'Enlaces y OSINT', ariaLabel: 'Enlaces, dominios y correos — verificación y OSINT', icon: Radar },
   { id: 'amenazas', label: 'Amenazas', ariaLabel: 'Amenazas — campañas y CVEs', icon: Layers },
+  { id: 'repo_scanner', label: 'Repositorios', ariaLabel: 'Repositorios — análisis de dependencias y cadena de suministro', icon: PackageSearch },
   { id: 'preguntar', label: 'Asistente', ariaLabel: 'Asistente — consultas con citas', icon: MessageSquare, dividerBefore: true },
-  { id: 'cuenta', label: 'Cuenta', ariaLabel: 'Cuenta — acceso y PDFs privados', icon: UserCheck },
-  { id: 'ajustes', label: 'Ajustes', ariaLabel: 'Ajustes', icon: Settings },
+  { id: 'cuenta', label: 'Cuenta y Ajustes', ariaLabel: 'Cuenta y Ajustes — perfil, seguridad y configuración', icon: UserCheck },
 ];
 
 function getLedClass(id, { pcVerdict, usbConnected, apiOnline, isLoadingChat, authConnected }) {
@@ -51,9 +53,10 @@ export function SpatialNavPill({
   isLoadingChat = false,
   authConnected = false,
   compact = false,
+  visibleModuleIds = null,
 }) {
   const pillId = useId();
-  const visibleItems = NAV_ITEMS;
+  const visibleItems = resolveVisibleNavItems(NAV_ITEMS, { visibleModules: visibleModuleIds });
   return (
     <nav
       aria-label="Navegación espacial OMEGA"

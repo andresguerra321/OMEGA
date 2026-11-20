@@ -570,6 +570,20 @@ export async function updateTenantProfile(profile, confirmed = false) {
   });
 }
 
+export async function scanRepositoryArchive(file) {
+  if (!file) throw new Error('Selecciona un archivo comprimido para analizar.');
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiFetch('/repo/scan', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function getRepoScanStatus(scanId) {
+  return apiFetch(`/repo/scan/${encodeURIComponent(scanId)}`);
+}
+
 export async function registerTenant({
   tenantSlug,
   tenantName,
