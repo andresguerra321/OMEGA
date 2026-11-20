@@ -1,0 +1,32 @@
+# Perfiles de Tenant en OMEGA (`GENERAL`, `DEVELOPER`, `LEGAL`)
+
+Los perfiles adaptan la presentación, la vista inicial y el alcance del corpus RAG según el caso de uso del espacio de trabajo (**tenant**).
+
+## 1. Qué cambia según el perfil
+
+La configuración versionada vive en `omega/backend-java/src/main/resources/profile-configs.json` y se expone mediante `GET /api/v1/profile/config`:
+
+| Perfil | Vista inicial (`defaultView`) | Módulos visibles (`visibleModules`) | Alcance RAG (`ragCorpusScope` / `corpus_scope`) | Enfoque del copiloto |
+| --- | --- | --- | --- | --- |
+| `GENERAL` | `inicio` | `inicio`, `equipo`, `exposicion`, `amenazas`, `preguntar`, `cuenta` | `general_cti` (sin filtro restrictivo sobre corpus general) | Comportamiento defensivo estándar de OMEGA (spyware, CTI y verificación pasiva). |
+| `DEVELOPER` | `repo_scanner` | Módulos estándar + `repo_scanner` | `dev_supply_chain_cti` (`DEVELOPER`) | Análisis estático de repositorios, dependencias y puntaje explicable. Nunca afirma "repo seguro"; usa *"Sin señales detectadas con las reglas actuales"*. |
+| `LEGAL` | `cuenta` | Módulos estándar + `expedientes` | `legal_expedientes` (`LEGAL`) | Lenguaje formal, citas exactas de expedientes y abstención explícita cuando falta evidencia. |
+
+## 2. Qué nunca cambia
+
+- **Aislamiento multi-tenant:** Un tenant jamás puede leer datos, expedientes, documentos ni hallazgos de otro tenant al cambiar de perfil.
+- **RBAC:** Los roles `ADMIN`, `ANALYST` y `CLIENT` siguen gobernando los permisos en todos los endpoints.
+- **Cambio de perfil:** Solo `ADMIN` puede ejecutar `PUT /api/v1/profile` con `confirmed: true`. La acción se registra en `audit_logs` (cadena SHA-256, acción `TENANT_PROFILE_CHANGED`) y **no borra ni migra datos existentes**.
+- **Alertas críticas:** Las alertas de seguridad críticas y la pestaña `cuenta` nunca se ocultan por perfil.
+
+## 3. Cómo añadir un perfil futuro
+
+1. Añadir el valor al enum `TenantProfile` en `omega/backend-java/src/main/java/com/omega/platform/domain/TenantProfile.java`.
+2. Crear una migración Flyway que amplíe las restricciones `CHECK` en `profile` (de `V11__tenant_profile.sql`) y `corpus_scope` (de `V12__corpus_scope.sql`).
+3. Agregar la entrada correspondiente en `omega/backend-java/src/main/resources/profile-configs.json`.
+4. Si introduce un nuevo módulo UI, registrarlo en `SpatialNavPill.jsx` y `App.jsx`.
+
+## 4. Límites conocidos
+
+- Cambiar el perfil de un tenant no re-etiqueta retroactivamente documentos ya indexados en `omega_rag.documents`; los documentos previos conservan su `corpus_scope` original (`GENERAL` por defecto).
+- El análisis de repositorios (`POST /api/v1/repo/scan`) actúa como proxy autenticado hacia el worker FastAPI (`omega/api` `/api/repo/scan`), por lo que requiere que dicho servicio esté activo.
