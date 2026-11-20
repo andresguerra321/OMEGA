@@ -15,6 +15,7 @@ import { buildProfileInitials } from './AuthModulePanel';
 import DossierExportButtons from './DossierExportButtons';
 import { RecoveryKeyCard } from './RecoveryKeyCard';
 import { SaasFleetCard } from './SaasFleetCard';
+import { ApiTokensCard } from './ApiTokensCard';
 
 const SettingsPanel = lazy(() =>
   import('./SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
@@ -470,6 +471,7 @@ export function AccountSettingsPanel({
             {mainTab === 'respaldo' && (
               <div className="space-y-4">
                 <RecoveryKeyCard />
+                <ApiTokensCard authSession={authSession} />
                 {isAdmin && <SaasFleetCard authSession={authSession} />}
               </div>
             )}

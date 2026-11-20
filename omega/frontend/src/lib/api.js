@@ -584,6 +584,25 @@ export async function getRepoScanStatus(scanId) {
   return apiFetch(`/repo/scan/${encodeURIComponent(scanId)}`);
 }
 
+export async function listApiTokens() {
+  return apiFetch('/api-tokens');
+}
+
+export async function createApiToken({ name, expiresInDays, maxUses } = {}) {
+  const body = { name: String(name || '').trim() };
+  if (expiresInDays !== undefined && expiresInDays !== '' && expiresInDays !== null) {
+    body.expiresInDays = Number(expiresInDays);
+  }
+  if (maxUses !== undefined && maxUses !== '' && maxUses !== null) {
+    body.maxUses = Number(maxUses);
+  }
+  return apiFetch('/api-tokens', { method: 'POST', body });
+}
+
+export async function revokeApiToken(tokenId) {
+  return apiFetch(`/api-tokens/${encodeURIComponent(tokenId)}`, { method: 'DELETE' });
+}
+
 export async function registerTenant({
   tenantSlug,
   tenantName,
