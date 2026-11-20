@@ -143,6 +143,7 @@ export default function App() {
   const [scanningPc, setScanningPc] = useState(false);
   const [syncingStix, setSyncingStix] = useState(false);
   const [stageFeedback, setStageFeedback] = useState(null);
+  const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [pinnedCopilotContext, setPinnedCopilotContext] = useState('');
   const [sessionsMenuOpen, setSessionsMenuOpen] = useState(false);
@@ -1140,86 +1141,115 @@ export default function App() {
               <div className="relative z-10 flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsCopilotOpen((v) => !v)}
-                  aria-label="Abrir o cerrar copiloto lateral"
-                  title="Copiloto (Ctrl+J)"
-                  className={`h-8 px-2 rounded-lg border inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
-                    isCopilotOpen
-                      ? 'border-[#2F6FED]/55 bg-[#141923] text-[#F2F2F4]'
-                      : 'border-white/[0.06] bg-[#141923]/75 text-[#F2F2F4] hover:border-white/[0.14]'
-                  }`}
+                  onClick={() => {
+                    setOperatorMenuOpen(false);
+                    setCommandOpen(true);
+                    setCommandQuery('');
+                  }}
+                  aria-label="Abrir búsqueda rápida (⌘K)"
+                  title="Saltar a módulo o acción (⌘K)"
+                  className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <Bell className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-                  <span className="font-tech h-4 min-w-[16px] px-1 rounded-full bg-[#2F6FED] text-white text-[10px] font-bold inline-flex items-center justify-center">
-                    {reportsCount}
-                  </span>
+                  <Search className="h-[13px] w-[13px]" strokeWidth={1.75} />
+                  <kbd className="text-[11px] text-slate-500 font-sans hidden sm:inline">⌘K</kbd>
                 </button>
-
-                <div className="inline-flex items-center rounded-lg bg-[#141923]/75 border border-white/[0.06] divide-x divide-white/[0.08] overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCommandOpen(true);
-                      setCommandQuery('');
-                    }}
-                    aria-label="Abrir búsqueda rápida (⌘K)"
-                    title="Saltar a módulo o acción (⌘K)"
-                    className="h-8 px-2.5 inline-flex items-center gap-1.5 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                  >
-                    <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    <span className="font-tech hidden 2xl:inline">⌘K</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOnboardingOpen(true)}
-                    aria-label="Abrir guía rápida de uso"
-                    title="Guía rápida de OMEGA"
-                    className="h-8 px-2.5 inline-flex items-center gap-1 text-[11.5px] text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                  >
-                    <BookOpen className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-                    <span className="hidden 2xl:inline">Guía</span>
-                  </button>
-                </div>
 
                 <button
                   type="button"
-                  onClick={() => handleNavigate('cuenta')}
-                  title={
-                    authSession
-                      ? `Cuenta: ${authSession.email} (${authSession.role})`
-                      : 'Iniciar sesión o crear cuenta OMEGA'
-                  }
-                  className={`h-8 px-2 xl:px-2.5 rounded-lg border bg-[#141923]/75 inline-flex items-center gap-1.5 text-[11.5px] font-medium transition-colors cursor-pointer ${
-                    authSession
-                      ? 'border-emerald-400/30 text-[#F2F2F4] hover:border-emerald-400/50'
-                      : 'border-[#2F6FED]/45 text-[#F2F2F4] hover:border-[#2F6FED]'
+                  onClick={() => {
+                    setOperatorMenuOpen(false);
+                    setIsCopilotOpen((v) => !v);
+                  }}
+                  aria-label="Abrir o cerrar copiloto lateral"
+                  title="Copiloto (Ctrl+J)"
+                  className={`p-2 rounded-lg relative inline-flex items-center justify-center transition-colors cursor-pointer ${
+                    isCopilotOpen
+                      ? 'bg-white/[0.08] text-slate-100'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.05]'
                   }`}
                 >
-                  {authSession ? (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-                      <span className="hidden lg:inline max-w-[110px] truncate font-tech">
-                        {authSession.email?.split('@')[0] || authSession.tenantSlug}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-                      <span className="hidden lg:inline">Entrar</span>
-                    </>
+                  <Bell className="h-[15px] w-[15px]" strokeWidth={1.75} />
+                  {reportsCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 text-[10px] font-medium leading-none bg-[#2F6FED] text-white px-1.5 py-0.5 rounded-full">
+                      {reportsCount}
+                    </span>
                   )}
                 </button>
 
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!authSession) {
+                        handleNavigate('cuenta');
+                        return;
+                      }
+                      setOperatorMenuOpen((v) => !v);
+                    }}
+                    aria-expanded={authSession ? operatorMenuOpen : undefined}
+                    title={
+                      authSession
+                        ? `Cuenta: ${authSession.email} (${authSession.role})`
+                        : 'Iniciar sesión o crear cuenta OMEGA'
+                    }
+                    className="px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] inline-flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+                  >
+                    {authSession ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <span className="hidden lg:inline max-w-[110px] truncate">
+                          {authSession.email?.split('@')[0] || authSession.tenantSlug}
+                        </span>
+                        <ChevronDown className="h-3 w-3 text-slate-400 hidden lg:inline" strokeWidth={1.75} />
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                        <span className="hidden lg:inline">Entrar</span>
+                      </>
+                    )}
+                  </button>
+
+                  {authSession && operatorMenuOpen && (
+                    <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-[#0F131B]/95 backdrop-blur-md border border-white/[0.07] shadow-[0_12px_32px_rgba(0,0,0,0.55)] p-1.5 z-50 space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOperatorMenuOpen(false);
+                          handleNavigate('cuenta');
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                      >
+                        <UserCheck className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                        <span>Cuenta y Ajustes</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOperatorMenuOpen(false);
+                          setOnboardingOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                      >
+                        <BookOpen className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                        <span>Guía interactiva</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {authSession && (
                   <>
-                    <span aria-hidden="true" className="h-4 w-px bg-white/10 mx-0.5 shrink-0" />
+                    <span aria-hidden="true" className="h-4 w-px bg-white/[0.08] mx-0.5 shrink-0" />
                     <button
                       type="button"
-                      onClick={() => void handlePanicPurge()}
+                      onClick={() => {
+                        setOperatorMenuOpen(false);
+                        void handlePanicPurge();
+                      }}
                       title="Purga rápida de emergencia: borra tokens, memoria volátil y caché local"
                       aria-label="Purga rápida de emergencia"
-                      className="h-8 px-2 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
                       <span className="hidden xl:inline">Purga</span>
