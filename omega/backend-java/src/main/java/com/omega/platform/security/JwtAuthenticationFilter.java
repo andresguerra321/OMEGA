@@ -62,6 +62,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         boolean isLogoutEndpoint = "/api/v1/auth/logout".equals(request.getRequestURI());
         try {
+            if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
             String token = resolveJwtToken(request);
             if (token == null || token.isEmpty()) {
                 filterChain.doFilter(request, response);

@@ -2,10 +2,15 @@ package com.omega.platform.web;
 
 import com.omega.platform.domain.TenantEntity;
 import com.omega.platform.repository.TenantRepository;
+import com.omega.platform.security.ApiTokenAuthenticationFilter;
 import com.omega.platform.security.TenantContext;
 import com.omega.platform.security.TenantScope;
+import com.omega.platform.service.ApiTokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.Map;
+import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
@@ -36,19 +41,25 @@ public class RepoScannerProxyController {
 
     private final RestClient forensicWorkerRestClient;
     private final TenantRepository tenantRepository;
+    private final ApiTokenService apiTokenService;
 
     public RepoScannerProxyController(
             @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
-            TenantRepository tenantRepository
+            TenantRepository tenantRepository,
+            ObjectProvider<ApiTokenService> apiTokenServiceProvider
     ) {
         this.forensicWorkerRestClient = forensicWorkerRestClient;
         this.tenantRepository = tenantRepository;
+        this.apiTokenService = apiTokenServiceProvider.getIfAvailable();
     }
 
     @PostMapping(value = "/scan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST') or hasAuthority('SCOPE_REPO_SCAN')")
     @SuppressWarnings("unchecked")
-    public Map<String, Object> scanRepository(@RequestPart("file") MultipartFile file) {
+    public Map<String, Object> scanRepository(
+            @RequestPart("file") MultipartFile file,
+            HttpServletRequest request
+    ) {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(scope.tenantId())
@@ -56,6 +67,11 @@ public class RepoScannerProxyController {
 
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debes adjuntar un archivo .tar.gz, .tgz o .zip");
+        }
+        if (apiTokenService != null) {
+            Object attr = request.getAttribute(ApiTokenAuthenticationFilter.API_TOKEN_ID_ATTR);
+            UUID apiTokenId = attr instanceof UUID uuid ? uuid : null;
+            apiTokenService.consumeScanQuotaAndTokenUse(tenant.getId(), apiTokenId);
         }
 
         byte[] bytes;
@@ -96,7 +112,7 @@ public class RepoScannerProxyController {
     }
 
     @GetMapping("/scan/{scanId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST', 'CLIENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST', 'CLIENT') or hasAuthority('SCOPE_REPO_SCAN')")
     @SuppressWarnings("unchecked")
     public Map<String, Object> getScanStatus(@PathVariable String scanId) {
         TenantContext.get()

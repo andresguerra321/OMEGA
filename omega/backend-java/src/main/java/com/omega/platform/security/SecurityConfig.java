@@ -2,6 +2,8 @@ package com.omega.platform.security;
 
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +35,9 @@ public class SecurityConfig {
     private final JsonSecurityHandlers jsonSecurityHandlers;
     private final List<String> corsAllowedOrigins;
 
+    @Autowired(required = false)
+    private ApiTokenAuthenticationFilter apiTokenAuthenticationFilter;
+
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             JsonSecurityHandlers jsonSecurityHandlers,
@@ -53,7 +58,7 @@ public class SecurityConfig {
             cookie.httpOnly(true).sameSite("Strict").path("/api");
             if (forceSecureCookie) cookie.secure(true);
         });
-        return http
+        http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokens)
@@ -83,10 +88,15 @@ public class SecurityConfig {
                                 "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
                                 "/api/v1/auth/mfa/verify", "/api/v1/auth/mfa/resend-email")
                         .permitAll()
-                        .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers("/api/v1/repo/scan", "/api/v1/repo/scan/**")
+                                .hasAnyAuthority("ROLE_ADMIN", "ROLE_ANALYST", "ROLE_CLIENT", "SCOPE_REPO_SCAN")
+                        .requestMatchers("/api/v1/**").hasAnyRole("ADMIN", "ANALYST", "CLIENT")
                         .anyRequest().denyAll())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .build();
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        if (apiTokenAuthenticationFilter != null) {
+            http.addFilterBefore(apiTokenAuthenticationFilter, JwtAuthenticationFilter.class);
+        }
+        return http.build();
     }
 
     @Bean
