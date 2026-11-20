@@ -1511,6 +1511,8 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                ) : activeNav === 'repo_scanner' ? (
+                  <RepoScannerPanel authSession={authSession} />
                 ) : (
                   <AccountSettingsPanel
                     authSession={authSession}
@@ -1546,10 +1548,6 @@ export default function App() {
                     profileConfig={profileConfig}
                     onSwitchProfile={switchProfile}
                   />
-                )}
-
-                {activeNav === 'repo_scanner' && (
-                  <RepoScannerPanel authSession={authSession} />
                 )}
                 </motion.div>
                </AnimatePresence>
