@@ -748,6 +748,26 @@ export async function deleteDevProjectPolicyOverride(projectId) {
   });
 }
 
+export async function listDevSupplyChainAdvisories({
+  ecosystem = '',
+  q = '',
+  projectId = '',
+} = {}) {
+  const params = new URLSearchParams();
+  if (ecosystem) params.set('ecosystem', ecosystem);
+  if (q) params.set('q', q);
+  if (projectId) params.set('projectId', projectId);
+  const qs = params.toString();
+  return apiFetch(`/dev/supply-chain/advisories${qs ? `?${qs}` : ''}`);
+}
+
+export async function queryDevSupplyChainIntel(question) {
+  return apiFetch('/dev/supply-chain/query', {
+    method: 'POST',
+    body: { question: String(question || '').trim() },
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }
