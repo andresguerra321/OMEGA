@@ -631,6 +631,56 @@ export async function deleteDevProject(projectId) {
   });
 }
 
+export async function listDevFindings({ projectId = '', severity = '', ruleId = '', triageStatus = '' } = {}) {
+  const params = new URLSearchParams();
+  if (projectId) params.set('projectId', projectId);
+  if (severity) params.set('severity', severity);
+  if (ruleId) params.set('ruleId', ruleId);
+  if (triageStatus) params.set('triageStatus', triageStatus);
+  const qs = params.toString();
+  return apiFetch(`/dev/findings${qs ? `?${qs}` : ''}`);
+}
+
+export async function updateDevFindingTriage(findingId, { status, comment = '' }) {
+  return apiFetch(`/dev/findings/${encodeURIComponent(findingId)}/triage`, {
+    method: 'PATCH',
+    body: { status, comment: String(comment || '').trim() || undefined },
+  });
+}
+
+export async function listDevFindingComments(findingId) {
+  return apiFetch(`/dev/findings/${encodeURIComponent(findingId)}/comments`);
+}
+
+export async function addDevFindingComment(findingId, body) {
+  return apiFetch(`/dev/findings/${encodeURIComponent(findingId)}/comments`, {
+    method: 'POST',
+    body: { body: String(body || '').trim() },
+  });
+}
+
+export async function listDevSuppressions(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/suppressions`);
+}
+
+export async function createDevSuppression(projectId, { ruleId, fingerprint = '', reason, expiresInDays = 30 }) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/suppressions`, {
+    method: 'POST',
+    body: {
+      ruleId: String(ruleId || '').trim(),
+      fingerprint: String(fingerprint || '').trim() || undefined,
+      reason: String(reason || '').trim(),
+      expiresInDays: Number(expiresInDays || 0),
+    },
+  });
+}
+
+export async function revokeDevSuppression(suppressionId) {
+  return apiFetch(`/dev/suppressions/${encodeURIComponent(suppressionId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }
