@@ -35,6 +35,18 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     long countByTenantIdAndExpedienteIdAndStatusIn(
             UUID tenantId, UUID expedienteId, java.util.Collection<DocumentStatus> statuses);
 
+    @Query("""
+            SELECT COALESCE(SUM(d.fileSizeBytes), 0)
+            FROM DocumentEntity d
+            WHERE d.tenantId = :tenantId
+              AND d.expedienteId = :expedienteId
+              AND d.status IN :statuses
+            """)
+    long sumFileSizeBytesByTenantIdAndExpedienteIdAndStatusIn(
+            @Param("tenantId") UUID tenantId,
+            @Param("expedienteId") UUID expedienteId,
+            @Param("statuses") java.util.Collection<DocumentStatus> statuses);
+
     long countByTenantIdAndStatus(UUID tenantId, DocumentStatus status);
 
     List<DocumentEntity> findAllByTenantIdAndStatusInOrderByCreatedAtDesc(

@@ -123,7 +123,7 @@ public class DocumentIngestionService {
         }
 
         var quotaReservation = legalQuotaService != null
-                ? legalQuotaService.reserveUploadSlot(principal, expedienteId)
+                ? legalQuotaService.reserveUploadSlot(principal, expedienteId, file.getSize())
                 : null;
         String sanitizedFilename = sanitizeFilename(file.getOriginalFilename());
         boolean allowExtraFormats = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
@@ -192,6 +192,11 @@ public class DocumentIngestionService {
                             "Este documento ya fue cargado en este expediente (mismo hash SHA-256).");
                 }
                 entity.setDocumentFormat(format);
+                try {
+                    entity.setFileSizeBytes(Files.size(tempPdfPath));
+                } catch (IOException ignored) {
+                    entity.setFileSizeBytes(Math.max(0L, file.getSize()));
+                }
                 if (tenant.getProfile() != null) {
                     entity.setCorpusScope(tenant.getProfile());
                 }
@@ -277,7 +282,8 @@ public class DocumentIngestionService {
                     try {
                         objectStoragePort.deleteObject(uploadedBucket, uploadedObjectKey);
                     } catch (Exception purgeEx) {
-                        log.warn("No se pudo purgar objeto huérfano tras TaskRejectedException para documento {}", savedDoc.getId());
+                        log.warn("No se pudo purgar objeto huérfano tras TaskRejectedException para documento {}",
+                                savedDoc.getId());
                     }
                 }
                 transactionTemplate.executeWithoutResult(

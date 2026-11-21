@@ -129,13 +129,18 @@ public class LegalQuotaService {
      * Si falla la ingesta antes de encolar, {@link #releaseUploadReservation(UploadReservation)} revierte el cobro en BD.
      */
     public UploadReservation reserveUploadSlot(OmegaPrincipal principal, UUID expedienteId) {
+        return reserveUploadSlot(principal, expedienteId, 0L);
+    }
+
+    public UploadReservation reserveUploadSlot(OmegaPrincipal principal, UUID expedienteId, long incomingBytes) {
         if (principal == null || !isLegalTenant(principal)) {
             return new UploadReservation(null, principal == null ? null : principal.tenantId(), Instant.now(), false);
         }
+        long safeIncomingBytes = Math.max(0L, incomingBytes);
         String planCode = resolvePlanCode(principal.tenantId());
         var limits = quotaProperties.forPlan(planCode);
         if (jdbc == null) {
-            return reserveUploadInMemoryFallback(principal.tenantId(), expedienteId, planCode, limits);
+            return reserveUploadInMemoryFallback(principal.tenantId(), expedienteId, planCode, limits, safeIncomingBytes);
         }
         return runRequiresNew(() -> {
             lockTenantQuota(principal.tenantId(), "UPLOAD");
@@ -165,9 +170,38 @@ public class LegalQuotaService {
                         "Este expediente alcanzó el límite de " + limits.getMaxDocumentsPerCase() + " documentos de tu plan " + planCode + ".");
             }
 
+            // B-07: Enforcement atómico de maxTotalBytesPerCase (documentos persistidos + reservas en vuelo)
+            if (limits.getMaxTotalBytesPerCase() > 0) {
+                Long persistedBytes = jdbc.queryForObject(
+                        """
+                        SELECT COALESCE(SUM(file_size_bytes), 0)
+                        FROM omega_rag.documents
+                        WHERE tenant_id = ? AND expediente_id = ?
+                          AND status IN ('PROCESSING', 'INDEXED', 'REINDEX_REQUIRED')
+                        """,
+                        Long.class, principal.tenantId(), expedienteId);
+                Long inflightBytes = jdbc.queryForObject(
+                        """
+                        SELECT COALESCE(SUM(file_size_bytes), 0)
+                        FROM omega_rag.legal_indexing_inflight
+                        WHERE tenant_id = ? AND expediente_id = ?
+                        """,
+                        Long.class, principal.tenantId(), expedienteId);
+                long projectedBytes = (persistedBytes == null ? 0L : persistedBytes)
+                        + (inflightBytes == null ? 0L : inflightBytes)
+                        + safeIncomingBytes;
+                if (projectedBytes > limits.getMaxTotalBytesPerCase()) {
+                    decrementPersistentRateBucket(principal.tenantId(), "UPLOAD", windowMinute);
+                    throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                            "Este expediente supera el límite de almacenamiento (" + limits.getMaxTotalBytesPerCase()
+                                    + " bytes) de tu plan " + planCode + ".");
+                }
+            }
+
             UUID reservationId = UUID.randomUUID();
-            jdbc.update("INSERT INTO omega_rag.legal_indexing_inflight(reservation_id, tenant_id, expediente_id) VALUES (?, ?, ?)",
-                    reservationId, principal.tenantId(), expedienteId);
+            jdbc.update(
+                    "INSERT INTO omega_rag.legal_indexing_inflight(reservation_id, tenant_id, expediente_id, file_size_bytes) VALUES (?, ?, ?, ?)",
+                    reservationId, principal.tenantId(), expedienteId, safeIncomingBytes);
             return new UploadReservation(reservationId, principal.tenantId(), windowMinute, true);
         });
     }
@@ -301,7 +335,7 @@ public class LegalQuotaService {
         return action.get();
     }
 
-    private UploadReservation reserveUploadInMemoryFallback(UUID tenantId, UUID expedienteId, String planCode, LegalQuotaProperties.PlanQuota limits) {
+    private UploadReservation reserveUploadInMemoryFallback(UUID tenantId, UUID expedienteId, String planCode, LegalQuotaProperties.PlanQuota limits, long incomingBytes) {
         Instant now = Instant.now();
         Deque<Instant> window = fallbackUploadWindows.computeIfAbsent(tenantId, k -> new ArrayDeque<>());
         synchronized (window) {
@@ -324,6 +358,15 @@ public class LegalQuotaService {
             if (docsInCase >= limits.getMaxDocumentsPerCase()) {
                 throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                         "Este expediente alcanzó el límite de " + limits.getMaxDocumentsPerCase() + " documentos de tu plan " + planCode + ".");
+            }
+            if (limits.getMaxTotalBytesPerCase() > 0 && incomingBytes > 0) {
+                long persistedBytes = documentRepository.sumFileSizeBytesByTenantIdAndExpedienteIdAndStatusIn(
+                        tenantId, expedienteId, ACTIVE_DOC_STATUSES);
+                if (persistedBytes + incomingBytes > limits.getMaxTotalBytesPerCase()) {
+                    throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                            "Este expediente supera el límite de almacenamiento (" + limits.getMaxTotalBytesPerCase()
+                                    + " bytes) de tu plan " + planCode + ".");
+                }
             }
             return new UploadReservation(UUID.randomUUID(), tenantId, now, true);
         } catch (RuntimeException ex) {

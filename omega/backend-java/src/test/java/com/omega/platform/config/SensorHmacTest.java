@@ -16,6 +16,21 @@ class SensorHmacTest {
         assertThat(SensorHmac.sign(key, "request", "POST", "/api/host/test", "1", "nonce", "{}".getBytes(StandardCharsets.UTF_8))).isNotEqualTo(first);
     }
 
+    @Test void bindsCanonicalHostActorAndContentType() {
+        byte[] key = new byte[32];
+        String base = SensorHmac.sign(key, "request", "POST", "/api/containment/execute", "1", "nonce",
+                "{}".getBytes(StandardCharsets.UTF_8), "user-1", "application/json; charset=utf-8");
+        String sameCanonical = SensorHmac.sign(key, "request", "POST", "/api/containment/execute", "1", "nonce",
+                "{}".getBytes(StandardCharsets.UTF_8), "  user-1  ", "APPLICATION/JSON; boundary=ignored");
+        String differentActor = SensorHmac.sign(key, "request", "POST", "/api/containment/execute", "1", "nonce",
+                "{}".getBytes(StandardCharsets.UTF_8), "user-2", "application/json");
+        String differentContentType = SensorHmac.sign(key, "request", "POST", "/api/containment/execute", "1", "nonce",
+                "{}".getBytes(StandardCharsets.UTF_8), "user-1", "text/plain");
+        assertThat(sameCanonical).isEqualTo(base);
+        assertThat(differentActor).isNotEqualTo(base);
+        assertThat(differentContentType).isNotEqualTo(base);
+    }
+
     @Test void nativeEndpointAcceptsOnlyLocalPipeOrUnixPath() {
         assertThatCode(() -> new LocalSensorRequestFactory("\\\\.\\pipe\\omega-agent-test")).doesNotThrowAnyException();
         assertThatCode(() -> new LocalSensorRequestFactory("/run/omega-agent/sensor.sock")).doesNotThrowAnyException();

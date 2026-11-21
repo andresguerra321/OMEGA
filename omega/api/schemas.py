@@ -76,8 +76,8 @@ class PcLiveSnapshot(BaseModel):
 
 
 class MobileUsbAuditRequest(BaseModel):
-    platform: str = Field(..., min_length=2, max_length=16)
-    device_id: str = Field(..., min_length=1, max_length=160)
+    platform: str = Field(..., min_length=2, max_length=16, pattern=r"^(?i)(IOS|ANDROID)$")
+    device_id: str = Field(..., min_length=1, max_length=160, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$")
     backup_password: str | None = None
     async_mode: bool = False
 

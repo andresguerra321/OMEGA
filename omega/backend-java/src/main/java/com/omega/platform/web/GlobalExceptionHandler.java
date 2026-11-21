@@ -114,4 +114,25 @@ public class GlobalExceptionHandler {
         pd.setProperty("fieldErrors", fieldErrors);
         return pd;
     }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ProblemDetail handleConstraintViolation(jakarta.validation.ConstraintViolationException ex) {
+        String detail = ex.getConstraintViolations().stream()
+                .map(v -> v.getMessage() != null ? v.getMessage() : "Parámetro inválido")
+                .distinct()
+                .reduce((a, b) -> a + " · " + b)
+                .orElse("Los parámetros ingresados no son válidos.");
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
+        pd.setTitle("Error de validación");
+        return pd;
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    public ProblemDetail handleMethodValidation(org.springframework.web.method.annotation.HandlerMethodValidationException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Los parámetros de la solicitud exceden los límites permitidos.");
+        pd.setTitle("Error de validación");
+        return pd;
+    }
 }

@@ -9,9 +9,27 @@ import time
 ACTIVE = None
 
 
-def signature(secret, direction, method, target, timestamp, nonce, body=b''):
-    message = '\n'.join((direction, method.upper(), target, timestamp, nonce,
-                         hashlib.sha256(body).hexdigest())).encode()
+def canonicalize_host_actor(host_actor=''):
+    return (host_actor or '').strip()
+
+
+def canonicalize_content_type(content_type=''):
+    if not content_type:
+        return ''
+    return content_type.split(';', 1)[0].strip().lower()
+
+
+def signature(secret, direction, method, target, timestamp, nonce, body=b'', host_actor='', content_type=''):
+    message = '\n'.join((
+        direction,
+        method.upper(),
+        target,
+        timestamp,
+        nonce,
+        hashlib.sha256(body).hexdigest(),
+        canonicalize_host_actor(host_actor),
+        canonicalize_content_type(content_type),
+    )).encode()
     return hmac.new(bytes.fromhex(secret), message, hashlib.sha256).hexdigest()
 
 
@@ -34,7 +52,12 @@ class LocalAuthenticator:
                 return False
         except (ValueError, TypeError):
             return False
-        expected = signature(self.secret, 'request', method, target, stamp, nonce, body)
+        host_actor = headers.get('x-host-actor', '')
+        content_type = headers.get('content-type', '')
+        expected = signature(
+            self.secret, 'request', method, target, stamp, nonce, body,
+            host_actor=host_actor, content_type=content_type,
+        )
         if not hmac.compare_digest(expected, supplied):
             return False
         with self.lock:

@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -36,6 +37,31 @@ WhichResolver = Callable[[str], str | None]
 _JOBS_LOCK = threading.Lock()
 _USB_JOBS: dict[str, dict[str, Any]] = {}
 _MAX_JOBS = 32
+SAFE_DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$")
+
+
+def validate_device_id(device_id: str) -> str:
+    """Valida device_id prohibiendo prefijo '-' y caracteres fuera de [A-Za-z0-9._:-] (C-06)."""
+    clean = (device_id or "").strip()
+    if not clean or clean.startswith("-") or not SAFE_DEVICE_ID_RE.fullmatch(clean):
+        raise ValueError("Identificador de dispositivo USB inválido.")
+    return clean
+
+
+def _require_connected_device(
+    device_id: str,
+    platform: str,
+    *,
+    run_cmd: CommandRunner | None = None,
+    which_fn: WhichResolver | None = None,
+) -> None:
+    connected = list_connected_devices(run_cmd=run_cmd, which_fn=which_fn).get("devices", [])
+    norm_platform = (platform or "IOS").strip().upper()
+    if not any(
+        d.get("id") == device_id and str(d.get("platform", "")).upper() == norm_platform
+        for d in connected
+    ):
+        raise ValueError("Dispositivo USB no encontrado en la lista de dispositivos conectados.")
 
 
 def _default_run_cmd(cmd: list[str], timeout_sec: int = 30) -> tuple[int, str, str]:
@@ -327,10 +353,13 @@ def run_usb_triage(
     progress_cb: Callable[[str, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Ejecuta extracción USB + MVT + streaming SQLite/WAL y garantiza el borrado Zero-Retention."""
+    device_id = validate_device_id(device_id)
     runner = run_cmd or _default_run_cmd
     resolver: WhichResolver = which_fn if which_fn is not None else (lambda name: resolve_portable_tool(name))
     ioc_lookup = lookup_fn or lookup_iocs_detailed
     norm_platform = (platform or "IOS").strip().upper()
+    if simulated_backup_dir is None:
+        _require_connected_device(device_id, norm_platform, run_cmd=runner, which_fn=resolver)
     model_hash = hashlib.sha256(f"{norm_platform}:{device_id}".encode("utf-8")).hexdigest()[:16]
 
     def notify(stage: str, pct: int, msg: str) -> None:
@@ -461,6 +490,10 @@ def start_usb_audit_job(
     simulated_backup_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Inicia un trabajo de auditoría USB y devuelve su estado (o resultado inmediato si `async_mode=False`)."""
+    device_id = validate_device_id(device_id)
+    norm_platform = (platform or "IOS").strip().upper()
+    if simulated_backup_dir is None:
+        _require_connected_device(device_id, norm_platform)
     job_id = str(uuid.uuid4())
     job_state: dict[str, Any] = {
         "jobId": job_id,

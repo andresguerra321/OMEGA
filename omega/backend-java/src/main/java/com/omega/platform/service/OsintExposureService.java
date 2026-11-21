@@ -72,6 +72,15 @@ public class OsintExposureService {
     @Autowired(required = false)
     private com.omega.platform.saas.AlertDispatcherService alertDispatcherService;
 
+    @Autowired(required = false)
+    private com.omega.platform.security.LoginRateLimiter rateLimiter;
+
+    @Value("${omega.osint.max-scans-per-window:20}")
+    private int maxScansPerWindow = 20;
+
+    private final com.omega.platform.security.LoginRateLimiter fallbackRateLimiter =
+            new com.omega.platform.security.LoginRateLimiter();
+
     public OsintExposureService(
             OsintAssetRepository assetRepository,
             PublicSchemaSupport publicSchemaSupport,
@@ -156,6 +165,14 @@ public class OsintExposureService {
         OsintMonitoredAssetEntity asset = assetRepository
                 .findByIdAndTenantIdAndUserId(assetId, principal.tenantId(), principal.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Activo OSINT no encontrado: " + assetId));
+
+        // B-07: Cuota / límite de tasa por tenant antes de invocar APIs externas (DNS, crt.sh, HackerTarget, HIBP)
+        com.omega.platform.security.LoginRateLimiter activeLimiter =
+                rateLimiter != null ? rateLimiter : fallbackRateLimiter;
+        int limit = Math.max(1, maxScansPerWindow);
+        String tenantKey = principal.tenantId().toString();
+        activeLimiter.assertScopedAllowed("osint-scan-tenant", tenantKey, limit);
+        activeLimiter.recordScopedFailure("osint-scan-tenant", tenantKey, limit);
 
         String value = asset.getAssetValue();
         String domain = resolveDomain(asset.getAssetType(), value);

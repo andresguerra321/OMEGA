@@ -271,44 +271,68 @@ public class ApiTokenService {
         String periodYm = YearMonth.now(ZoneOffset.UTC).toString();
         Instant now = Instant.now();
 
-        RepoScanUsageEntity usage = repoScanUsageRepository.findByTenantIdAndPeriodYm(tenantId, periodYm)
-                .orElseGet(() -> new RepoScanUsageEntity(UUID.randomUUID(), tenantId, periodYm, 0, now));
-
-        if (usage.getScansUsed() >= monthlyQuota) {
+        // B-06: Consumo atómico de cuota mensual sin ventana TOCTOU
+        int quotaRowsUpdated;
+        if (monthlyQuota <= 0) {
+            quotaRowsUpdated = 0;
+        } else if (jdbc != null) {
+            quotaRowsUpdated = jdbc.update(
+                    """
+                    INSERT INTO omega_rag.repo_scan_usage (id, tenant_id, period_ym, scans_used, updated_at)
+                    VALUES (:id, :tenantId, :periodYm, 1, :now)
+                    ON CONFLICT (tenant_id, period_ym) DO UPDATE
+                        SET scans_used = omega_rag.repo_scan_usage.scans_used + 1,
+                            updated_at = EXCLUDED.updated_at
+                        WHERE omega_rag.repo_scan_usage.scans_used < :quota
+                    """,
+                    Map.of(
+                            "id", UUID.randomUUID(),
+                            "tenantId", tenantId,
+                            "periodYm", periodYm,
+                            "now", java.sql.Timestamp.from(now),
+                            "quota", monthlyQuota
+                    )
+            );
+        } else {
+            quotaRowsUpdated = repoScanUsageRepository.incrementScansUsedAtomically(tenantId, periodYm, monthlyQuota, now);
+            if (quotaRowsUpdated == 0 && repoScanUsageRepository.findByTenantIdAndPeriodYm(tenantId, periodYm).isEmpty()) {
+                repoScanUsageRepository.save(new RepoScanUsageEntity(UUID.randomUUID(), tenantId, periodYm, 1, now));
+                quotaRowsUpdated = 1;
+            }
+        }
+        if (quotaRowsUpdated != 1) {
             throw new ResponseStatusException(
                     HttpStatus.TOO_MANY_REQUESTS,
                     "Cuota mensual de escaneos de repositorio agotada para el plan actual");
         }
 
         if (apiTokenIdOrNull != null) {
-            ApiTokenEntity token = apiTokenRepository.findByIdAndTenantId(apiTokenIdOrNull, tenantId)
-                    .orElseThrow(() -> new AccessDeniedException("Token de API inexistente"));
-            if (token.getRevokedAt() != null
-                    || (token.getExpiresAt() != null && !token.getExpiresAt().isAfter(now))) {
-                throw new AccessDeniedException("Token de API revocado o expirado");
-            }
-            if (token.getMaxUses() != null && token.getUsesCount() >= token.getMaxUses()) {
+            // B-06: Consumo atómico de usos del token con guarda WHERE (max_uses IS NULL OR uses_count < max_uses)
+            int tokenRowsUpdated = apiTokenRepository.incrementUseAtomically(apiTokenIdOrNull, tenantId, now);
+            if (tokenRowsUpdated != 1) {
+                ApiTokenEntity token = apiTokenRepository.findByIdAndTenantId(apiTokenIdOrNull, tenantId)
+                        .orElseThrow(() -> new AccessDeniedException("Token de API inexistente"));
+                if (token.getRevokedAt() != null
+                        || (token.getExpiresAt() != null && !token.getExpiresAt().isAfter(now))) {
+                    throw new AccessDeniedException("Token de API revocado o expirado");
+                }
                 throw new ResponseStatusException(
                         HttpStatus.TOO_MANY_REQUESTS,
                         "El token de API alcanzó su límite máximo de usos");
             }
-            token.setUsesCount(token.getUsesCount() + 1);
-            token.setLastUsedAt(now);
-            apiTokenRepository.save(token);
 
-            auditLogService.record(
-                    tenantId,
-                    token.getCreatedByUserId(),
-                    "API_TOKEN_SCAN_USED",
-                    "API_TOKEN",
-                    token.getId().toString(),
-                    Map.of("usesCount", token.getUsesCount(), "periodYm", periodYm)
-            );
+            ApiTokenEntity updatedToken = apiTokenRepository.findByIdAndTenantId(apiTokenIdOrNull, tenantId).orElse(null);
+            if (updatedToken != null) {
+                auditLogService.record(
+                        tenantId,
+                        updatedToken.getCreatedByUserId(),
+                        "API_TOKEN_SCAN_USED",
+                        "API_TOKEN",
+                        updatedToken.getId().toString(),
+                        Map.of("usesCount", updatedToken.getUsesCount(), "periodYm", periodYm)
+                );
+            }
         }
-
-        usage.setScansUsed(usage.getScansUsed() + 1);
-        usage.setUpdatedAt(now);
-        repoScanUsageRepository.save(usage);
     }
 
     public int resolveMonthlyScanQuota(UUID tenantId) {

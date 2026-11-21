@@ -78,6 +78,9 @@ public class DocumentEntity {
     @Column(name = "retention_until")
     private Instant retentionUntil;
 
+    @Column(name = "file_size_bytes", nullable = false)
+    private long fileSizeBytes = 0L;
+
     public String getFailureCode() { return failureCode; }
     public void setFailureCode(String code) { failureCode = code; }
     public String getDocumentFormat() { return documentFormat; }
@@ -90,6 +93,8 @@ public class DocumentEntity {
     public void setContentSha256(String contentSha256) { this.contentSha256 = contentSha256; }
     public Instant getRetentionUntil() { return retentionUntil; }
     public void setRetentionUntil(Instant retentionUntil) { this.retentionUntil = retentionUntil; }
+    public long getFileSizeBytes() { return fileSizeBytes; }
+    public void setFileSizeBytes(long fileSizeBytes) { this.fileSizeBytes = Math.max(0L, fileSizeBytes); }
 
     protected DocumentEntity() {
     }

@@ -108,7 +108,21 @@ async def verify_internal_service_token(request: Request, call_next):
             app.state.container_auth_key = secret
         authenticator = app.state.container_auth
     if authenticator is not None:
-        body = await request.body()
+        max_hmac_bytes = int(os.getenv('OMEGA_MAX_HMAC_BODY_BYTES', str(MAX_TOTAL_UPLOAD_BYTES)))
+        chunks: list[bytes] = []
+        total_len = 0
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            total_len += len(chunk)
+            if total_len > max_hmac_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={'detail': 'El cuerpo de la solicitud excede el límite máximo permitido.'},
+                )
+            chunks.append(chunk)
+        body = b''.join(chunks)
+        request._body = body
         target = request.url.path + (('?' + request.url.query) if request.url.query else '')
         if not authenticator.verify(request.method, target, request.headers, body):
             return JSONResponse(status_code=401, content={'detail': 'Firma HMAC inválida o nonce repetido'})
@@ -139,7 +153,7 @@ async def verify_internal_service_token(request: Request, call_next):
 
 
 async def call_next_with_tenant(request, call_next):
-    if request.url.path.startswith(('/api/host/', '/api/containment/')):
+    if request.url.path.startswith(('/api/host/', '/api/containment/', '/api/mobile/usb/')):
         owner = os.getenv('OMEGA_HOST_OWNER_TENANT_ID', '').strip()
         if not owner:
             return JSONResponse(status_code=503, content={'detail': 'Configura OMEGA_HOST_OWNER_TENANT_ID para vincular este sensor a un único tenant.'})
@@ -483,21 +497,30 @@ def link_infrastructure(payload: LinkCheckRequest):
 
 @app.get("/api/mobile/usb/devices")
 def list_mobile_usb_devices():
+    if not getattr(app.state, 'integrity_ok', False):
+        raise HTTPException(status_code=503, detail='Integridad no verificada: auditoría USB bloqueada')
     return list_connected_devices()
 
 
 @app.post("/api/mobile/usb/audit")
 def start_mobile_usb_audit(payload: MobileUsbAuditRequest):
-    return start_usb_audit_job(
-        platform=payload.platform,
-        device_id=payload.device_id,
-        backup_password=payload.backup_password,
-        async_mode=payload.async_mode,
-    )
+    if not getattr(app.state, 'integrity_ok', False):
+        raise HTTPException(status_code=503, detail='Integridad no verificada: auditoría USB bloqueada')
+    try:
+        return start_usb_audit_job(
+            platform=payload.platform,
+            device_id=payload.device_id,
+            backup_password=payload.backup_password,
+            async_mode=payload.async_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/mobile/usb/audit/{job_id}")
 def get_mobile_usb_audit_status(job_id: str):
+    if not getattr(app.state, 'integrity_ok', False):
+        raise HTTPException(status_code=503, detail='Integridad no verificada: auditoría USB bloqueada')
     job = get_usb_audit_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Trabajo de auditoría USB no encontrado.")

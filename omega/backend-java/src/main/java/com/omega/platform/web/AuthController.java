@@ -155,6 +155,9 @@ public class AuthController {
             @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret,
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
+        String ip = httpServletRequest != null ? httpServletRequest.getRemoteAddr() : "unknown";
+        recoveryLimiter.assertScopedAllowed("auth-register-ip", ip, 20);
+        recoveryLimiter.recordScopedFailure("auth-register-ip", ip, 20);
         AuthTokenResponse response = authService.registerAccount(request, bootstrapSecret);
         if (passwordResetService != null) {
             response = response.withRecoveryKey(passwordResetService.createRecoveryKey(response.userId(), request.password()).get("recoveryKey"));
@@ -171,6 +174,9 @@ public class AuthController {
             @RequestHeader(value = "X-Omega-Bootstrap-Secret", required = false) String bootstrapSecret,
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
+        String ip = httpServletRequest != null ? httpServletRequest.getRemoteAddr() : "unknown";
+        recoveryLimiter.assertScopedAllowed("auth-tenant-register-ip", ip, 15);
+        recoveryLimiter.recordScopedFailure("auth-tenant-register-ip", ip, 15);
         AuthTokenResponse response = authService.registerTenant(request, bootstrapSecret);
         if (passwordResetService != null) {
             response = response.withRecoveryKey(passwordResetService.createRecoveryKey(response.userId(), request.adminPassword()).get("recoveryKey"));
@@ -250,7 +256,16 @@ public class AuthController {
     public Map<String, String> createRecoveryKey(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody MfaDisableRequest request) {
-        return passwordResetService.createRecoveryKey(principal.userId(), request.password());
+        String userKey = principal.userId().toString();
+        recoveryLimiter.assertScopedAllowed("auth-recovery-key-user", userKey, 5);
+        try {
+            Map<String, String> result = passwordResetService.createRecoveryKey(principal.userId(), request.password());
+            recoveryLimiter.recordScopedFailure("auth-recovery-key-user", userKey, 5);
+            return result;
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            recoveryLimiter.recordScopedFailure("auth-recovery-key-user", userKey, 5);
+            throw ex;
+        }
     }
 
     @PostMapping("/password-reset/confirm")
@@ -349,7 +364,16 @@ public class AuthController {
     public MfaStatusResponse disableMfa(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody MfaDisableRequest request) {
-        return requireTwoFactorService().disableMfa(principal.userId(), request.password());
+        String userKey = principal.userId().toString();
+        recoveryLimiter.assertScopedAllowed("auth-mfa-disable-user", userKey, 5);
+        try {
+            MfaStatusResponse result = requireTwoFactorService().disableMfa(principal.userId(), request.password());
+            recoveryLimiter.resetScoped("auth-mfa-disable-user", userKey);
+            return result;
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            recoveryLimiter.recordScopedFailure("auth-mfa-disable-user", userKey, 5);
+            throw ex;
+        }
     }
 
     private TwoFactorService requireTwoFactorService() {

@@ -21,9 +21,25 @@ public final class SensorHmac {
 
     public static String sign(byte[] key, String direction, String method, String target,
             String stamp, String nonce, byte[] body) {
+        return sign(key, direction, method, target, stamp, nonce, body, "", "");
+    }
+
+    public static String sign(byte[] key, String direction, String method, String target,
+            String stamp, String nonce, byte[] body, String hostActor, String contentType) {
         try {
             String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body));
-            byte[] message = String.join("\n", direction, method.toUpperCase(java.util.Locale.ROOT), target, stamp, nonce, hash)
+            String canonActor = canonicalizeHostActor(hostActor);
+            String canonContentType = canonicalizeContentType(contentType);
+            byte[] message = String.join(
+                            "\n",
+                            direction,
+                            method.toUpperCase(java.util.Locale.ROOT),
+                            target,
+                            stamp,
+                            nonce,
+                            hash,
+                            canonActor,
+                            canonContentType)
                     .getBytes(StandardCharsets.UTF_8);
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
@@ -31,6 +47,19 @@ public final class SensorHmac {
         } catch (java.security.GeneralSecurityException ex) {
             throw new IllegalStateException("HMAC no disponible", ex);
         }
+    }
+
+    public static String canonicalizeHostActor(String hostActor) {
+        return hostActor == null ? "" : hostActor.trim();
+    }
+
+    public static String canonicalizeContentType(String contentType) {
+        if (contentType == null) {
+            return "";
+        }
+        int semicolon = contentType.indexOf(';');
+        String mediaType = semicolon >= 0 ? contentType.substring(0, semicolon) : contentType;
+        return mediaType.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     public static ClientHttpRequestInterceptor interceptor(String token) {
@@ -42,9 +71,12 @@ public final class SensorHmac {
             RANDOM.nextBytes(random);
             String nonce = HexFormat.of().formatHex(random), stamp = Long.toString(Instant.now().getEpochSecond());
             String target = request.getURI().getRawPath() + (request.getURI().getRawQuery() == null ? "" : "?" + request.getURI().getRawQuery());
+            String hostActor = request.getHeaders().getFirst("X-Host-Actor");
+            String contentType = request.getHeaders().getFirst("Content-Type");
             request.getHeaders().set("X-Omega-Time", stamp);
             request.getHeaders().set("X-Omega-Nonce", nonce);
-            request.getHeaders().set("X-Omega-Signature", sign(key, "request", request.getMethod().name(), target, stamp, nonce, body));
+            request.getHeaders().set("X-Omega-Signature",
+                    sign(key, "request", request.getMethod().name(), target, stamp, nonce, body, hostActor, contentType));
             ClientHttpResponse response = execution.execute(request, body);
             try (response) {
                 byte[] content = response.getBody().readNBytes(128 * 1024 * 1024 + 1);
