@@ -13,6 +13,7 @@ import {
   PackageSearch,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Terminal,
   UploadCloud,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ import { ApiTokensCard } from './ApiTokensCard';
 import { DevProjectsTab } from './DevProjectsTab';
 import { DevFindingsTriageTab } from './DevFindingsTriageTab';
 import { DevDependenciesSbomTab } from './DevDependenciesSbomTab';
+import { DevPoliciesTab } from './DevPoliciesTab';
 
 function GitHubIcon({ className = 'h-4 w-4' }) {
   return (
@@ -159,6 +161,7 @@ export function RepoScannerPanel({ authSession }) {
             { id: 'projects', label: 'Proyectos', icon: FolderGit2 },
             { id: 'findings', label: 'Hallazgos y Triaje', icon: ShieldAlert },
             { id: 'sbom', label: 'Dependencias y SBOM', icon: Boxes },
+            { id: 'policies', label: 'Políticas', icon: SlidersHorizontal },
             { id: 'cli', label: 'CLI y Tokens API', icon: Terminal, badge: activeTokensCount },
             { id: 'github', label: 'Integración GitHub', icon: GitHubIcon, connected: Boolean(ghStatus) },
           ].map((t) => {
@@ -210,6 +213,10 @@ export function RepoScannerPanel({ authSession }) {
 
         {devTab === 'sbom' && (
           <DevDependenciesSbomTab />
+        )}
+
+        {devTab === 'policies' && (
+          <DevPoliciesTab authSession={authSession} />
         )}
 
         {devTab === 'cli' && (

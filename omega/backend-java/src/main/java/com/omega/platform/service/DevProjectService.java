@@ -51,6 +51,7 @@ public class DevProjectService {
     private final DevSuppressionRepository suppressionRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private final DevPolicyService devPolicyService;
 
     public DevProjectService(
             DevProjectRepository projectRepository,
@@ -59,7 +60,8 @@ public class DevProjectService {
             DevDependencyRepository dependencyRepository,
             DevSuppressionRepository suppressionRepository,
             AuditLogService auditLogService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) DevPolicyService devPolicyService
     ) {
         this.projectRepository = projectRepository;
         this.scanRepository = scanRepository;
@@ -68,6 +70,7 @@ public class DevProjectService {
         this.suppressionRepository = suppressionRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
+        this.devPolicyService = devPolicyService;
     }
 
     @Transactional(readOnly = true)
@@ -259,10 +262,11 @@ public class DevProjectService {
                 tenantId, triggeredBy, projectId, projectNameHint, repoUrlHint, branchHint, source);
         if (project == null) return Optional.empty();
 
-        double rawScore = toDouble(workerResponse.get("score"), toDouble(workerResponse.get("overall_score"), 0.0));
-        List<Map<String, Object>> rawFindings = workerResponse.get("findings") instanceof List<?> list
+        Map<String, Object> mutableResponse = new LinkedHashMap<>(workerResponse);
+        double rawScore = toDouble(mutableResponse.get("score"), toDouble(mutableResponse.get("overall_score"), 0.0));
+        List<Map<String, Object>> rawFindings = mutableResponse.get("findings") instanceof List<?> list
                 ? (List<Map<String, Object>>) list : List.of();
-        List<Map<String, Object>> rawDeps = workerResponse.get("dependencies") instanceof List<?> list
+        List<Map<String, Object>> rawDeps = mutableResponse.get("dependencies") instanceof List<?> list
                 ? (List<Map<String, Object>>) list : List.of();
 
         Instant now = Instant.now();
@@ -352,8 +356,25 @@ public class DevProjectService {
         if (hasSuppressionsApplied) {
             scan.setEffectiveScore(Math.max(0.0, rawScore - suppressedPoints));
             scan.setHasActiveSuppressions(true);
-            scanRepository.saveAndFlush(scan);
         }
+
+        if (devPolicyService != null) {
+            DevPolicyService.PolicyEvaluationResult eval = devPolicyService.evaluateScan(
+                    tenantId, project.getId(), findingsToSave, depsToSave);
+            scan.setPolicyStatus(eval.status());
+            try {
+                workerResponse.put("policy_evaluation", Map.of(
+                        "status", eval.status(),
+                        "fail_on_severity", eval.failOnSeverity(),
+                        "action_on_violation", eval.actionOnViolation(),
+                        "should_fail_pipeline", eval.shouldFailPipeline(),
+                        "violations", eval.violations()
+                ));
+            } catch (UnsupportedOperationException ignored) {
+                // Immutable map passed in direct unit/integration tests
+            }
+        }
+        scanRepository.saveAndFlush(scan);
 
         project.touch();
         projectRepository.saveAndFlush(project);

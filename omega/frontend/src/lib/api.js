@@ -697,6 +697,57 @@ export async function exportDevSbom(projectId, format = 'cyclonedx') {
   );
 }
 
+export async function getDevTenantPolicy() {
+  return apiFetch('/dev/policies');
+}
+
+export async function updateDevTenantPolicy({
+  failOnSeverity = 'HIGH',
+  actionOnViolation = 'FAIL_PIPELINE',
+  allowedPackages = [],
+  blockedPackages = [],
+} = {}) {
+  return apiFetch('/dev/policies', {
+    method: 'PUT',
+    body: {
+      failOnSeverity,
+      actionOnViolation,
+      allowedPackages,
+      blockedPackages,
+    },
+  });
+}
+
+export async function getDevProjectPolicy(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/policy`);
+}
+
+export async function updateDevProjectPolicy(
+  projectId,
+  {
+    failOnSeverity = 'HIGH',
+    actionOnViolation = 'FAIL_PIPELINE',
+    allowedPackages = [],
+    blockedPackages = [],
+  } = {}
+) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/policy`, {
+    method: 'PUT',
+    body: {
+      failOnSeverity,
+      actionOnViolation,
+      allowedPackages,
+      blockedPackages,
+    },
+  });
+}
+
+export async function deleteDevProjectPolicyOverride(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/policy`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }

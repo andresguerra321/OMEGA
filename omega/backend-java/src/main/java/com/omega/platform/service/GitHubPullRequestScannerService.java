@@ -339,6 +339,13 @@ public class GitHubPullRequestScannerService {
         sb.append(PR_COMMENT_MARKER).append("\n");
         sb.append("### OMEGA Repo Scanner (Solo lectura)\n");
         sb.append("- **Puntaje compuesto:** `").append(score).append("/100`\n");
+        if (scanResult.get("policy_evaluation") instanceof Map<?, ?> policyEval) {
+            Object rawPolStatus = policyEval.get("status") != null ? policyEval.get("status") : "PASS";
+            Object rawPolThreshold = policyEval.get("fail_on_severity") != null ? policyEval.get("fail_on_severity") : "HIGH";
+            String polStatus = redactAndSanitizeUntrusted(String.valueOf(rawPolStatus), 20);
+            String polThreshold = redactAndSanitizeUntrusted(String.valueOf(rawPolThreshold), 20);
+            sb.append("- **Política del tenant:** `").append(polStatus).append("` (umbral `").append(polThreshold).append("`)\n");
+        }
         if (findings.isEmpty()) {
             sb.append("- **Estado:** Sin señales detectadas con las reglas actuales.\n");
         } else {
