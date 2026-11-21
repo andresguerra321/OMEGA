@@ -61,12 +61,24 @@ test('la configuración real preserva GENERAL y DEVELOPER y abre LEGAL en expedi
   });
   assert.deepEqual(config.profiles.DEVELOPER, {
     visibleModules: ['repo_scanner', 'inicio', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
+    moduleLabels: {
+      inicio: 'Proyectos y hallazgos',
+      amenazas: 'Cadena de suministro',
+      equipo: 'Mi estación',
+      repo_scanner: 'Proyectos',
+    },
     ragCorpusScope: 'dev_supply_chain_cti', copilotTone: 'technical_appsec',
     copilotInstructions: 'Usa tono técnico y directo enfocado en análisis de repositorios, dependencias, puntaje explicable y cadena de suministro. Nunca afirmes que un repositorio es seguro.',
     defaultView: 'repo_scanner',
   });
   assert.deepEqual(config.profiles.LEGAL.visibleModules, ['expedientes', 'preguntar', 'seguridad_despacho', 'cuenta']);
   assert.equal(config.profiles.LEGAL.defaultView, 'expedientes');
+
+  const devNav = resolveVisibleNavItems(BASE_NAV_ITEMS, config.profiles.DEVELOPER);
+  const byId = Object.fromEntries(devNav.map((item) => [item.id, item.label]));
+  assert.equal(byId.inicio, 'Proyectos y hallazgos');
+  assert.equal(byId.amenazas, 'Cadena de suministro');
+  assert.equal(byId.repo_scanner, 'Proyectos');
 });
 
 test('cuenta permanece visible aunque la configuración no la incluya', () => {

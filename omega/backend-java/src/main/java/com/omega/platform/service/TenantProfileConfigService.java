@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.core.io.ClassPathResource;
@@ -21,6 +22,7 @@ public class TenantProfileConfigService {
     public record ProfileConfig(
             TenantProfile profile,
             List<String> visibleModules,
+            Map<String, String> moduleLabels,
             String ragCorpusScope,
             String copilotTone,
             String copilotInstructions,
@@ -50,11 +52,17 @@ public class TenantProfileConfigService {
                 JsonNode node = profilesNode.path(p.name());
                 List<String> modules = new ArrayList<>();
                 node.path("visibleModules").forEach(m -> modules.add(m.asText()));
+                Map<String, String> labels = new LinkedHashMap<>();
+                JsonNode labelsNode = node.path("moduleLabels");
+                if (labelsNode.isObject()) {
+                    labelsNode.fields().forEachRemaining(e -> labels.put(e.getKey(), e.getValue().asText()));
+                }
                 configs.put(
                         p,
                         new ProfileConfig(
                                 p,
                                 List.copyOf(modules),
+                                Map.copyOf(labels),
                                 node.path("ragCorpusScope").asText("general_cti"),
                                 node.path("copilotTone").asText("balanced_defensive"),
                                 node.path("copilotInstructions").asText(""),

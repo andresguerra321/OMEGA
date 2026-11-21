@@ -973,7 +973,15 @@ export default function App() {
 
   const isDesktop = isDesktopApp();
   const isSignedIn = Boolean(authSession && isAuthenticated());
-  const activeNavItem = NAV_ITEMS.find((n) => n.id === activeNav) || NAV_ITEMS[0];
+  const resolvedNavItems = useMemo(
+    () =>
+      NAV_ITEMS.map((item) => {
+        const customLabel = profileConfig?.moduleLabels?.[item.id];
+        return customLabel ? { ...item, label: customLabel } : item;
+      }),
+    [profileConfig?.moduleLabels]
+  );
+  const activeNavItem = resolvedNavItems.find((n) => n.id === activeNav) || resolvedNavItems[0];
   const reportsCount = Number(govStats?.corpus_stats?.reports ?? 0);
   const usbConnected = Boolean(usbStatus?.android?.connected || usbStatus?.ios?.connected);
   const pcRawVerdict = pcAudit?.triage?.diagnosis?.verdict_code || pcAudit?.verdict;
@@ -1151,6 +1159,7 @@ export default function App() {
                   isLoadingChat={loadingChat}
                   authConnected={Boolean(authSession)}
                   visibleModuleIds={profileConfig?.visibleModules}
+                  moduleLabels={profileConfig?.moduleLabels}
                 />
               </div>
 
@@ -1656,7 +1665,7 @@ export default function App() {
         onClose={() => setCommandOpen(false)}
         commandQuery={commandQuery}
         onChangeQuery={setCommandQuery}
-        navItems={NAV_ITEMS.filter((item) => item.id !== 'expedientes' || profileConfig?.visibleModules?.includes(item.id))}
+        navItems={resolvedNavItems.filter((item) => item.id !== 'expedientes' || profileConfig?.visibleModules?.includes(item.id))}
         onNavigate={handleNavigate}
         onOpenCopilot={() => setIsCopilotOpen(true)}
         onOpenOnboarding={() => setOnboardingOpen(true)}

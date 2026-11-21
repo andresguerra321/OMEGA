@@ -58,9 +58,13 @@ export function SpatialNavPill({
   authConnected = false,
   compact = false,
   visibleModuleIds = null,
+  moduleLabels = null,
 }) {
   const pillId = useId();
-  const visibleItems = resolveVisibleNavItems(NAV_ITEMS, { visibleModules: visibleModuleIds });
+  const visibleItems = resolveVisibleNavItems(NAV_ITEMS, {
+    visibleModules: visibleModuleIds,
+    moduleLabels,
+  });
   return (
     <nav
       aria-label="Navegación espacial OMEGA"

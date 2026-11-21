@@ -111,7 +111,10 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.defaultView").value("repo_scanner"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("dev_supply_chain_cti"))
                 .andExpect(jsonPath("$.copilotTone").value("technical_appsec"))
-                .andExpect(jsonPath("$.visibleModules[0]").value("repo_scanner"));
+                .andExpect(jsonPath("$.visibleModules[0]").value("repo_scanner"))
+                .andExpect(jsonPath("$.moduleLabels.inicio").value("Proyectos y hallazgos"))
+                .andExpect(jsonPath("$.moduleLabels.amenazas").value("Cadena de suministro"))
+                .andExpect(jsonPath("$.moduleLabels.equipo").value("Mi estación"));
 
         mockAuth("tok-legal-analyst", UUID.randomUUID(), Role.ANALYST, TenantProfile.LEGAL);
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal-analyst"))
