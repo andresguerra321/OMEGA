@@ -12,6 +12,7 @@ import { LegalDocumentsPanel } from './LegalDocumentsPanel';
 import { LegalTimelineTab } from './LegalTimelineTab';
 import { LegalAdminIssuesPanel } from './LegalAdminIssuesPanel';
 import { LegalFirmSearchPanel } from './LegalFirmSearchPanel';
+import { LegalOnboardingGuide } from './LegalOnboardingGuide';
 import DossierExportButtons from './DossierExportButtons';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['access', 'Acceso'], ['activity', 'Actividad']];
@@ -88,6 +89,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
   const [detailRevision, setDetailRevision] = useState(0);
   const [editor, setEditor] = useState(null);
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [creatingDemo, setCreatingDemo] = useState(false);
   const load = useCallback(() => legalApi.cases({ ...filters, page, size: 20 }), [filters, page]);
   const request = useLegalData(load);
   const canCreate = ['ADMIN', 'ANALYST'].includes(authSession?.role);
@@ -96,6 +98,23 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
     const saved = editor.value ? await legalApi.update(editor.value.id, draft) : await legalApi.create(draft);
     setSelected(saved.id); setDetailRevision(value => value + 1); setEditor(null); request.reload();
   }
+  async function createDemoCase() {
+    if (!canCreate || creatingDemo) return;
+    setCreatingDemo(true);
+    try {
+      const demo = await legalApi.create({
+        title: '[DEMO FICTICIA] Arrendamiento comercial sintético',
+        classification: 'INTERNAL',
+        reference: 'DEMO-SINTETICA-001',
+        status: 'OPEN',
+        description: 'Expediente de demostración creado con datos 100% ficticios para explorar el flujo de documentos, cronología, asistente con citas y exportación de dossier. Puedes eliminarlo en cualquier momento.',
+      });
+      setSelected(demo.id);
+      request.reload();
+    } finally {
+      setCreatingDemo(false);
+    }
+  }
   return <section aria-labelledby="expedientes-title" className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
     <div inert={editor ? true : undefined} className="mx-auto max-w-5xl space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -103,6 +122,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
         {!selected && canCreate && <button type="button" onClick={() => setEditor({ value: null })} className={`${policyAccepted ? LEGAL_PRIMARY : LEGAL_SECONDARY} inline-flex items-center gap-2`}><Plus size={14} strokeWidth={1.75} />Nuevo expediente</button>}
       </header>
       <p role="note" className="text-xs text-white/60">El asistente no ofrece asesoría legal. Verifica la información con un profesional.</p>
+      <LegalOnboardingGuide policyAccepted={policyAccepted} />
       <LegalDocumentAiPanel onPolicyChange={setPolicyAccepted} />
       <LegalAdminIssuesPanel role={authSession?.role} />
       {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onDeleted={() => { setSelected(''); request.reload(); }} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
@@ -114,7 +134,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
           <label className="space-y-1 text-xs text-white/60">Orden<select name="order" value={filters.order} onChange={change} className={LEGAL_INPUT}><option value="updated">Actualizados recientemente</option><option value="created">Más recientes</option><option value="title">Título</option></select></label>
         </div>
         <LegalLoadState request={request} label="Cargando expedientes…">{data => <div className="rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 px-5 backdrop-blur-md">
-          {data.content.length === 0 ? <div className="space-y-2 py-6"><h2 className="font-medium text-white">No hay expedientes para mostrar</h2><p className="text-sm text-white/60">{canCreate ? 'Crea tu primer expediente o cambia los filtros de búsqueda.' : 'Cambia los filtros o pide al propietario que revise tu acceso.'}</p></div> : <ul aria-label="Expedientes disponibles" className="divide-y divide-white/[0.06]">{data.content.map(item => <li key={item.id}><button type="button" onClick={() => setSelected(item.id)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg py-4 text-left focus-visible:outline-2 focus-visible:outline-white hover:bg-white/[0.02]" aria-label={`Abrir expediente ${item.title}`}><span className="min-w-0 break-words font-medium text-white">{item.title}<span className="mt-1 block text-xs font-normal text-white/55">{item.reference || 'Sin referencia'} · {CASE_CLASSES[item.classification]}</span></span><span className="rounded-full border border-white/[0.05] bg-[#141923]/75 px-2.5 py-1 text-xs text-white/60">{CASE_STATES[item.status]}</span></button></li>)}</ul>}
+          {data.content.length === 0 ? <div className="space-y-3 py-6"><h2 className="font-medium text-white">No hay expedientes para mostrar</h2><p className="text-sm text-white/60">{canCreate ? 'Crea tu primer expediente, cambia los filtros o inicia un expediente de demostración ficticio.' : 'Cambia los filtros o pide al propietario que revise tu acceso.'}</p>{canCreate && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setEditor({ value: null })} className={LEGAL_PRIMARY}>Crear expediente</button><button type="button" disabled={creatingDemo} onClick={() => void createDemoCase()} className={LEGAL_SECONDARY}>{creatingDemo ? 'Creando demo…' : 'Cargar expediente de demo (ficticio)'}</button></div>}</div> : <ul aria-label="Expedientes disponibles" className="divide-y divide-white/[0.06]">{data.content.map(item => <li key={item.id}><button type="button" onClick={() => setSelected(item.id)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg py-4 text-left focus-visible:outline-2 focus-visible:outline-white hover:bg-white/[0.02]" aria-label={`Abrir expediente ${item.title}`}><span className="min-w-0 break-words font-medium text-white">{item.title}<span className="mt-1 block text-xs font-normal text-white/55">{item.reference || 'Sin referencia'} · {CASE_CLASSES[item.classification]}</span></span><span className="rounded-full border border-white/[0.05] bg-[#141923]/75 px-2.5 py-1 text-xs text-white/60">{CASE_STATES[item.status]}</span></button></li>)}</ul>}
           <LegalPagination value={data} onPage={setPage} label="Páginas de expedientes" />
         </div>}</LegalLoadState>
       </>}
