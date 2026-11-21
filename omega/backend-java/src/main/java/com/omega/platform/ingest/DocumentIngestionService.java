@@ -129,7 +129,7 @@ public class DocumentIngestionService {
                         false,
                         DocumentStatus.PROCESSING
                 );
-                var tenant = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                var tenant = tenantRepository.findActiveForUpdate(principal.tenantId())
                         .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
                 // Preserve existing GENERAL/DEVELOPER ingestion behavior while repairing LEGAL retrieval.
                 if (tenant.getProfile() == TenantProfile.LEGAL) {

@@ -19,7 +19,7 @@ GENERAL y DEVELOPER conservan sus valores anteriores; `dev_cli` sigue oculto. La
 - **Aislamiento multi-tenant:** Un tenant jamás puede leer datos, expedientes, documentos ni hallazgos de otro tenant al cambiar de perfil.
 - **RBAC:** Los roles `ADMIN`, `ANALYST` y `CLIENT` siguen gobernando los permisos en todos los endpoints.
 - **Gestión de acceso:** Solo el propietario o ADMIN puede conceder, listar o revocar permisos de un expediente. WRITE no permite administrar acceso. Crear expedientes y conceder, cambiar o revocar permisos genera auditoría sin títulos, nombres ni correos en los metadatos de esas acciones.
-- **Cambio de perfil:** Solo `ADMIN` puede ejecutar `PUT /api/v1/profile` con `confirmed: true`. La acción se registra en `audit_logs` (cadena SHA-256, acción `TENANT_PROFILE_CHANGED`) y **no borra ni migra datos existentes**.
+- **Cambio de perfil:** Solo `ADMIN` puede ejecutar `PUT /api/v1/profile` con `confirmed: true`. La acción se registra en `audit_logs` (`TENANT_PROFILE_CHANGED`). Al entrar o salir de LEGAL se sincroniza `corpus_scope` de sus documentos dentro de la misma transacción, sin borrar contenido. El bloqueo del tenant coordina cambios de perfil y altas de documentos.
 - **Alertas críticas:** Las alertas de seguridad críticas y la pestaña `cuenta` nunca se ocultan por perfil.
 
 ## 3. Cómo añadir un perfil futuro
@@ -31,7 +31,7 @@ GENERAL y DEVELOPER conservan sus valores anteriores; `dev_cli` sigue oculto. La
 
 ## 4. Límites conocidos
 
-- Cambiar el perfil de un tenant no re-etiqueta retroactivamente documentos ya indexados en `omega_rag.documents`; los documentos previos conservan su `corpus_scope` original (`GENERAL` por defecto).
+- Los cambios entre GENERAL y DEVELOPER conservan el comportamiento anterior. Las transiciones que incluyen LEGAL reetiquetan únicamente documentos del tenant autenticado; se prueban GENERAL → LEGAL → DEVELOPER y el aislamiento entre tenants.
 - V17 corrige documentos con alcance GENERAL pertenecientes a tenants LEGAL al aplicar la migración. Las nuevas cargas de esos tenants usan LEGAL. Se conserva el aislamiento por tenant y expediente; no se guardan originales permanentemente.
 - La abstención del asistente legal y la selección de documentos concretos todavía requieren trabajo de backend; las instrucciones de perfil por sí solas no garantizan abstención.
 - El análisis de repositorios (`POST /api/v1/repo/scan`) actúa como proxy autenticado hacia el worker FastAPI (`omega/api` `/api/repo/scan`), por lo que requiere que dicho servicio esté activo.

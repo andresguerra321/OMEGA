@@ -114,6 +114,33 @@ class HybridRagQueryTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
+    void retagsExistingDocumentsWhenEnteringAndLeavingLegalWithoutLosingEvidence() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts = inv.getArgument(0);
+            return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode registered = registerTenant("transition-" + suffix, "Synthetic", "test@" + suffix + ".org");
+        String token = registered.get("accessToken").asText();
+        UUID caseId = createExpediente(token, "Synthetic transition case");
+        UUID documentId = uploadPdfAndWaitIndexed(token, caseId, "synthetic.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_LEGAL_PRINCIPAL.");
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
+        for (String profile : java.util.List.of("LEGAL", "DEVELOPER")) {
+            mockMvc.perform(put("/api/v1/profile")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"profile\":\"" + profile + "\",\"confirmed\":true}"))
+                    .andExpect(status().isOk());
+            assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo(profile);
+            assertLegalCitation(token, caseId, documentId);
+        }
+    }
+
+    @Test
     void legalUploadAndLegacyRepairRemainQueryableWithoutCrossCaseOrCrossTenantCitations() throws Exception {
         when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
         when(embeddingProvider.dimensions()).thenReturn(1536);

@@ -45,6 +45,9 @@ class TenantProfileMigrationAndEndpointTest {
         @MockBean
         private TenantRepository tenantRepository;
 
+    @MockBean
+    private com.omega.platform.repository.DocumentRepository documentRepository;
+
         @MockBean
         private JwtService jwtService;
 

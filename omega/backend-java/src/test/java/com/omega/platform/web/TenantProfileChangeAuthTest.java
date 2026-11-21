@@ -52,6 +52,9 @@ class TenantProfileChangeAuthTest {
     private TenantRepository tenantRepository;
 
     @MockBean
+    private com.omega.platform.repository.DocumentRepository documentRepository;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean
@@ -74,6 +77,7 @@ class TenantProfileChangeAuthTest {
         when(jwtService.parseAndValidate(token)).thenReturn(claims);
         when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
         when(tenantRepository.findByIdAndActiveTrue(tenantId)).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findActiveForUpdate(tenantId)).thenReturn(Optional.of(tenant));
         when(tenantRepository.save(any(TenantEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         return tenant;
     }
