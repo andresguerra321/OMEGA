@@ -17,6 +17,10 @@ import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.rag.EmbeddingException;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.security.Role;
+import com.omega.platform.security.TenantContext;
+import com.omega.platform.security.TenantScope;
+import com.omega.platform.storage.ObjectStoragePort;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,6 +68,8 @@ class LegalDataLifecycleCascadeTest {
             sharedTempDir = Files.createTempDirectory("omega-legal-q9-test-");
         }
         registry.add("omega.ingest.temp-dir", () -> sharedTempDir.toAbsolutePath().toString());
+        registry.add("omega.storage.provider", () -> "memory");
+        registry.add("omega.storage.retention-enabled", () -> "true");
         if (EXTERNAL_DB_URL != null && !EXTERNAL_DB_URL.isBlank()) {
             registry.add("spring.datasource.url", () -> EXTERNAL_DB_URL);
             registry.add("spring.datasource.username", () -> envOrDefault("OMEGA_TEST_DB_USER", "omega_test"));
@@ -97,6 +103,7 @@ class LegalDataLifecycleCascadeTest {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private DocumentRepository documentRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private ObjectStoragePort objectStoragePort;
 
     @MockBean private EmbeddingProvider embeddingProvider;
 
@@ -189,10 +196,30 @@ class LegalDataLifecycleCascadeTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM omega_rag.legal_timeline_events WHERE expediente_id = ?", Integer.class, caseId)).isGreaterThan(0);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM omega_rag.expediente_permissions WHERE expediente_id = ?", Integer.class, caseId)).isEqualTo(1);
 
+        var storedDoc = documentRepository.findById(docId).orElseThrow();
+        String storedBucket = storedDoc.getStorageBucket();
+        String storedKey = storedDoc.getStorageObjectKey();
+        assertThat(storedBucket).isEqualTo("omega-vault");
+        assertThat(storedKey).isEqualTo("tenants/" + tenantId + "/expedientes/" + caseId + "/" + docId + ".bin");
+        try {
+            TenantContext.set(new TenantScope(tenantId, colabId, Role.ADMIN));
+            assertThat(objectStoragePort.exists(storedBucket, storedKey)).isTrue();
+        } finally {
+            TenantContext.clear();
+        }
+
         // Supresión en cascada del expediente
         mockMvc.perform(delete("/api/v1/expedientes/" + caseId).with(csrf())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isNoContent());
+
+        // Verificar que el objeto desaparece del storage S3/MinIO
+        try {
+            TenantContext.set(new TenantScope(tenantId, colabId, Role.ADMIN));
+            assertThat(objectStoragePort.exists(storedBucket, storedKey)).isFalse();
+        } finally {
+            TenantContext.clear();
+        }
 
         // Verificar que no queda NINGÚN dato derivado
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM omega_rag.expedientes WHERE id = ?", Integer.class, caseId)).isZero();

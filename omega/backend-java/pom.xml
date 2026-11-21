@@ -114,6 +114,13 @@
             <version>${tess4j.version}</version>
         </dependency>
 
+        <!-- Object Storage S3-compatible (MinIO) -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.17</version>
+        </dependency>
+
         <!-- Testing & Testcontainers -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

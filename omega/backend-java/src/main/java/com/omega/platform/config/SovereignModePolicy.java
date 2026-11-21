@@ -43,6 +43,27 @@ public class SovereignModePolicy {
         if (!smtp.isBlank() && !Set.of("localhost", "127.0.0.1", "::1", "mailpit").contains(smtp)) {
             throw new IllegalStateException("El modo soberano requiere desactivar SMTP externo o usar un servidor local sin reenvío.");
         }
+        String storageProvider = environment.getProperty("omega.storage.provider", "noop");
+        if ("minio".equalsIgnoreCase(storageProvider)) {
+            requireLocalStorageEndpoint(environment.getProperty("omega.storage.minio.endpoint", "http://localhost:9000"));
+        }
+    }
+
+    public void requireLocalStorageEndpoint(String endpoint) {
+        if (!enabled()) return;
+        if (endpoint == null || endpoint.isBlank()) {
+            throw new IllegalStateException("El modo soberano requiere un endpoint MinIO local explícito.");
+        }
+        URI uri;
+        try {
+            uri = URI.create(endpoint.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("Endpoint de almacenamiento inválido en modo soberano.", ex);
+        }
+        String host = uri.getHost();
+        if (host == null || !Set.of("localhost", "127.0.0.1", "[::1]", "::1", "minio").contains(host.toLowerCase())) {
+            throw new IllegalStateException("El modo soberano prohíbe endpoints de almacenamiento S3/MinIO externos.");
+        }
     }
 
     public void requireExternalAccess() {

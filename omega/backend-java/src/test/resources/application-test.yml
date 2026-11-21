@@ -52,5 +52,16 @@ omega:
     stix-corpus-dir: ../corpus_mvp/iocs
   osint:
     external-lookups-enabled: false
+  storage:
+    provider: noop
+    retention-enabled: false
+    default-retention-days: 365
+    minio:
+      endpoint: http://localhost:9000
+      access-key: ""
+      secret-key: ""
+      vault-bucket: omega-vault
+      staging-bucket: omega-staging
+      presign-ttl-seconds: 90
 
 OMEGA_EXTERNAL_IOC_SYNC_ENABLED: false

@@ -65,10 +65,31 @@ public class DocumentEntity {
     private String failureCode;
     @Column(name = "document_format", nullable = false, length = 12)
     private String documentFormat = "PDF";
+
+    @Column(name = "storage_bucket", length = 64)
+    private String storageBucket;
+
+    @Column(name = "storage_object_key", length = 512)
+    private String storageObjectKey;
+
+    @Column(name = "content_sha256", length = 64)
+    private String contentSha256;
+
+    @Column(name = "retention_until")
+    private Instant retentionUntil;
+
     public String getFailureCode() { return failureCode; }
     public void setFailureCode(String code) { failureCode = code; }
     public String getDocumentFormat() { return documentFormat; }
     public void setDocumentFormat(String format) { documentFormat = format; }
+    public String getStorageBucket() { return storageBucket; }
+    public void setStorageBucket(String storageBucket) { this.storageBucket = storageBucket; }
+    public String getStorageObjectKey() { return storageObjectKey; }
+    public void setStorageObjectKey(String storageObjectKey) { this.storageObjectKey = storageObjectKey; }
+    public String getContentSha256() { return contentSha256; }
+    public void setContentSha256(String contentSha256) { this.contentSha256 = contentSha256; }
+    public Instant getRetentionUntil() { return retentionUntil; }
+    public void setRetentionUntil(Instant retentionUntil) { this.retentionUntil = retentionUntil; }
 
     protected DocumentEntity() {
     }

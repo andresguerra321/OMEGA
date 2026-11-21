@@ -12,6 +12,7 @@ import com.omega.platform.repository.UserRepository;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.security.Role;
+import com.omega.platform.storage.ObjectStoragePort;
 import com.omega.platform.web.dto.ExpedienteDtos.CreateExpedienteRequest;
 import com.omega.platform.web.dto.ExpedienteDtos.DocumentMetadataResponse;
 import com.omega.platform.web.dto.ExpedienteDtos.ExpedienteDetailResponse;
@@ -33,6 +34,9 @@ public class ExpedienteService {
     private final UserRepository userRepository;
     private final ExpedienteAuthorizationService authorizationService;
     private final AuditLogService auditLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ObjectStoragePort objectStoragePort;
 
     public ExpedienteService(
             ExpedienteRepository expedienteRepository,
@@ -155,10 +159,23 @@ public class ExpedienteService {
     @Transactional
     public void deleteExpediente(OmegaPrincipal principal, UUID expedienteId) {
         ExpedienteEntity expediente = authorizationService.requireWriteAccess(principal, expedienteId);
+        List<DocumentEntity> storedDocs = documentRepository
+                .findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId)
+                .stream()
+                .filter(d -> d.getStorageBucket() != null && !d.getStorageBucket().isBlank()
+                        && d.getStorageObjectKey() != null && !d.getStorageObjectKey().isBlank())
+                .toList();
         expedienteRepository.delete(expediente);
         expedienteRepository.flush();
+        int purgedObjectsCount = 0;
+        if (objectStoragePort != null) {
+            for (DocumentEntity doc : storedDocs) {
+                objectStoragePort.deleteObject(doc.getStorageBucket(), doc.getStorageObjectKey());
+                purgedObjectsCount++;
+            }
+        }
         auditLogService.record(principal.tenantId(), principal.userId(), "EXPEDIENTE_DELETED", "EXPEDIENTE",
-                expedienteId.toString(), Map.of());
+                expedienteId.toString(), Map.of("purgedObjectsCount", purgedObjectsCount));
     }
 
     private ExpedienteSummaryResponse toSummary(ExpedienteEntity entity) {

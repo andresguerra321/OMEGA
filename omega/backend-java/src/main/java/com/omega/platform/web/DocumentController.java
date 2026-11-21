@@ -1,11 +1,15 @@
 package com.omega.platform.web;
 
 import com.omega.platform.ingest.DocumentIngestionService;
+import com.omega.platform.ingest.DocumentIngestionService.DocumentDownloadStream;
 import com.omega.platform.ingest.DocumentIngestionService.IngestAcceptedResult;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.web.dto.ExpedienteDtos.DocumentMetadataResponse;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -82,5 +86,22 @@ public class DocumentController {
             @PathVariable UUID documentId
     ) {
         return documentIngestionService.getDocumentStatus(principal, expedienteId, documentId);
+    }
+
+    @GetMapping("/{documentId}/download")
+    public ResponseEntity<InputStreamResource> download(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @PathVariable UUID expedienteId,
+            @PathVariable UUID documentId
+    ) {
+        DocumentDownloadStream download = documentIngestionService.downloadDocument(principal, expedienteId, documentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(download.safeDownloadFilename())
+                        .build()
+                        .toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(new InputStreamResource(download.stream()));
     }
 }

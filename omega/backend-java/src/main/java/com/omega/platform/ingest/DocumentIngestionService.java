@@ -14,6 +14,9 @@ import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
 import com.omega.platform.service.ResourceNotFoundException;
+import com.omega.platform.storage.ObjectStoragePort;
+import com.omega.platform.storage.StorageKeyGenerator;
+import com.omega.platform.storage.StorageProperties;
 import com.omega.platform.web.dto.ExpedienteDtos.DocumentMetadataResponse;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +26,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
@@ -39,8 +44,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Orquestador síncrono en frontera para ingesta Zero-Retention:
- * valida magic bytes (`%PDF-`), tamaño máximo, calcula SHA-256 en streaming RAM,
- * inspecciona el AST PDF con PDFBox antes de persistir metadatos y delega la extracción al pool @Async.
+ * valida magic bytes (`%PDF-`), tamaño máximo, calcula SHA-256 en streaming
+ * RAM,
+ * inspecciona el AST PDF con PDFBox antes de persistir metadatos y delega la
+ * extracción al pool @Async.
  */
 @Service
 public class DocumentIngestionService {
@@ -64,6 +71,15 @@ public class DocumentIngestionService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.omega.platform.service.LegalQuotaService legalQuotaService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ObjectStoragePort objectStoragePort;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private StorageProperties storageProperties;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private StorageKeyGenerator storageKeyGenerator;
+
     public DocumentIngestionService(
             OmegaProperties properties,
             ExpedienteAuthorizationService authorizationService,
@@ -76,8 +92,7 @@ public class DocumentIngestionService {
             TenantRepository tenantRepository,
             IngestTemporaryFiles temporaryFiles,
             OfficeImageExtractor officeImageExtractor,
-            com.omega.platform.service.LegalDocumentAiService legalAi
-    ) {
+            com.omega.platform.service.LegalDocumentAiService legalAi) {
         this.properties = properties;
         this.authorizationService = authorizationService;
         this.pdfSecuritySanitizer = pdfSecuritySanitizer;
@@ -95,8 +110,7 @@ public class DocumentIngestionService {
     public IngestAcceptedResult ingestPdf(
             OmegaPrincipal principal,
             UUID expedienteId,
-            MultipartFile file
-    ) {
+            MultipartFile file) {
         ExpedienteEntity expediente = authorizationService.requireWriteAccess(principal, expedienteId);
         legalAi.requireConsent(principal);
         if (file == null || file.isEmpty()) {
@@ -132,7 +146,9 @@ public class DocumentIngestionService {
             boolean isPdf;
             try (var header = Files.newInputStream(tempPdfPath)) {
                 isPdf = Arrays.equals(header.readNBytes(5), PDF_MAGIC);
-            } catch (IOException ex) { throw new InvalidDocumentException("No se pudo inspeccionar el documento."); }
+            } catch (IOException ex) {
+                throw new InvalidDocumentException("No se pudo inspeccionar el documento.");
+            }
             try {
                 if (isPdf) {
                     format = "PDF";
@@ -159,8 +175,7 @@ public class DocumentIngestionService {
                         inspection.totalPages(),
                         embeddingProvider.modelName(),
                         false,
-                        DocumentStatus.PROCESSING
-                );
+                        DocumentStatus.PROCESSING);
                 var tenant = tenantRepository.findActiveForUpdate(principal.tenantId())
                         .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
                 legalAi.requireConsent(principal);
@@ -171,7 +186,8 @@ public class DocumentIngestionService {
                                 principal.tenantId(),
                                 expediente.getId(),
                                 sha256Hash,
-                                List.of(DocumentStatus.PROCESSING, DocumentStatus.INDEXED, DocumentStatus.REINDEX_REQUIRED))) {
+                                List.of(DocumentStatus.PROCESSING, DocumentStatus.INDEXED,
+                                        DocumentStatus.REINDEX_REQUIRED))) {
                     throw new com.omega.platform.service.ConflictException(
                             "Este documento ya fue cargado en este expediente (mismo hash SHA-256).");
                 }
@@ -190,14 +206,49 @@ public class DocumentIngestionService {
                         Map.of(
                                 "expedienteId", expediente.getId().toString(),
                                 "sha256Hash", sha256Hash,
-                                "totalPages", inspection.totalPages()
-                        )
-                );
+                                "totalPages", inspection.totalPages()));
                 return entity;
             });
 
             if (savedDoc == null) {
                 throw new IllegalStateException("No se pudo registrar el documento en PostgreSQL.");
+            }
+
+            // Almacenamiento opcional S3-compatible (MinIO): solo si la retención está explícitamente habilitada.
+            // En modo zero-retention (por defecto) se omite por completo y el flujo queda intacto.
+            if (storageProperties != null && storageProperties.isRetentionEnabled()
+                    && objectStoragePort != null && storageKeyGenerator != null) {
+                String vaultBucket = storageProperties.getMinio().getVaultBucket();
+                String objectKey = storageKeyGenerator.generateDocumentKey(expediente.getId(), savedDoc.getId());
+                String contentType = resolveContentTypeForFormat(format);
+                try (InputStream in = Files.newInputStream(tempPdfPath)) {
+                    long sanitizedSize = Files.size(tempPdfPath);
+                    objectStoragePort.putObject(vaultBucket, objectKey, in, sanitizedSize, contentType);
+                } catch (IOException ex) {
+                    throw new com.omega.platform.storage.ObjectStorageException("Error leyendo el documento sanitizado para almacenamiento.", ex);
+                }
+                Instant retentionUntil = Instant.now().plus(Duration.ofDays(storageProperties.getDefaultRetentionDays()));
+                transactionTemplate.executeWithoutResult(tx -> documentRepository
+                        .findByIdAndTenantId(savedDoc.getId(), principal.tenantId())
+                        .ifPresent(doc -> {
+                            doc.setStorageBucket(vaultBucket);
+                            doc.setStorageObjectKey(objectKey);
+                            doc.setContentSha256(sha256Hash);
+                            doc.setRetentionUntil(retentionUntil);
+                            documentRepository.saveAndFlush(doc);
+                            auditLogService.record(
+                                    principal.tenantId(),
+                                    principal.userId(),
+                                    "DOCUMENT_OBJECT_STORED",
+                                    "DOCUMENT",
+                                    doc.getId().toString(),
+                                    Map.of(
+                                            "expedienteId", expediente.getId().toString(),
+                                            "bucket", vaultBucket,
+                                            "sha256Hash", sha256Hash
+                                    )
+                            );
+                        }));
             }
 
             DocumentIngestCommand cmd = new DocumentIngestCommand(
@@ -208,19 +259,19 @@ public class DocumentIngestionService {
                     sanitizedFilename,
                     sha256Hash,
                     tempPdfPath,
-                    format
-            );
+                    format);
 
             CompletableFuture<DocumentStatus> future;
             try {
                 future = asyncDocumentProcessor.processAsync(cmd);
                 handedOffToAsync = true;
             } catch (TaskRejectedException ex) {
-                transactionTemplate.executeWithoutResult(tx -> documentRepository.findByIdAndTenantId(savedDoc.getId(), principal.tenantId())
-                        .ifPresent(doc -> {
-                            doc.setStatus(DocumentStatus.FAILED);
-                            documentRepository.saveAndFlush(doc);
-                        }));
+                transactionTemplate.executeWithoutResult(
+                        tx -> documentRepository.findByIdAndTenantId(savedDoc.getId(), principal.tenantId())
+                                .ifPresent(doc -> {
+                                    doc.setStatus(DocumentStatus.FAILED);
+                                    documentRepository.saveAndFlush(doc);
+                                }));
                 throw new IllegalStateException("Cola de ingestión asíncrona saturada; intente nuevamente.", ex);
             }
 
@@ -240,7 +291,8 @@ public class DocumentIngestionService {
     @Transactional(readOnly = true)
     public List<DocumentMetadataResponse> listDocuments(OmegaPrincipal principal, UUID expedienteId) {
         authorizationService.requireReadAccess(principal, expedienteId);
-        return documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId)
+        return documentRepository
+                .findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId)
                 .stream()
                 .map(DocumentIngestionService::toMetadataResponse)
                 .toList();
@@ -249,7 +301,8 @@ public class DocumentIngestionService {
     @Transactional
     public List<DocumentMetadataResponse> markReindexRequired(OmegaPrincipal principal, UUID expedienteId) {
         authorizationService.requireWriteAccess(principal, expedienteId);
-        var documents = documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId);
+        var documents = documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(),
+                expedienteId);
         int changed = 0;
         for (var document : documents) {
             if (document.getStatus() == DocumentStatus.INDEXED
@@ -271,11 +324,74 @@ public class DocumentIngestionService {
         DocumentEntity document = documentRepository.findByIdAndTenantId(documentId, principal.tenantId())
                 .filter(doc -> doc.getExpedienteId().equals(expedienteId))
                 .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado"));
+        String bucket = document.getStorageBucket();
+        String objectKey = document.getStorageObjectKey();
         documentRepository.delete(document);
         documentRepository.flush();
+        boolean objectPurged = false;
+        if (bucket != null && !bucket.isBlank() && objectKey != null && !objectKey.isBlank() && objectStoragePort != null) {
+            objectStoragePort.deleteObject(bucket, objectKey);
+            objectPurged = true;
+        }
         auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_DELETED", "EXPEDIENTE",
-                expedienteId.toString(), Map.of("documentId", documentId.toString(), "sha256Hash", document.getSha256Hash()));
+                expedienteId.toString(), Map.of(
+                        "documentId", documentId.toString(),
+                        "sha256Hash", document.getSha256Hash(),
+                        "objectPurged", objectPurged
+                ));
     }
+
+    @Transactional
+    public DocumentDownloadStream downloadDocument(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {
+        authorizationService.requireReadAccess(principal, expedienteId);
+        DocumentEntity doc = documentRepository.findByIdAndTenantId(documentId, principal.tenantId())
+                .filter(d -> d.getExpedienteId().equals(expedienteId))
+                .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado en el expediente actual"));
+        if (doc.getStorageBucket() == null || doc.getStorageBucket().isBlank()
+                || doc.getStorageObjectKey() == null || doc.getStorageObjectKey().isBlank()
+                || objectStoragePort == null) {
+            throw new ResourceNotFoundException("El documento no tiene binario almacenado (modo zero-retention).");
+        }
+        InputStream stream = objectStoragePort.getObjectStream(doc.getStorageBucket(), doc.getStorageObjectKey());
+        String contentType = resolveContentTypeForFormat(doc.getDocumentFormat());
+        String ext = resolveExtensionForFormat(doc.getDocumentFormat());
+        auditLogService.record(
+                principal.tenantId(),
+                principal.userId(),
+                "DOCUMENT_DOWNLOADED",
+                "DOCUMENT",
+                doc.getId().toString(),
+                Map.of(
+                        "expedienteId", expedienteId.toString(),
+                        "sha256Hash", doc.getContentSha256() != null ? doc.getContentSha256() : doc.getSha256Hash()
+                )
+        );
+        return new DocumentDownloadStream(stream, contentType, doc.getId() + "." + ext);
+    }
+
+    private static String resolveContentTypeForFormat(String format) {
+        if (format == null) return "application/octet-stream";
+        return switch (format.toUpperCase()) {
+            case "PDF" -> "application/pdf";
+            case "PNG" -> "image/png";
+            case "JPEG", "JPG" -> "image/jpeg";
+            case "DOCX" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            default -> "application/octet-stream";
+        };
+    }
+
+    private static String resolveExtensionForFormat(String format) {
+        if (format == null) return "bin";
+        return switch (format.toUpperCase()) {
+            case "PDF" -> "pdf";
+            case "PNG" -> "png";
+            case "JPEG", "JPG" -> "jpg";
+            case "DOCX" -> "docx";
+            default -> "bin";
+        };
+    }
+
+    public record DocumentDownloadStream(InputStream stream, String contentType, String safeDownloadFilename) {}
 
     @Transactional(readOnly = true)
     public DocumentMetadataResponse getDocumentStatus(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {
@@ -286,7 +402,8 @@ public class DocumentIngestionService {
         return toMetadataResponse(doc);
     }
 
-    private String streamValidateMagicBytesAndHash(MultipartFile file, Path tempPdfPath, long maxBytes, boolean allowExtraFormats) {
+    private String streamValidateMagicBytesAndHash(MultipartFile file, Path tempPdfPath, long maxBytes,
+            boolean allowExtraFormats) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] header = new byte[8];
@@ -294,7 +411,7 @@ public class DocumentIngestionService {
             long totalRead = 0;
 
             try (InputStream in = file.getInputStream();
-                 OutputStream out = Files.newOutputStream(tempPdfPath)) {
+                    OutputStream out = Files.newOutputStream(tempPdfPath)) {
                 byte[] buffer = new byte[16 * 1024];
                 int n;
                 while ((n = in.read(buffer)) != -1) {
@@ -313,9 +430,10 @@ public class DocumentIngestionService {
             }
 
             boolean validPdf = headerRead >= 5 && Arrays.equals(Arrays.copyOf(header, 5), PDF_MAGIC);
-            boolean extra = headerRead >= 4 && ((header[0] == 'P' && header[1] == 'K' && header[2] == 3 && header[3] == 4)
-                    || (header[0] == (byte)0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G')
-                    || (header[0] == (byte)0xff && header[1] == (byte)0xd8 && header[2] == (byte)0xff));
+            boolean extra = headerRead >= 4
+                    && ((header[0] == 'P' && header[1] == 'K' && header[2] == 3 && header[3] == 4)
+                            || (header[0] == (byte) 0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G')
+                            || (header[0] == (byte) 0xff && header[1] == (byte) 0xd8 && header[2] == (byte) 0xff));
             if (!validPdf && !(allowExtraFormats && extra)) {
                 throw new InvalidDocumentException(allowExtraFormats
                         ? "El archivo no presenta una firma binaria válida (PDF, DOCX, PNG o JPEG)."
@@ -339,18 +457,21 @@ public class DocumentIngestionService {
             var tenant = tenantRepository.findActiveForUpdate(principal.tenantId())
                     .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
             if (tenant.getProfile() != TenantProfile.LEGAL) {
-                auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REJECTED_UNSAFE_PDF", "EXPEDIENTE",
+                auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REJECTED_UNSAFE_PDF",
+                        "EXPEDIENTE",
                         expedienteId.toString(), Map.of("sha256Hash", sha256Hash, "reasonCode", code));
                 return;
             }
             var document = new DocumentEntity(principal.tenantId(), expedienteId, principal.userId(), filename,
                     sha256Hash, 0, embeddingProvider.modelName(), false, DocumentStatus.REJECTED);
-            if (tenant.getProfile() == TenantProfile.LEGAL) document.setCorpusScope(TenantProfile.LEGAL);
+            if (tenant.getProfile() == TenantProfile.LEGAL)
+                document.setCorpusScope(TenantProfile.LEGAL);
             document.setFailureCode(code);
             document.setTempDeletedAt(deletedAt);
             documentRepository.saveAndFlush(document);
             auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REJECTED_UNSAFE_PDF", "DOCUMENT",
-                    document.getId().toString(), Map.of("expedienteId", expedienteId.toString(), "sha256Hash", sha256Hash, "reasonCode", code));
+                    document.getId().toString(),
+                    Map.of("expedienteId", expedienteId.toString(), "sha256Hash", sha256Hash, "reasonCode", code));
         });
     }
 
@@ -382,8 +503,7 @@ public class DocumentIngestionService {
                 doc.isOcrApplied(),
                 doc.getStatus(),
                 doc.getCreatedAt(),
-                doc.getTempDeletedAt()
-        );
+                doc.getTempDeletedAt());
     }
 
     private String resolveTenantCorpusScope(UUID tenantId) {
@@ -397,7 +517,6 @@ public class DocumentIngestionService {
 
     public record IngestAcceptedResult(
             DocumentMetadataResponse document,
-            CompletableFuture<DocumentStatus> processingFuture
-    ) {
+            CompletableFuture<DocumentStatus> processingFuture) {
     }
 }

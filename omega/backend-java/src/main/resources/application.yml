@@ -125,6 +125,17 @@ omega:
     read-timeout-ms: 120000
   cti:
     stix-corpus-dir: ${OMEGA_STIX_CORPUS_DIR:/app/corpus_mvp/iocs}
+  storage:
+    provider: ${OMEGA_STORAGE_PROVIDER:noop}
+    retention-enabled: ${OMEGA_STORAGE_RETENTION_ENABLED:false}
+    default-retention-days: ${OMEGA_STORAGE_RETENTION_DAYS:365}
+    minio:
+      endpoint: ${OMEGA_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${OMEGA_MINIO_ACCESS_KEY:}
+      secret-key: ${OMEGA_MINIO_SECRET_KEY:}
+      vault-bucket: ${OMEGA_MINIO_VAULT_BUCKET:omega-vault}
+      staging-bucket: ${OMEGA_MINIO_STAGING_BUCKET:omega-staging}
+      presign-ttl-seconds: ${OMEGA_MINIO_PRESIGN_TTL_SECONDS:90}
   dev:
     monitoring:
       enabled: ${OMEGA_DEV_MONITORING_ENABLED:true}
