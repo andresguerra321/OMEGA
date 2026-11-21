@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
+  Bell,
   BookOpen,
   ExternalLink,
   MessageSquare,
+  Play,
   RefreshCw,
   Search,
   Send,
@@ -11,9 +13,12 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import {
+  evaluateDevProjectMonitoring,
+  getDevProjectMonitoring,
   listDevProjects,
   listDevSupplyChainAdvisories,
   queryDevSupplyChainIntel,
+  updateDevProjectMonitoring,
 } from '../lib/api';
 
 export function DevSupplyChainIntelTab() {
@@ -28,6 +33,57 @@ export function DevSupplyChainIntelTab() {
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const [ragResponse, setRagResponse] = useState(null);
+
+  const [monitoring, setMonitoring] = useState(null);
+  const [evalResult, setEvalResult] = useState(null);
+  const [monitoringBusy, setMonitoringBusy] = useState(false);
+
+  async function loadMonitoring(targetProjId) {
+    if (!targetProjId) {
+      setMonitoring(null);
+      setEvalResult(null);
+      return;
+    }
+    try {
+      const m = await getDevProjectMonitoring(targetProjId);
+      setMonitoring(m || null);
+    } catch {
+      setMonitoring(null);
+    }
+  }
+
+  async function handleToggleMonitoring(nextEnabled) {
+    if (!projectId || monitoringBusy) return;
+    setMonitoringBusy(true);
+    setError('');
+    try {
+      const updated = await updateDevProjectMonitoring(projectId, {
+        enabled: nextEnabled,
+        channel: monitoring?.channel || 'WEBHOOK',
+        minSeverity: monitoring?.minSeverity || 'HIGH',
+      });
+      setMonitoring(updated);
+    } catch (err) {
+      setError(err?.message || 'No se pudo actualizar la suscripción de monitoreo continuo.');
+    } finally {
+      setMonitoringBusy(false);
+    }
+  }
+
+  async function handleEvaluateNow() {
+    if (!projectId || monitoringBusy) return;
+    setMonitoringBusy(true);
+    setError('');
+    try {
+      const res = await evaluateDevProjectMonitoring(projectId);
+      setEvalResult(res);
+      await loadMonitoring(projectId);
+    } catch (err) {
+      setError(err?.message || 'No se pudo reevaluar el inventario almacenado.');
+    } finally {
+      setMonitoringBusy(false);
+    }
+  }
 
   async function loadCatalog(proj = projectId, eco = ecosystem, q = query) {
     setLoading(true);
@@ -50,6 +106,7 @@ export function DevSupplyChainIntelTab() {
 
   useEffect(() => {
     void loadCatalog();
+    void loadMonitoring(projectId);
   }, [projectId, ecosystem]);
 
   async function handleAsk(e) {
@@ -241,6 +298,74 @@ export function DevSupplyChainIntelTab() {
                 </div>
               </article>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#2F6FED]/15 border border-[#2F6FED]/30 text-[#2F6FED]">
+              <Bell className="h-4 w-4" strokeWidth={1.75} />
+            </span>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-100">
+                Monitoreo Continuo sobre SBOM Guardado (Zero-Retention)
+              </h3>
+              <p className="text-xs text-slate-400">
+                Reevalúa el inventario de dependencias almacenado ante nuevos advisories sin volver a descargar el código fuente.
+              </p>
+            </div>
+          </div>
+
+          {projectId ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={monitoringBusy}
+                onClick={() => handleToggleMonitoring(!monitoring?.enabled)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  monitoring?.enabled
+                    ? 'bg-emerald-500/15 border border-emerald-400/35 text-emerald-300'
+                    : 'bg-[#141923] border border-white/[0.08] text-slate-300'
+                }`}
+              >
+                <span>{monitoring?.enabled ? 'Monitoreo activo' : 'Activar monitoreo'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={monitoringBusy}
+                onClick={handleEvaluateNow}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] hover:bg-[#2558C7] disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+              >
+                <Play className="h-3.5 w-3.5" strokeWidth={1.75} />
+                <span>{monitoringBusy ? 'Evaluando...' : 'Reevaluar SBOM ahora'}</span>
+              </button>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-400">
+              Selecciona un proyecto arriba para configurar y ejecutar su monitoreo continuo.
+            </span>
+          )}
+        </div>
+
+        {monitoring?.feedStaleWarning && (
+          <div
+            role="alert"
+            className="rounded-xl border border-amber-400/35 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-300"
+          >
+            {monitoring.feedStatusMessage}
+          </div>
+        )}
+
+        {evalResult && (
+          <div className="rounded-xl bg-[#141923]/75 border border-white/[0.06] p-4 text-xs text-slate-300 space-y-1">
+            <p>
+              Dependencias reevaluadas: <strong className="text-slate-100">{evalResult.evaluatedDependencies}</strong> ·{' '}
+              Nuevas alertas generadas: <strong className="text-rose-300">{evalResult.newAlertsCount}</strong> ·{' '}
+              Alertas deduplicadas: <strong className="text-slate-100">{evalResult.deduplicatedCount}</strong>
+            </p>
+            <p className="text-[11px] text-slate-400">{evalResult.feedStatusMessage}</p>
           </div>
         )}
       </section>

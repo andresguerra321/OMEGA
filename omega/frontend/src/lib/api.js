@@ -786,6 +786,27 @@ export async function exportDevReportPdf(projectId = '') {
   return apiFetch(`/dev/reports/export/pdf${qs}`, { responseType: 'blob' });
 }
 
+export async function getDevProjectMonitoring(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/monitoring`);
+}
+
+export async function updateDevProjectMonitoring(
+  projectId,
+  { enabled = true, channel = 'WEBHOOK', minSeverity = 'HIGH' } = {}
+) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/monitoring`, {
+    method: 'PUT',
+    body: { enabled: Boolean(enabled), channel, minSeverity },
+  });
+}
+
+export async function evaluateDevProjectMonitoring(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/monitoring/evaluate`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }
