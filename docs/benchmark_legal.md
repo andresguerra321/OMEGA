@@ -1,35 +1,54 @@
-# Benchmark de Calidad del Asistente LEGAL (Q7)
+# Evaluación y Benchmark del Asistente LEGAL (Q7)
 
-> **Naturaleza del corpus:** 100% sintético y ficticio (`omega/backend-java/src/test/resources/legal_benchmark/synthetic_cases.json`). No contiene documentos ni datos personales de clientes reales.
+> **Naturaleza del corpus:** 100% sintético y ficticio (`synthetic_cases.json` y `hard_benchmark_cases.json`). No contiene documentos ni datos personales de clientes reales.
 
-## 1. Metodología
+## 1. Separación estricta: prueba de regresión determinista vs evaluación con modelos reales
 
-- **Corpus sintético:** 3 expedientes ficticios (`EXP_ARRENDAMIENTO`, `EXP_SUMINISTRO`, `EXP_LABORAL`) con documentos PDF multipágina generados en memoria e indexados en PostgreSQL (`pgvector`) mediante el flujo real de `DocumentIngestionService` + `AsyncDocumentProcessor`.
-- **Conjunto de evaluación (12 preguntas):**
-  - `6` preguntas con respuesta explícita en una página concreta (`ANSWERABLE`).
-  - `3` preguntas sin respuesta en el expediente (`UNANSWERABLE`).
-  - `3` preguntas que mezclan expedientes — consultan al Expediente A hechos que solo existen en el Expediente B (`CROSS_CASE`).
-- **Ejecución reproducible:**
-  ```powershell
-  .\scripts\run_legal_benchmark.ps1
-  # o directamente:
-  cd omega/backend-java && mvn -B test -Dtest=LegalRagQualityBenchmarkTest
-  ```
+Es crítico **no confundir** ambas mediciones:
 
-## 2. Umbrales mínimos (gate de regresión en CI)
+1. **Prueba de regresión determinista offline (`-Mode deterministic`, ejecutada en CI):**
+   - **Qué mide:** precisión del índice léxico (`tsvector`), aislamiento SQL por `tenant_id` / `expediente_id`, exactitud de metadatos de cita (`documentId` + `pageNumber`) y cumplimiento de guardarraíles (`LEGAL_ABSTENTION` y `guardedLegalAnswer`).
+   - **Qué NO mide:** capacidad de comprensión semántica, síntesis ni tendencia a alucinar de un modelo LLM real (Groq, OpenAI u Ollama), ya que el generador está stubbeado para ser 100% reproducible sin red ni claves en CI.
+2. **Evaluación manual con proveedores reales (`-Mode groq` / `-Mode ollama`, nunca en CI):**
+   - **Qué mide:** comportamiento real de extremo a extremo sobre un conjunto difícil ([hard_benchmark_cases.json](file:///C:/Users/andre/OneDrive/Escritorio/proyectos/CAMPUS/OMEGA/omega/backend-java/src/test/resources/legal_benchmark/hard_benchmark_cases.json)) con **11 escenarios exigentes**:
+     - `CONTRADICTORY_DOCS` (`H01`–`H02`): contradicción entre contrato base y otrosí modificatorio en el mismo expediente (verifica que recupera ambos documentos).
+     - `NEAR_MISS` (`H03`–`H06`): casi-aciertos que comparten nombres de partes y conceptos con el contrato, pero preguntan por datos ausentes (tasa de interés moratorio, cámara arbitral, registro sanitario, salario base).
+     - `SEMANTIC_PARAPHRASE` (`H07`–`H08`): preguntas formuladas con sinónimos que no aparecen literalmente en el texto (*«situaciones extraordinarias»* -> *«fuerza mayor»*; *«desembolso único»* -> *«una sola cuota»*).
+     - `CROSS_CASE` (`H09`–`H11`): preguntas que mezclan expedientes del mismo despacho.
 
-| Métrica | Umbral fijado | Resultado medido (modo léxico determinista) |
+## 2. Cómo ejecutar cada modo
+
+```powershell
+# 1. Regresión determinista (CI / offline — solo infraestructura RAG y guardarraíles)
+.\scripts\run_legal_benchmark.ps1 -Mode deterministic
+
+# 2. Evaluación manual con Groq real (requiere backend corriendo con GROQ_API_KEY; nunca en CI)
+$env:GROQ_API_KEY = "gsk_..."
+.\scripts\run_legal_benchmark.ps1 -Mode groq -BaseUrl http://127.0.0.1:8080
+
+# 3. Evaluación manual con Ollama local (chat + embeddings reales; nunca en CI)
+$env:OMEGA_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+.\scripts\run_legal_benchmark.ps1 -Mode ollama -BaseUrl http://127.0.0.1:8080
+```
+
+## 3. Comparativa documentada: `LOCAL_TEXT` (`tsvector`) vs embeddings reales (OpenAI / Ollama)
+
+| Tipo de consulta | `LOCAL_TEXT` (`lexical-only-tsvector`, ej. Groq sin clave OpenAI) | Embeddings reales (OpenAI `text-embedding-3-small` / Ollama `bge-m3`) |
 | --- | --- | --- |
-| Fidelidad a las fuentes (`sourceFidelityRate`) | `>= 1.00` (100%) | **1.00** (6/6) |
-| Exactitud de cita documento + página (`citationExactnessRate`) | `>= 0.95` (95%) | **1.00** (6/6) |
-| Tasa de abstención correcta (`correctAbstentionRate`) | `>= 1.00` (100%) | **1.00** (6/6) |
-| Tasa de respuestas sin sustento (`unsupportedAnswerRate`) | `== 0.00` (0%) | **0.00** (0/12) |
-| Fuga entre expedientes (`crossCaseLeakageRate`) | `== 0.00` (0%) | **0.00** (0/3) |
+| **Términos exactos** (montos, nombres propios, números de cláusula) | **Alta recuperación** (coincidencia exacta rápida y determinista, sin envío externo de fragmentos al indexar). | **Alta recuperación** (búsqueda híbrida RRF combina vector + léxico). |
+| **Paráfrasis semánticas** (`H07`: *«exonerado de sanciones»* vs *«fuerza mayor»*; `H08`: *«desembolso único»* vs *«una sola cuota»*) | **Limitada / baja:** puede devolver `LEGAL_ABSTENTION` si la pregunta no comparte palabras literales con el documento. | **Significativamente superior:** el vector semántico recupera el fragmento aunque no coincidan las palabras exactas (siempre sujeto al umbral de similitud `>= 0.78`). |
+| **Documentos contradictorios** (`H01`–`H02`) | Recupera ambos documentos si comparten los términos clave (`canon`, `plazo`, partes). | Recupera ambos documentos incluso si el otrosí usa redacción distinta (*«prórroga»* vs *«extensión del plazo»*). |
+| **Casi-aciertos (`NEAR_MISS`, `H03`–`H06`)** | Puede recuperar el contrato por coincidencia léxica de las partes; depende del LLM real + `guardedLegalAnswer` no inventar el dato ausente. | Puede recuperar fragmentos temáticamente cercanos; requiere que el LLM real indique explícitamente que el dato no consta y que `guardedLegalAnswer` valide cada cita `[n]`. |
 
-Si una modificación futura hace caer cualquiera de estas métricas por debajo del umbral, `LegalRagQualityBenchmarkTest` falla automáticamente la compilación de Maven (`mvn -B test`).
+## 4. Umbrales de regresión determinista (gate en CI)
 
-## 3. Limitaciones honestas
+Estos umbrales aplican **exclusivamente** a la prueba de regresión determinista (`LegalRagQualityBenchmarkTest`, 12 preguntas) para evitar regresiones en aislamiento, citas y abstención:
 
-1. **Modo determinista offline:** El benchmark ejecuta recuperación real en PostgreSQL (`tsvector` / `HybridRagSearchRepository`) y validación real de `guardedLegalAnswer` + `LEGAL_ABSTENTION`, pero utiliza un generador determinista sin llamadas de red externas para evitar flakiness o fuga de datos en CI.
-2. **No mide razonamiento jurídico complejo:** Evalúa precisión de recuperación, exactitud de citas y abstención sobre hechos escritos explícitamente; no evalúa interpretación jurisprudencial ni estrategia procesal (fuera de alcance: OMEGA no ofrece asesoría legal).
-3. **Evaluación con LLM real:** Al conectar un modelo externo (Groq / OpenAI / Ollama), la redacción final depende del modelo elegido, si bien `guardedLegalAnswer()` sigue descartando automáticamente cualquier línea factual que carezca de cita `[n]` válida.
+| Métrica de infraestructura RAG | Umbral mínimo (CI) | Resultado verificado |
+| --- | --- | --- |
+| Cobertura de evidencia recuperada en `ANSWERABLE` | `>= 1.00` | `1.00` (6/6) |
+| Exactitud de metadatos de cita (`documentId` + `pageNumber`) | `>= 0.95` | `1.00` (6/6) |
+| Abstención determinista en `UNANSWERABLE` + `CROSS_CASE` | `>= 1.00` | `1.00` (6/6) |
+| Fuga entre expedientes (`CROSS_CASE`) | `== 0.00` | `0.00` (0/3) |
+
+> **Nota de honestidad:** Los valores reales de precisión del modelo LLM en `hard_benchmark_cases.json` dependen del modelo configurado (`Groq` u `Ollama`) y deben medirse manualmente con `scripts/run_legal_benchmark.ps1 -Mode groq|ollama` antes de salir a producción con cada modelo.

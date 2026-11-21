@@ -1,0 +1,143 @@
+{
+  "fixtureNotice": "SYNTHETIC_HARD_BENCHMARK_FIXTURE — 100% datos ficticios para evaluación con proveedores reales (Groq/Ollama) y regresión offline. Nunca usar datos reales de clientes.",
+  "cases": [
+    {
+      "key": "EXP_ARRENDAMIENTO_CONTRADICTORIO",
+      "title": "Expediente Sintético Arrendamiento con Otrosí Contradictorio",
+      "documents": [
+        {
+          "key": "DOC_CONTRATO_ORIGINAL",
+          "filename": "synthetic-contrato-base.pdf",
+          "pages": [
+            "CONTRATO BASE DE ARRENDAMIENTO COMERCIAL. Arrendador: Inmobiliaria Norte SAS. Arrendatario: Comercial Sur Ltda. Canon mensual inicial: 4500000 pesos. Plazo inicial: 24 meses desde el 15 de marzo de 2024.",
+            "CLÁUSULA DE DEPÓSITO. El depósito de garantía es equivalente a dos meses de canon. No se pactó cláusula arbitral ni intereses moratorios en este contrato."
+          ]
+        },
+        {
+          "key": "DOC_OTROSI_MODIFICATORIO",
+          "filename": "synthetic-otrosi-modificatorio.pdf",
+          "pages": [
+            "OTROSÍ MODIFICATORIO N. 1 DEL 2024-09-01. Las partes Inmobiliaria Norte SAS y Comercial Sur Ltda acuerdan modificar el contrato base: el canon mensual se ajusta a 5200000 pesos y el plazo se extiende a 36 meses."
+          ]
+        }
+      ]
+    },
+    {
+      "key": "EXP_SUMINISTRO_MEDICO",
+      "title": "Expediente Sintético Suministro Clínico",
+      "documents": [
+        {
+          "key": "DOC_SUMINISTRO",
+          "filename": "synthetic-acuerdo-suministro.pdf",
+          "pages": [
+            "ACUERDO DE SUMINISTRO CLÍNICO. Proveedor: BioLogistica SA. Comprador: Clinica Andina. Plazo máximo de entrega: diez días hábiles tras orden de compra escrita.",
+            "PENALIDADES. Retraso injustificado genera multa diaria del 0.5 por ciento con tope del 10 por ciento. Fuerza mayor exime de penalidad previa notificación en 48 horas."
+          ]
+        }
+      ]
+    },
+    {
+      "key": "EXP_LABORAL_CONCILIACION",
+      "title": "Expediente Sintético Conciliación Laboral",
+      "documents": [
+        {
+          "key": "DOC_ACTA",
+          "filename": "synthetic-acta-laboral.pdf",
+          "pages": [
+            "ACTA DE CONCILIACIÓN LABORAL. Fecha: 2024-09-12. Empleador: Talleres Delta SAS. Trabajador: Carlos Perez. Liquidación acordada: 12800000 pesos pagaderos en una sola cuota el 2024-09-30."
+          ]
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "H01",
+      "category": "CONTRADICTORY_DOCS",
+      "caseKey": "EXP_ARRENDAMIENTO_CONTRADICTORIO",
+      "question": "¿Cuál es el canon mensual pactado entre Inmobiliaria Norte y Comercial Sur? Indica si existe contradicción o modificación entre documentos.",
+      "expectedDocKeys": ["DOC_CONTRATO_ORIGINAL", "DOC_OTROSI_MODIFICATORIO"],
+      "expectedTerms": ["4500000", "5200000"]
+    },
+    {
+      "id": "H02",
+      "category": "CONTRADICTORY_DOCS",
+      "caseKey": "EXP_ARRENDAMIENTO_CONTRADICTORIO",
+      "question": "¿Cuál es el plazo del contrato de arrendamiento de Inmobiliaria Norte y si fue extendido?",
+      "expectedDocKeys": ["DOC_CONTRATO_ORIGINAL", "DOC_OTROSI_MODIFICATORIO"],
+      "expectedTerms": ["24 meses", "36 meses"]
+    },
+    {
+      "id": "H03",
+      "category": "NEAR_MISS",
+      "caseKey": "EXP_ARRENDAMIENTO_CONTRADICTORIO",
+      "question": "¿Cuál es la tasa exacta de interés moratorio bancario fijada para Inmobiliaria Norte y Comercial Sur?",
+      "expectedBehavior": "ABSTAIN_OR_STATE_NOT_AGREED",
+      "forbiddenFabrication": "%"
+    },
+    {
+      "id": "H04",
+      "category": "NEAR_MISS",
+      "caseKey": "EXP_ARRENDAMIENTO_CONTRADICTORIO",
+      "question": "¿En qué cámara de comercio se pactó el tribunal arbitral del contrato de arrendamiento?",
+      "expectedBehavior": "ABSTAIN_OR_STATE_NOT_AGREED",
+      "forbiddenFabrication": "Cámara de Comercio de Bogotá"
+    },
+    {
+      "id": "H05",
+      "category": "NEAR_MISS",
+      "caseKey": "EXP_SUMINISTRO_MEDICO",
+      "question": "¿Cuál es el número de registro sanitario INVIMA de los insumos entregados por BioLogistica a Clinica Andina?",
+      "expectedBehavior": "ABSTAIN",
+      "forbiddenFabrication": "INVIMA-"
+    },
+    {
+      "id": "H06",
+      "category": "NEAR_MISS",
+      "caseKey": "EXP_LABORAL_CONCILIACION",
+      "question": "¿Cuál era el salario mensual base y cargo de Carlos Perez en Talleres Delta?",
+      "expectedBehavior": "ABSTAIN",
+      "forbiddenFabrication": "Gerente"
+    },
+    {
+      "id": "H07",
+      "category": "SEMANTIC_PARAPHRASE",
+      "caseKey": "EXP_SUMINISTRO_MEDICO",
+      "question": "¿En qué situaciones extraordinarias queda exonerado el proveedor de pagar sanciones económicas?",
+      "expectedDocKeys": ["DOC_SUMINISTRO"],
+      "expectedTerms": ["Fuerza mayor", "48 horas"]
+    },
+    {
+      "id": "H08",
+      "category": "SEMANTIC_PARAPHRASE",
+      "caseKey": "EXP_LABORAL_CONCILIACION",
+      "question": "¿Cuándo vence el desembolso único pactado a favor del empleado?",
+      "expectedDocKeys": ["DOC_ACTA"],
+      "expectedTerms": ["2024-09-30", "12800000"]
+    },
+    {
+      "id": "H09",
+      "category": "CROSS_CASE",
+      "caseKey": "EXP_ARRENDAMIENTO_CONTRADICTORIO",
+      "question": "¿Cuál es el tope de multa diaria de BioLogistica y Clinica Andina?",
+      "expectedBehavior": "ABSTAIN",
+      "forbiddenTerm": "BioLogistica"
+    },
+    {
+      "id": "H10",
+      "category": "CROSS_CASE",
+      "caseKey": "EXP_SUMINISTRO_MEDICO",
+      "question": "¿Qué liquidación se pactó en el acta de Talleres Delta para Carlos Perez?",
+      "expectedBehavior": "ABSTAIN",
+      "forbiddenTerm": "12800000"
+    },
+    {
+      "id": "H11",
+      "category": "CROSS_CASE",
+      "caseKey": "EXP_LABORAL_CONCILIACION",
+      "question": "¿Cuál es el canon mensual del otrosí de Inmobiliaria Norte?",
+      "expectedBehavior": "ABSTAIN",
+      "forbiddenTerm": "5200000"
+    }
+  ]
+}
