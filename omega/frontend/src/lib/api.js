@@ -599,6 +599,38 @@ export async function getRepoScanStatus(scanId) {
   return apiFetch(`/repo/scan/${encodeURIComponent(scanId)}`);
 }
 
+export async function listDevProjects() {
+  return apiFetch('/dev/projects');
+}
+
+export async function createDevProject({ name, repoUrl = '', defaultBranch = '', sourceType = 'GITHUB_URL' }) {
+  return apiFetch('/dev/projects', {
+    method: 'POST',
+    body: {
+      name: String(name || '').trim(),
+      repoUrl: String(repoUrl || '').trim() || undefined,
+      defaultBranch: String(defaultBranch || '').trim() || undefined,
+      sourceType,
+    },
+  });
+}
+
+export async function getDevProjectDetail(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}`);
+}
+
+export async function compareDevScans(projectId, baseScanId, headScanId) {
+  return apiFetch(
+    `/dev/projects/${encodeURIComponent(projectId)}/compare?baseScanId=${encodeURIComponent(baseScanId)}&headScanId=${encodeURIComponent(headScanId)}`
+  );
+}
+
+export async function deleteDevProject(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }

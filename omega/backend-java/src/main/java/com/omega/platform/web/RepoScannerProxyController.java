@@ -6,6 +6,9 @@ import com.omega.platform.security.ApiTokenAuthenticationFilter;
 import com.omega.platform.security.TenantContext;
 import com.omega.platform.security.TenantScope;
 import com.omega.platform.service.ApiTokenService;
+import com.omega.platform.service.DevProjectService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -65,6 +68,9 @@ public class RepoScannerProxyController {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    @Autowired(required = false)
+    private DevProjectService devProjectService;
+
     public RepoScannerProxyController(
             @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
             TenantRepository tenantRepository,
@@ -80,6 +86,9 @@ public class RepoScannerProxyController {
     @SuppressWarnings("unchecked")
     public Map<String, Object> scanRepository(
             @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "projectId", required = false) UUID projectId,
+            @RequestParam(value = "projectName", required = false) String projectName,
+            @RequestParam(value = "source", required = false) String source,
             HttpServletRequest request
     ) {
         TenantScope scope = TenantContext.get()
@@ -107,7 +116,20 @@ public class RepoScannerProxyController {
                 ? file.getOriginalFilename()
                 : "repo.tar.gz";
 
-        return forwardArchiveToScanner(tenant.getId(), filename, bytes);
+        Map<String, Object> scanResult = forwardArchiveToScanner(tenant.getId(), filename, bytes);
+        if (devProjectService != null && scanResult != null) {
+            String effectiveName = (projectName != null && !projectName.isBlank())
+                    ? projectName
+                    : filename.replaceAll("\\.(tar\\.gz|tgz|zip)$", "");
+            devProjectService.recordScanResult(
+                    tenant.getId(), scope.userId(), projectId, effectiveName, null, null,
+                    (source != null && !source.isBlank()) ? source : "UI", scanResult
+            ).ifPresent(saved -> {
+                scanResult.put("persisted_scan_id", saved.getId().toString());
+                scanResult.put("project_id", saved.getProjectId().toString());
+            });
+        }
+        return scanResult;
     }
 
     @PostMapping(value = "/scan-url", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -168,7 +190,21 @@ public class RepoScannerProxyController {
 
         byte[] archiveBytes = downloadBoundedArchive(reqBuilder.build());
         String filename = owner + "-" + repo + ".tar.gz";
-        return forwardArchiveToScanner(tenant.getId(), filename, archiveBytes);
+        Map<String, Object> scanResult = forwardArchiveToScanner(tenant.getId(), filename, archiveBytes);
+        if (devProjectService != null && scanResult != null) {
+            String canonicalUrl = "https://github.com/" + owner + "/" + repo;
+            String effectiveName = (payload.projectName() != null && !payload.projectName().isBlank())
+                    ? payload.projectName()
+                    : owner + "/" + repo;
+            devProjectService.recordScanResult(
+                    tenant.getId(), scope.userId(), payload.projectId(), effectiveName, canonicalUrl, branch,
+                    "URL", scanResult
+            ).ifPresent(saved -> {
+                scanResult.put("persisted_scan_id", saved.getId().toString());
+                scanResult.put("project_id", saved.getProjectId().toString());
+            });
+        }
+        return scanResult;
     }
 
     private byte[] downloadBoundedArchive(HttpRequest httpRequest) {
@@ -260,7 +296,13 @@ public class RepoScannerProxyController {
         }
     }
 
-    public record ScanRepositoryUrlRequest(String repoUrl, String branch, String githubToken) {}
+    public record ScanRepositoryUrlRequest(
+            String repoUrl,
+            String branch,
+            String githubToken,
+            UUID projectId,
+            String projectName
+    ) {}
 
     @GetMapping("/scan/{scanId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST', 'CLIENT') or hasAuthority('SCOPE_REPO_SCAN')")

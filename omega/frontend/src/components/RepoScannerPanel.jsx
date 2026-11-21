@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Copy,
   FileArchive,
+  FolderGit2,
   GitBranch,
   KeyRound,
   PackageSearch,
@@ -23,6 +24,7 @@ import {
   unlinkGitHubInstallation,
 } from '../lib/api';
 import { ApiTokensCard } from './ApiTokensCard';
+import { DevProjectsTab } from './DevProjectsTab';
 
 function GitHubIcon({ className = 'h-4 w-4' }) {
   return (
@@ -151,6 +153,7 @@ export function RepoScannerPanel({ authSession }) {
         >
           {[
             { id: 'scan', label: 'Analizar repositorio', icon: PackageSearch },
+            { id: 'projects', label: 'Proyectos', icon: FolderGit2 },
             { id: 'cli', label: 'CLI y Tokens API', icon: Terminal, badge: activeTokensCount },
             { id: 'github', label: 'Integración GitHub', icon: GitHubIcon, connected: Boolean(ghStatus) },
           ].map((t) => {
@@ -185,6 +188,16 @@ export function RepoScannerPanel({ authSession }) {
             );
           })}
         </nav>
+
+        {devTab === 'projects' && (
+          <DevProjectsTab
+            authSession={authSession}
+            onSelectProjectForScan={(proj) => {
+              if (proj?.repoUrl) setRepoUrl(proj.repoUrl);
+              setDevTab('scan');
+            }}
+          />
+        )}
 
         {devTab === 'cli' && (
           <div className="space-y-5">
