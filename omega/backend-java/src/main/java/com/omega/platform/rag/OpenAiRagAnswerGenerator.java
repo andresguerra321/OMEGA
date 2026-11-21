@@ -368,7 +368,9 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
                 }
                 sb.append("- ")
                         .append(excerpt)
-                        .append(" [").append(idx++).append("]\n");
+                        .append(" [").append(idx++).append("] ")
+                        .append(chunk.citationLabel())
+                        .append('\n');
             }
             sb.append('\n');
         }

@@ -94,7 +94,7 @@ class MultiTenantSecurityIntegrationTest {
         // 1. Unauthenticated access must return 401 ProblemDetail JSON
         mockMvc.perform(get("/api/v1/expedientes"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.title").value("Autenticación requerida"));
+                .andExpect(jsonPath("$.title").value("Sesión no válida o expirada"));
 
         // 2. Register Tenant A & Tenant B with distinct ADMIN users
         JsonNode tenantA = registerTenant("red-prensa-alpha", "Red Prensa Alpha", "admin@alpha.org", "ClaveSeguraAlpha123!", "Admin Alpha");

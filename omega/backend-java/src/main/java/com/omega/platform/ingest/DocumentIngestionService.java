@@ -4,10 +4,12 @@ import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.domain.ExpedienteEntity;
+import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.ingest.AsyncDocumentProcessor.DocumentIngestCommand;
 import com.omega.platform.ingest.PdfSecuritySanitizer.PdfInspectionResult;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
@@ -54,6 +56,9 @@ public class DocumentIngestionService {
     private final AuditLogService auditLogService;
     private final AsyncDocumentProcessor asyncDocumentProcessor;
     private final TransactionTemplate transactionTemplate;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TenantRepository tenantRepository;
 
     public DocumentIngestionService(
             OmegaProperties properties,
@@ -112,8 +117,9 @@ public class DocumentIngestionService {
             }
 
             // Confirmar fila PROCESSING + auditoría antes de lanzar el hilo @Async
+            String resolvedCorpusScope = resolveTenantCorpusScope(principal.tenantId());
             DocumentEntity savedDoc = transactionTemplate.execute(tx -> {
-                DocumentEntity entity = documentRepository.saveAndFlush(new DocumentEntity(
+                DocumentEntity docToSave = new DocumentEntity(
                         principal.tenantId(),
                         expediente.getId(),
                         principal.userId(),
@@ -123,7 +129,9 @@ public class DocumentIngestionService {
                         embeddingProvider.modelName(),
                         false,
                         DocumentStatus.PROCESSING
-                ));
+                );
+                docToSave.setCorpusScope(resolvedCorpusScope);
+                DocumentEntity entity = documentRepository.saveAndFlush(docToSave);
 
                 auditLogService.record(
                         principal.tenantId(),
@@ -289,6 +297,15 @@ public class DocumentIngestionService {
                 doc.getCreatedAt(),
                 doc.getTempDeletedAt()
         );
+    }
+
+    private String resolveTenantCorpusScope(UUID tenantId) {
+        if (tenantRepository == null || tenantId == null) {
+            return TenantProfile.GENERAL.name();
+        }
+        return tenantRepository.findByIdAndActiveTrue(tenantId)
+                .map(t -> t.getProfile() != null ? t.getProfile().name() : TenantProfile.GENERAL.name())
+                .orElse(TenantProfile.GENERAL.name());
     }
 
     public record IngestAcceptedResult(

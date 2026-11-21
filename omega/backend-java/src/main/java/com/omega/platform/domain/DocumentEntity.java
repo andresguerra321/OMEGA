@@ -135,6 +135,14 @@ public class DocumentEntity {
         this.ocrApplied = ocrApplied;
     }
 
+    public String getCorpusScope() {
+        return corpusScope;
+    }
+
+    public void setCorpusScope(String corpusScope) {
+        this.corpusScope = (corpusScope == null || corpusScope.isBlank()) ? "GENERAL" : corpusScope.trim().toUpperCase();
+    }
+
     public DocumentStatus getStatus() {
         return status;
     }
