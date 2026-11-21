@@ -4,12 +4,14 @@ import { legalApi } from '../lib/legalApi.js';
 import { useLegalData } from '../lib/useLegalData.js';
 import { LegalDocumentAiPanel } from './LegalDocumentAiPanel';
 import { LegalCaseEditor } from './LegalCaseEditor';
-import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY, LegalLoadState, LegalPagination } from './LegalWorkspacePrimitives';
-import { LegalDocumentsPreview, LegalAccessPreview, LegalActivityPreview, LegalAssistantPreview } from './LegalCasePreviewTabs';
+import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY } from '../lib/legalPresentation.js';
+import { LegalLoadState, LegalPagination } from './LegalWorkspacePrimitives';
+import { LegalAccessPreview, LegalActivityPreview, LegalAssistantPreview } from './LegalCasePreviewTabs';
+import { LegalDocumentsPanel } from './LegalDocumentsPanel';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['access', 'Acceso'], ['activity', 'Actividad']];
 
-function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId }) {
+function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, policyAccepted }) {
   const [tab, setTab] = useState('documents');
   const load = useCallback(() => legalApi.metadata(id), [id]);
   const request = useLegalData(load);
@@ -29,7 +31,7 @@ function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId }) {
     <div className="rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-5 backdrop-blur-md">
       <div role="tablist" aria-label="Secciones del expediente" onKeyDown={moveTab} className="flex gap-1 overflow-x-auto border-b border-white/[0.06] pb-2">{TABS.map(([key, label]) => <button key={key} id={`legal-tab-${key}`} role="tab" type="button" aria-selected={tab === key} aria-controls={`legal-panel-${key}`} tabIndex={tab === key ? 0 : -1} onClick={() => setTab(key)} className={`rounded-lg px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-2 focus-visible:outline-white ${tab === key ? 'border-b-2 border-[#2F6FED] text-white' : 'text-white/60 hover:text-white'}`}>{label}</button>)}</div>
       <section role="tabpanel" id={`legal-panel-${tab}`} aria-labelledby={`legal-tab-${tab}`} tabIndex={0} className="pt-4 focus-visible:outline-2 focus-visible:outline-white">
-        {tab === 'documents' && <LegalDocumentsPreview key={value.id} value={value} />}
+        {tab === 'documents' && <LegalDocumentsPanel key={value.id} value={value} role={role} policyAccepted={policyAccepted} />}
         {tab === 'assistant' && <LegalAssistantPreview value={value} onOpenAssistant={onOpenAssistant} />}
         {tab === 'access' && <LegalAccessPreview key={value.id} value={value} />}
         {tab === 'activity' && <LegalActivityPreview key={value.id} value={value} currentUserId={currentUserId} />}
@@ -61,7 +63,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
       </header>
       <p role="note" className="text-xs text-white/60">El asistente no ofrece asesoría legal. Verifica la información con un profesional.</p>
       <LegalDocumentAiPanel onPolicyChange={setPolicyAccepted} />
-      {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} /> : <>
+      {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1 text-xs text-white/60">Buscar<input name="search" value={filters.search} onChange={change} maxLength={120} placeholder="Título o referencia" className={LEGAL_INPUT} /></label>
           <label className="space-y-1 text-xs text-white/60">Estado<select name="status" value={filters.status} onChange={change} className={LEGAL_INPUT}><option value="">Todos los estados</option>{Object.entries(CASE_STATES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>

@@ -87,6 +87,24 @@ test('navegación por perfil y estados reales de Expedientes', async (t) => {
     await act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Acepto')).click());
     assert.equal(acceptedHash, policy.fingerprint);
     assert.match(document.body.textContent, /Política aceptada/);
+    const { LegalDocumentsPanel } = await server.ssrLoadModule('/src/components/LegalDocumentsPanel.jsx');
+    const doc = { id: 'doc', originalFilename: 'synthetic.pdf', sha256Hash: 'a'.repeat(64), totalPages: 1, status: 'INDEXED', ocrApplied: false, tempDeletedAt: '2026-11-20T12:00:00Z' };
+    let deleted = false;
+    globalThis.fetch = async (url, options) => {
+      if (options?.method === 'DELETE') { deleted = true; return new Response(null, { status: 204 }); }
+      if (String(url).includes('/text?')) return json({ fragments: [{ id: 'fragment', order: 0, text: 'Texto sintético extraído.' }] });
+      if (String(url).endsWith('/detail')) return json({ metadata: doc, format: 'PDF' });
+      return json({ ...emptyPage, content: deleted ? [] : [{ metadata: doc }], totalElements: deleted ? 0 : 1, totalPages: 1 });
+    };
+    await act(async () => root.render(createElement(LegalDocumentsPanel, { key: 'docs', value: synthetic, role: 'ANALYST', policyAccepted: true })));
+    await act(async () => findButton('synthetic.pdf').click());
+    assert.match(document.body.textContent, /Texto sintético extraído/);
+    assert.match(document.body.textContent, /no es una firma/);
+    await act(async () => findButton('Eliminar documento').click());
+    assert.equal(deleted, false);
+    await act(async () => findButton('Confirmar eliminación').click());
+    assert.equal(deleted, true);
+    assert.match(document.body.textContent, /aún no tiene documentos/);
   } finally {
     if (root) await act(async () => root.unmount());
     Object.assign(globalThis, saved);

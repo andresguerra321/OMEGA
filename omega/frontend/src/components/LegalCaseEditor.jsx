@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY } from './LegalWorkspacePrimitives';
+import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY } from '../lib/legalPresentation.js';
 
 export function LegalCaseEditor({ value, onSave, onClose }) {
   const [draft, setDraft] = useState(() => value ? { title: value.title, classification: value.classification, description: value.description, reference: value.reference, status: value.status } : { title: '', classification: 'CONFIDENTIAL', description: '', reference: '', status: 'OPEN' });
