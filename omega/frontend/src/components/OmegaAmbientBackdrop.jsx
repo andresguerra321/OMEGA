@@ -4,7 +4,7 @@
  *
  * @param {{ intensity?: 'focused' | 'workspace' | 'dashboard' }} props
  */
-export function OmegaAmbientBackdrop({ intensity = 'workspace' }) {
+export function OmegaAmbientBackdrop({ intensity = 'workspace', opacityClassName }) {
   const isFocused = intensity === 'focused';
 
   return (
@@ -18,7 +18,7 @@ export function OmegaAmbientBackdrop({ intensity = 'workspace' }) {
         decoding="async"
         draggable={false}
         className={`fixed inset-0 -z-10 h-full w-full object-cover object-center pointer-events-none select-none transition-opacity duration-500 [mask-image:radial-gradient(ellipse_96%_90%_at_50%_45%,black_52%,transparent_100%)] [-webkit-mask-image:radial-gradient(ellipse_96%_90%_at_50%_45%,black_52%,transparent_100%)] ${
-          isFocused ? 'opacity-50' : 'opacity-35'
+          opacityClassName || (isFocused ? 'opacity-50' : 'opacity-35')
         }`}
       />
     </div>

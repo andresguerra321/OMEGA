@@ -14,6 +14,11 @@ import org.springframework.web.bind.annotation.*;
 public class LegalCaseController {
     private final LegalCaseService service;
     public LegalCaseController(LegalCaseService service) { this.service=service; }
+    @PostMapping("/full") @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
+    public CaseView create(@AuthenticationPrincipal OmegaPrincipal actor,@Valid @RequestBody UpdateCase request) {
+        return service.create(actor,request);
+    }
     @GetMapping("/page")
     public PageView<CaseView> list(@AuthenticationPrincipal OmegaPrincipal actor,
             @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size,

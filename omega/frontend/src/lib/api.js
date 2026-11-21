@@ -254,7 +254,7 @@ function buildFriendlyError(status, payload, fallbackMessage) {
   return detail || payload?.title || fallbackMessage || `Error HTTP ${status}`;
 }
 
-async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json' } = {}) {
+export async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json' } = {}) {
   const url = rawUrl ? path : `${API_V1}${path}`;
   const reqHeaders = new Headers(headers);
   const session = getAuthSession();

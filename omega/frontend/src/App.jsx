@@ -1105,6 +1105,7 @@ export default function App() {
             className="relative isolate flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
           >
             <OmegaAmbientBackdrop
+              opacityClassName={privateOnlyWorkspace ? 'opacity-30' : undefined}
               intensity={
                 activeNav === 'exposicion' || activeNav === 'enlace'
                   ? 'focused'
@@ -1469,7 +1470,11 @@ export default function App() {
                 ) : activeNav === 'expedientes' ? (
                   <ExpedientesPanel
                     key={`${authSession?.tenantId}:${authSession?.userId}`}
-                    onOpenAccount={() => handleNavigate('cuenta')}
+                    authSession={authSession}
+                    onOpenAssistant={(id) => {
+                      setActiveExpedienteId(id); setExpedienteDocs([]); setCurrentSessionId(null); setDraftContext(null);
+                      setSelectedCitation(null); setIsSourcesPanelOpen(false); setUsePrivateDocs(true); handleNavigate('preguntar');
+                    }}
                   />
                 ) : activeNav === 'cuenta' ? (
                   <AccountSettingsPanel

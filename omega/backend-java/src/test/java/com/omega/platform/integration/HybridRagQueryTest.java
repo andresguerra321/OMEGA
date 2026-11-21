@@ -115,6 +115,26 @@ class HybridRagQueryTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
+    void createsCompleteCaseAtomicallyAndKeepsPrivateMetadataOutOfAudit() throws Exception {
+        String suffix=UUID.randomUUID().toString().substring(0,8);
+        String token=registerTenant("complete-"+suffix,"Synthetic","complete@"+suffix+".org").get("accessToken").asText();
+        var result=mockMvc.perform(post("/api/v1/expedientes/full").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Synthetic complete case\",\"classification\":\"CONFIDENTIAL\",\"description\":\"PRIVATE_DESCRIPTION_MARKER\",\"reference\":\"PRIVATE_REFERENCE_MARKER\",\"status\":\"CLOSED\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect(jsonPath("$.canManagePermissions").value(true)).andReturn();
+        String id=objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
+        mockMvc.perform(get("/api/v1/expedientes/"+id+"/metadata").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.reference").value("PRIVATE_REFERENCE_MARKER"));
+        String activity=mockMvc.perform(get("/api/v1/expedientes/"+id+"/activity/page").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(activity).contains("EXPEDIENTE_CREATED").doesNotContain("PRIVATE_DESCRIPTION_MARKER","PRIVATE_REFERENCE_MARKER","Synthetic complete case");
+        mockMvc.perform(post("/api/v1/expedientes/full").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"\",\"classification\":\"CONFIDENTIAL\",\"status\":\"OPEN\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void ingestsWordOnlyForLegalAndKeepsTheHashOfOriginalBytes() throws Exception {
         when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small"); when(embeddingProvider.dimensions()).thenReturn(1536);
         when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {

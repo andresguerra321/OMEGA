@@ -12,19 +12,19 @@ function Target({ value }) {
   </div>;
 }
 
-export function LegalDocumentAiPanel() {
+export function LegalDocumentAiPanel({ onPolicyChange }) {
   const [attempt, setAttempt] = useState(0);
   const [policy, setPolicy] = useState(null);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState(false);
   useEffect(() => {
     let active = true;
-    fetchLegalDocumentAiPolicy().then((value) => { if (active) { setPolicy(value); setError(''); } })
+    fetchLegalDocumentAiPolicy().then((value) => { if (active) { setPolicy(value); setError(''); onPolicyChange?.(value.accepted); } })
       .catch(() => { if (active) setError('No pudimos comprobar la política de documentos.'); });
     const refresh = () => { if (active) setAttempt((value) => value + 1); };
     window.addEventListener('omega:backend-ready', refresh);
     return () => { active = false; window.removeEventListener('omega:backend-ready', refresh); };
-  }, [attempt]);
+  }, [attempt, onPolicyChange]);
 
   async function accept() {
     setAccepting(true); setError('');

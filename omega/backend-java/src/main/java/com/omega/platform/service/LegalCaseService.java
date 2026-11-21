@@ -54,6 +54,17 @@ public class LegalCaseService {
     }
 
     @Transactional
+    public CaseView create(OmegaPrincipal actor, UpdateCase request) {
+        var value=new ExpedienteEntity(actor.tenantId(),actor.userId(),request.title().strip(),request.classification());
+        value.setDescription(request.description()==null ? "" : request.description().strip());
+        value.setCaseReference(request.reference()==null ? "" : request.reference().strip()); value.setStatus(request.status());
+        cases.saveAndFlush(value);
+        audit.record(actor.tenantId(),actor.userId(),"EXPEDIENTE_CREATED","EXPEDIENTE",value.getId().toString(),
+                Map.of("classification",value.getClassification().name(),"status",value.getStatus().name()));
+        return view(actor,value);
+    }
+
+    @Transactional
     public CaseView metadata(OmegaPrincipal actor, UUID id) {
         var value=authorization.requireReadAccess(actor,id);
         audit.record(actor.tenantId(),actor.userId(),"EXPEDIENTE_VIEWED","EXPEDIENTE",id.toString(),Map.of());
