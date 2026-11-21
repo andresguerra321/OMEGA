@@ -59,6 +59,9 @@ class ApiTokenScopeAndAuthTest {
     private TenantRepository tenantRepository;
 
     @MockBean
+    private com.omega.platform.repository.DocumentRepository documentRepository;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean

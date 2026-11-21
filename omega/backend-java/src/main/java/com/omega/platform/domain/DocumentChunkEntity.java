@@ -118,6 +118,9 @@ public class DocumentChunkEntity {
         return embedding;
     }
 
+    public void setEmbedding(float[] value) { embedding = value; }
+    public void setEmbeddingModel(String value) { embeddingModel = value; }
+
     public int getPageNumber() {
         return pageNumber;
     }

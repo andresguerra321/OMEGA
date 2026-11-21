@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -36,6 +39,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -102,6 +108,215 @@ class HybridRagQueryTest {
     @MockBean
     private EmbeddingProvider embeddingProvider;
 
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void createsCompleteCaseAtomicallyAndKeepsPrivateMetadataOutOfAudit() throws Exception {
+        String suffix=UUID.randomUUID().toString().substring(0,8);
+        String token=registerTenant("complete-"+suffix,"Synthetic","complete@"+suffix+".org").get("accessToken").asText();
+        var result=mockMvc.perform(post("/api/v1/expedientes/full").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Synthetic complete case\",\"classification\":\"CONFIDENTIAL\",\"description\":\"PRIVATE_DESCRIPTION_MARKER\",\"reference\":\"PRIVATE_REFERENCE_MARKER\",\"status\":\"CLOSED\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect(jsonPath("$.canManagePermissions").value(true)).andReturn();
+        String id=objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
+        mockMvc.perform(get("/api/v1/expedientes/"+id+"/metadata").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.reference").value("PRIVATE_REFERENCE_MARKER"));
+        String activity=mockMvc.perform(get("/api/v1/expedientes/"+id+"/activity/page").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(activity).contains("EXPEDIENTE_CREATED").doesNotContain("PRIVATE_DESCRIPTION_MARKER","PRIVATE_REFERENCE_MARKER","Synthetic complete case");
+        mockMvc.perform(post("/api/v1/expedientes/full").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"\",\"classification\":\"CONFIDENTIAL\",\"status\":\"OPEN\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void ingestsWordOnlyForLegalAndKeepsTheHashOfOriginalBytes() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small"); when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts=inv.getArgument(0); return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+        var buffer=new ByteArrayOutputStream();
+        try(var zip=new java.util.zip.ZipOutputStream(buffer)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("word/document.xml"));
+            zip.write("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>Predator contrato sintético MARCADOR_LEGAL_PRINCIPAL.</w:t></w:r></w:p></w:body></w:document>".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        byte[] bytes=buffer.toByteArray(); String suffix=UUID.randomUUID().toString().substring(0,8);
+        String token=registerTenant("word-"+suffix,"Synthetic","word@"+suffix+".org").get("accessToken").asText();
+        UUID caseId=createExpediente(token,"Synthetic Word");
+        mockMvc.perform(multipart("/api/v1/expedientes/"+caseId+"/documents")
+                .file(new MockMultipartFile("file","synthetic.docx",MediaType.APPLICATION_OCTET_STREAM_VALUE,bytes))
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/v1/profile").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"profile\":\"LEGAL\",\"confirmed\":true}"))
+                .andExpect(status().isOk());
+        UUID id=uploadAndWaitIndexed(token,caseId,"synthetic.docx",bytes);
+        var document=documentRepository.findById(id).orElseThrow();
+        assertThat(document.getDocumentFormat()).isEqualTo("DOCX");
+        assertThat(document.getSha256Hash()).isEqualTo(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)));
+        assertLegalCitation(token,caseId,id);
+    }
+
+    @Test
+    void exposesMetadataTextActivityAndSelectedDocumentsWithoutChangingLegacyListContract() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts=inv.getArgument(0); return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+        String suffix=UUID.randomUUID().toString().substring(0,8);
+        var tenant=registerTenant("metadata-"+suffix,"Synthetic", "test@"+suffix+".org");
+        String token=tenant.get("accessToken").asText(); UUID caseId=createExpediente(token,"Synthetic case");
+        UUID first=uploadPdfAndWaitIndexed(token,caseId,"synthetic-one.pdf","Contrato","Predator contrato sintético con evidencia principal suficiente para este caso.");
+        UUID second=uploadPdfAndWaitIndexed(token,caseId,"synthetic-two.pdf","Contrato","Predator segundo contrato sintético con evidencia diferente para este caso.");
+        UUID anotherCase=createExpediente(token,"Another case");
+        UUID unrelated=uploadPdfAndWaitIndexed(token,anotherCase,"synthetic-private.pdf","Contrato","Predator evidencia exclusiva de otro expediente que debe excluirse siempre.");
+        String path="/api/v1/expedientes/"+caseId;
+        mockMvc.perform(put(path+"/metadata").header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Synthetic updated\",\"classification\":\"CONFIDENTIAL\",\"description\":\"Private synthetic description\",\"reference\":\"SYN-001\",\"status\":\"CLOSED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED")).andExpect(jsonPath("$.reference").value("SYN-001"));
+        mockMvc.perform(get("/api/v1/expedientes/page").param("status","CLOSED").param("search","SYN-001").param("size","1")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].canWrite").value(true));
+        mockMvc.perform(get("/api/v1/expedientes").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").exists());
+        mockMvc.perform(get(path+"/documents/page").param("size","1").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1)).andExpect(jsonPath("$.totalElements").value(2));
+        mockMvc.perform(get(path+"/documents/"+first+"/text").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.fragments[0].text").exists());
+        mockMvc.perform(post(path+"/query").header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"question\":\"Predator contrato\",\"documentIds\":[\""+second+"\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.citations.length()").value(1))
+                .andExpect(jsonPath("$.citations[0].documentId").value(second.toString()));
+        mockMvc.perform(post(path+"/query").header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"question\":\"Predator contrato\",\"documentIds\":[\""+unrelated+"\"]}"))
+                .andExpect(status().isNotFound());
+        String foreign=registerTenant("foreign-meta-"+suffix,"Foreign", "foreign@"+suffix+".org").get("accessToken").asText();
+        for(String route:java.util.List.of("/metadata","/activity/page","/documents/page","/documents/"+first+"/text"))
+            mockMvc.perform(get(path+route).header(HttpHeaders.AUTHORIZATION,"Bearer "+foreign)).andExpect(status().isNotFound());
+        var activity=mockMvc.perform(get(path+"/activity/page").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].action").exists()).andReturn();
+        assertThat(activity.getResponse().getContentAsString()).doesNotContain("synthetic-one.pdf","Private synthetic description","Synthetic updated");
+        mockMvc.perform(delete(path+"/documents/"+first).header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isNoContent());
+        mockMvc.perform(get(path+"/documents/"+first+"/text").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isNotFound());
+        mockMvc.perform(delete(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isNoContent());
+        assertThat(documentRepository.findById(second)).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM omega_rag.document_chunks WHERE document_id IN (?,?)",Long.class,first,second)).isZero();
+    }
+
+    @Test
+    void retagsExistingDocumentsWhenEnteringAndLeavingLegalWithoutLosingEvidence() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts = inv.getArgument(0);
+            return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode registered = registerTenant("transition-" + suffix, "Synthetic", "test@" + suffix + ".org");
+        String token = registered.get("accessToken").asText();
+        UUID caseId = createExpediente(token, "Synthetic transition case");
+        UUID documentId = uploadPdfAndWaitIndexed(token, caseId, "synthetic.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_LEGAL_PRINCIPAL.");
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
+        for (String profile : java.util.List.of("LEGAL", "DEVELOPER")) {
+            mockMvc.perform(put("/api/v1/profile")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"profile\":\"" + profile + "\",\"confirmed\":true}"))
+                    .andExpect(status().isOk());
+            assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo(profile);
+            assertLegalCitation(token, caseId, documentId);
+        }
+    }
+
+    @Test
+    void legalUploadAndLegacyRepairRemainQueryableWithoutCrossCaseOrCrossTenantCitations() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts = inv.getArgument(0);
+            return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode legal = registerTenant("legal-" + suffix, "Legal", "legal@" + suffix + ".org");
+        String token = legal.get("accessToken").asText();
+        mockMvc.perform(put("/api/v1/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "profile": "LEGAL", "confirmed": true }
+                                """))
+                .andExpect(status().isOk());
+        UUID caseId = createExpediente(token, "Expediente contractual");
+        UUID documentId = uploadPdfAndWaitIndexed(token, caseId, "contrato.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_LEGAL_PRINCIPAL.");
+        UUID otherCase = createExpediente(token, "Otro expediente");
+        uploadPdfAndWaitIndexed(token, otherCase, "otro.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_OTRO_EXPEDIENTE.");
+        assertLegalCitation(token, caseId, documentId);
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
+
+        JsonNode general = registerTenant("general-" + suffix, "General", "general@" + suffix + ".org");
+        String generalToken = general.get("accessToken").asText();
+        UUID generalCase = createExpediente(generalToken, "Expediente general");
+        UUID generalDoc = uploadPdfAndWaitIndexed(generalToken, generalCase, "general.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_OTRO_TENANT.");
+        JsonNode developer = registerTenant("dev-" + suffix, "Developer", "dev@" + suffix + ".org");
+        String devToken = developer.get("accessToken").asText();
+        mockMvc.perform(put("/api/v1/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + devToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "profile": "DEVELOPER", "confirmed": true }
+                                """))
+                .andExpect(status().isOk());
+        UUID devCase = createExpediente(devToken, "Expediente developer");
+        UUID devDoc = uploadPdfAndWaitIndexed(devToken, devCase, "dev.pdf", "Contrato",
+                "Predator Intellexa contrato MARCADOR_DEVELOPER.");
+
+        // Recreate the pre-V17 bug, then execute the actual migration against existing rows.
+        jdbcTemplate.update("UPDATE omega_rag.documents SET corpus_scope = 'GENERAL' WHERE id = ?", documentId);
+        var migration = new ResourceDatabasePopulator(new ClassPathResource(
+                "db/migration/V17__repair_legal_document_corpus_scope.sql"));
+        migration.execute(dataSource);
+        migration.execute(dataSource);
+        assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
+        assertThat(documentRepository.findById(generalDoc).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
+        assertThat(documentRepository.findById(devDoc).orElseThrow().getCorpusScope()).isEqualTo("DEVELOPER");
+        assertLegalCitation(token, caseId, documentId);
+        mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + generalToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Predator contrato\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    private void assertLegalCitation(String token, UUID caseId, UUID documentId) throws Exception {
+        acceptLegalPolicyIfNeeded(token);
+        mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Predator Intellexa contrato\",\"topK\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OK"))
+                .andExpect(jsonPath("$.citations.length()").value(1))
+                .andExpect(jsonPath("$.citations[0].documentId").value(documentId.toString()))
+                .andExpect(jsonPath("$.citations[0].pageNumber").value(1))
+                .andExpect(jsonPath("$.citations[0].excerpt").value(
+                        org.hamcrest.Matchers.containsString("MARCADOR_LEGAL_PRINCIPAL")));
+    }
+
     @Test
     void enforcesHybridSearchTenantExpedienteIsolationCitationsAndModelDriftReindexWarning() throws Exception {
         final String[] activeModelHolder = {"text-embedding-3-small"};
@@ -161,7 +376,7 @@ class HybridRagQueryTest {
         assertThat(citation.get("citationLabel").asText())
                 .isEqualTo("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]");
         assertThat(body.get("answer").asText())
-                .contains("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]")
+                .contains("[1]")
                 .doesNotContain("MARCADOR_EXCLUSIVO_EXPEDIENTE_A2")
                 .doesNotContain("MARCADOR_EXCLUSIVO_TENANT_B");
 
@@ -193,7 +408,7 @@ class HybridRagQueryTest {
         assertThat(degradedJson.get("warnings").get(0).asText()).contains("tsvector");
         assertThat(degradedJson.get("citations").get(0).get("originalFilename").asText()).isEqualTo("predator-cytrox.pdf");
         assertThat(degradedJson.get("answer").asText())
-                .contains("[Documento: predator-cytrox.pdf | Pág. 1 | Sección: 1. Infraestructura Cytrox Predator]")
+                .contains("[1]")
                 .doesNotContain("MARCADOR_EXCLUSIVO_EXPEDIENTE_A2")
                 .doesNotContain("MARCADOR_EXCLUSIVO_TENANT_B");
 
@@ -217,7 +432,19 @@ class HybridRagQueryTest {
                 .isEqualTo("local-bge-m3-phase2");
         assertThat(driftJson.get("warnings").get(0).asText()).contains("Zero-Retention");
         assertThat(documentRepository.findById(docA1).orElseThrow().getStatus())
+                .isEqualTo(DocumentStatus.INDEXED);
+        mockMvc.perform(post("/api/v1/expedientes/" + expA1 + "/documents/mark-reindex-required")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isOk());
+        assertThat(documentRepository.findById(docA1).orElseThrow().getStatus())
                 .isEqualTo(DocumentStatus.REINDEX_REQUIRED);
+        String originalHash=documentRepository.findById(docA1).orElseThrow().getSha256Hash();
+        Long fragmentsBefore=jdbcTemplate.queryForObject("SELECT count(*) FROM omega_rag.document_chunks WHERE document_id = ?",Long.class,docA1);
+        mockMvc.perform(post("/api/v1/expedientes/"+expA1+"/documents/"+docA1+"/reindex")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+tokenA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.embeddingModel").value("local-bge-m3-phase2"));
+        assertThat(documentRepository.findById(docA1).orElseThrow().getSha256Hash()).isEqualTo(originalHash);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM omega_rag.document_chunks WHERE document_id = ?",Long.class,docA1)).isEqualTo(fragmentsBefore);
     }
 
     private UUID uploadPdfAndWaitIndexed(
@@ -244,8 +471,13 @@ class HybridRagQueryTest {
             pdfBytes = baos.toByteArray();
         }
 
+        return uploadAndWaitIndexed(token,expId,filename,pdfBytes);
+    }
+
+    private UUID uploadAndWaitIndexed(String token, UUID expId, String filename, byte[] bytes) throws Exception {
+        acceptLegalPolicyIfNeeded(token);
         MvcResult up = mockMvc.perform(multipart("/api/v1/expedientes/" + expId + "/documents")
-                        .file(new MockMultipartFile("file", filename, MediaType.APPLICATION_PDF_VALUE, pdfBytes))
+                        .file(new MockMultipartFile("file", filename, MediaType.APPLICATION_OCTET_STREAM_VALUE, bytes))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isAccepted())
                 .andReturn();
@@ -280,6 +512,19 @@ class HybridRagQueryTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(res.getResponse().getContentAsString());
+    }
+
+    private void acceptLegalPolicyIfNeeded(String token) throws Exception {
+        var profile=mockMvc.perform(get("/api/v1/profile/config").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andReturn();
+        if(!"LEGAL".equals(objectMapper.readTree(profile.getResponse().getContentAsString()).path("profile").asText())) return;
+        var response=mockMvc.perform(get("/api/v1/legal/document-ai/policy").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andReturn();
+        var policy=objectMapper.readTree(response.getResponse().getContentAsString());
+        if(!policy.path("accepted").asBoolean())
+            mockMvc.perform(post("/api/v1/legal/document-ai/consent").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"fingerprint\":\""+policy.path("fingerprint").asText()+"\"}"))
+                    .andExpect(status().isNoContent());
     }
 
     private UUID createExpediente(String token, String title) throws Exception {

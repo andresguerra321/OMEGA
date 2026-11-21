@@ -4,5 +4,6 @@ public enum DocumentStatus {
     PROCESSING,
     INDEXED,
     FAILED,
+    REJECTED,
     REINDEX_REQUIRED
 }

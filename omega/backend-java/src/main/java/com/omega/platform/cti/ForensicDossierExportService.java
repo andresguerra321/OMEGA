@@ -102,7 +102,7 @@ public class ForensicDossierExportService {
         var principal = new OmegaPrincipal(scope.userId(), scope.tenantId(), "", scope.role(), true);
         var expediente = authorization.requireReadAccess(principal, expedienteId);
         var evidence = documents.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(scope.tenantId(), expedienteId).stream()
-                .map(doc -> new EvidenceItem(doc.getId(), doc.getOriginalFilename(), doc.getSha256Hash(), doc.getStatus().name(),
+                .map(doc -> new EvidenceItem(doc.getId(), "Documento " + doc.getId(), doc.getSha256Hash(), doc.getStatus().name(),
                         expediente.getClassification().name(), doc.getTotalPages(), doc.getEmbeddingModel(), doc.getCreatedAt())).toList();
         Instant exportedAt = Instant.now();
         // record() holds the tenant advisory lock until this snapshot and its export transaction complete.
@@ -115,16 +115,20 @@ public class ForensicDossierExportService {
         List<FindingItem> findings = new ArrayList<>();
         for (AuditLogEntity entry : sequence) {
             JsonNode metadata = readMetadata(entry.getMetadataJson());
+            JsonNode safeMetadata = mapper.valueToTree(com.omega.platform.service.AuditMetadataPolicy.sanitize(
+                    mapper.convertValue(metadata, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {})));
+            boolean safeToDisclose = metadata.equals(safeMetadata);
             boolean relevant = ("EXPEDIENTE".equals(entry.getResourceType()) && expedienteId.toString().equals(entry.getResourceId()))
                     || ("DOCUMENT".equals(entry.getResourceType()) && documentIds.contains(entry.getResourceId()))
                     || expedienteId.toString().equals(metadata.path("expedienteId").asText());
             exportedEntries.add(new AuditEntry(entry.getChainSeq(), entry.getId(), entry.getTenantId(),
                     relevant ? entry.getActorUserId() : null, relevant ? entry.getAction() : null,
                     relevant ? entry.getResourceType() : null, relevant ? entry.getResourceId() : null,
-                    relevant ? entry.getMetadataJson() : null, entry.getPreviousHash(), entry.getCurrentHash(), entry.getCreatedAt(), !relevant));
+                    relevant && safeToDisclose ? entry.getMetadataJson() : null,
+                    entry.getPreviousHash(), entry.getCurrentHash(), entry.getCreatedAt(), !relevant || !safeToDisclose));
             if (relevant && (entry.getAction().contains("FORENSIC") && !entry.getAction().startsWith("EXPORT_")
                     || entry.getAction().startsWith("CONTAINMENT_"))) {
-                findings.add(new FindingItem(entry.getId(), entry.getAction(), entry.getCreatedAt(), explanation(entry.getAction(), metadata), metadata));
+                findings.add(new FindingItem(entry.getId(), entry.getAction(), entry.getCreatedAt(), explanation(entry.getAction(), safeMetadata), safeMetadata));
             }
         }
         String risk = findings.stream().map(f -> f.technicalEvidence().path("riskLevel").asText("UNKNOWN"))
@@ -138,7 +142,7 @@ public class ForensicDossierExportService {
                 sequence.isEmpty() ? AuditLogService.GENESIS_HASH : sequence.getLast().getCurrentHash(), verification.verifiedCount(),
                 sequence.size(), verification.brokenEntryId(), verification.detail(), List.copyOf(exportedEntries));
         return new DossierExportPayload("omega-dossier-v1", exportedAt,
-                new CaseMetadata(expedienteId, scope.tenantId(), expediente.getTitle(), expediente.getClassification().name(), expediente.getCreatedAt()),
+                new CaseMetadata(expedienteId, scope.tenantId(), "Expediente " + expedienteId, expediente.getClassification().name(), expediente.getCreatedAt()),
                 risk, summary, evidence, List.copyOf(findings), chain, List.of(
                 "Informe automatizado de OMEGA: no acredita firma de un perito ni certificación legal o sello de tiempo de una autoridad externa.",
                 "CHAIN_VALID verifica la consistencia del snapshot almacenado; no demuestra autenticidad del archivo original ni detecta una reescritura completa de la cadena o eliminación de su cola sin un anclaje externo previo.",

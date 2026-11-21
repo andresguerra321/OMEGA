@@ -1,17 +1,17 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "profiles": {
     "LEGAL": {
       "visibleModules": [
-        "cuenta",
+        "expedientes",
         "preguntar",
-        "amenazas",
-        "expedientes"
+        "seguridad_despacho",
+        "cuenta"
       ],
       "ragCorpusScope": "legal_expedientes",
       "copilotTone": "forensic_legal",
       "copilotInstructions": "Prioriza lenguaje formal y citas exactas de expedientes y documentos del tenant. Si la evidencia no sustenta una afirmación, abstente explícitamente.",
-      "defaultView": "cuenta"
+      "defaultView": "expedientes"
     },
     "DEVELOPER": {
       "visibleModules": [

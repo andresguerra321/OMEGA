@@ -19,6 +19,7 @@ import {
   UserCheck,
   Bell,
   KeyRound,
+  FolderOpen,
 } from 'lucide-react';
 import {
   fetchApiHealth,
@@ -89,6 +90,9 @@ const RepoScannerPanel = lazy(() =>
 const DevCliModulePanel = lazy(() =>
   import('./components/DevCliModulePanel').then((m) => ({ default: m.DevCliModulePanel }))
 );
+const ExpedientesPanel = lazy(() =>
+  import('./components/ExpedientesPanel').then((m) => ({ default: m.ExpedientesPanel }))
+);
 const AuthModal = lazy(() =>
   import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
 );
@@ -103,6 +107,7 @@ const NAV_ITEMS = [
   { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
   { id: 'preguntar', label: 'Asistente', subtitle: 'Consultas con citas', icon: MessageSquare },
   { id: 'cuenta', label: 'Cuenta y Ajustes', subtitle: 'Perfil, seguridad, ajustes y configuración', icon: UserCheck },
+  { id: 'expedientes', label: 'Expedientes', subtitle: 'Expedientes del despacho', icon: FolderOpen },
 ];
 
 const BOOT_LOADER_STEPS = [
@@ -160,12 +165,13 @@ export default function App() {
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
   const { profileConfig, switchProfile } = useTenantProfileConfig(authSession);
+  const privateOnlyWorkspace = profileConfig?.ragCorpusScope === 'legal_expedientes';
   const appliedProfileDefaultRef = useRef('');
   useEffect(() => {
     const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
     if (!authSession || !profileConfig?.defaultView || appliedProfileDefaultRef.current === profileKey) return;
     appliedProfileDefaultRef.current = profileKey;
-    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'dev_cli', 'preguntar', 'cuenta'].includes(profileConfig.defaultView)) {
+    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'dev_cli', 'preguntar', 'cuenta', 'expedientes'].includes(profileConfig.defaultView)) {
       setActiveNav(profileConfig.defaultView);
     }
   }, [authSession, profileConfig?.profile, profileConfig?.defaultView]);
@@ -629,7 +635,9 @@ export default function App() {
     const t0 = performance.now();
 
     try {
-      const targetExpedienteId = usePrivateDocs && activeExpedienteId ? activeExpedienteId : null;
+      const targetExpedienteId = (privateOnlyWorkspace || usePrivateDocs) && activeExpedienteId ? activeExpedienteId : null;
+      if (privateOnlyWorkspace && !targetExpedienteId) throw new Error('Selecciona un expediente antes de consultar sus documentos.');
+      if (privateOnlyWorkspace && options?.imageFile) throw new Error('Carga la imagen como documento del expediente antes de consultarla.');
       const res = options?.imageFile
         ? await sendMultimodalQuery({
             expedienteId: targetExpedienteId,
@@ -644,7 +652,7 @@ export default function App() {
             pinnedContextPayload,
             {
               expedienteId: targetExpedienteId,
-              generalMode: generalChatMode,
+              generalMode: privateOnlyWorkspace ? false : generalChatMode,
               analysisContext: options?.analysisContext ?? (lastAnalysisContext || null),
             },
           );
@@ -1097,6 +1105,7 @@ export default function App() {
             className="relative isolate flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
           >
             <OmegaAmbientBackdrop
+              opacityClassName={privateOnlyWorkspace ? 'opacity-30' : undefined}
               intensity={
                 activeNav === 'exposicion' || activeNav === 'enlace'
                   ? 'focused'
@@ -1409,12 +1418,14 @@ export default function App() {
                 >
                 {activeNav === 'preguntar' ? (
                   <ChatWorkspace
+                    privateOnly={privateOnlyWorkspace}
+                    disclaimer={privateOnlyWorkspace ? 'No es asesoría legal. Verifica cada afirmación en los documentos citados.' : ''}
                     messages={messages}
                     loading={loadingChat}
                     topK={topK}
                     onChangeTopK={setTopK}
-                    generalChatMode={generalChatMode}
-                    onToggleGeneralChatMode={() => setGeneralChatMode((v) => !v)}
+                    generalChatMode={privateOnlyWorkspace ? false : generalChatMode}
+                    onToggleGeneralChatMode={privateOnlyWorkspace ? undefined : () => setGeneralChatMode((v) => !v)}
                     sourceScope={sourceScope}
                     onChangeSourceScope={setSourceScope}
                     onSendMessage={handleSend}
@@ -1439,7 +1450,7 @@ export default function App() {
                     textareaRef={textareaRef}
                     authSession={authSession}
                     onOpenAuth={openAuthModal}
-                    usePrivateDocs={usePrivateDocs}
+                    usePrivateDocs={privateOnlyWorkspace || usePrivateDocs}
                     onTogglePrivateDocs={(nextVal) => setUsePrivateDocs(Boolean(nextVal))}
                     privateDocs={expedienteDocs}
                     activeExpedienteId={activeExpedienteId}
@@ -1455,6 +1466,15 @@ export default function App() {
                     onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
                     aiEngine={govStats?.ai_engine || null}
                     onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
+                  />
+                ) : activeNav === 'expedientes' ? (
+                  <ExpedientesPanel
+                    key={`${authSession?.tenantId}:${authSession?.userId}`}
+                    authSession={authSession}
+                    onOpenAssistant={(id) => {
+                      setActiveExpedienteId(id); setExpedienteDocs([]); setCurrentSessionId(null); setDraftContext(null);
+                      setSelectedCitation(null); setIsSourcesPanelOpen(false); setUsePrivateDocs(true); handleNavigate('preguntar');
+                    }}
                   />
                 ) : activeNav === 'cuenta' ? (
                   <AccountSettingsPanel
@@ -1636,7 +1656,7 @@ export default function App() {
         onClose={() => setCommandOpen(false)}
         commandQuery={commandQuery}
         onChangeQuery={setCommandQuery}
-        navItems={NAV_ITEMS}
+        navItems={NAV_ITEMS.filter((item) => item.id !== 'expedientes' || profileConfig?.visibleModules?.includes(item.id))}
         onNavigate={handleNavigate}
         onOpenCopilot={() => setIsCopilotOpen(true)}
         onOpenOnboarding={() => setOnboardingOpen(true)}

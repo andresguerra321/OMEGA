@@ -149,10 +149,19 @@ public class AuditLogService {
             return "{}";
         }
         try {
-            return objectMapper.writeValueAsString(metadata);
+            return objectMapper.writeValueAsString(AuditMetadataPolicy.sanitize(metadata));
         } catch (JsonProcessingException ex) {
             return "{\"serializationError\":true}";
         }
+    }
+
+    public String metadataForDisclosure(String json) {
+        try {
+            var original = objectMapper.readTree(json);
+            Map<String, Object> values = objectMapper.convertValue(original,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            return original.equals(objectMapper.valueToTree(AuditMetadataPolicy.sanitize(values))) ? json : null;
+        } catch (Exception ex) { return null; }
     }
 
     public record ChainVerificationResult(

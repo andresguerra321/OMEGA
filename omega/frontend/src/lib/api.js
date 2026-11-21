@@ -254,7 +254,7 @@ function buildFriendlyError(status, payload, fallbackMessage) {
   return detail || payload?.title || fallbackMessage || `Error HTTP ${status}`;
 }
 
-async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json' } = {}) {
+export async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json' } = {}) {
   const url = rawUrl ? path : `${API_V1}${path}`;
   const reqHeaders = new Headers(headers);
   const session = getAuthSession();
@@ -560,6 +560,14 @@ export async function registerAccount({
 
 export async function fetchProfileConfig() {
   return apiFetch('/profile/config');
+}
+
+export function fetchLegalDocumentAiPolicy() { return apiFetch('/legal/document-ai/policy'); }
+export function acceptLegalDocumentAiPolicy(fingerprint) {
+  return apiFetch('/legal/document-ai/consent', { method: 'POST', body: { fingerprint } });
+}
+export function reindexExpedienteDocument(expedienteId, documentId) {
+  return apiFetch(`/expedientes/${encodeURIComponent(expedienteId)}/documents/${encodeURIComponent(documentId)}/reindex`, { method: 'POST' });
 }
 
 export async function updateTenantProfile(profile, confirmed = false) {
