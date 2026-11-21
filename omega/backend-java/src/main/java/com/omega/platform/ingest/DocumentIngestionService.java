@@ -161,9 +161,8 @@ public class DocumentIngestionService {
                 if (!"PDF".equals(format) && tenant.getProfile() != TenantProfile.LEGAL)
                     throw new InvalidDocumentException("Este perfil solo admite PDF.");
                 entity.setDocumentFormat(format);
-                // Preserve existing GENERAL/DEVELOPER ingestion behavior while repairing LEGAL retrieval.
-                if (tenant.getProfile() == TenantProfile.LEGAL) {
-                    entity.setCorpusScope(TenantProfile.LEGAL);
+                if (tenant.getProfile() != null) {
+                    entity.setCorpusScope(tenant.getProfile());
                 }
                 documentRepository.saveAndFlush(entity);
 
@@ -363,6 +362,15 @@ public class DocumentIngestionService {
                 doc.getCreatedAt(),
                 doc.getTempDeletedAt()
         );
+    }
+
+    private String resolveTenantCorpusScope(UUID tenantId) {
+        if (tenantRepository == null || tenantId == null) {
+            return TenantProfile.GENERAL.name();
+        }
+        return tenantRepository.findByIdAndActiveTrue(tenantId)
+                .map(t -> t.getProfile() != null ? t.getProfile().name() : TenantProfile.GENERAL.name())
+                .orElse(TenantProfile.GENERAL.name());
     }
 
     public record IngestAcceptedResult(

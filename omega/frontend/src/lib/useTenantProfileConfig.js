@@ -5,6 +5,7 @@ export const DEFAULT_PROFILE_CONFIG = Object.freeze({
   profile: 'GENERAL',
   version: '1.1.0',
   visibleModules: ['inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
+  moduleLabels: {},
   ragCorpusScope: 'general_cti',
   copilotTone: 'balanced_defensive',
   copilotInstructions: '',
@@ -12,7 +13,8 @@ export const DEFAULT_PROFILE_CONFIG = Object.freeze({
 });
 
 /**
- * Filtra los elementos de navegación según `visibleModules` del perfil activo.
+ * Filtra los elementos de navegación según `visibleModules` del perfil activo
+ * y aplica las etiquetas declaradas en `moduleLabels` sin condicionales por perfil.
  * Nunca oculta `cuenta` ni impide mostrar alertas críticas de seguridad.
  */
 export function resolveVisibleNavItems(navItems, profileConfig) {
@@ -21,7 +23,20 @@ export function resolveVisibleNavItems(navItems, profileConfig) {
     ? new Set(profileConfig.visibleModules)
     : new Set(DEFAULT_PROFILE_CONFIG.visibleModules);
   allowed.add('cuenta');
-  return navItems.filter((item) => allowed.has(item.id));
+  const labels = profileConfig?.moduleLabels && typeof profileConfig.moduleLabels === 'object'
+    ? profileConfig.moduleLabels
+    : null;
+  return navItems
+    .filter((item) => allowed.has(item.id))
+    .map((item) => {
+      const customLabel = labels?.[item.id];
+      if (!customLabel || typeof customLabel !== 'string') return item;
+      return {
+        ...item,
+        label: customLabel,
+        ariaLabel: customLabel,
+      };
+    });
 }
 
 export function useTenantProfileConfig(authSession) {

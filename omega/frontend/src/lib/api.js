@@ -607,6 +607,227 @@ export async function getRepoScanStatus(scanId) {
   return apiFetch(`/repo/scan/${encodeURIComponent(scanId)}`);
 }
 
+export async function listDevProjects() {
+  return apiFetch('/dev/projects');
+}
+
+export async function createDevProject({ name, repoUrl = '', defaultBranch = '', sourceType = 'GITHUB_URL' }) {
+  return apiFetch('/dev/projects', {
+    method: 'POST',
+    body: {
+      name: String(name || '').trim(),
+      repoUrl: String(repoUrl || '').trim() || undefined,
+      defaultBranch: String(defaultBranch || '').trim() || undefined,
+      sourceType,
+    },
+  });
+}
+
+export async function getDevProjectDetail(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}`);
+}
+
+export async function compareDevScans(projectId, baseScanId, headScanId) {
+  return apiFetch(
+    `/dev/projects/${encodeURIComponent(projectId)}/compare?baseScanId=${encodeURIComponent(baseScanId)}&headScanId=${encodeURIComponent(headScanId)}`
+  );
+}
+
+export async function deleteDevProject(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listDevFindings({ projectId = '', severity = '', ruleId = '', triageStatus = '' } = {}) {
+  const params = new URLSearchParams();
+  if (projectId) params.set('projectId', projectId);
+  if (severity) params.set('severity', severity);
+  if (ruleId) params.set('ruleId', ruleId);
+  if (triageStatus) params.set('triageStatus', triageStatus);
+  const qs = params.toString();
+  return apiFetch(`/dev/findings${qs ? `?${qs}` : ''}`);
+}
+
+export async function updateDevFindingTriage(findingId, { status, comment = '' }) {
+  return apiFetch(`/dev/findings/${encodeURIComponent(findingId)}/triage`, {
+    method: 'PATCH',
+    body: { status, comment: String(comment || '').trim() || undefined },
+  });
+}
+
+export async function listDevFindingComments(findingId) {
+  return apiFetch(`/dev/findings/${encodeURIComponent(findingId)}/comments`);
+}
+
+export async function addDevFindingComment(findingId, body) {
+  return apiFetch(`/dev/findings/${encodeURIComponent(findingId)}/comments`, {
+    method: 'POST',
+    body: { body: String(body || '').trim() },
+  });
+}
+
+export async function listDevSuppressions(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/suppressions`);
+}
+
+export async function createDevSuppression(projectId, { ruleId, fingerprint = '', reason, expiresInDays = 30 }) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/suppressions`, {
+    method: 'POST',
+    body: {
+      ruleId: String(ruleId || '').trim(),
+      fingerprint: String(fingerprint || '').trim() || undefined,
+      reason: String(reason || '').trim(),
+      expiresInDays: Number(expiresInDays || 0),
+    },
+  });
+}
+
+export async function revokeDevSuppression(suppressionId) {
+  return apiFetch(`/dev/suppressions/${encodeURIComponent(suppressionId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listDevDependencies(projectId, { ecosystem = '', q = '' } = {}) {
+  const params = new URLSearchParams();
+  if (ecosystem) params.set('ecosystem', ecosystem);
+  if (q) params.set('q', q);
+  const qs = params.toString();
+  return apiFetch(
+    `/dev/projects/${encodeURIComponent(projectId)}/dependencies${qs ? `?${qs}` : ''}`
+  );
+}
+
+export async function exportDevSbom(projectId, format = 'cyclonedx') {
+  return apiFetch(
+    `/dev/projects/${encodeURIComponent(projectId)}/sbom?format=${encodeURIComponent(format)}`
+  );
+}
+
+export async function getDevTenantPolicy() {
+  return apiFetch('/dev/policies');
+}
+
+export async function updateDevTenantPolicy({
+  failOnSeverity = 'HIGH',
+  actionOnViolation = 'FAIL_PIPELINE',
+  allowedPackages = [],
+  blockedPackages = [],
+} = {}) {
+  return apiFetch('/dev/policies', {
+    method: 'PUT',
+    body: {
+      failOnSeverity,
+      actionOnViolation,
+      allowedPackages,
+      blockedPackages,
+    },
+  });
+}
+
+export async function getDevProjectPolicy(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/policy`);
+}
+
+export async function updateDevProjectPolicy(
+  projectId,
+  {
+    failOnSeverity = 'HIGH',
+    actionOnViolation = 'FAIL_PIPELINE',
+    allowedPackages = [],
+    blockedPackages = [],
+  } = {}
+) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/policy`, {
+    method: 'PUT',
+    body: {
+      failOnSeverity,
+      actionOnViolation,
+      allowedPackages,
+      blockedPackages,
+    },
+  });
+}
+
+export async function deleteDevProjectPolicyOverride(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/policy`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listDevSupplyChainAdvisories({
+  ecosystem = '',
+  q = '',
+  projectId = '',
+} = {}) {
+  const params = new URLSearchParams();
+  if (ecosystem) params.set('ecosystem', ecosystem);
+  if (q) params.set('q', q);
+  if (projectId) params.set('projectId', projectId);
+  const qs = params.toString();
+  return apiFetch(`/dev/supply-chain/advisories${qs ? `?${qs}` : ''}`);
+}
+
+export async function queryDevSupplyChainIntel(question) {
+  return apiFetch('/dev/supply-chain/query', {
+    method: 'POST',
+    body: { question: String(question || '').trim() },
+  });
+}
+
+export async function exportDevReportJson(projectId = '') {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  return apiFetch(`/dev/reports/export/json${qs}`);
+}
+
+export async function exportDevReportPdf(projectId = '') {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  return apiFetch(`/dev/reports/export/pdf${qs}`, { responseType: 'blob' });
+}
+
+export async function getDevProjectMonitoring(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/monitoring`);
+}
+
+export async function updateDevProjectMonitoring(
+  projectId,
+  { enabled = true, channel = 'WEBHOOK', minSeverity = 'HIGH' } = {}
+) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/monitoring`, {
+    method: 'PUT',
+    body: { enabled: Boolean(enabled), channel, minSeverity },
+  });
+}
+
+export async function evaluateDevProjectMonitoring(projectId) {
+  return apiFetch(`/dev/projects/${encodeURIComponent(projectId)}/monitoring/evaluate`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export async function auditDevWorkstationPosture({
+  consentConfirmed = false,
+  inspectLocalHostMetadata = true,
+  sshKeyPermissiveAcl = false,
+  plaintextPackageManagerRc = false,
+  gitCredentialHelperPlaintext = false,
+  exposedSensitiveEnvNames = [],
+} = {}) {
+  return apiFetch('/dev/workstation/audit', {
+    method: 'POST',
+    body: {
+      consentConfirmed: Boolean(consentConfirmed),
+      inspectLocalHostMetadata: Boolean(inspectLocalHostMetadata),
+      sshKeyPermissiveAcl: Boolean(sshKeyPermissiveAcl),
+      plaintextPackageManagerRc: Boolean(plaintextPackageManagerRc),
+      gitCredentialHelperPlaintext: Boolean(gitCredentialHelperPlaintext),
+      exposedSensitiveEnvNames,
+    },
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }

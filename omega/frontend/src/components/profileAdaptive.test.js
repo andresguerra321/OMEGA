@@ -61,12 +61,24 @@ test('la configuración real preserva GENERAL y DEVELOPER y abre LEGAL en expedi
   });
   assert.deepEqual(config.profiles.DEVELOPER, {
     visibleModules: ['repo_scanner', 'inicio', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
+    moduleLabels: {
+      inicio: 'Proyectos y hallazgos',
+      amenazas: 'Cadena de suministro',
+      equipo: 'Mi estación',
+      repo_scanner: 'Proyectos',
+    },
     ragCorpusScope: 'dev_supply_chain_cti', copilotTone: 'technical_appsec',
     copilotInstructions: 'Usa tono técnico y directo enfocado en análisis de repositorios, dependencias, puntaje explicable y cadena de suministro. Nunca afirmes que un repositorio es seguro.',
     defaultView: 'repo_scanner',
   });
   assert.deepEqual(config.profiles.LEGAL.visibleModules, ['expedientes', 'preguntar', 'seguridad_despacho', 'cuenta']);
   assert.equal(config.profiles.LEGAL.defaultView, 'expedientes');
+
+  const devNav = resolveVisibleNavItems(BASE_NAV_ITEMS, config.profiles.DEVELOPER);
+  const byId = Object.fromEntries(devNav.map((item) => [item.id, item.label]));
+  assert.equal(byId.inicio, 'Proyectos y hallazgos');
+  assert.equal(byId.amenazas, 'Cadena de suministro');
+  assert.equal(byId.repo_scanner, 'Proyectos');
 });
 
 test('cuenta permanece visible aunque la configuración no la incluya', () => {
@@ -77,4 +89,23 @@ test('RepoScannerPanel nunca usa la frase "repo seguro" y conserva el mensaje ho
   const src = readFileSync(new URL('./RepoScannerPanel.jsx', import.meta.url), 'utf8');
   assert.equal(/repo seguro/i.test(src), false);
   assert.ok(src.includes('Sin señales detectadas con las reglas actuales'));
+});
+
+test('Hub Proyectos (RepoScannerPanel) consolida todas las pestañas comerciales de DEVELOPER sin habilitar dev_cli en navegación principal', () => {
+  const panelSrc = readFileSync(new URL('./RepoScannerPanel.jsx', import.meta.url), 'utf8');
+  for (const tabId of ['scan', 'projects', 'findings', 'sbom', 'policies', 'supply_chain', 'reports', 'cli', 'github']) {
+    assert.ok(panelSrc.includes(`id: '${tabId}'`), `Falta pestaña ${tabId} en RepoScannerPanel`);
+  }
+  for (const compFile of [
+    './DevProjectsTab.jsx',
+    './DevFindingsTriageTab.jsx',
+    './DevDependenciesSbomTab.jsx',
+    './DevPoliciesTab.jsx',
+    './DevSupplyChainIntelTab.jsx',
+    './DevReportsTab.jsx',
+  ]) {
+    const cSrc = readFileSync(new URL(compFile, import.meta.url), 'utf8');
+    assert.equal(/repo seguro/i.test(cSrc), false);
+    assert.ok(cSrc.length > 500);
+  }
 });

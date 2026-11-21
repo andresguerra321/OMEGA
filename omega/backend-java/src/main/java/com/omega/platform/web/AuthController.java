@@ -187,9 +187,11 @@ public class AuthController {
         String trustedDeviceToken = sessionCookieHelper != null
                 ? sessionCookieHelper.extractTrustedDeviceToken(httpServletRequest)
                 : null;
-        AuthTokenResponse response = authService.login(request, httpServletRequest.getRemoteAddr(), trustedDeviceToken);
+        AuthTokenResponse response = (trustedDeviceToken != null && !trustedDeviceToken.isBlank())
+                ? authService.login(request, httpServletRequest.getRemoteAddr(), trustedDeviceToken)
+                : authService.login(request, httpServletRequest.getRemoteAddr());
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
-        if (sessionCookieHelper != null && !response.mfaRequired() && response.userId() != null) {
+        if (sessionCookieHelper != null && response != null && !response.mfaRequired() && response.userId() != null) {
             if (Boolean.FALSE.equals(request.rememberMe())) {
                 sessionCookieHelper.clearTrustedDeviceCookie(httpServletRequest, httpServletResponse);
             } else {

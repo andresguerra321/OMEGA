@@ -115,3 +115,69 @@ def test_repo_scan_endpoints_require_internal_service_token(monkeypatch):
     fetch = client.get(f"/api/repo/scan/{body['scan_id']}", headers=headers)
     assert fetch.status_code == 200
     assert fetch.json()["scan_id"] == body["scan_id"]
+
+
+def test_extracts_normalized_dependencies_and_purls_from_multiple_ecosystems():
+    raw = _build_tar_gz(
+        {
+            "package.json": json.dumps({"dependencies": {"lodash": "^4.17.21"}}).encode("utf-8"),
+            "requirements.txt": b"fastapi==0.115.0\n",
+            "Cargo.toml": b'[dependencies]\nserde = "1.0.210"\n',
+        }
+    )
+    res = scan_archive_bytes("deps.tar.gz", raw)
+    by_eco = {d["ecosystem"]: d for d in res.dependencies}
+    assert by_eco["npm"]["name"] == "lodash"
+    assert by_eco["npm"]["purl"] == "pkg:npm/lodash@4.17.21"
+    assert by_eco["pypi"]["name"] == "fastapi"
+    assert by_eco["pypi"]["purl"] == "pkg:pypi/fastapi@0.115.0"
+    assert by_eco["cargo"]["name"] == "serde"
+    assert by_eco["cargo"]["purl"] == "pkg:cargo/serde@1.0.210"
+
+
+def test_detects_exposed_credentials_with_strict_redaction_and_zero_false_positives_on_clean_projects():
+    from sarif_exporter import scan_status_to_sarif
+
+    # Construimos tokens sintéticos en tiempo de ejecución para no almacenar literales en el repo
+    synthetic_gh = "ghp_" + ("A7b9C2d4E6f8G1h3J5k7L9m2N4p6Q8r0S2t4")
+    synthetic_aws = "AKIA" + "IOSFODNN7SYNTH99"
+    synthetic_ai = "sk-proj-" + ("Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4")
+    synthetic_omega = "omega_scan_" + ("99887766554433221100aabbccddeeff")
+
+    leaked_src = (
+        f"const GH_TOKEN = '{synthetic_gh}';\n"
+        f"const AWS_ID = '{synthetic_aws}';\n"
+        f"const OPENAI_KEY = '{synthetic_ai}';\n"
+        f"const OMEGA_KEY = '{synthetic_omega}';\n"
+    ).encode("utf-8")
+
+    raw = _build_tar_gz({"src/config.js": leaked_src})
+    res = scan_archive_bytes("leaked.tar.gz", raw)
+    rule_ids = {f.rule_id for f in res.findings}
+
+    assert "SECRET-CREDENTIAL-GITHUB-01" in rule_ids
+    assert "SECRET-CREDENTIAL-AWS-01" in rule_ids
+    assert "SECRET-CREDENTIAL-AI-API-01" in rule_ids
+    assert "SECRET-CREDENTIAL-OMEGA-01" in rule_ids
+
+    # Garantía absoluta: el valor del secreto NUNCA aparece en findings ni en SARIF
+    serialized_json = res.model_dump_json()
+    sarif_str = json.dumps(scan_status_to_sarif(res.model_dump()))
+    for secret_val in (synthetic_gh, synthetic_aws, synthetic_ai, synthetic_omega):
+        assert secret_val not in serialized_json
+        assert secret_val not in sarif_str
+
+    for f in res.findings:
+        assert "[CREDENTIAL_REDACTED]" in f.evidence
+        assert "Guía de rotación:" in f.explanation
+        assert f.location.startswith("src/config.js:")
+
+    # Benchmark de falsos positivos en proyectos limpios con placeholders de documentación
+    clean_files = {
+        "README.md": b"Usa `ghp_example_placeholder_token` o `AKIA0000000000EXAMPLE` en tus pruebas.\n",
+        "src/main.py": b"import hashlib\nprint(hashlib.sha256(b'omega').hexdigest())\n",
+        "src/utils.ts": b"export const VERSION = '2.0.0';\nexport function sum(a: number, b: number) { return a + b; }\n",
+    }
+    clean_res = scan_archive_bytes("clean-project.tar.gz", _build_tar_gz(clean_files))
+    secret_findings = [f for f in clean_res.findings if f.rule_id.startswith("SECRET-CREDENTIAL-")]
+    assert secret_findings == []

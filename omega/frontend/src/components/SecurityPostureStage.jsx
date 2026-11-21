@@ -89,7 +89,8 @@ export function SecurityPostureStage({
   visibleModuleIds = null,
   profileConfig = null,
 }) {
-  const isDeveloper = profileConfig?.profile === 'DEVELOPER';
+  const isDeveloper = Boolean(profileConfig?.visibleModules?.includes('repo_scanner'));
+  const moduleLabels = profileConfig?.moduleLabels || {};
   const surfaceOrder = isDeveloper ? DEV_SURFACE_ORDER : SURFACE_ORDER;
   const [surfaceMenuOpen, setSurfaceMenuOpen] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
@@ -361,6 +362,7 @@ export function SecurityPostureStage({
             isLoadingChat={isLoadingChat}
             authConnected={Boolean(authSession)}
             visibleModuleIds={visibleModuleIds}
+            moduleLabels={moduleLabels}
           />
         </div>
 
@@ -792,7 +794,7 @@ export function SecurityPostureStage({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h2 className="text-[14px] font-semibold text-[#F2F2F4] leading-tight">
-                      Proyectos GitHub
+                      {moduleLabels.inicio || 'Proyectos y hallazgos'}
                     </h2>
                     <p className="text-[11.5px] text-[#9A9AA2]">
                       Repositorios · Manifiestos · Dependencias
@@ -1119,7 +1121,7 @@ export function SecurityPostureStage({
                     onClick={() => onNavigate?.('amenazas')}
                     className="text-[#F2F2F4] hover:text-[#2F6FED] underline decoration-[#2F6FED]/55 cursor-pointer transition-colors"
                   >
-                    Amenazas →
+                    {moduleLabels.amenazas || 'Amenazas'} →
                   </button>
                 </div>
               )}

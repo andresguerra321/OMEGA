@@ -29,9 +29,9 @@ GENERAL y DEVELOPER conservan sus valores anteriores; `dev_cli` sigue oculto. La
 3. Agregar la entrada correspondiente en `omega/backend-java/src/main/resources/profile-configs.json`.
 4. Si introduce un nuevo módulo UI, registrarlo en `SpatialNavPill.jsx` y `App.jsx`.
 
-## 4. Límites conocidos
+## 4. Límites conocidos y capacidades completas por rol
 
-- Los cambios entre GENERAL y DEVELOPER conservan el comportamiento anterior. Las transiciones que incluyen LEGAL reetiquetan únicamente documentos del tenant autenticado; se prueban GENERAL → LEGAL → DEVELOPER y el aislamiento entre tenants.
-- V17 corrige documentos con alcance GENERAL pertenecientes a tenants LEGAL al aplicar la migración. Las nuevas cargas de esos tenants usan LEGAL. Se conserva el aislamiento por tenant y expediente; no se guardan originales permanentemente.
-- La abstención del asistente legal y la selección de documentos concretos todavía requieren trabajo de backend; las instrucciones de perfil por sí solas no garantizan abstención.
-- El análisis de repositorios (`POST /api/v1/repo/scan`) actúa como proxy autenticado hacia el worker FastAPI (`omega/api` `/api/repo/scan`), por lo que requiere que dicho servicio esté activo.
+- **Perfil `DEVELOPER` completo:** documentado en detalle en [docs/developer_producto.md](developer_producto.md) (Proyectos, Hallazgos y Triaje, Dependencias y SBOM CycloneDX 1.5 / SPDX 2.3, Políticas, Inteligencia de Cadena de Suministro `dev_supply_chain_cti`, Reportes PDF/JSON, CLI `--project` y GitHub App). La migración `V20` actualiza retroactivamente a `corpus_scope = 'DEVELOPER'` los documentos de tenants con perfil `DEVELOPER`.
+- **Decisión sobre `dev_cli` y `DevCliModulePanel.jsx`:** el ítem `dev_cli` no se habilita en `profile-configs.json` porque CLI, tokens `REPO_SCAN` y GitHub App están integrados como pestañas dentro del hub **Proyectos** (`RepoScannerPanel.jsx`). `DevCliModulePanel.jsx` se conserva únicamente como componente legado de compatibilidad sin exponerlo en la barra de navegación.
+- **Transiciones y aislamiento `LEGAL` / `DEVELOPER` / `GENERAL`:** las transiciones entre perfiles reetiquetan únicamente documentos del tenant autenticado; `V17` corrige documentos de tenants `LEGAL` y `V20` los de tenants `DEVELOPER`, conservando el aislamiento por tenant y expediente sin almacenar originales permanentemente.
+- El análisis de repositorios (`POST /api/v1/repo/scan` y `/scan-url`) actúa como proxy autenticado hacia el worker FastAPI (`omega/api` `/api/repo/scan`) y registra automáticamente los metadatos saneados en `omega_rag.dev_projects`, `dev_scans`, `dev_findings` y `dev_dependencies`.

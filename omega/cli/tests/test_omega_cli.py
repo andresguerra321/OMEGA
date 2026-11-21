@@ -149,6 +149,66 @@ def test_local_limits_exceeded_returns_exit_4(tmp_path: Path):
     assert code == omega_cli.EXIT_LIMITS
 
 
+def test_cli_associates_project_and_respects_server_policy_and_suppressions(tmp_path: Path):
+    repo = _make_sample_repo(tmp_path)
+    out = io.StringIO()
+    err = io.StringIO()
+
+    # 1. Cuando el servidor indica policy_evaluation.should_fail_pipeline = True, sale con código 1 incluso sin --fail-on
+    with mock.patch.object(
+        omega_cli,
+        "upload_archive_scan",
+        return_value={
+            "scan_id": "s_pol_fail",
+            "status": "COMPLETED",
+            "files_scanned": 2,
+            "score": 45,
+            "findings": [],
+            "policy_evaluation": {
+                "status": "FAIL",
+                "fail_on_severity": "HIGH",
+                "action_on_violation": "FAIL_PIPELINE",
+                "should_fail_pipeline": True,
+                "violations": ["Paquete bloqueado: npm:event-stream"],
+            },
+        },
+    ) as mocked_upload:
+        code = omega_cli.main(
+            ["scan", str(repo), "--url", "http://127.0.0.1:8080", "--token", "omega_scan_test12345678", "--project", "payments-api"],
+            stdout=out,
+            stderr=err,
+        )
+    assert code == omega_cli.EXIT_FINDINGS
+    assert mocked_upload.call_args.kwargs["project_name"] == "payments-api"
+
+    # 2. Cuando un hallazgo HIGH está suprimido (triage_status = ACCEPTED), --fail-on HIGH no falla el pipeline
+    with mock.patch.object(
+        omega_cli,
+        "upload_archive_scan",
+        return_value={
+            "scan_id": "s_suppressed",
+            "status": "COMPLETED",
+            "files_scanned": 2,
+            "score": 0,
+            "findings": [
+                {
+                    "rule_id": "NPM-POSTINSTALL-EXEC-01",
+                    "severity": "HIGH",
+                    "location": "package.json:10",
+                    "explanation": "Suprimido con expiración",
+                    "triage_status": "ACCEPTED",
+                }
+            ],
+        },
+    ):
+        code_sup = omega_cli.main(
+            ["scan", str(repo), "--url", "http://127.0.0.1:8080", "--token", "omega_scan_test12345678", "--fail-on", "HIGH"],
+            stdout=io.StringIO(),
+            stderr=io.StringIO(),
+        )
+    assert code_sup == omega_cli.EXIT_CLEAN
+
+
 def test_terminal_renderer_ascii_fallback_and_no_color(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("NO_COLOR", "1")
     buf = io.StringIO()

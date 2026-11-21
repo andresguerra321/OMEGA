@@ -293,7 +293,7 @@ class HybridRagQueryTest {
         migration.execute(dataSource);
         assertThat(documentRepository.findById(documentId).orElseThrow().getCorpusScope()).isEqualTo("LEGAL");
         assertThat(documentRepository.findById(generalDoc).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
-        assertThat(documentRepository.findById(devDoc).orElseThrow().getCorpusScope()).isEqualTo("GENERAL");
+        assertThat(documentRepository.findById(devDoc).orElseThrow().getCorpusScope()).isEqualTo("DEVELOPER");
         assertLegalCitation(token, caseId, documentId);
         mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + generalToken)

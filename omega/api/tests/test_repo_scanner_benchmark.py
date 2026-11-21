@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timezone
 import io
 import json
 import tarfile
@@ -75,3 +76,15 @@ def test_repo_scanner_benchmark_precision_recall_and_low_false_positives():
     assert precision >= 0.85, f"Precision demasiado baja: {precision}"
     assert recall >= 0.85, f"Recall demasiado bajo: {recall}"
     assert false_positive_rate <= 0.10, f"Falsos positivos demasiado altos: {false_positive_rate}"
+
+    # Verificar que las 3 reglas de contexto de metadatos Fase 2 se activaron explícitamente sobre 'lodahs'
+    phase2_res = scan_archive_bytes(
+        "m2.tar.gz",
+        _tar_gz_from_files(malicious_samples[1]),
+        registry_client=stub,
+        now=datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc),
+    )
+    phase2_rules = {f.rule_id for f in phase2_res.findings}
+    assert "PKG-NEW-OR-RECENT-01" in phase2_rules
+    assert "PKG-MAINTAINER-CHANGE-01" in phase2_rules
+    assert "PKG-TEMPORAL-CHAIN-01" in phase2_rules

@@ -1,16 +1,22 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  BookOpen,
+  Boxes,
   Check,
   ChevronDown,
   ChevronUp,
   Copy,
   FileArchive,
+  FileText,
+  FolderGit2,
   GitBranch,
   KeyRound,
+  Laptop,
   PackageSearch,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   Terminal,
   UploadCloud,
 } from 'lucide-react';
@@ -23,6 +29,13 @@ import {
   unlinkGitHubInstallation,
 } from '../lib/api';
 import { ApiTokensCard } from './ApiTokensCard';
+import { DevProjectsTab } from './DevProjectsTab';
+import { DevFindingsTriageTab } from './DevFindingsTriageTab';
+import { DevDependenciesSbomTab } from './DevDependenciesSbomTab';
+import { DevPoliciesTab } from './DevPoliciesTab';
+import { DevSupplyChainIntelTab } from './DevSupplyChainIntelTab';
+import { DevReportsTab } from './DevReportsTab';
+import { DevWorkstationTab } from './DevWorkstationTab';
 
 function GitHubIcon({ className = 'h-4 w-4' }) {
   return (
@@ -151,6 +164,13 @@ export function RepoScannerPanel({ authSession }) {
         >
           {[
             { id: 'scan', label: 'Analizar repositorio', icon: PackageSearch },
+            { id: 'projects', label: 'Proyectos', icon: FolderGit2 },
+            { id: 'findings', label: 'Hallazgos y Triaje', icon: ShieldAlert },
+            { id: 'sbom', label: 'Dependencias y SBOM', icon: Boxes },
+            { id: 'policies', label: 'Políticas', icon: SlidersHorizontal },
+            { id: 'supply_chain', label: 'Cadena de suministro', icon: BookOpen },
+            { id: 'workstation', label: 'Mi estación', icon: Laptop },
+            { id: 'reports', label: 'Reportes', icon: FileText },
             { id: 'cli', label: 'CLI y Tokens API', icon: Terminal, badge: activeTokensCount },
             { id: 'github', label: 'Integración GitHub', icon: GitHubIcon, connected: Boolean(ghStatus) },
           ].map((t) => {
@@ -185,6 +205,40 @@ export function RepoScannerPanel({ authSession }) {
             );
           })}
         </nav>
+
+        {devTab === 'projects' && (
+          <DevProjectsTab
+            authSession={authSession}
+            onSelectProjectForScan={(proj) => {
+              if (proj?.repoUrl) setRepoUrl(proj.repoUrl);
+              setDevTab('scan');
+            }}
+          />
+        )}
+
+        {devTab === 'findings' && (
+          <DevFindingsTriageTab authSession={authSession} />
+        )}
+
+        {devTab === 'sbom' && (
+          <DevDependenciesSbomTab />
+        )}
+
+        {devTab === 'policies' && (
+          <DevPoliciesTab authSession={authSession} />
+        )}
+
+        {devTab === 'supply_chain' && (
+          <DevSupplyChainIntelTab />
+        )}
+
+        {devTab === 'workstation' && (
+          <DevWorkstationTab />
+        )}
+
+        {devTab === 'reports' && (
+          <DevReportsTab />
+        )}
 
         {devTab === 'cli' && (
           <div className="space-y-5">

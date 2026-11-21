@@ -22,6 +22,12 @@
         "preguntar",
         "cuenta"
       ],
+      "moduleLabels": {
+        "inicio": "Proyectos y hallazgos",
+        "amenazas": "Cadena de suministro",
+        "equipo": "Mi estación",
+        "repo_scanner": "Proyectos"
+      },
       "ragCorpusScope": "dev_supply_chain_cti",
       "copilotTone": "technical_appsec",
       "copilotInstructions": "Usa tono técnico y directo enfocado en análisis de repositorios, dependencias, puntaje explicable y cadena de suministro. Nunca afirmes que un repositorio es seguro.",

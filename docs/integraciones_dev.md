@@ -9,8 +9,8 @@ La CLI utiliza únicamente la biblioteca estándar de Python (`argparse`, `urlli
 # Exportar token de API de alcance REPO_SCAN (nunca pasarlo por argumento si es evitable)
 export OMEGA_API_TOKEN="omega_scan_..."
 
-# Analizar repositorio contra el servidor OMEGA (HTTPS obligatorio fuera de localhost)
-python omega/cli/omega_cli.py scan . --url https://tu-omega.example --format sarif --output omega-results.sarif --fail-on HIGH
+# Analizar repositorio contra el servidor OMEGA asociándolo a un proyecto y aplicando su política
+python omega/cli/omega_cli.py scan . --url https://tu-omega.example --project mi-servicio --format sarif --output omega-results.sarif --fail-on HIGH
 
 # Modo sin red (solo detectores estáticos locales)
 python omega/cli/omega_cli.py scan . --offline
@@ -19,12 +19,13 @@ python omega/cli/omega_cli.py scan . --offline
 python omega/cli/omega_cli.py scan . --preview
 ```
 
-### Códigos de salida
-- `0`: limpio o hallazgos por debajo del umbral `--fail-on`.
-- `1`: hallazgos con severidad `>= --fail-on`.
+### Códigos de salida y evaluación de políticas
+- `0`: limpio, hallazgos suprimidos/aceptados o por debajo del umbral `--fail-on` y política `PASS`/`WARN`.
+- `1`: hallazgos activos con severidad `>= --fail-on` o violación de política del servidor con acción `FAIL_PIPELINE` (incluidos paquetes bloqueados).
 - `2`: error de argumentos/uso (`argparse`).
 - `3`: error de red, autenticación, cuota (`429`) o URL `http://` fuera de `localhost`.
 - `4`: escaneo rechazado por límites locales o del servidor (`50 MiB`, `5,000` archivos).
+- **Asociación con proyectos y supresiones:** pasando `--project <nombre>` o `--project-id <uuid>`, el servidor registra el escaneo en el historial del proyecto (`omega_rag.dev_scans`), descuenta automáticamente las supresiones vigentes (`dev_suppressions`) del puntaje efectivo y devuelve `policy_evaluation` para que la CLI y GitHub Actions respeten la política configurada por el administrador.
 
 ### Exclusión de secretos y `.gitignore`
 - **Siempre excluidos** (incluso con `--include-ignored`): `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `id_rsa*`, `id_ed25519*`, `.npmrc`, `.pypirc`, `credentials.json`, `secrets.json`, `.git/`, `node_modules/`, `__pycache__/`.

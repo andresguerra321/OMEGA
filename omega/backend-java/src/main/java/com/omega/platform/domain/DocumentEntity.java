@@ -144,16 +144,20 @@ public class DocumentEntity {
         this.ocrApplied = ocrApplied;
     }
 
-    public DocumentStatus getStatus() {
-        return status;
-    }
-
     public String getCorpusScope() {
         return corpusScope;
     }
 
+    public void setCorpusScope(String corpusScope) {
+        this.corpusScope = (corpusScope == null || corpusScope.isBlank()) ? "GENERAL" : corpusScope.trim().toUpperCase();
+    }
+
     public void setCorpusScope(TenantProfile profile) {
-        this.corpusScope = profile.name();
+        this.corpusScope = profile == null ? "GENERAL" : profile.name();
+    }
+
+    public DocumentStatus getStatus() {
+        return status;
     }
 
     public void setStatus(DocumentStatus status) {
