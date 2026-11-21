@@ -12,6 +12,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> {
 
+    org.springframework.data.domain.Page<DocumentEntity> findAllByTenantIdAndExpedienteId(
+            UUID tenantId, UUID expedienteId, org.springframework.data.domain.Pageable pageable);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE DocumentEntity d SET d.corpusScope = :scope WHERE d.tenantId = :tenantId")
     int retagTenantDocuments(@Param("tenantId") UUID tenantId, @Param("scope") String scope);

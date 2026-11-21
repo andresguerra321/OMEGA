@@ -36,6 +36,26 @@ public class ExpedienteEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
+    private String description = "";
+    @Column(name = "case_reference", nullable = false, length = 160)
+    private String caseReference = "";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "case_status", nullable = false, length = 20)
+    private ExpedienteStatus status = ExpedienteStatus.OPEN;
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt = Instant.now();
+
+    public String getDescription() { return description; }
+    public void setDescription(String value) { description = value; }
+    public String getCaseReference() { return caseReference; }
+    public void setCaseReference(String value) { caseReference = value; }
+    public ExpedienteStatus getStatus() { return status; }
+    public void setStatus(ExpedienteStatus value) { status = value; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    @jakarta.persistence.PreUpdate
+    void markUpdated() { updatedAt = Instant.now(); }
+
     protected ExpedienteEntity() {
     }
 

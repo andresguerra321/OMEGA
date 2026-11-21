@@ -48,6 +48,7 @@ public class AsyncDocumentProcessor {
     private final AuditLogService auditLogService;
     private final TransactionTemplate transactionTemplate;
     private final IngestTemporaryFiles temporaryFiles;
+    private final OfficeImageExtractor officeImageExtractor;
 
     public AsyncDocumentProcessor(
             PdfChunkExtractor pdfChunkExtractor,
@@ -56,7 +57,8 @@ public class AsyncDocumentProcessor {
             DocumentChunkRepository documentChunkRepository,
             AuditLogService auditLogService,
             TransactionTemplate transactionTemplate,
-            IngestTemporaryFiles temporaryFiles
+            IngestTemporaryFiles temporaryFiles,
+            OfficeImageExtractor officeImageExtractor
     ) {
         this.pdfChunkExtractor = pdfChunkExtractor;
         this.embeddingProvider = embeddingProvider;
@@ -65,6 +67,7 @@ public class AsyncDocumentProcessor {
         this.auditLogService = auditLogService;
         this.transactionTemplate = transactionTemplate;
         this.temporaryFiles = temporaryFiles;
+        this.officeImageExtractor = officeImageExtractor;
     }
 
     @Async("omegaIngestExecutor")
@@ -78,7 +81,8 @@ public class AsyncDocumentProcessor {
         String failureReason = null;
 
         try {
-            ExtractionResult extraction = pdfChunkExtractor.extractAndChunk(cmd.tempPdfPath());
+            ExtractionResult extraction = "PDF".equals(cmd.format())
+                    ? pdfChunkExtractor.extractAndChunk(cmd.tempPdfPath()) : officeImageExtractor.extract(cmd.tempPdfPath(), cmd.format());
             totalPages = extraction.totalPages();
             ocrApplied = extraction.ocrApplied();
             List<ExtractedChunk> chunks = extraction.chunks();
@@ -133,7 +137,7 @@ public class AsyncDocumentProcessor {
 
             finalStatus = DocumentStatus.INDEXED;
         } catch (Exception ex) {
-            failureReason = "DOCUMENT_PROCESSING_FAILED";
+            failureReason = ex instanceof InvalidDocumentException ? "TEXT_UNAVAILABLE" : "DOCUMENT_PROCESSING_FAILED";
             log.error("DOCUMENT_PROCESSING_FAILED document={} tenant={}", cmd.documentId(), cmd.tenantId());
         } finally {
             Instant deletedAt = forceDeleteTempFile(cmd.tempPdfPath());
@@ -202,6 +206,8 @@ public class AsyncDocumentProcessor {
                         doc.setTotalPages(totalPages);
                     }
                     doc.setOcrApplied(ocrApplied);
+                    doc.setFailureCode(resolvedStatus == DocumentStatus.FAILED
+                            ? (deletedAt == null ? "TEMP_DELETE_FAILED" : (failureReason == null ? "DOCUMENT_PROCESSING_FAILED" : failureReason)) : null);
                     if (deletedAt != null) {
                         doc.setTempDeletedAt(deletedAt);
                     }
@@ -253,7 +259,8 @@ public class AsyncDocumentProcessor {
             UUID actorUserId,
             String originalFilename,
             String sha256Hash,
-            Path tempPdfPath
+            Path tempPdfPath,
+            String format
     ) {
     }
 }

@@ -61,6 +61,15 @@ public class DocumentEntity {
     @Column(name = "temp_deleted_at")
     private Instant tempDeletedAt;
 
+    @Column(name = "failure_code", length = 64)
+    private String failureCode;
+    @Column(name = "document_format", nullable = false, length = 12)
+    private String documentFormat = "PDF";
+    public String getFailureCode() { return failureCode; }
+    public void setFailureCode(String code) { failureCode = code; }
+    public String getDocumentFormat() { return documentFormat; }
+    public void setDocumentFormat(String format) { documentFormat = format; }
+
     protected DocumentEntity() {
     }
 

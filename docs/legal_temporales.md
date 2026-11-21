@@ -1,12 +1,12 @@
 # Temporales de documentos
 
-Solo se admite PDF en este bloque. El original no se conserva de forma permanente.
+Los formatos admitidos por perfil se documentan en `legal_expedientes.md`. El original no se conserva de forma permanente.
 
 Spring/Tomcat recibe multipart en `spring.servlet.multipart.location`, configurado como
 `OMEGA_MULTIPART_TMP_DIR` o, por defecto, `<omega.ingest.temp-dir>/multipart`.
 La ingesta usa un segundo archivo UUID en `omega.ingest.temp-dir`
 (`OMEGA_INGEST_TMP_DIR`, por defecto `/tmp/omega_ingest`).
-El cierre de la petición elimina el spool multipart; el procesador elimina su PDF en `finally`.
+El cierre de la petición elimina el spool multipart; el procesador elimina su archivo en `finally`.
 
 En Docker Compose, `/tmp/omega_ingest` es tmpfs; el subdirectorio multipart comparte ese montaje.
 En el host o con una ruta alternativa puede ser disco: no se afirma retención exclusiva en RAM.

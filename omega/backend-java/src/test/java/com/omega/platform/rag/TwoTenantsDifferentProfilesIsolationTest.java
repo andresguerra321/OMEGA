@@ -39,7 +39,7 @@ class TwoTenantsDifferentProfilesIsolationTest {
         TenantRepository tenantRepository = mock(TenantRepository.class);
 
         when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
-        when(searchRepository.searchLexicalOnly(any(), any(), anyString(), any(), anyInt(), anyString()))
+        when(searchRepository.searchLexicalOnly(any(), any(), anyString(), any(), anyInt(), anyString(), any()))
                 .thenReturn(List.of());
         when(answerGenerator.generateGroundedAnswer(anyString(), any(), any()))
                 .thenReturn("Sin evidencia suficiente.");
@@ -91,7 +91,7 @@ class TwoTenantsDifferentProfilesIsolationTest {
         assertNotEquals(devTenantId, legalTenantId);
         verify(authz).requireReadAccess(devPrincipal, expDev);
         verify(authz).requireReadAccess(legalPrincipal, expLegal);
-        verify(searchRepository).searchLexicalOnly(eq(devTenantId), eq(expDev), eq("postinstall script"), any(), eq(5), eq("DEVELOPER"));
-        verify(searchRepository).searchLexicalOnly(eq(legalTenantId), eq(expLegal), eq("cadena de custodia"), any(), eq(5), eq("LEGAL"));
+        verify(searchRepository).searchLexicalOnly(eq(devTenantId), eq(expDev), eq("postinstall script"), any(), eq(5), eq("DEVELOPER"), any());
+        verify(searchRepository).searchLexicalOnly(eq(legalTenantId), eq(expLegal), eq("cadena de custodia"), any(), eq(5), eq("LEGAL"), any());
     }
 }

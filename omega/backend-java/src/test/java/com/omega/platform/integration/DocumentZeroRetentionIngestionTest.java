@@ -221,6 +221,11 @@ class DocumentZeroRetentionIngestionTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnprocessableEntity());
 
+        assertThat(documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(tenantId, expId)).isEmpty();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/profile")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"profile\":\"LEGAL\",\"confirmed\":true}"))
+                .andExpect(status().isOk());
         // 2. PDF con acción /Launch
         byte[] launchPdf = buildLaunchMaliciousPdf();
         mockMvc.perform(multipart("/api/v1/expedientes/" + expId + "/documents")
@@ -235,7 +240,8 @@ class DocumentZeroRetentionIngestionTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isBadRequest());
 
-        assertThat(documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(tenantId, expId)).isEmpty();
+        assertThat(documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(tenantId, expId))
+                .hasSize(1).allSatisfy(doc -> { assertThat(doc.getStatus()).isEqualTo(DocumentStatus.REJECTED); assertThat(doc.getFailureCode()).isNotBlank(); });
         try (Stream<Path> files = Files.walk(sharedTempDir)) {
             assertThat(files.filter(Files::isRegularFile).toList()).isEmpty();
         }

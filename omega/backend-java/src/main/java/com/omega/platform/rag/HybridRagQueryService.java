@@ -99,6 +99,12 @@ public class HybridRagQueryService {
         List<DocumentEntity> docs = documentRepository
                 .findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId);
 
+        if (request.documentIds() != null && !request.documentIds().isEmpty()) {
+            var available = docs.stream().map(DocumentEntity::getId).collect(java.util.stream.Collectors.toSet());
+            if (!available.containsAll(request.documentIds()))
+                throw new com.omega.platform.service.ResourceNotFoundException("Documento no encontrado en el expediente");
+            docs = docs.stream().filter(doc -> request.documentIds().contains(doc.getId())).toList();
+        }
         List<DocumentReindexNotice> reindexNotices = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         int activeIndexedCount = 0;
@@ -191,7 +197,7 @@ public class HybridRagQueryService {
                     retrievalQuestion,
                     lexicalModels,
                     topK,
-                    corpusScope
+                    corpusScope, request.documentIds()
             );
         } else {
             try {
@@ -203,7 +209,7 @@ public class HybridRagQueryService {
                         queryVector,
                         activeModel,
                         topK,
-                        corpusScope
+                        corpusScope, request.documentIds()
                 );
                 if (lexicalIndexedCount > 0) {
                     ranked = mergeLexicalFallbackHits(
@@ -214,7 +220,7 @@ public class HybridRagQueryService {
                                     retrievalQuestion,
                                     List.of(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL),
                                     topK,
-                                    corpusScope
+                                    corpusScope, request.documentIds()
                             ),
                             topK
                     );
@@ -230,7 +236,7 @@ public class HybridRagQueryService {
                         retrievalQuestion,
                         lexicalModels,
                         topK,
-                        corpusScope
+                        corpusScope, request.documentIds()
                 );
             }
         }
@@ -331,8 +337,12 @@ public class HybridRagQueryService {
             @NotBlank @Size(min = 2, max = 2000) String question,
             @Min(1) @Max(20) Integer topK,
             @Size(max = 4000) @JsonProperty("analysis_context") String analysisContext,
-            @Valid @Size(max = 6) List<RagConversation.Turn> history
+            @Valid @Size(max = 6) List<RagConversation.Turn> history,
+            @Size(max = 100) List<UUID> documentIds
     ) {
+        public RagQueryRequest(String question, Integer topK, String analysisContext, List<RagConversation.Turn> history) {
+            this(question, topK, analysisContext, history, null);
+        }
         public RagQueryRequest(String question, Integer topK, String analysisContext) {
             this(question, topK, analysisContext, List.of());
         }

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -112,6 +113,83 @@ class HybridRagQueryTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void ingestsWordOnlyForLegalAndKeepsTheHashOfOriginalBytes() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small"); when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts=inv.getArgument(0); return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+        var buffer=new ByteArrayOutputStream();
+        try(var zip=new java.util.zip.ZipOutputStream(buffer)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("word/document.xml"));
+            zip.write("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>Predator contrato sintético MARCADOR_LEGAL_PRINCIPAL.</w:t></w:r></w:p></w:body></w:document>".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        byte[] bytes=buffer.toByteArray(); String suffix=UUID.randomUUID().toString().substring(0,8);
+        String token=registerTenant("word-"+suffix,"Synthetic","word@"+suffix+".org").get("accessToken").asText();
+        UUID caseId=createExpediente(token,"Synthetic Word");
+        mockMvc.perform(multipart("/api/v1/expedientes/"+caseId+"/documents")
+                .file(new MockMultipartFile("file","synthetic.docx",MediaType.APPLICATION_OCTET_STREAM_VALUE,bytes))
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/v1/profile").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"profile\":\"LEGAL\",\"confirmed\":true}"))
+                .andExpect(status().isOk());
+        UUID id=uploadAndWaitIndexed(token,caseId,"synthetic.docx",bytes);
+        var document=documentRepository.findById(id).orElseThrow();
+        assertThat(document.getDocumentFormat()).isEqualTo("DOCX");
+        assertThat(document.getSha256Hash()).isEqualTo(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)));
+        assertLegalCitation(token,caseId,id);
+    }
+
+    @Test
+    void exposesMetadataTextActivityAndSelectedDocumentsWithoutChangingLegacyListContract() throws Exception {
+        when(embeddingProvider.modelName()).thenReturn("text-embedding-3-small");
+        when(embeddingProvider.dimensions()).thenReturn(1536);
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> {
+            java.util.List<String> texts=inv.getArgument(0); return texts.stream().map(HybridRagQueryTest::semanticVector).toList();
+        });
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> semanticVector(inv.getArgument(0)));
+        String suffix=UUID.randomUUID().toString().substring(0,8);
+        var tenant=registerTenant("metadata-"+suffix,"Synthetic", "test@"+suffix+".org");
+        String token=tenant.get("accessToken").asText(); UUID caseId=createExpediente(token,"Synthetic case");
+        UUID first=uploadPdfAndWaitIndexed(token,caseId,"synthetic-one.pdf","Contrato","Predator contrato sintético con evidencia principal suficiente para este caso.");
+        UUID second=uploadPdfAndWaitIndexed(token,caseId,"synthetic-two.pdf","Contrato","Predator segundo contrato sintético con evidencia diferente para este caso.");
+        UUID anotherCase=createExpediente(token,"Another case");
+        UUID unrelated=uploadPdfAndWaitIndexed(token,anotherCase,"synthetic-private.pdf","Contrato","Predator evidencia exclusiva de otro expediente que debe excluirse siempre.");
+        String path="/api/v1/expedientes/"+caseId;
+        mockMvc.perform(put(path+"/metadata").header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Synthetic updated\",\"classification\":\"CONFIDENTIAL\",\"description\":\"Private synthetic description\",\"reference\":\"SYN-001\",\"status\":\"CLOSED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED")).andExpect(jsonPath("$.reference").value("SYN-001"));
+        mockMvc.perform(get("/api/v1/expedientes/page").param("status","CLOSED").param("search","SYN-001").param("size","1")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].canWrite").value(true));
+        mockMvc.perform(get("/api/v1/expedientes").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").exists());
+        mockMvc.perform(get(path+"/documents/page").param("size","1").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1)).andExpect(jsonPath("$.totalElements").value(2));
+        mockMvc.perform(get(path+"/documents/"+first+"/text").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.fragments[0].text").exists());
+        mockMvc.perform(post(path+"/query").header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"question\":\"Predator contrato\",\"documentIds\":[\""+second+"\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.citations.length()").value(1))
+                .andExpect(jsonPath("$.citations[0].documentId").value(second.toString()));
+        mockMvc.perform(post(path+"/query").header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"question\":\"Predator contrato\",\"documentIds\":[\""+unrelated+"\"]}"))
+                .andExpect(status().isNotFound());
+        String foreign=registerTenant("foreign-meta-"+suffix,"Foreign", "foreign@"+suffix+".org").get("accessToken").asText();
+        for(String route:java.util.List.of("/metadata","/activity/page","/documents/page","/documents/"+first+"/text"))
+            mockMvc.perform(get(path+route).header(HttpHeaders.AUTHORIZATION,"Bearer "+foreign)).andExpect(status().isNotFound());
+        var activity=mockMvc.perform(get(path+"/activity/page").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].action").exists()).andReturn();
+        assertThat(activity.getResponse().getContentAsString()).doesNotContain("synthetic-one.pdf","Private synthetic description","Synthetic updated");
+        mockMvc.perform(delete(path+"/documents/"+first).header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isNoContent());
+        mockMvc.perform(get(path+"/documents/"+first+"/text").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isNotFound());
+        mockMvc.perform(delete(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isNoContent());
+        assertThat(documentRepository.findById(second)).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM omega_rag.document_chunks WHERE document_id IN (?,?)",Long.class,first,second)).isZero();
+    }
 
     @Test
     void retagsExistingDocumentsWhenEnteringAndLeavingLegalWithoutLosingEvidence() throws Exception {
@@ -365,8 +443,12 @@ class HybridRagQueryTest {
             pdfBytes = baos.toByteArray();
         }
 
+        return uploadAndWaitIndexed(token,expId,filename,pdfBytes);
+    }
+
+    private UUID uploadAndWaitIndexed(String token, UUID expId, String filename, byte[] bytes) throws Exception {
         MvcResult up = mockMvc.perform(multipart("/api/v1/expedientes/" + expId + "/documents")
-                        .file(new MockMultipartFile("file", filename, MediaType.APPLICATION_PDF_VALUE, pdfBytes))
+                        .file(new MockMultipartFile("file", filename, MediaType.APPLICATION_OCTET_STREAM_VALUE, bytes))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isAccepted())
                 .andReturn();

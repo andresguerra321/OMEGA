@@ -10,7 +10,7 @@ La configuración `1.1.0` vive en `omega/backend-java/src/main/resources/profile
 | --- | --- | --- | --- | --- |
 | `GENERAL` | `inicio` | `inicio`, `equipo`, `exposicion`, `amenazas`, `preguntar`, `cuenta` | `general_cti` (sin filtro restrictivo sobre corpus general) | Comportamiento defensivo estándar de OMEGA (spyware, CTI y verificación pasiva). |
 | `DEVELOPER` | `repo_scanner` | Módulos estándar + `repo_scanner` | `dev_supply_chain_cti` (`DEVELOPER`) | Análisis estático de repositorios, dependencias y puntaje explicable. Nunca afirma "repo seguro"; usa *"Sin señales detectadas con las reglas actuales"*. |
-| `LEGAL` | `expedientes` | `expedientes`, `preguntar`, `cuenta`; `seguridad_despacho` está configurado, pero permanece oculto hasta L9 | `legal_expedientes` (`LEGAL`) | Instrucciones de lenguaje formal y citas de documentos privados. |
+| `LEGAL` | `expedientes` | `expedientes`, `preguntar`, `cuenta`; `seguridad_despacho` está configurado, pero permanece oculto hasta LM | `legal_expedientes` (`LEGAL`) | Instrucciones de lenguaje formal y citas de documentos privados. |
 
 GENERAL y DEVELOPER conservan sus valores anteriores; `dev_cli` sigue oculto. La vista inicial de Expedientes ofrece una lista de lectura con estados de carga, error y vacío. La gestión completa del expediente corresponde a los bloques posteriores.
 
