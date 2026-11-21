@@ -33,6 +33,14 @@ test('navegación por perfil y estados reales de Expedientes', async (t) => {
       if (profile === 'LEGAL') assert.match(html, /aria-current="page"/);
       dom.window.close();
     }
+    const { ChatWorkspace } = await server.ssrLoadModule('/src/components/ChatWorkspace.jsx');
+    const chatHtml = renderToStaticMarkup(createElement(ChatWorkspace, { privateOnly: true, usePrivateDocs: true,
+      disclaimer: 'No es asesoría legal.', messages: [], allConversationCitations: [], loading: false }));
+    const chatDom = new JSDOM(chatHtml);
+    assert.match(chatDom.window.document.querySelector('[role="note"]').textContent, /No es asesoría legal/);
+    const visibleButtons = [...chatDom.window.document.querySelectorAll('button')].filter(button => !button.hidden);
+    assert.equal(visibleButtons.some(button => button.textContent.includes('Corpus CTI')), false);
+    chatDom.window.close();
 
     let finishRequest;
     const policy = { fingerprint: 'a'.repeat(64), accepted: true, canAccept: false,

@@ -34,6 +34,9 @@ class LegalDocumentAiPolicyTest {
             var changed=service.policy(actor); assertThat(changed.accepted()).isFalse();
             assertThat(changed.fingerprint()).isNotEqualTo(first.fingerprint());
             assertThat(mapper.writeValueAsString(changed)).doesNotContain("synthetic-secret-never-disclose");
+            assertThatThrownBy(() -> service.requireIndexedImageForLegal(actor)).isInstanceOf(ConflictException.class);
+            when(tenants.findByIdAndActiveTrue(tenant)).thenReturn(Optional.of(new TenantEntity("synthetic","Synthetic",TenantProfile.GENERAL)));
+            assertThatCode(() -> service.requireIndexedImageForLegal(actor)).doesNotThrowAnyException();
         } finally { TenantContext.clear(); }
     }
 }

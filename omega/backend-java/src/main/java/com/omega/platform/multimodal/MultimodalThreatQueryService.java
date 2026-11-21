@@ -45,6 +45,8 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class MultimodalThreatQueryService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.omega.platform.service.LegalDocumentAiService legalAi;
 
     private static final Pattern URL_RE = Pattern.compile("https?://[^\\s<>\"')]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern DOMAIN_RE = Pattern.compile("\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:com|net|org|io|xyz|top|tk|ml|ga|cf|gq|click|info|biz|ru|cn|app|dev|edu|gov|co)\\b", Pattern.CASE_INSENSITIVE);
@@ -101,6 +103,7 @@ public class MultimodalThreatQueryService {
             String question
     ) {
         authorizationService.requireReadAccess(principal, expedienteId);
+        if(legalAi!=null) legalAi.requireIndexedImageForLegal(principal);
         return executePipeline(principal, expedienteId, imageBytes, question);
     }
 

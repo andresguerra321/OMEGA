@@ -107,3 +107,23 @@ auditoría o dossier; los tests usan secretos sintéticos y los reportes no vuel
 
 El flujo completo de UI y la guía manual se completan en los bloques siguientes. No se acredita
 todavía el perfil LEGAL como producto terminado.
+
+## Abstención y citas
+
+LEGAL consulta exclusivamente el expediente autorizado y los documentos seleccionados. No usa el
+historial ni el contexto técnico enviado por el cliente como evidencia o instrucciones de análisis.
+Las preguntas deben identificar explícitamente lo que se quiere consultar.
+Sin documentos listos o sin fragmentos relevantes devuelve esta respuesta fija, sin invocar el generador:
+
+> No hay fragmentos relevantes suficientes en este expediente para responder. No es asesoría legal.
+
+La recuperación exige coincidencia léxica o similitud vectorial mínima de 0,78. Este umbral no garantiza
+exhaustividad ni pertinencia jurídica. Con evidencia, las líneas del modelo deben incluir referencias
+válidas a fragmentos recuperados; si no las tienen, se muestran extractos citados en su lugar.
+Las referencias incluyen id documental y página o segmento; los nombres de archivo no se envían como
+etiquetas de cita de LEGAL. Una referencia válida no acredita por sí sola la verdad o interpretación
+de una afirmación: el usuario debe revisar el fragmento y el documento conservado localmente.
+
+El chat principal mantiene un aviso de no asesoría y no permite cambiar a fuentes públicas en LEGAL.
+Las imágenes deben cargarse e indexarse como documentos antes de consultarse; el endpoint multimodal
+efímero no sustituye ese recorrido con citas. GENERAL conserva su selección de fuentes y su generador.

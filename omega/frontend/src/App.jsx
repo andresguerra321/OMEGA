@@ -165,6 +165,7 @@ export default function App() {
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
   const { profileConfig, switchProfile } = useTenantProfileConfig(authSession);
+  const privateOnlyWorkspace = profileConfig?.ragCorpusScope === 'legal_expedientes';
   const appliedProfileDefaultRef = useRef('');
   useEffect(() => {
     const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
@@ -634,7 +635,9 @@ export default function App() {
     const t0 = performance.now();
 
     try {
-      const targetExpedienteId = usePrivateDocs && activeExpedienteId ? activeExpedienteId : null;
+      const targetExpedienteId = (privateOnlyWorkspace || usePrivateDocs) && activeExpedienteId ? activeExpedienteId : null;
+      if (privateOnlyWorkspace && !targetExpedienteId) throw new Error('Selecciona un expediente antes de consultar sus documentos.');
+      if (privateOnlyWorkspace && options?.imageFile) throw new Error('Carga la imagen como documento del expediente antes de consultarla.');
       const res = options?.imageFile
         ? await sendMultimodalQuery({
             expedienteId: targetExpedienteId,
@@ -649,7 +652,7 @@ export default function App() {
             pinnedContextPayload,
             {
               expedienteId: targetExpedienteId,
-              generalMode: generalChatMode,
+              generalMode: privateOnlyWorkspace ? false : generalChatMode,
               analysisContext: options?.analysisContext ?? (lastAnalysisContext || null),
             },
           );
@@ -1414,12 +1417,14 @@ export default function App() {
                 >
                 {activeNav === 'preguntar' ? (
                   <ChatWorkspace
+                    privateOnly={privateOnlyWorkspace}
+                    disclaimer={privateOnlyWorkspace ? 'No es asesoría legal. Verifica cada afirmación en los documentos citados.' : ''}
                     messages={messages}
                     loading={loadingChat}
                     topK={topK}
                     onChangeTopK={setTopK}
-                    generalChatMode={generalChatMode}
-                    onToggleGeneralChatMode={() => setGeneralChatMode((v) => !v)}
+                    generalChatMode={privateOnlyWorkspace ? false : generalChatMode}
+                    onToggleGeneralChatMode={privateOnlyWorkspace ? undefined : () => setGeneralChatMode((v) => !v)}
                     sourceScope={sourceScope}
                     onChangeSourceScope={setSourceScope}
                     onSendMessage={handleSend}
@@ -1444,7 +1449,7 @@ export default function App() {
                     textareaRef={textareaRef}
                     authSession={authSession}
                     onOpenAuth={openAuthModal}
-                    usePrivateDocs={usePrivateDocs}
+                    usePrivateDocs={privateOnlyWorkspace || usePrivateDocs}
                     onTogglePrivateDocs={(nextVal) => setUsePrivateDocs(Boolean(nextVal))}
                     privateDocs={expedienteDocs}
                     activeExpedienteId={activeExpedienteId}

@@ -242,7 +242,7 @@ public class AsyncDocumentProcessor {
                 );
             });
         } catch (Exception ex) {
-            log.error("Error persistiendo auditoría/temp_deleted_at para documento {}", cmd.documentId(), ex);
+            log.error("DOCUMENT_FINAL_AUDIT_FAILED document={}", cmd.documentId());
         }
     }
 

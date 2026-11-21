@@ -70,6 +70,10 @@ public class LegalDocumentAiService {
             throw new ConflictException("Un administrador debe revisar y aceptar la política de IA documental en Expedientes antes de cargar o consultar documentos.");
     }
 
+    public void requireIndexedImageForLegal(OmegaPrincipal actor) {
+        if(isLegal(actor)) throw new ConflictException("Carga la imagen como documento del expediente antes de consultarla con citas.");
+    }
+
     private void requireLegal(OmegaPrincipal actor) {
         if(!TenantContext.requireTenantId().equals(actor.tenantId())) throw new org.springframework.security.access.AccessDeniedException("Contexto de tenant inválido");
         if(!isLegal(actor)) throw new ResourceNotFoundException("Configuración no disponible");

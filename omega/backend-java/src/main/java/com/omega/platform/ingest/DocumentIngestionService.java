@@ -112,7 +112,7 @@ public class DocumentIngestionService {
         try {
             Files.createDirectories(tempDir);
         } catch (IOException ex) {
-            throw new IllegalStateException("No se pudo preparar el almacenamiento temporal volátil: " + tempDir, ex);
+            throw new IllegalStateException("INGEST_TEMP_UNAVAILABLE");
         }
 
         Path tempPdfPath = tempDir.resolve(UUID.randomUUID() + ".pdf");
