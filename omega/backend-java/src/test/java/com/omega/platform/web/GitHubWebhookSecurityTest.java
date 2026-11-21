@@ -95,7 +95,7 @@ class GitHubWebhookSecurityTest {
         byte[] body = "{\"action\":\"suspend\",\"installation\":{\"id\":123}}".getBytes(StandardCharsets.UTF_8);
         String sig = sign(body, "test-webhook-secret-123");
 
-        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt(), anyString(), any())).thenReturn(true);
+        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt(), anyString(), any())).thenReturn(true, false);
 
         mvc.perform(post("/api/v1/integrations/github/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -107,7 +107,6 @@ class GitHubWebhookSecurityTest {
                 .andExpect(jsonPath("$.accepted").value(true));
 
         // Replay con mismo deliveryId -> 200 OK idempotente
-        when(deliveryRepository.tryRecordDelivery(eq("deliv-1"), anyInt(), anyString(), any())).thenReturn(false);
         mvc.perform(post("/api/v1/integrations/github/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Hub-Signature-256", sig)

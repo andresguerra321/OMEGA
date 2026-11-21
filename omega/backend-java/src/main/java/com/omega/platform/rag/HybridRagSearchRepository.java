@@ -56,6 +56,7 @@ public class HybridRagSearchRepository {
                   AND d.embedding_model = :embeddingModel
                   AND c.embedding_model = :embeddingModel
                   AND (:corpusScope = '' OR d.corpus_scope = :corpusScope)
+                  AND (:filterDocuments = false OR c.document_id IN (:documentIds))
                 ORDER BY (c.embedding <=> CAST(:queryVector AS public.vector)) ASC
                 LIMIT :candidateLimit
             ),
@@ -78,6 +79,7 @@ public class HybridRagSearchRepository {
                   AND d.embedding_model = :embeddingModel
                   AND c.embedding_model = :embeddingModel
                   AND (:corpusScope = '' OR d.corpus_scope = :corpusScope)
+                  AND (:filterDocuments = false OR c.document_id IN (:documentIds))
                   AND c.search_vector @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
                 ORDER BY lex_score DESC
                 LIMIT :candidateLimit
@@ -136,6 +138,7 @@ public class HybridRagSearchRepository {
                   AND d.embedding_model IN (:embeddingModels)
                   AND c.embedding_model IN (:embeddingModels)
                   AND (:corpusScope = '' OR d.corpus_scope = :corpusScope)
+                  AND (:filterDocuments = false OR c.document_id IN (:documentIds))
                   AND c.search_vector @@ to_tsquery('pg_catalog.simple', :lexicalTsQuery)
                 ORDER BY lex_score DESC
                 LIMIT :topK
@@ -191,6 +194,11 @@ public class HybridRagSearchRepository {
             int topK,
             String corpusScope
     ) {
+        return searchHybrid(tenantId, expedienteId, question, queryVector, embeddingModel, topK, corpusScope, null);
+    }
+
+    public List<RankedChunk> searchHybrid(UUID tenantId, UUID expedienteId, String question, float[] queryVector,
+            String embeddingModel, int topK, String corpusScope, List<UUID> documentIds) {
         int safeTopK = Math.max(1, Math.min(topK, 20));
         int candidateLimit = Math.max(safeTopK * 4, 24);
         String tsQuery = buildSanitizedOrTsQuery(question);
@@ -202,6 +210,8 @@ public class HybridRagSearchRepository {
                 .addValue("expedienteId", expedienteId)
                 .addValue("embeddingModel", embeddingModel)
                 .addValue("corpusScope", safeScope)
+                .addValue("filterDocuments", documentIds != null && !documentIds.isEmpty())
+                .addValue("documentIds", documentIds == null || documentIds.isEmpty() ? List.of(new UUID(0, 0)) : documentIds)
                 .addValue("queryVector", toVectorLiteral(queryVector))
                 .addValue("lexicalTsQuery", hasLexical ? tsQuery : "omega_noop")
                 .addValue("hasLexical", hasLexical)
@@ -253,6 +263,11 @@ public class HybridRagSearchRepository {
             int topK,
             String corpusScope
     ) {
+        return searchLexicalOnly(tenantId, expedienteId, question, embeddingModels, topK, corpusScope, null);
+    }
+
+    public List<RankedChunk> searchLexicalOnly(UUID tenantId, UUID expedienteId, String question,
+            Collection<String> embeddingModels, int topK, String corpusScope, List<UUID> documentIds) {
         if (embeddingModels == null || embeddingModels.isEmpty()) {
             return List.of();
         }
@@ -267,6 +282,8 @@ public class HybridRagSearchRepository {
                 .addValue("expedienteId", expedienteId)
                 .addValue("embeddingModels", List.copyOf(embeddingModels))
                 .addValue("corpusScope", safeScope)
+                .addValue("filterDocuments", documentIds != null && !documentIds.isEmpty())
+                .addValue("documentIds", documentIds == null || documentIds.isEmpty() ? List.of(new UUID(0, 0)) : documentIds)
                 .addValue("lexicalTsQuery", tsQuery)
                 .addValue("topK", safeTopK)
                 .addValue("rrfK", (double) properties.rag().rrfK())

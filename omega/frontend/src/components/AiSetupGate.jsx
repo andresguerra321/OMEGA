@@ -80,6 +80,17 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
 
   useEffect(() => {
     if (!enabled) return undefined;
+    const configureLocal = () => {
+      const local = PROVIDER_PRESETS.find((preset) => preset.id === 'ollama');
+      setProviderId(local.id); setCustomBaseUrl(local.baseUrl); setCustomModel(local.model);
+      setApiKey(''); setError(''); setShowOtherProviders(true); setStep(1); setPhase('setup');
+    };
+    window.addEventListener('omega:configure-local-ai', configureLocal);
+    return () => window.removeEventListener('omega:configure-local-ai', configureLocal);
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
     if (completed.current === null) {
       try { completed.current = Boolean(completionKey && window.localStorage.getItem(completionKey) === 'complete'); }
       catch { completed.current = false; }

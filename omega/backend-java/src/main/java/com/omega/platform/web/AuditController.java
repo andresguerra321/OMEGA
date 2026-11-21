@@ -31,7 +31,7 @@ public class AuditController {
             @RequestParam(defaultValue = "50") int limit
     ) {
         return auditLogService.listRecent(principal.tenantId(), limit).stream()
-                .map(AuditLogResponse::fromEntity)
+                .map(entry -> AuditLogResponse.fromEntity(entry, auditLogService))
                 .toList();
     }
 
@@ -53,7 +53,7 @@ public class AuditController {
             String currentHash,
             Instant createdAt
     ) {
-        static AuditLogResponse fromEntity(AuditLogEntity e) {
+        static AuditLogResponse fromEntity(AuditLogEntity e, AuditLogService audit) {
             return new AuditLogResponse(
                     e.getId(),
                     e.getChainSeq(),
@@ -62,7 +62,7 @@ public class AuditController {
                     e.getAction(),
                     e.getResourceType(),
                     e.getResourceId(),
-                    e.getMetadataJson(),
+                    audit.metadataForDisclosure(e.getMetadataJson()),
                     e.getPreviousHash(),
                     e.getCurrentHash(),
                     e.getCreatedAt()

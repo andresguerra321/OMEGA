@@ -248,6 +248,7 @@ def test_native_pipe_roundtrip_uses_real_acl_and_node_client(monkeypatch):
     worker = threading.Thread(target=server, daemon=True)
     worker.start()
     script = '''const net = await import('node:net');
+const crypto = await import('node:crypto');
 const rpc = (msg) => new Promise((resolve, reject) => {
   const s = net.connect(process.argv[1]);
   let buf = '';
@@ -262,7 +263,16 @@ const rpc = (msg) => new Promise((resolve, reject) => {
 let healthResp;
 for (let i = 0; i < 30; i++) {
   try {
-    healthResp = await rpc({ method: 'GET', target: '/api/health', headers: {}, body: '' });
+    const bootstrap = await rpc({ bootstrap: true });
+    const unsigned = await rpc({ method: 'GET', target: '/api/health', headers: {}, body: '' });
+    if (unsigned.status !== 401) throw new Error('Unsigned RPC must be rejected');
+    const stamp = String(Math.floor(Date.now() / 1000));
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const bodyHash = crypto.createHash('sha256').update('').digest('hex');
+    const message = ['request', 'GET', '/api/health', stamp, nonce, bodyHash].join('\\n');
+    const sig = crypto.createHmac('sha256', Buffer.from(bootstrap.secret, 'hex')).update(message).digest('hex');
+    healthResp = await rpc({ method: 'GET', target: '/api/health',
+      headers: { 'x-omega-time': stamp, 'x-omega-nonce': nonce, 'x-omega-signature': sig }, body: '' });
     break;
   } catch (e) {
     if (i === 29) throw e;
@@ -270,7 +280,8 @@ for (let i = 0; i < 30; i++) {
   }
 }
 const health = JSON.parse(Buffer.from(healthResp.body, 'base64').toString('utf8'));
-if (healthResp.status !== 200 || health.service !== 'omega-forensic-worker') process.exit(1);'''
+if (healthResp.status !== 200 || health.service !== 'omega-forensic-worker')
+  throw new Error('Unexpected health status: ' + healthResp.status);'''
     try:
         result = subprocess.run(['node', '--input-type=module', '-e', script, endpoint], capture_output=True, text=True, timeout=20)
         assert result.returncode == 0, result.stderr

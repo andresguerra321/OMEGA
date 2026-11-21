@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { SPRING_SNAPPY } from '../lib/motion';
 import {
   Home,
+  FolderOpen,
   Laptop,
   Layers,
   MessageSquare,
@@ -15,6 +16,7 @@ import {
 import { resolveVisibleNavItems } from '../lib/useTenantProfileConfig';
 
 const NAV_ITEMS = [
+  { id: 'expedientes', label: 'Expedientes', ariaLabel: 'Expedientes', icon: FolderOpen },
   { id: 'inicio', label: 'Inicio', ariaLabel: 'Inicio', icon: Home },
   { id: 'equipo', label: 'Equipos', ariaLabel: 'Equipos — revisar mi dispositivo', icon: Laptop },
   { id: 'exposicion', label: 'Enlaces y OSINT', ariaLabel: 'Enlaces, dominios y correos — verificación y OSINT', icon: Radar },

@@ -10,6 +10,22 @@ import org.springframework.data.repository.query.Param;
 
 public interface ExpedienteRepository extends JpaRepository<ExpedienteEntity, UUID> {
 
+    @Query("""
+            SELECT e FROM ExpedienteEntity e WHERE e.tenantId = :tenantId
+            AND (:admin = true OR e.ownerUserId = :userId OR EXISTS
+                (SELECT p.id FROM ExpedientePermissionEntity p WHERE p.tenantId = :tenantId
+                 AND p.expedienteId = e.id AND p.userId = :userId))
+            AND (:search = '' OR LOWER(e.title) LIKE LOWER(CONCAT('%', :search, '%'))
+                 OR LOWER(e.caseReference) LIKE LOWER(CONCAT('%', :search, '%')))
+            AND (:state IS NULL OR e.status = :state)
+            AND (:classification IS NULL OR e.classification = :classification)
+            """)
+    org.springframework.data.domain.Page<ExpedienteEntity> searchAccessible(
+            @Param("tenantId") UUID tenantId, @Param("userId") UUID userId, @Param("admin") boolean admin,
+            @Param("search") String search, @Param("state") com.omega.platform.domain.ExpedienteStatus state,
+            @Param("classification") com.omega.platform.domain.ClassificationLevel classification,
+            org.springframework.data.domain.Pageable pageable);
+
     Optional<ExpedienteEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 
     List<ExpedienteEntity> findAllByTenantIdOrderByCreatedAtDesc(UUID tenantId);

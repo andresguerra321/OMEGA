@@ -36,6 +36,14 @@ public class ExpedienteAuthorizationService {
         return authorize(principal, expedienteId, true);
     }
 
+    public ExpedienteEntity requirePermissionManagementAccess(OmegaPrincipal principal, UUID expedienteId) {
+        ExpedienteEntity expediente = requireReadAccess(principal, expedienteId);
+        if (principal.role() != Role.ADMIN && !expediente.getOwnerUserId().equals(principal.userId())) {
+            throw new AccessDeniedException("Solo el propietario o un administrador puede gestionar el acceso");
+        }
+        return expediente;
+    }
+
     private ExpedienteEntity authorize(OmegaPrincipal principal, UUID expedienteId, boolean writeRequired) {
         UUID tenantId = principal.tenantId();
         ExpedienteEntity expediente = expedienteRepository.findByIdAndTenantId(expedienteId, tenantId)

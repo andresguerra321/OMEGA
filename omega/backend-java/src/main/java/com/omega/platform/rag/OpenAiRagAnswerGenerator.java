@@ -112,7 +112,7 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
                 }
             } catch (Exception ex) {
                 log.warn("Fallo invocando Chat Completions ({} / {}); intentando siguiente proveedor en cadena: {}",
-                        target.providerName(), target.model(), ex.getMessage());
+                        target.providerName(), target.model(), ex.getClass().getSimpleName());
             }
         }
 
@@ -148,7 +148,7 @@ public class OpenAiRagAnswerGenerator implements RagAnswerGenerator {
                     return sanitizeGeneratedAnswer(text);
                 }
             } catch (Exception ex) {
-                log.warn("Fallo en modo general ({} / {}): {}", target.providerName(), target.model(), ex.getMessage());
+                log.warn("Fallo en modo general ({} / {}): {}", target.providerName(), target.model(), ex.getClass().getSimpleName());
             }
         }
         return null;

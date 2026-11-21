@@ -212,6 +212,8 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
 }
 
 export function ChatWorkspace({
+  privateOnly = false,
+  disclaimer = '',
   messages,
   loading,
   topK = 6,
@@ -540,6 +542,8 @@ export function ChatWorkspace({
           >
             <button
               type="button"
+              hidden={privateOnly}
+              style={privateOnly ? { display: 'none' } : undefined}
               onClick={() => onTogglePrivateDocs?.(false)}
               className={`inline-flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 text-[11.5px] font-medium transition-colors cursor-pointer ${
                 !usePrivateDocs
@@ -633,6 +637,8 @@ export function ChatWorkspace({
           />
           <button
             type="button"
+            hidden={privateOnly}
+            style={privateOnly ? { display: 'none' } : undefined}
             onClick={() => imageInputRef.current?.click()}
             title="Analizar captura de pantalla en RAM (Zero-Retention multimodal)"
             className={`inline-flex items-center gap-1.5 rounded-[8px] border border-white/[0.08] bg-white/[0.04] hover:border-[#2F6FED]/45 hover:bg-[rgba(28,36,56,0.65)] text-[#F2F2F4] active:scale-[0.96] transition-all duration-150 cursor-pointer ${
@@ -697,6 +703,7 @@ export function ChatWorkspace({
 
       {/* Columna Principal del Chat */}
       <div className="relative z-10 flex-1 flex flex-col min-w-0">
+        {disclaimer && <p role="note" className="shrink-0 border-b border-white/[0.06] px-4 py-2 text-center text-xs text-white/65">{disclaimer}</p>}
         {messages.length === 0 ? (
           /* ============================================================
              ESTADO INICIAL: Hero Glassmórfico Centrado Sin Superposiciones
@@ -876,7 +883,7 @@ export function ChatWorkspace({
             {(hasHistory || usePrivateDocs) && (
               <footer className="relative z-10 w-full max-w-[680px] pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#9A9AA2]">
                 <span className="text-[#8A8E99]">
-                  {usePrivateDocs ? 'Procesamiento privado solo en memoria' : ''}
+                    {usePrivateDocs ? (privateOnly ? 'Consulta confidencial del expediente' : 'Procesamiento privado solo en memoria') : ''}
                 </span>
                 {hasHistory && (
                   <button
@@ -906,6 +913,8 @@ export function ChatWorkspace({
                   </span>
                   <button
                     type="button"
+                    hidden={privateOnly}
+                    style={privateOnly ? { display: 'none' } : undefined}
                     onClick={() => onTogglePrivateDocs?.(false)}
                     className="text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
                   >

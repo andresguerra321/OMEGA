@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -76,6 +77,13 @@ public class ExpedienteController {
         return expedienteService.getExpedienteDetail(principal, expedienteId);
     }
 
+    @DeleteMapping("/{expedienteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    public void delete(@AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId) {
+        expedienteService.deleteExpediente(principal, expedienteId);
+    }
+
     @PostMapping("/{expedienteId}/permissions")
     public PermissionResponse grantPermission(
             @AuthenticationPrincipal OmegaPrincipal principal,
@@ -83,5 +91,18 @@ public class ExpedienteController {
             @Valid @RequestBody GrantPermissionRequest request
     ) {
         return expedienteService.grantPermission(principal, expedienteId, request);
+    }
+
+    @GetMapping("/{expedienteId}/permissions")
+    public List<PermissionResponse> listPermissions(
+            @AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId) {
+        return expedienteService.listPermissions(principal, expedienteId);
+    }
+
+    @DeleteMapping("/{expedienteId}/permissions/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokePermission(
+            @AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId, @PathVariable UUID userId) {
+        expedienteService.revokePermission(principal, expedienteId, userId);
     }
 }

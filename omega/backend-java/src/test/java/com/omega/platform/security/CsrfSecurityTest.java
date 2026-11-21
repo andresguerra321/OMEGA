@@ -108,6 +108,10 @@ class CsrfSecurityTest {
 
     @Test
     void bearerOnlyModeCannotUseAmbientCookieAndDoesNotIssueSessionCookie() throws Exception {
+        when(auth.login(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.nullable(String.class))).thenReturn(
+                new com.omega.platform.web.dto.AuthDtos.AuthTokenResponse("valid-jwt", "Bearer", 3600,
+                        UUID.randomUUID(), UUID.randomUUID(), "test", "user@example.org", Role.ADMIN));
         mvc.perform(post("/api/v1/csrf-probe").cookie(session()).header("X-Omega-Auth-Mode", "bearer"))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/csrf-probe").cookie(session()).header("X-Omega-Auth-Mode", "bearer")

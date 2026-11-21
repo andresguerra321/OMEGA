@@ -3,7 +3,7 @@ import { fetchProfileConfig, updateTenantProfile } from './api.js';
 
 export const DEFAULT_PROFILE_CONFIG = Object.freeze({
   profile: 'GENERAL',
-  version: '1.0.0',
+  version: '1.1.0',
   visibleModules: ['inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
   ragCorpusScope: 'general_cti',
   copilotTone: 'balanced_defensive',

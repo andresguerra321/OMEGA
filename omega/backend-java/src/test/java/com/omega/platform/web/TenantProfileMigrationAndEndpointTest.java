@@ -45,6 +45,9 @@ class TenantProfileMigrationAndEndpointTest {
         @MockBean
         private TenantRepository tenantRepository;
 
+    @MockBean
+    private com.omega.platform.repository.DocumentRepository documentRepository;
+
         @MockBean
         private JwtService jwtService;
 
@@ -104,7 +107,7 @@ class TenantProfileMigrationAndEndpointTest {
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-dev-admin"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile").value("DEVELOPER"))
-                .andExpect(jsonPath("$.configVersion").value("1.0.0"))
+                .andExpect(jsonPath("$.configVersion").value("1.1.0"))
                 .andExpect(jsonPath("$.defaultView").value("repo_scanner"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("dev_supply_chain_cti"))
                 .andExpect(jsonPath("$.copilotTone").value("technical_appsec"))
@@ -114,10 +117,10 @@ class TenantProfileMigrationAndEndpointTest {
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal-analyst"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile").value("LEGAL"))
-                .andExpect(jsonPath("$.defaultView").value("cuenta"))
+                .andExpect(jsonPath("$.defaultView").value("expedientes"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("legal_expedientes"))
                 .andExpect(jsonPath("$.copilotTone").value("forensic_legal"))
-                .andExpect(jsonPath("$.visibleModules[3]").value("expedientes"));
+                .andExpect(jsonPath("$.visibleModules").value(org.hamcrest.Matchers.contains("expedientes", "preguntar", "seguridad_despacho", "cuenta")));
 
                 mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
                 mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))

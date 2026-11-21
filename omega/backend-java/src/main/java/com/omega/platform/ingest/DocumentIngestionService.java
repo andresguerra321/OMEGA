@@ -4,10 +4,12 @@ import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.domain.DocumentEntity;
 import com.omega.platform.domain.DocumentStatus;
 import com.omega.platform.domain.ExpedienteEntity;
+import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.ingest.AsyncDocumentProcessor.DocumentIngestCommand;
 import com.omega.platform.ingest.PdfSecuritySanitizer.PdfInspectionResult;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.AuditLogService;
@@ -54,6 +56,10 @@ public class DocumentIngestionService {
     private final AuditLogService auditLogService;
     private final AsyncDocumentProcessor asyncDocumentProcessor;
     private final TransactionTemplate transactionTemplate;
+    private final TenantRepository tenantRepository;
+    private final IngestTemporaryFiles temporaryFiles;
+    private final OfficeImageExtractor officeImageExtractor;
+    private final com.omega.platform.service.LegalDocumentAiService legalAi;
 
     public DocumentIngestionService(
             OmegaProperties properties,
@@ -63,7 +69,11 @@ public class DocumentIngestionService {
             DocumentRepository documentRepository,
             AuditLogService auditLogService,
             AsyncDocumentProcessor asyncDocumentProcessor,
-            TransactionTemplate transactionTemplate
+            TransactionTemplate transactionTemplate,
+            TenantRepository tenantRepository,
+            IngestTemporaryFiles temporaryFiles,
+            OfficeImageExtractor officeImageExtractor,
+            com.omega.platform.service.LegalDocumentAiService legalAi
     ) {
         this.properties = properties;
         this.authorizationService = authorizationService;
@@ -73,6 +83,10 @@ public class DocumentIngestionService {
         this.auditLogService = auditLogService;
         this.asyncDocumentProcessor = asyncDocumentProcessor;
         this.transactionTemplate = transactionTemplate;
+        this.tenantRepository = tenantRepository;
+        this.temporaryFiles = temporaryFiles;
+        this.officeImageExtractor = officeImageExtractor;
+        this.legalAi = legalAi;
     }
 
     public IngestAcceptedResult ingestPdf(
@@ -81,6 +95,7 @@ public class DocumentIngestionService {
             MultipartFile file
     ) {
         ExpedienteEntity expediente = authorizationService.requireWriteAccess(principal, expedienteId);
+        legalAi.requireConsent(principal);
         if (file == null || file.isEmpty()) {
             throw new InvalidDocumentException("Debe adjuntar un archivo PDF no vacío.");
         }
@@ -91,29 +106,45 @@ public class DocumentIngestionService {
         }
 
         String sanitizedFilename = sanitizeFilename(file.getOriginalFilename());
+        boolean allowExtraFormats = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                .map(tenant -> tenant.getProfile() == TenantProfile.LEGAL).orElse(false);
         Path tempDir = Path.of(properties.ingest().tempDir());
         try {
             Files.createDirectories(tempDir);
         } catch (IOException ex) {
-            throw new IllegalStateException("No se pudo preparar el almacenamiento temporal volátil: " + tempDir, ex);
+            throw new IllegalStateException("INGEST_TEMP_UNAVAILABLE");
         }
 
         Path tempPdfPath = tempDir.resolve(UUID.randomUUID() + ".pdf");
+        temporaryFiles.register(tempPdfPath);
         boolean handedOffToAsync = false;
 
         try {
-            String sha256Hash = streamValidateMagicBytesAndHash(file, tempPdfPath, maxBytes);
+            String sha256Hash = streamValidateMagicBytesAndHash(file, tempPdfPath, maxBytes, allowExtraFormats);
             PdfInspectionResult inspection;
+            String format;
+            boolean isPdf;
+            try (var header = Files.newInputStream(tempPdfPath)) {
+                isPdf = Arrays.equals(header.readNBytes(5), PDF_MAGIC);
+            } catch (IOException ex) { throw new InvalidDocumentException("No se pudo inspeccionar el documento."); }
             try {
-                inspection = pdfSecuritySanitizer.validateCleanPdf(tempPdfPath);
-            } catch (UnsafeDocumentException unsafeEx) {
-                auditRejectedPdf(principal, expediente.getId(), sanitizedFilename, sha256Hash, unsafeEx.getMessage());
+                if (isPdf) {
+                    format = "PDF";
+                    inspection = pdfSecuritySanitizer.validateCleanPdf(tempPdfPath);
+                } else {
+                    var extra = officeImageExtractor.inspect(tempPdfPath);
+                    format = extra.format();
+                    inspection = new PdfInspectionResult(extra.pages());
+                }
+            } catch (UnsafeDocumentException | InvalidDocumentException unsafeEx) {
+                recordRejectedDocument(principal, expediente.getId(), sanitizedFilename, sha256Hash,
+                        unsafeEx instanceof UnsafeDocumentException ? "UNSAFE_PDF" : "INVALID_FORMAT", tempPdfPath);
                 throw unsafeEx;
             }
 
             // Confirmar fila PROCESSING + auditoría antes de lanzar el hilo @Async
             DocumentEntity savedDoc = transactionTemplate.execute(tx -> {
-                DocumentEntity entity = documentRepository.saveAndFlush(new DocumentEntity(
+                DocumentEntity entity = new DocumentEntity(
                         principal.tenantId(),
                         expediente.getId(),
                         principal.userId(),
@@ -123,7 +154,18 @@ public class DocumentIngestionService {
                         embeddingProvider.modelName(),
                         false,
                         DocumentStatus.PROCESSING
-                ));
+                );
+                var tenant = tenantRepository.findActiveForUpdate(principal.tenantId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
+                legalAi.requireConsent(principal);
+                if (!"PDF".equals(format) && tenant.getProfile() != TenantProfile.LEGAL)
+                    throw new InvalidDocumentException("Este perfil solo admite PDF.");
+                entity.setDocumentFormat(format);
+                // Preserve existing GENERAL/DEVELOPER ingestion behavior while repairing LEGAL retrieval.
+                if (tenant.getProfile() == TenantProfile.LEGAL) {
+                    entity.setCorpusScope(TenantProfile.LEGAL);
+                }
+                documentRepository.saveAndFlush(entity);
 
                 auditLogService.record(
                         principal.tenantId(),
@@ -133,7 +175,6 @@ public class DocumentIngestionService {
                         entity.getId().toString(),
                         Map.of(
                                 "expedienteId", expediente.getId().toString(),
-                                "originalFilename", sanitizedFilename,
                                 "sha256Hash", sha256Hash,
                                 "totalPages", inspection.totalPages()
                         )
@@ -152,7 +193,8 @@ public class DocumentIngestionService {
                     principal.userId(),
                     sanitizedFilename,
                     sha256Hash,
-                    tempPdfPath
+                    tempPdfPath,
+                    format
             );
 
             CompletableFuture<DocumentStatus> future;
@@ -171,11 +213,7 @@ public class DocumentIngestionService {
             return new IngestAcceptedResult(toMetadataResponse(savedDoc), future);
         } finally {
             if (!handedOffToAsync) {
-                try {
-                    Files.deleteIfExists(tempPdfPath);
-                } catch (IOException ex) {
-                    log.error("No se pudo eliminar archivo temporal rechazado {}: {}", tempPdfPath, ex.getMessage());
-                }
+                temporaryFiles.purge(tempPdfPath);
             }
         }
     }
@@ -189,6 +227,37 @@ public class DocumentIngestionService {
                 .toList();
     }
 
+    @Transactional
+    public List<DocumentMetadataResponse> markReindexRequired(OmegaPrincipal principal, UUID expedienteId) {
+        authorizationService.requireWriteAccess(principal, expedienteId);
+        var documents = documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId);
+        int changed = 0;
+        for (var document : documents) {
+            if (document.getStatus() == DocumentStatus.INDEXED
+                    && !embeddingProvider.modelName().equals(document.getEmbeddingModel())
+                    && !AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL.equals(document.getEmbeddingModel())) {
+                document.setStatus(DocumentStatus.REINDEX_REQUIRED);
+                changed++;
+            }
+        }
+        documentRepository.saveAll(documents);
+        auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REINDEX_MARKED", "EXPEDIENTE",
+                expedienteId.toString(), Map.of("documentCount", changed));
+        return documents.stream().map(DocumentIngestionService::toMetadataResponse).toList();
+    }
+
+    @Transactional
+    public void deleteDocument(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {
+        authorizationService.requireWriteAccess(principal, expedienteId);
+        DocumentEntity document = documentRepository.findByIdAndTenantId(documentId, principal.tenantId())
+                .filter(doc -> doc.getExpedienteId().equals(expedienteId))
+                .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado"));
+        documentRepository.delete(document);
+        documentRepository.flush();
+        auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_DELETED", "EXPEDIENTE",
+                expedienteId.toString(), Map.of("documentId", documentId.toString(), "sha256Hash", document.getSha256Hash()));
+    }
+
     @Transactional(readOnly = true)
     public DocumentMetadataResponse getDocumentStatus(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {
         authorizationService.requireReadAccess(principal, expedienteId);
@@ -198,10 +267,10 @@ public class DocumentIngestionService {
         return toMetadataResponse(doc);
     }
 
-    private String streamValidateMagicBytesAndHash(MultipartFile file, Path tempPdfPath, long maxBytes) {
+    private String streamValidateMagicBytesAndHash(MultipartFile file, Path tempPdfPath, long maxBytes, boolean allowExtraFormats) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] header = new byte[PDF_MAGIC.length];
+            byte[] header = new byte[8];
             int headerRead = 0;
             long totalRead = 0;
 
@@ -214,8 +283,8 @@ public class DocumentIngestionService {
                     if (totalRead > maxBytes) {
                         throw new InvalidDocumentException("El stream PDF excede el límite máximo permitido.");
                     }
-                    if (headerRead < PDF_MAGIC.length) {
-                        int toCopy = Math.min(n, PDF_MAGIC.length - headerRead);
+                    if (headerRead < header.length) {
+                        int toCopy = Math.min(n, header.length - headerRead);
                         System.arraycopy(buffer, 0, header, headerRead, toCopy);
                         headerRead += toCopy;
                     }
@@ -224,7 +293,11 @@ public class DocumentIngestionService {
                 }
             }
 
-            if (headerRead < PDF_MAGIC.length || !Arrays.equals(header, PDF_MAGIC)) {
+            boolean validPdf = headerRead >= 5 && Arrays.equals(Arrays.copyOf(header, 5), PDF_MAGIC);
+            boolean extra = headerRead >= 4 && ((header[0] == 'P' && header[1] == 'K' && header[2] == 3 && header[3] == 4)
+                    || (header[0] == (byte)0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G')
+                    || (header[0] == (byte)0xff && header[1] == (byte)0xd8 && header[2] == (byte)0xff));
+            if (!validPdf && !(allowExtraFormats && extra)) {
                 throw new InvalidDocumentException("El archivo no presenta la firma binaria mágica '%PDF-'.");
             }
 
@@ -238,25 +311,26 @@ public class DocumentIngestionService {
         }
     }
 
-    private void auditRejectedPdf(
-            OmegaPrincipal principal,
-            UUID expedienteId,
-            String filename,
-            String sha256Hash,
-            String reason
-    ) {
-        transactionTemplate.executeWithoutResult(tx -> auditLogService.record(
-                principal.tenantId(),
-                principal.userId(),
-                "DOCUMENT_REJECTED_UNSAFE_PDF",
-                "EXPEDIENTE",
-                expedienteId.toString(),
-                Map.of(
-                        "originalFilename", filename,
-                        "sha256Hash", sha256Hash,
-                        "reason", reason
-                )
-        ));
+    private void recordRejectedDocument(OmegaPrincipal principal, UUID expedienteId, String filename,
+            String sha256Hash, String code, Path path) {
+        var deletedAt = temporaryFiles.purge(path);
+        transactionTemplate.executeWithoutResult(tx -> {
+            var tenant = tenantRepository.findActiveForUpdate(principal.tenantId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
+            if (tenant.getProfile() != TenantProfile.LEGAL) {
+                auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REJECTED_UNSAFE_PDF", "EXPEDIENTE",
+                        expedienteId.toString(), Map.of("sha256Hash", sha256Hash, "reasonCode", code));
+                return;
+            }
+            var document = new DocumentEntity(principal.tenantId(), expedienteId, principal.userId(), filename,
+                    sha256Hash, 0, embeddingProvider.modelName(), false, DocumentStatus.REJECTED);
+            if (tenant.getProfile() == TenantProfile.LEGAL) document.setCorpusScope(TenantProfile.LEGAL);
+            document.setFailureCode(code);
+            document.setTempDeletedAt(deletedAt);
+            documentRepository.saveAndFlush(document);
+            auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REJECTED_UNSAFE_PDF", "DOCUMENT",
+                    document.getId().toString(), Map.of("expedienteId", expedienteId.toString(), "sha256Hash", sha256Hash, "reasonCode", code));
+        });
     }
 
     private static String sanitizeFilename(String raw) {

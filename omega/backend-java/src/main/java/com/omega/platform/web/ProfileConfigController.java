@@ -3,6 +3,7 @@ package com.omega.platform.web;
 import com.omega.platform.domain.TenantEntity;
 import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.repository.TenantRepository;
+import com.omega.platform.repository.DocumentRepository;
 import com.omega.platform.security.Role;
 import com.omega.platform.security.TenantContext;
 import com.omega.platform.security.TenantScope;
@@ -33,15 +34,18 @@ public class ProfileConfigController {
     private final TenantRepository tenantRepository;
     private final TenantProfileConfigService configService;
     private final AuditLogService auditLogService;
+    private final DocumentRepository documentRepository;
 
     public ProfileConfigController(
             TenantRepository tenantRepository,
             TenantProfileConfigService configService,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            DocumentRepository documentRepository
     ) {
         this.tenantRepository = tenantRepository;
         this.configService = configService;
         this.auditLogService = auditLogService;
+        this.documentRepository = documentRepository;
     }
 
     @GetMapping("/config")
@@ -55,7 +59,7 @@ public class ProfileConfigController {
     }
 
     /**
-     * Cambia el perfil operativo del tenant sin borrar ni migrar datos existentes.
+     * Cambia el perfil sin borrar contenido; al entrar o salir de LEGAL sincroniza el alcance documental.
      * Solo ADMIN puede ejecutarlo y requiere confirmación explícita.
      */
     @PutMapping
@@ -72,7 +76,7 @@ public class ProfileConfigController {
                     HttpStatus.BAD_REQUEST,
                     "Debes confirmar explícitamente el cambio de perfil del espacio");
         }
-        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(scope.tenantId())
+        TenantEntity tenant = tenantRepository.findActiveForUpdate(scope.tenantId())
                 .orElseThrow(() -> new AccessDeniedException("Tenant inactivo o inexistente"));
 
         TenantProfile previousProfile = tenant.getProfile() != null ? tenant.getProfile() : TenantProfile.GENERAL;
@@ -80,6 +84,9 @@ public class ProfileConfigController {
         if (previousProfile != nextProfile) {
             tenant.setProfile(nextProfile);
             tenantRepository.save(tenant);
+            if (previousProfile == TenantProfile.LEGAL || nextProfile == TenantProfile.LEGAL) {
+                documentRepository.retagTenantDocuments(scope.tenantId(), nextProfile.name());
+            }
             auditLogService.record(
                     scope.tenantId(),
                     scope.userId(),
