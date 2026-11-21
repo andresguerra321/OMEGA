@@ -26,7 +26,8 @@ La configuración versionada vive en `omega/backend-java/src/main/resources/prof
 3. Agregar la entrada correspondiente en `omega/backend-java/src/main/resources/profile-configs.json`.
 4. Si introduce un nuevo módulo UI, registrarlo en `SpatialNavPill.jsx` y `App.jsx`.
 
-## 4. Límites conocidos
+## 4. Límites conocidos y capacidades completas por rol
 
-- Cambiar el perfil de un tenant no re-etiqueta retroactivamente documentos ya indexados en `omega_rag.documents`; los documentos previos conservan su `corpus_scope` original (`GENERAL` por defecto).
-- El análisis de repositorios (`POST /api/v1/repo/scan`) actúa como proxy autenticado hacia el worker FastAPI (`omega/api` `/api/repo/scan`), por lo que requiere que dicho servicio esté activo.
+- **Perfil `DEVELOPER` completo:** documentado en detalle en [docs/developer_producto.md](developer_producto.md) (Proyectos, Hallazgos y Triaje, Dependencias y SBOM CycloneDX 1.5 / SPDX 2.3, Políticas, Inteligencia de Cadena de Suministro `dev_supply_chain_cti`, Reportes PDF/JSON, CLI `--project` y GitHub App). La migración `V20` actualiza retroactivamente a `corpus_scope = 'DEVELOPER'` los documentos de tenants con perfil `DEVELOPER`.
+- **Decisión sobre `dev_cli` y `DevCliModulePanel.jsx`:** el ítem `dev_cli` no se habilita en `profile-configs.json` porque CLI, tokens `REPO_SCAN` y GitHub App están integrados como pestañas dentro del hub **Proyectos** (`RepoScannerPanel.jsx`). `DevCliModulePanel.jsx` se conserva únicamente como componente legado de compatibilidad sin exponerlo en la barra de navegación.
+- El análisis de repositorios (`POST /api/v1/repo/scan` y `/scan-url`) actúa como proxy autenticado hacia el worker FastAPI (`omega/api` `/api/repo/scan`) y registra automáticamente los metadatos saneados en `omega_rag.dev_projects`, `dev_scans`, `dev_findings` y `dev_dependencies`.

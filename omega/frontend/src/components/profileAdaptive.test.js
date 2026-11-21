@@ -51,3 +51,22 @@ test('RepoScannerPanel nunca usa la frase "repo seguro" y conserva el mensaje ho
   assert.equal(/repo seguro/i.test(src), false);
   assert.ok(src.includes('Sin señales detectadas con las reglas actuales'));
 });
+
+test('Hub Proyectos (RepoScannerPanel) consolida todas las pestañas comerciales de DEVELOPER sin habilitar dev_cli en navegación principal', () => {
+  const panelSrc = readFileSync(new URL('./RepoScannerPanel.jsx', import.meta.url), 'utf8');
+  for (const tabId of ['scan', 'projects', 'findings', 'sbom', 'policies', 'supply_chain', 'reports', 'cli', 'github']) {
+    assert.ok(panelSrc.includes(`id: '${tabId}'`), `Falta pestaña ${tabId} en RepoScannerPanel`);
+  }
+  for (const compFile of [
+    './DevProjectsTab.jsx',
+    './DevFindingsTriageTab.jsx',
+    './DevDependenciesSbomTab.jsx',
+    './DevPoliciesTab.jsx',
+    './DevSupplyChainIntelTab.jsx',
+    './DevReportsTab.jsx',
+  ]) {
+    const cSrc = readFileSync(new URL(compFile, import.meta.url), 'utf8');
+    assert.equal(/repo seguro/i.test(cSrc), false);
+    assert.ok(cSrc.length > 500);
+  }
+});
