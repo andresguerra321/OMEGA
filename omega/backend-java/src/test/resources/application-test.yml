@@ -52,3 +52,5 @@ omega:
     stix-corpus-dir: ../corpus_mvp/iocs
   osint:
     external-lookups-enabled: false
+
+OMEGA_EXTERNAL_IOC_SYNC_ENABLED: false
