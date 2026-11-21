@@ -27,6 +27,7 @@ spring:
     locations: classpath:db/migration
   servlet:
     multipart:
+      location: ${OMEGA_MULTIPART_TMP_DIR:${omega.ingest.temp-dir}/multipart}
       max-file-size: ${OMEGA_MAX_UPLOAD_SIZE:64MB}
       max-request-size: ${OMEGA_MAX_REQUEST_SIZE:128MB}
   mail:

@@ -51,12 +51,14 @@ class TwoTenantsDifferentProfilesIsolationTest {
         UUID expLegal = UUID.randomUUID();
 
         DocumentEntity devDoc = mock(DocumentEntity.class);
+        when(devDoc.getId()).thenReturn(UUID.randomUUID());
         when(devDoc.getStatus()).thenReturn(DocumentStatus.INDEXED);
         when(devDoc.getEmbeddingModel()).thenReturn(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL);
         when(devDoc.getOriginalFilename()).thenReturn("dev-advisory.pdf");
         when(devDoc.getSha256Hash()).thenReturn("a".repeat(64));
 
         DocumentEntity legalDoc = mock(DocumentEntity.class);
+        when(legalDoc.getId()).thenReturn(UUID.randomUUID());
         when(legalDoc.getStatus()).thenReturn(DocumentStatus.INDEXED);
         when(legalDoc.getEmbeddingModel()).thenReturn(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL);
         when(legalDoc.getOriginalFilename()).thenReturn("legal-expediente.pdf");

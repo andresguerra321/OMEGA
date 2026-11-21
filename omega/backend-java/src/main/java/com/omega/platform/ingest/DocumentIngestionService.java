@@ -57,6 +57,7 @@ public class DocumentIngestionService {
     private final AsyncDocumentProcessor asyncDocumentProcessor;
     private final TransactionTemplate transactionTemplate;
     private final TenantRepository tenantRepository;
+    private final IngestTemporaryFiles temporaryFiles;
 
     public DocumentIngestionService(
             OmegaProperties properties,
@@ -67,7 +68,8 @@ public class DocumentIngestionService {
             AuditLogService auditLogService,
             AsyncDocumentProcessor asyncDocumentProcessor,
             TransactionTemplate transactionTemplate,
-            TenantRepository tenantRepository
+            TenantRepository tenantRepository,
+            IngestTemporaryFiles temporaryFiles
     ) {
         this.properties = properties;
         this.authorizationService = authorizationService;
@@ -78,6 +80,7 @@ public class DocumentIngestionService {
         this.asyncDocumentProcessor = asyncDocumentProcessor;
         this.transactionTemplate = transactionTemplate;
         this.tenantRepository = tenantRepository;
+        this.temporaryFiles = temporaryFiles;
     }
 
     public IngestAcceptedResult ingestPdf(
@@ -104,6 +107,7 @@ public class DocumentIngestionService {
         }
 
         Path tempPdfPath = tempDir.resolve(UUID.randomUUID() + ".pdf");
+        temporaryFiles.register(tempPdfPath);
         boolean handedOffToAsync = false;
 
         try {
@@ -145,7 +149,6 @@ public class DocumentIngestionService {
                         entity.getId().toString(),
                         Map.of(
                                 "expedienteId", expediente.getId().toString(),
-                                "originalFilename", sanitizedFilename,
                                 "sha256Hash", sha256Hash,
                                 "totalPages", inspection.totalPages()
                         )
@@ -183,11 +186,7 @@ public class DocumentIngestionService {
             return new IngestAcceptedResult(toMetadataResponse(savedDoc), future);
         } finally {
             if (!handedOffToAsync) {
-                try {
-                    Files.deleteIfExists(tempPdfPath);
-                } catch (IOException ex) {
-                    log.error("No se pudo eliminar archivo temporal rechazado {}: {}", tempPdfPath, ex.getMessage());
-                }
+                temporaryFiles.purge(tempPdfPath);
             }
         }
     }
@@ -199,6 +198,37 @@ public class DocumentIngestionService {
                 .stream()
                 .map(DocumentIngestionService::toMetadataResponse)
                 .toList();
+    }
+
+    @Transactional
+    public List<DocumentMetadataResponse> markReindexRequired(OmegaPrincipal principal, UUID expedienteId) {
+        authorizationService.requireWriteAccess(principal, expedienteId);
+        var documents = documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId);
+        int changed = 0;
+        for (var document : documents) {
+            if (document.getStatus() == DocumentStatus.INDEXED
+                    && !embeddingProvider.modelName().equals(document.getEmbeddingModel())
+                    && !AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL.equals(document.getEmbeddingModel())) {
+                document.setStatus(DocumentStatus.REINDEX_REQUIRED);
+                changed++;
+            }
+        }
+        documentRepository.saveAll(documents);
+        auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_REINDEX_MARKED", "EXPEDIENTE",
+                expedienteId.toString(), Map.of("documentCount", changed));
+        return documents.stream().map(DocumentIngestionService::toMetadataResponse).toList();
+    }
+
+    @Transactional
+    public void deleteDocument(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {
+        authorizationService.requireWriteAccess(principal, expedienteId);
+        DocumentEntity document = documentRepository.findByIdAndTenantId(documentId, principal.tenantId())
+                .filter(doc -> doc.getExpedienteId().equals(expedienteId))
+                .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado"));
+        documentRepository.delete(document);
+        documentRepository.flush();
+        auditLogService.record(principal.tenantId(), principal.userId(), "DOCUMENT_DELETED", "EXPEDIENTE",
+                expedienteId.toString(), Map.of("documentId", documentId.toString(), "sha256Hash", document.getSha256Hash()));
     }
 
     @Transactional(readOnly = true)
@@ -264,9 +294,8 @@ public class DocumentIngestionService {
                 "EXPEDIENTE",
                 expedienteId.toString(),
                 Map.of(
-                        "originalFilename", filename,
                         "sha256Hash", sha256Hash,
-                        "reason", reason
+                        "reasonCode", "UNSAFE_PDF"
                 )
         ));
     }

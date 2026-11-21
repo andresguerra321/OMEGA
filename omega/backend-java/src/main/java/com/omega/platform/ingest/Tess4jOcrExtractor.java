@@ -43,7 +43,7 @@ public class Tess4jOcrExtractor implements OcrExtractor {
             String text = tesseract.doOCR(pageImage);
             return text == null ? "" : text;
         } catch (TesseractException | UnsatisfiedLinkError ex) {
-            log.warn("Error ejecutando Tesseract OCR ({}): {}", languages, ex.getMessage());
+            log.warn("Error ejecutando Tesseract OCR ({}): {}", languages, ex.getClass().getSimpleName());
             return "";
         }
     }

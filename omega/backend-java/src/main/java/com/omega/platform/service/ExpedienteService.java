@@ -152,6 +152,15 @@ public class ExpedienteService {
         );
     }
 
+    @Transactional
+    public void deleteExpediente(OmegaPrincipal principal, UUID expedienteId) {
+        ExpedienteEntity expediente = authorizationService.requireWriteAccess(principal, expedienteId);
+        expedienteRepository.delete(expediente);
+        expedienteRepository.flush();
+        auditLogService.record(principal.tenantId(), principal.userId(), "EXPEDIENTE_DELETED", "EXPEDIENTE",
+                expedienteId.toString(), Map.of());
+    }
+
     private ExpedienteSummaryResponse toSummary(ExpedienteEntity entity) {
         return new ExpedienteSummaryResponse(
                 entity.getId(),

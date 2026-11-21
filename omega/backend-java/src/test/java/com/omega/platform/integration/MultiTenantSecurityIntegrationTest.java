@@ -195,6 +195,22 @@ class MultiTenantSecurityIntegrationTest {
             assertThat(metadata).doesNotContain("@", "Referencia confidencial", owner, admin, writer, reader, analyst);
         }
         assertThat(auditLogService.verifyTenantChain(tenantId).valid()).isTrue();
+        DocumentEntity drifted = documentRepository.saveAndFlush(new DocumentEntity(tenantId, UUID.fromString(caseId),
+                UUID.fromString(ownerId), "synthetic.pdf", "a".repeat(64), 1, "outdated-model", false, DocumentStatus.INDEXED));
+        mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"question\":\"Synthetic question\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("REINDEX_REQUIRED"));
+        assertThat(documentRepository.findById(drifted.getId()).orElseThrow().getStatus()).isEqualTo(DocumentStatus.INDEXED);
+        mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/documents/mark-reindex-required")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/v1/expedientes/" + caseId + "/documents/" + drifted.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/v1/expedientes/" + caseId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader))
+                .andExpect(status().isForbidden());
     }
 
     @Test

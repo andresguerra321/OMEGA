@@ -333,6 +333,11 @@ class HybridRagQueryTest {
                 .isEqualTo("local-bge-m3-phase2");
         assertThat(driftJson.get("warnings").get(0).asText()).contains("Zero-Retention");
         assertThat(documentRepository.findById(docA1).orElseThrow().getStatus())
+                .isEqualTo(DocumentStatus.INDEXED);
+        mockMvc.perform(post("/api/v1/expedientes/" + expA1 + "/documents/mark-reindex-required")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isOk());
+        assertThat(documentRepository.findById(docA1).orElseThrow().getStatus())
                 .isEqualTo(DocumentStatus.REINDEX_REQUIRED);
     }
 

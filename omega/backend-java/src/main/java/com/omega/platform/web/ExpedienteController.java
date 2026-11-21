@@ -77,6 +77,13 @@ public class ExpedienteController {
         return expedienteService.getExpedienteDetail(principal, expedienteId);
     }
 
+    @DeleteMapping("/{expedienteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    public void delete(@AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId) {
+        expedienteService.deleteExpediente(principal, expedienteId);
+    }
+
     @PostMapping("/{expedienteId}/permissions")
     public PermissionResponse grantPermission(
             @AuthenticationPrincipal OmegaPrincipal principal,

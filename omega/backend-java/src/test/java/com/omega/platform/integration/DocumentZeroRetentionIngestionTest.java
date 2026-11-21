@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -161,8 +162,8 @@ class DocumentZeroRetentionIngestionTest {
         assertThat(documentChunkRepository.countByTenantIdAndDocumentId(tenantAId, documentId)).isGreaterThan(0);
 
         // Cero archivos PDF permanentes o huérfanos en el almacenamiento temporal
-        try (Stream<Path> files = Files.list(sharedTempDir)) {
-            assertThat(files.toList()).isEmpty();
+        try (Stream<Path> files = Files.walk(sharedTempDir)) {
+            assertThat(files.filter(Files::isRegularFile).toList()).isEmpty();
         }
 
         // Verificar cadena SHA-256 e inmutabilidad en PostgreSQL
@@ -186,6 +187,21 @@ class DocumentZeroRetentionIngestionTest {
         mockMvc.perform(get("/api/v1/expedientes/" + expAId + "/documents/" + documentId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenB))
                 .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/v1/expedientes/" + expAId + "/documents/" + documentId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/v1/expedientes/" + expAId + "/documents/" + documentId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isNoContent());
+        assertThat(documentRepository.findById(documentId)).isEmpty();
+        assertThat(documentChunkRepository.countByTenantIdAndDocumentId(tenantAId, documentId)).isZero();
+        mockMvc.perform(delete("/api/v1/expedientes/" + expAId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/expedientes/" + expAId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isNotFound());
+        assertThat(auditLogService.verifyTenantChain(tenantAId).valid()).isTrue();
     }
 
     @Test
@@ -220,8 +236,8 @@ class DocumentZeroRetentionIngestionTest {
                 .andExpect(status().isBadRequest());
 
         assertThat(documentRepository.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(tenantId, expId)).isEmpty();
-        try (Stream<Path> files = Files.list(sharedTempDir)) {
-            assertThat(files.toList()).isEmpty();
+        try (Stream<Path> files = Files.walk(sharedTempDir)) {
+            assertThat(files.filter(Files::isRegularFile).toList()).isEmpty();
         }
         assertThat(auditLogService.verifyTenantChain(tenantId).valid()).isTrue();
         assertThat(auditLogService.listRecent(tenantId, 10))
@@ -263,8 +279,8 @@ class DocumentZeroRetentionIngestionTest {
         assertThat(indexed.getTempDeletedAt()).isNotNull();
         assertThat(documentChunkRepository.countByTenantIdAndDocumentId(tenantId, documentId)).isGreaterThan(0);
 
-        try (Stream<Path> files = Files.list(sharedTempDir)) {
-            assertThat(files.toList()).isEmpty();
+        try (Stream<Path> files = Files.walk(sharedTempDir)) {
+            assertThat(files.filter(Files::isRegularFile).toList()).isEmpty();
         }
 
         MvcResult ragRes = mockMvc.perform(post("/api/v1/expedientes/" + expId + "/query")

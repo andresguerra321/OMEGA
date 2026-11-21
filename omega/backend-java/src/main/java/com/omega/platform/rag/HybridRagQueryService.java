@@ -106,18 +106,14 @@ public class HybridRagQueryService {
 
         for (DocumentEntity doc : docs) {
             boolean isLexicalFallback = AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL.equals(doc.getEmbeddingModel());
-            if (doc.getStatus() == DocumentStatus.INDEXED
-                    && !activeModel.equals(doc.getEmbeddingModel())
-                    && !isLexicalFallback) {
-                doc.setStatus(DocumentStatus.REINDEX_REQUIRED);
-                documentRepository.saveAndFlush(doc);
-            }
-
-            if (doc.getStatus() == DocumentStatus.REINDEX_REQUIRED) {
+            boolean requiresReindex = doc.getStatus() == DocumentStatus.REINDEX_REQUIRED
+                    || (doc.getStatus() == DocumentStatus.INDEXED
+                    && !activeModel.equals(doc.getEmbeddingModel()) && !isLexicalFallback);
+            if (requiresReindex) {
                 String advice = String.format(
                         "El documento '%s' (SHA-256: %s) fue indexado con '%s' y requiere reindexación para '%s'. "
                                 + "Por política Zero-Retention no conservamos el PDF en el servidor; vuelve a subir tu copia local.",
-                        doc.getOriginalFilename(),
+                        doc.getId().toString(),
                         doc.getSha256Hash(),
                         doc.getEmbeddingModel(),
                         activeModel
@@ -125,7 +121,7 @@ public class HybridRagQueryService {
                 warnings.add(advice);
                 reindexNotices.add(new DocumentReindexNotice(
                         doc.getId(),
-                        doc.getOriginalFilename(),
+                        doc.getId().toString(),
                         doc.getSha256Hash(),
                         doc.getEmbeddingModel(),
                         activeModel,
@@ -137,7 +133,7 @@ public class HybridRagQueryService {
                 lexicalIndexedCount++;
                 warnings.add(String.format(
                         "El documento '%s' (SHA-256: %s) fue indexado sin clave de embeddings y se consulta por índice léxico exacto (tsvector).",
-                        doc.getOriginalFilename(),
+                        doc.getId().toString(),
                         doc.getSha256Hash()
                 ));
             }
@@ -226,7 +222,7 @@ public class HybridRagQueryService {
             } catch (EmbeddingException ex) {
                 lexicalDegraded = true;
                 log.warn("Proveedor de embeddings no disponible; degradando consulta del expediente {} a búsqueda léxica tsvector: {}",
-                        expedienteId, ex.getMessage());
+                        expedienteId, "EMBEDDING_UNAVAILABLE");
                 warnings.add("Proveedor de embeddings no disponible temporalmente; consulta ejecutada en modo degradado por búsqueda léxica exacta (tsvector).");
                 ranked = searchRepository.searchLexicalOnly(
                         principal.tenantId(),

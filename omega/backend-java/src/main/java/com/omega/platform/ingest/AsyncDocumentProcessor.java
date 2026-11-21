@@ -47,6 +47,7 @@ public class AsyncDocumentProcessor {
     private final DocumentChunkRepository documentChunkRepository;
     private final AuditLogService auditLogService;
     private final TransactionTemplate transactionTemplate;
+    private final IngestTemporaryFiles temporaryFiles;
 
     public AsyncDocumentProcessor(
             PdfChunkExtractor pdfChunkExtractor,
@@ -54,7 +55,8 @@ public class AsyncDocumentProcessor {
             DocumentRepository documentRepository,
             DocumentChunkRepository documentChunkRepository,
             AuditLogService auditLogService,
-            TransactionTemplate transactionTemplate
+            TransactionTemplate transactionTemplate,
+            IngestTemporaryFiles temporaryFiles
     ) {
         this.pdfChunkExtractor = pdfChunkExtractor;
         this.embeddingProvider = embeddingProvider;
@@ -62,6 +64,7 @@ public class AsyncDocumentProcessor {
         this.documentChunkRepository = documentChunkRepository;
         this.auditLogService = auditLogService;
         this.transactionTemplate = transactionTemplate;
+        this.temporaryFiles = temporaryFiles;
     }
 
     @Async("omegaIngestExecutor")
@@ -122,7 +125,7 @@ public class AsyncDocumentProcessor {
                 doc.setEmbeddingModel(modelName);
                 doc.setTotalPages(pagesCount);
                 doc.setOcrApplied(usedOcr);
-                doc.setStatus(DocumentStatus.INDEXED);
+                // Publish INDEXED only with the final purge stamp and audit transaction below.
                 documentRepository.saveAndFlush(doc);
                 return entities.size();
             });
@@ -130,8 +133,8 @@ public class AsyncDocumentProcessor {
 
             finalStatus = DocumentStatus.INDEXED;
         } catch (Exception ex) {
-            failureReason = ex.getMessage();
-            log.error("Fallo procesando documento {} (tenant={}): {}", cmd.documentId(), cmd.tenantId(), failureReason, ex);
+            failureReason = "DOCUMENT_PROCESSING_FAILED";
+            log.error("DOCUMENT_PROCESSING_FAILED document={} tenant={}", cmd.documentId(), cmd.tenantId());
         } finally {
             Instant deletedAt = forceDeleteTempFile(cmd.tempPdfPath());
             persistFinalAuditAndDeletionStamp(
@@ -160,7 +163,7 @@ public class AsyncDocumentProcessor {
                     "Proveedor de embeddings no disponible para documento {} (tenant={}); indexando en modo léxico tsvector ({})",
                     cmd.documentId(),
                     cmd.tenantId(),
-                    ex.getMessage()
+                    "EMBEDDING_UNAVAILABLE"
             );
             int dims = Math.max(1536, embeddingProvider.dimensions());
             float[] zeroVector = new float[dims];
@@ -172,15 +175,7 @@ public class AsyncDocumentProcessor {
         }
     }
 
-    private static Instant forceDeleteTempFile(Path tempPath) {
-        try {
-            Files.deleteIfExists(tempPath);
-        } catch (Exception ex) {
-            log.error("ALERTA CRÍTICA Zero-Retention: no se pudo borrar archivo temporal {}", tempPath, ex);
-            return null;
-        }
-        return Files.exists(tempPath) ? null : Instant.now();
-    }
+    private Instant forceDeleteTempFile(Path tempPath) { return temporaryFiles.purge(tempPath); }
 
     private void persistFinalAuditAndDeletionStamp(
             DocumentIngestCommand cmd,
@@ -193,7 +188,7 @@ public class AsyncDocumentProcessor {
             Instant deletedAt,
             String failureReason
     ) {
-        final DocumentStatus resolvedStatus = finalStatus == DocumentStatus.INDEXED
+        final DocumentStatus resolvedStatus = finalStatus == DocumentStatus.INDEXED && deletedAt != null
                 ? DocumentStatus.INDEXED
                 : DocumentStatus.FAILED;
 
@@ -215,7 +210,6 @@ public class AsyncDocumentProcessor {
 
                 Map<String, Object> meta = new LinkedHashMap<>();
                 meta.put("expedienteId", cmd.expedienteId().toString());
-                meta.put("originalFilename", cmd.originalFilename());
                 meta.put("sha256Hash", cmd.sha256Hash());
                 meta.put("finalStatus", resolvedStatus.name());
                 meta.put("persistedChunks", persistedChunks);
@@ -226,7 +220,7 @@ public class AsyncDocumentProcessor {
                 meta.put("lexicalFallback", lexicalFallbackUsed);
                 meta.put("tempDeletedAt", deletedAt != null ? deletedAt.toString() : "DELETE_FAILED");
                 if (failureReason != null && !failureReason.isBlank()) {
-                    meta.put("error", failureReason.length() > 300 ? failureReason.substring(0, 300) : failureReason);
+                    meta.put("errorCode", "DOCUMENT_PROCESSING_FAILED");
                 }
 
                 auditLogService.record(

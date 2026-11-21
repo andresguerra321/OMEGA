@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,6 +48,21 @@ public class DocumentController {
             @PathVariable UUID expedienteId
     ) {
         return documentIngestionService.listDocuments(principal, expedienteId);
+    }
+
+    @PostMapping("/mark-reindex-required")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    public List<DocumentMetadataResponse> markReindexRequired(
+            @AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId) {
+        return documentIngestionService.markReindexRequired(principal, expedienteId);
+    }
+
+    @DeleteMapping("/{documentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    public void delete(@AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId,
+            @PathVariable UUID documentId) {
+        documentIngestionService.deleteDocument(principal, expedienteId, documentId);
     }
 
     @GetMapping("/{documentId}")
