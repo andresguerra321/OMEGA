@@ -134,6 +134,9 @@ public interface GitHubApiClient {
             return names;
         }
 
+        private static final java.util.regex.Pattern SAFE_REF_SHA_PATTERN =
+                java.util.regex.Pattern.compile("^[0-9a-fA-F]{40}$");
+
         @Override
         public byte[] downloadTarballBounded(
                 String installationToken,
@@ -141,6 +144,9 @@ public interface GitHubApiClient {
                 String refSha,
                 int maxBytes
         ) {
+            if (refSha == null || !SAFE_REF_SHA_PATTERN.matcher(refSha).matches()) {
+                throw new IllegalArgumentException("refSha inválido: se requiere un commit SHA-1 hexadecimal de 40 caracteres");
+            }
             URI currentUri = URI.create("https://api.github.com" + repositoryPath(repoFullName) + "/tarball/" + refSha);
             for (int hop = 0; hop <= 2; hop++) {
                 validateAllowedTarballUri(currentUri);
@@ -253,6 +259,13 @@ public interface GitHubApiClient {
         public static void validateAllowedTarballUri(URI uri) {
             if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) {
                 throw new SecurityException("Solo se permite HTTPS para descargar tarballs de GitHub");
+            }
+            if (uri.getUserInfo() != null) {
+                throw new SecurityException("La URI de descarga de tarball no puede incluir credenciales userInfo");
+            }
+            int port = uri.getPort();
+            if (port != -1 && port != 443) {
+                throw new SecurityException("Puerto no permitido para descarga de tarball de GitHub: " + port);
             }
             String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
             if (!ALLOWED_TARBALL_HOSTS.contains(host)) {

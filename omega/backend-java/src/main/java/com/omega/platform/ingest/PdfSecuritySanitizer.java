@@ -1,10 +1,12 @@
 package com.omega.platform.ingest;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.IdentityHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.apache.pdfbox.Loader;
@@ -13,6 +15,7 @@ import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSObject;
+import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.springframework.stereotype.Component;
 
@@ -136,9 +139,40 @@ public class PdfSecuritySanitizer {
             throw new UnsafeDocumentException("PDF rechazado por tipo de acción prohibida: /" + actionSubtype);
         }
 
+        // A-03: Inspeccionar acciones /S /URI y claves /URI permitiendo exclusivamente https:// bien formado
+        if ("URI".equals(actionSubtype) || dict.containsKey(COSName.URI)) {
+            COSBase uriObj = dict.getDictionaryObject(COSName.URI);
+            String rawUri = uriObj instanceof COSString cs ? cs.getString() : dict.getString(COSName.URI);
+            validateSafePdfUri(rawUri);
+        }
+
         String genericSubtype = dict.getNameAsString(COSName.SUBTYPE);
         if (genericSubtype != null && FORBIDDEN_ACTION_SUBTYPES.contains(genericSubtype)) {
             throw new UnsafeDocumentException("PDF rechazado por subtipo incrustado prohibido: /" + genericSubtype);
+        }
+    }
+
+    static void validateSafePdfUri(String rawUri) {
+        if (rawUri == null || rawUri.isBlank()) {
+            throw new UnsafeDocumentException("PDF rechazado por acción /URI vacía o malformada.");
+        }
+        String trimmed = rawUri.trim();
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (c < 0x20 || c == 0x7F) {
+                throw new UnsafeDocumentException("PDF rechazado por acción /URI con caracteres de control.");
+            }
+        }
+        URI parsed;
+        try {
+            parsed = new URI(trimmed);
+        } catch (Exception ex) {
+            throw new UnsafeDocumentException("PDF rechazado por acción /URI malformada.");
+        }
+        String scheme = parsed.getScheme() == null ? "" : parsed.getScheme().toLowerCase(Locale.ROOT);
+        if (!"https".equals(scheme) || parsed.getHost() == null || parsed.getHost().isBlank() || parsed.getUserInfo() != null) {
+            throw new UnsafeDocumentException(
+                    "PDF rechazado por esquema /URI no permitido (solo se admite https:// bien formado): " + scheme);
         }
     }
 

@@ -1,0 +1,5 @@
+# Pinned CI security & test tools (C-08)
+# Referenced by .github/workflows/{api-worker-tests,supply-chain-audit,sast-security}.yml
+pip-audit==2.7.3
+pytest==8.3.4
+semgrep==1.99.0

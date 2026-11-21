@@ -20,8 +20,32 @@ public class GitHubWebhookDeliveryRepository {
         this.jdbc = jdbc;
     }
 
+    public static final int DEFAULT_PAYLOAD_TTL_HOURS = 48;
+
     public boolean tryRecordDelivery(String deliveryId, int ttlHours) {
         return tryRecordDelivery(deliveryId, ttlHours, "", null);
+    }
+
+    /**
+     * B-09: Purga únicamente payload_json después de payloadTtlHours (48h) mientras retiene delivery_id
+     * hasta expires_at (>= 30 días) para prevenir replay tardío de webhooks firmados.
+     */
+    public void purgeExpiredPayloadsAndDeliveries(int payloadTtlHours) {
+        Instant now = Instant.now();
+        Instant payloadCutoff = now.minus(Math.max(1, payloadTtlHours), ChronoUnit.HOURS);
+        jdbc.update(
+                """
+                UPDATE omega_rag.github_webhook_deliveries
+                SET payload_json = NULL
+                WHERE payload_json IS NOT NULL
+                  AND received_at < :payloadCutoff
+                """,
+                Map.of("payloadCutoff", java.sql.Timestamp.from(payloadCutoff))
+        );
+        jdbc.update(
+                "DELETE FROM omega_rag.github_webhook_deliveries WHERE expires_at < :now",
+                Map.of("now", java.sql.Timestamp.from(now))
+        );
     }
 
     /**
@@ -33,10 +57,7 @@ public class GitHubWebhookDeliveryRepository {
         Instant expiresAt = now.plus(Math.max(1, ttlHours), ChronoUnit.HOURS);
         String payloadJson = rawPayload != null ? new String(rawPayload, StandardCharsets.UTF_8) : null;
 
-        jdbc.update(
-                "DELETE FROM omega_rag.github_webhook_deliveries WHERE expires_at < :now",
-                Map.of("now", java.sql.Timestamp.from(now))
-        );
+        purgeExpiredPayloadsAndDeliveries(DEFAULT_PAYLOAD_TTL_HOURS);
 
         int inserted = jdbc.update(
                 """

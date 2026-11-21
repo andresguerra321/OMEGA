@@ -8,15 +8,40 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import re
 import time
 from typing import Any, Callable
-import urllib.error
 import urllib.parse
-import urllib.request
+
+import evasion_intelligence
 
 USER_AGENT = "OMEGA-Security-Scanner/2.0.9 (static-metadata-only)"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_CACHE_TTL_SECONDS = 300.0
+MAX_REGISTRY_JSON_BYTES = 2 * 1024 * 1024
+
+# C-10: Validación estricta de nombres de paquete npm y PyPI (prohíbe .., backslashes y caracteres de control)
+NPM_PACKAGE_NAME_RE = re.compile(r"^(?:@[a-z0-9][a-z0-9._-]{0,99}/)?[a-z0-9][a-z0-9._-]{0,213}$")
+PYPI_PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,198}[A-Za-z0-9])?$")
+
+
+def validate_package_name(ecosystem: str, name: str) -> str | None:
+    """Valida estrictamente el nombre del paquete antes de construir cualquier URL de registry (C-10)."""
+    eco = (ecosystem or "").strip().lower()
+    if not isinstance(name, str):
+        return None
+    pkg = name.strip()
+    if not pkg or ".." in pkg or "\\" in pkg or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in pkg):
+        return None
+    if eco == "npm":
+        if not NPM_PACKAGE_NAME_RE.fullmatch(pkg):
+            return None
+        return pkg
+    if eco == "pypi":
+        if not PYPI_PACKAGE_NAME_RE.fullmatch(pkg):
+            return None
+        return pkg
+    return None
 
 
 @dataclass(frozen=True)
@@ -47,7 +72,7 @@ class RegistryMetadataClient:
 
     def get_package_metadata(self, ecosystem: str, name: str) -> PackageMetadata | None:
         eco = ecosystem.strip().lower()
-        pkg = name.strip()
+        pkg = validate_package_name(eco, name)
         if not pkg or eco not in ("npm", "pypi"):
             return None
 
@@ -70,7 +95,10 @@ class RegistryMetadataClient:
         return meta
 
     def _fetch_npm(self, name: str) -> PackageMetadata | None:
-        encoded = urllib.parse.quote(name, safe="@/")
+        valid = validate_package_name("npm", name)
+        if not valid:
+            return None
+        encoded = urllib.parse.quote(valid, safe="@/")
         payload = self._fetcher(f"https://registry.npmjs.org/{encoded}", self._timeout)
         if not isinstance(payload, dict):
             return None
@@ -109,7 +137,10 @@ class RegistryMetadataClient:
         )
 
     def _fetch_pypi(self, name: str) -> PackageMetadata | None:
-        encoded = urllib.parse.quote(name, safe="")
+        valid = validate_package_name("pypi", name)
+        if not valid:
+            return None
+        encoded = urllib.parse.quote(valid, safe="")
         payload = self._fetcher(f"https://pypi.org/pypi/{encoded}/json", self._timeout)
         if not isinstance(payload, dict):
             return None
@@ -152,17 +183,21 @@ class RegistryMetadataClient:
 
 
 def _http_get_json(url: str, timeout: float) -> dict[str, Any] | None:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
-        method="GET",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status != 200:
-                return None
-            return json.loads(resp.read(2 * 1024 * 1024).decode("utf-8", errors="replace"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        resp = evasion_intelligence.safe_http_get(
+            url,
+            USER_AGENT,
+            limit=MAX_REGISTRY_JSON_BYTES,
+            redirects=0,
+            headers={"Accept": "application/json"},
+        )
+        if not isinstance(resp, dict) or resp.get("status") != 200:
+            return None
+        body = resp.get("body", b"")
+        if not isinstance(body, (bytes, bytearray)):
+            return None
+        return json.loads(bytes(body).decode("utf-8", errors="replace"))
+    except (ValueError, TimeoutError, OSError, json.JSONDecodeError):
         return None
 
 

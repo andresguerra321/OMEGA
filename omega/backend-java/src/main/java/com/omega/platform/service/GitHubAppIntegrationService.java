@@ -41,7 +41,8 @@ public class GitHubAppIntegrationService {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubAppIntegrationService.class);
     public static final int MAX_WEBHOOK_BYTES = 1_048_576; // 1 MiB
-    private static final int DELIVERY_TTL_HOURS = 48;
+    public static final int DELIVERY_RETENTION_HOURS = 30 * 24; // B-09: retener delivery_id >= 30 días anti-replay
+    public static final int PAYLOAD_RETENTION_HOURS = 48; // B-09: purgar payload_json tras 48h
 
     private final GitHubAppInstallationRepository installationRepository;
     private final GitHubOAuthStateRepository stateRepository;
@@ -186,7 +187,7 @@ public class GitHubAppIntegrationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta cabecera X-GitHub-Delivery válida");
         }
         final String safeEvent = eventType != null ? eventType.trim() : "";
-        if (!deliveryRepository.tryRecordDelivery(deliveryId.trim(), DELIVERY_TTL_HOURS, safeEvent, rawBody)) {
+        if (!deliveryRepository.tryRecordDelivery(deliveryId.trim(), DELIVERY_RETENTION_HOURS, safeEvent, rawBody)) {
             return false;
         }
 
@@ -209,10 +210,11 @@ public class GitHubAppIntegrationService {
      */
     @Scheduled(fixedDelay = 60_000)
     public void reconcileFailedDeliveries() {
+        deliveryRepository.purgeExpiredPayloadsAndDeliveries(PAYLOAD_RETENTION_HOURS);
         List<GitHubWebhookDeliveryRepository.FailedDeliveryRecord> pending =
                 deliveryRepository.findRetryableFailedDeliveries(3, 20);
         for (GitHubWebhookDeliveryRepository.FailedDeliveryRecord rec : pending) {
-            if (!deliveryRepository.tryRecordDelivery(rec.deliveryId(), DELIVERY_TTL_HOURS)) {
+            if (!deliveryRepository.tryRecordDelivery(rec.deliveryId(), DELIVERY_RETENTION_HOURS)) {
                 continue;
             }
             try {

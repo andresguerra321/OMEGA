@@ -26,6 +26,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
@@ -67,6 +69,8 @@ jobs:
             ext: ''
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
@@ -140,12 +144,15 @@ jobs:
     name: Verify, Sign and Attest Consolidated Installers
     needs: build-tauri-v2
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
@@ -153,7 +160,11 @@ jobs:
         with:
           pattern: omega-desktop-tauri-*
           path: installer-input
-      - name: Generate Mandatory Checksums and Optional Detached Signature
+      - name: Generate Checksums (Unsigned Preview / Dispatch)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: python omega/scripts/release_integrity.py --source installer-input --output release --recursive
+      - name: Generate Mandatory Checksums and Detached Signature (Tagged Release Only)
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: python omega/scripts/release_integrity.py --source installer-input --output release --recursive
@@ -173,6 +184,7 @@ jobs:
                   manifest.write(f'{hashlib.sha256(target.read_bytes()).hexdigest()}  {name}\n')
           PY
       - name: Attest Build Provenance (Sigstore / SLSA)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: 'release/*'
