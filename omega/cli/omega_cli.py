@@ -192,7 +192,15 @@ def validate_server_url(url: str) -> str:
     return url.rstrip("/")
 
 
-def upload_archive_scan(base_url: str, token: str, archive_bytes: bytes) -> dict[str, Any]:
+def upload_archive_scan(
+    base_url: str,
+    token: str,
+    archive_bytes: bytes,
+    *,
+    project_name: str = "",
+    project_id: str = "",
+    source: str = "CLI",
+) -> dict[str, Any]:
     boundary = f"----omega-{uuid.uuid4().hex}"
     body = (
         f"--{boundary}\r\n"
@@ -200,8 +208,15 @@ def upload_archive_scan(base_url: str, token: str, archive_bytes: bytes) -> dict
         "Content-Type: application/gzip\r\n\r\n"
     ).encode("utf-8") + archive_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
 
+    query_params: dict[str, str] = {"source": source or "CLI"}
+    if project_id.strip():
+        query_params["projectId"] = project_id.strip()
+    if project_name.strip():
+        query_params["projectName"] = project_name.strip()
+    qs = urllib.parse.urlencode(query_params)
+
     req = urllib.request.Request(
-        f"{base_url}/api/v1/repo/scan",
+        f"{base_url}/api/v1/repo/scan?{qs}",
         data=body,
         method="POST",
         headers={
@@ -280,6 +295,8 @@ def main(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
     )
     scan_p.add_argument("--include-ignored", action="store_true", help="Incluir archivos ignorados por .gitignore (nunca secretos)")
     scan_p.add_argument("--preview", action="store_true", help="Mostrar archivos a incluir y exclusiones sin subir")
+    scan_p.add_argument("--project", default="", help="Nombre o slug del proyecto en OMEGA al que asociar el escaneo")
+    scan_p.add_argument("--project-id", default="", help="UUID del proyecto en OMEGA al que asociar el escaneo")
 
     args = parser.parse_args(argv)
     out_stream = stdout or sys.stdout
@@ -321,7 +338,16 @@ def main(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
             return EXIT_NETWORK_AUTH
         try:
             base_url = validate_server_url(args.url)
-            result = upload_archive_scan(base_url, token, archive_bytes)
+            project_hint = str(args.project or "").strip() or target.name
+            ci_source = "GITHUB_ACTION" if os.environ.get("GITHUB_ACTIONS") == "true" else "CLI"
+            result = upload_archive_scan(
+                base_url,
+                token,
+                archive_bytes,
+                project_name=project_hint,
+                project_id=str(args.project_id or "").strip(),
+                source=ci_source,
+            )
         except PermissionError as exc:
             ui_err.error(sanitize_untrusted_text(str(exc)))
             return EXIT_NETWORK_AUTH
@@ -354,9 +380,19 @@ def main(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
         else:
             ui.render_scan_result(result, sanitizer=sanitize_untrusted_text)
 
+    policy_eval = result.get("policy_evaluation")
+    if isinstance(policy_eval, dict):
+        if bool(policy_eval.get("should_fail_pipeline")):
+            return EXIT_FINDINGS
+        if not args.fail_on:
+            return EXIT_CLEAN
+
     if args.fail_on:
         threshold = SEVERITY_ORDER[args.fail_on]
         for finding in result.get("findings") or []:
+            triage = str(finding.get("triage_status") or finding.get("triageStatus") or "OPEN").upper()
+            if triage in ("ACCEPTED", "FALSE_POSITIVE", "FIXED"):
+                continue
             sev = str(finding.get("severity") or "LOW").upper()
             if SEVERITY_ORDER.get(sev, 1) >= threshold:
                 return EXIT_FINDINGS
