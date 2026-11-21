@@ -87,6 +87,12 @@ const AccountSettingsPanel = lazy(() =>
 const RepoScannerPanel = lazy(() =>
   import('./components/RepoScannerPanel').then((m) => ({ default: m.RepoScannerPanel }))
 );
+const DevSupplyChainIntelTab = lazy(() =>
+  import('./components/DevSupplyChainIntelTab').then((m) => ({ default: m.DevSupplyChainIntelTab }))
+);
+const DevWorkstationTab = lazy(() =>
+  import('./components/DevWorkstationTab').then((m) => ({ default: m.DevWorkstationTab }))
+);
 const ExpedientesPanel = lazy(() =>
   import('./components/ExpedientesPanel').then((m) => ({ default: m.ExpedientesPanel }))
 );
@@ -1516,25 +1522,39 @@ export default function App() {
                     onAiConfigured={() => void refreshSystemTelemetry()}
                   />
                 ) : activeNav === 'amenazas' ? (
-                  <CampaignsPanel
-                    onAskInChat={askInChat}
-                    onVerifyLink={(url) => handleNavigate('enlace', { url })}
-                    onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
-                    initialSearch={threatJump.query}
-                    initialSearchKey={threatJump.key}
-                  />
+                  profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
+                    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
+                      <div className="w-full max-w-5xl mx-auto pb-16">
+                        <DevSupplyChainIntelTab />
+                      </div>
+                    </div>
+                  ) : (
+                    <CampaignsPanel
+                      onAskInChat={askInChat}
+                      onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                      onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
+                      initialSearch={threatJump.query}
+                      initialSearchKey={threatJump.key}
+                    />
+                  )
                 ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
                   <div className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-8 flex flex-col">
                     {activeNav === 'equipo' && (
-                      <MvtVerifierPanel
-                        key={`mvt-${deviceNavKey}`}
-                        onAskInChat={askInChat}
-                        onVerifyLink={(url) => handleNavigate('enlace', { url })}
-                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
-                        initialTab={deviceInitialTab}
-                        preloadedAudit={pcAudit}
-                        onAuditUpdate={handlePcAuditComplete}
-                      />
+                      profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
+                        <div className="w-full max-w-5xl mx-auto pb-16">
+                          <DevWorkstationTab />
+                        </div>
+                      ) : (
+                        <MvtVerifierPanel
+                          key={`mvt-${deviceNavKey}`}
+                          onAskInChat={askInChat}
+                          onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                          onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                          initialTab={deviceInitialTab}
+                          preloadedAudit={pcAudit}
+                          onAuditUpdate={handlePcAuditComplete}
+                        />
+                      )
                     )}
                     {activeNav === 'exposicion' && (
                       <div className="flex-1 flex flex-col">

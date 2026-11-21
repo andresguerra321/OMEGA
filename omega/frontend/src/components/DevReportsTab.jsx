@@ -5,6 +5,7 @@ import {
   exportDevReportPdf,
   listDevProjects,
 } from '../lib/api';
+import { OmegaSelect } from './OmegaSelect';
 
 export function DevReportsTab() {
   const [projects, setProjects] = useState([]);
@@ -102,11 +103,11 @@ export function DevReportsTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <OmegaSelect
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
               aria-label="Seleccionar alcance del reporte"
-              className="rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-1.5 text-xs text-slate-100"
+              className="min-w-[220px]"
             >
               <option value="">Toda la organización</option>
               {projects.map((p) => (
@@ -114,7 +115,7 @@ export function DevReportsTab() {
                   Proyecto: {p.name}
                 </option>
               ))}
-            </select>
+            </OmegaSelect>
 
             <button
               type="button"

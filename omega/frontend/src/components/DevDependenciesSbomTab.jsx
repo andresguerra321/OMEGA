@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { exportDevSbom, listDevDependencies, listDevProjects } from '../lib/api';
+import { OmegaSelect } from './OmegaSelect';
 
 export function DevDependenciesSbomTab() {
   const [projects, setProjects] = useState([]);
@@ -140,11 +141,10 @@ export function DevDependenciesSbomTab() {
             <label htmlFor="sbom-project-select" className="block text-[11px] text-slate-400 mb-1">
               Proyecto
             </label>
-            <select
+            <OmegaSelect
               id="sbom-project-select"
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-1.5 text-xs text-slate-100"
             >
               {projects.length === 0 && <option value="">Sin proyectos</option>}
               {projects.map((p) => (
@@ -152,18 +152,17 @@ export function DevDependenciesSbomTab() {
                   {p.name}
                 </option>
               ))}
-            </select>
+            </OmegaSelect>
           </div>
 
           <div>
             <label htmlFor="sbom-eco-select" className="block text-[11px] text-slate-400 mb-1">
               Ecosistema
             </label>
-            <select
+            <OmegaSelect
               id="sbom-eco-select"
               value={ecosystem}
               onChange={(e) => setEcosystem(e.target.value)}
-              className="w-full rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-1.5 text-xs text-slate-100"
             >
               <option value="">Todos los ecosistemas</option>
               <option value="npm">npm</option>
@@ -171,7 +170,7 @@ export function DevDependenciesSbomTab() {
               <option value="maven">maven</option>
               <option value="cargo">cargo</option>
               <option value="go">go</option>
-            </select>
+            </OmegaSelect>
           </div>
 
           <div className="sm:col-span-2">

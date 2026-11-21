@@ -8,6 +8,7 @@ import {
   updateDevProjectPolicy,
   updateDevTenantPolicy,
 } from '../lib/api';
+import { OmegaSelect } from './OmegaSelect';
 
 export function DevPoliciesTab({ authSession }) {
   const isAdmin = authSession?.role === 'ADMIN';
@@ -141,15 +142,15 @@ export function DevPoliciesTab({ authSession }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label htmlFor="policy-scope-select" className="text-xs text-slate-400">
+          <div className="flex items-center gap-2.5">
+            <label htmlFor="policy-scope-select" className="text-xs text-slate-400 shrink-0">
               Alcance:
             </label>
-            <select
+            <OmegaSelect
               id="policy-scope-select"
               value={scopeProjectId}
               onChange={(e) => handleScopeChange(e.target.value)}
-              className="rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-1.5 text-xs text-slate-100"
+              className="min-w-[260px]"
             >
               <option value="">Política global del tenant (por defecto)</option>
               {projects.map((p) => (
@@ -157,7 +158,7 @@ export function DevPoliciesTab({ authSession }) {
                   Proyecto: {p.name}
                 </option>
               ))}
-            </select>
+            </OmegaSelect>
           </div>
         </div>
 
@@ -209,39 +210,37 @@ export function DevPoliciesTab({ authSession }) {
           <form onSubmit={handleSave} className="space-y-4 pt-2 border-t border-white/[0.06]">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="policy-fail-severity" className="block text-xs font-medium text-slate-200 mb-1">
+                <label htmlFor="policy-fail-severity" className="block text-xs font-medium text-slate-200 mb-1.5">
                   Severidad mínima que infringe la política
                 </label>
-                <select
+                <OmegaSelect
                   id="policy-fail-severity"
                   disabled={!isAdmin}
                   value={failOnSeverity}
                   onChange={(e) => setFailOnSeverity(e.target.value)}
-                  className="w-full rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-2 text-xs text-slate-100 disabled:opacity-60"
                 >
                   <option value="CRITICAL">CRITICAL (solo hallazgos críticos)</option>
                   <option value="HIGH">HIGH (críticos y altos — recomendado)</option>
                   <option value="MEDIUM">MEDIUM (críticos, altos y medios)</option>
                   <option value="LOW">LOW (cualquier hallazgo activo)</option>
                   <option value="NONE">NONE (solo evaluar paquetes bloqueados)</option>
-                </select>
+                </OmegaSelect>
               </div>
 
               <div>
-                <label htmlFor="policy-action-violation" className="block text-xs font-medium text-slate-200 mb-1">
+                <label htmlFor="policy-action-violation" className="block text-xs font-medium text-slate-200 mb-1.5">
                   Acción en CLI, GitHub Action y PRs
                 </label>
-                <select
+                <OmegaSelect
                   id="policy-action-violation"
                   disabled={!isAdmin}
                   value={actionOnViolation}
                   onChange={(e) => setActionOnViolation(e.target.value)}
-                  className="w-full rounded-lg bg-[#141923]/75 border border-white/[0.08] px-3 py-2 text-xs text-slate-100 disabled:opacity-60"
                 >
                   <option value="FAIL_PIPELINE">FAIL_PIPELINE (fallar ejecución con código de salida != 0)</option>
                   <option value="COMMENT_PR">COMMENT_PR (reportar FAIL en PR sin bloquear CLI local)</option>
                   <option value="MARK_ONLY">MARK_ONLY (solo advertir WARN en panel y reportes)</option>
-                </select>
+                </OmegaSelect>
               </div>
             </div>
 

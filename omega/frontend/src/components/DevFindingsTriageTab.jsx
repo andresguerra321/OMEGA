@@ -18,6 +18,7 @@ import {
   revokeDevSuppression,
   updateDevFindingTriage,
 } from '../lib/api';
+import { OmegaSelect } from './OmegaSelect';
 
 const TRIAGE_LABELS = {
   NEW: 'Nuevo',
@@ -173,11 +174,10 @@ export function DevFindingsTriageTab({ authSession }) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-          <select
+          <OmegaSelect
             aria-label="Filtrar por proyecto"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
-            className="rounded-lg bg-[#141923]/80 border border-white/[0.08] px-3 py-2 text-xs text-slate-200"
           >
             <option value="">Todos los proyectos</option>
             {projects.map((p) => (
@@ -185,26 +185,24 @@ export function DevFindingsTriageTab({ authSession }) {
                 {p.name}
               </option>
             ))}
-          </select>
+          </OmegaSelect>
 
-          <select
+          <OmegaSelect
             aria-label="Filtrar por severidad"
             value={severity}
             onChange={(e) => setSeverity(e.target.value)}
-            className="rounded-lg bg-[#141923]/80 border border-white/[0.08] px-3 py-2 text-xs text-slate-200"
           >
             <option value="">Todas las severidades</option>
             <option value="CRITICAL">Crítica</option>
             <option value="HIGH">Alta</option>
             <option value="MEDIUM">Media</option>
             <option value="LOW">Baja</option>
-          </select>
+          </OmegaSelect>
 
-          <select
+          <OmegaSelect
             aria-label="Filtrar por estado de triaje"
             value={triageStatus}
             onChange={(e) => setTriageStatus(e.target.value)}
-            className="rounded-lg bg-[#141923]/80 border border-white/[0.08] px-3 py-2 text-xs text-slate-200"
           >
             <option value="">Todos los estados</option>
             {Object.entries(TRIAGE_LABELS).map(([k, label]) => (
@@ -212,7 +210,7 @@ export function DevFindingsTriageTab({ authSession }) {
                 {label}
               </option>
             ))}
-          </select>
+          </OmegaSelect>
 
           <div className="flex items-center gap-1.5">
             <input
@@ -279,19 +277,19 @@ export function DevFindingsTriageTab({ authSession }) {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <select
+                      <OmegaSelect
                         aria-label={`Estado de triaje para ${f.ruleId}`}
                         disabled={!canWrite}
                         value={f.triageStatus}
                         onChange={(e) => void handleStatusChange(f.id, e.target.value)}
-                        className="rounded-lg bg-[#141923] border border-white/[0.08] px-2.5 py-1.5 text-xs text-slate-200"
+                        className="min-w-[165px]"
                       >
                         {Object.entries(TRIAGE_LABELS).map(([k, label]) => (
                           <option key={k} value={k}>
                             {label}
                           </option>
                         ))}
-                      </select>
+                      </OmegaSelect>
 
                       <button
                         type="button"
@@ -330,17 +328,17 @@ export function DevFindingsTriageTab({ authSession }) {
                               placeholder="Motivo verificable (ej. script de compilación interna auditado)"
                               className="sm:col-span-7 rounded-lg bg-[#0F131B] border border-white/[0.08] px-3 py-1.5 text-xs text-slate-100"
                             />
-                            <select
+                            <OmegaSelect
                               aria-label="Expiración de supresión"
                               value={supDays}
                               onChange={(e) => setSupDays(e.target.value)}
-                              className="sm:col-span-3 rounded-lg bg-[#0F131B] border border-white/[0.08] px-2.5 py-1.5 text-xs text-slate-200"
+                              className="sm:col-span-3"
                             >
                               <option value="7">Expira en 7 días</option>
                               <option value="30">Expira en 30 días</option>
                               <option value="90">Expira en 90 días</option>
                               <option value="0">Sin expiración</option>
-                            </select>
+                            </OmegaSelect>
                             <button
                               type="button"
                               disabled={!supReason.trim()}

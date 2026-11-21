@@ -17,6 +17,7 @@ import {
   getDevProjectDetail,
   listDevProjects,
 } from '../lib/api';
+import { OmegaSelect } from './OmegaSelect';
 
 function formatDate(iso) {
   if (!iso) return 'Sin escaneos';
@@ -367,30 +368,30 @@ export function DevProjectsTab({ authSession, onSelectProjectForScan }) {
                   <div className="flex flex-wrap items-center gap-2.5">
                     <GitCompare className="h-4 w-4 text-[#2F6FED]" strokeWidth={1.75} />
                     <span className="text-xs font-medium text-slate-200">Comparar dos escaneos:</span>
-                    <select
+                    <OmegaSelect
                       aria-label="Escaneo base"
                       value={baseScanId}
                       onChange={(e) => setBaseScanId(e.target.value)}
-                      className="rounded-lg bg-[#141923] border border-white/[0.08] px-2.5 py-1.5 text-xs text-slate-200"
+                      className="min-w-[215px]"
                     >
                       {detail.scans.map((s) => (
                         <option key={s.id} value={s.id}>
                           Base: {formatDate(s.createdAt)} ({Number(s.effectiveScore).toFixed(0)} pts)
                         </option>
                       ))}
-                    </select>
-                    <select
+                    </OmegaSelect>
+                    <OmegaSelect
                       aria-label="Escaneo objetivo"
                       value={headScanId}
                       onChange={(e) => setHeadScanId(e.target.value)}
-                      className="rounded-lg bg-[#141923] border border-white/[0.08] px-2.5 py-1.5 text-xs text-slate-200"
+                      className="min-w-[215px]"
                     >
                       {detail.scans.map((s) => (
                         <option key={s.id} value={s.id}>
                           Actual: {formatDate(s.createdAt)} ({Number(s.effectiveScore).toFixed(0)} pts)
                         </option>
                       ))}
-                    </select>
+                    </OmegaSelect>
                     <button
                       type="button"
                       disabled={comparing || !baseScanId || !headScanId}

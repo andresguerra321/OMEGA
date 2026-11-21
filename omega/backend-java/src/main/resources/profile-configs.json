@@ -17,6 +17,7 @@
       "visibleModules": [
         "repo_scanner",
         "inicio",
+        "equipo",
         "exposicion",
         "amenazas",
         "preguntar",
@@ -25,6 +26,7 @@
       "moduleLabels": {
         "inicio": "Proyectos y hallazgos",
         "amenazas": "Cadena de suministro",
+        "equipo": "Mi estación",
         "repo_scanner": "Proyectos"
       },
       "ragCorpusScope": "dev_supply_chain_cti",

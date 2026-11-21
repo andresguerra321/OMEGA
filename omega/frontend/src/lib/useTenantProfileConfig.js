@@ -57,8 +57,24 @@ export function useTenantProfileConfig(authSession) {
     try {
       const data = await fetchProfileConfig();
       if (data && typeof data === 'object' && Array.isArray(data.visibleModules)) {
-        setProfileConfig(data);
-        return data;
+        const normalized =
+          data.profile === 'DEVELOPER' && !data.visibleModules.includes('equipo')
+            ? {
+                ...data,
+                visibleModules: [
+                  'repo_scanner',
+                  'inicio',
+                  'equipo',
+                  ...data.visibleModules.filter((m) => m !== 'repo_scanner' && m !== 'inicio'),
+                ],
+                moduleLabels: {
+                  equipo: 'Mi estación',
+                  ...(data.moduleLabels || {}),
+                },
+              }
+            : data;
+        setProfileConfig(normalized);
+        return normalized;
       }
       setProfileConfig(DEFAULT_PROFILE_CONFIG);
       return DEFAULT_PROFILE_CONFIG;

@@ -1,18 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  BookOpen,
   Boxes,
   Check,
   ChevronDown,
   ChevronUp,
   Copy,
-  FileArchive,
-  FileText,
-  FolderGit2,
-  GitBranch,
   KeyRound,
-  Laptop,
   PackageSearch,
   ShieldAlert,
   ShieldCheck,
@@ -33,9 +27,7 @@ import { DevProjectsTab } from './DevProjectsTab';
 import { DevFindingsTriageTab } from './DevFindingsTriageTab';
 import { DevDependenciesSbomTab } from './DevDependenciesSbomTab';
 import { DevPoliciesTab } from './DevPoliciesTab';
-import { DevSupplyChainIntelTab } from './DevSupplyChainIntelTab';
 import { DevReportsTab } from './DevReportsTab';
-import { DevWorkstationTab } from './DevWorkstationTab';
 
 function GitHubIcon({ className = 'h-4 w-4' }) {
   return (
@@ -73,6 +65,7 @@ export function RepoScannerPanel({ authSession }) {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [expandedMap, setExpandedMap] = useState({});
+  const [projectsRefreshKey, setProjectsRefreshKey] = useState(0);
 
   const [ghStatus, setGhStatus] = useState(null);
   const [ghState, setGhState] = useState('');
@@ -114,6 +107,7 @@ export function RepoScannerPanel({ authSession }) {
       const data = await scanRepositoryArchive(fileToScan);
       setResult(data);
       setExpandedMap({});
+      setProjectsRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err?.message || 'No se pudo completar el análisis del archivo.');
     } finally {
@@ -139,6 +133,7 @@ export function RepoScannerPanel({ authSession }) {
       });
       setResult(data);
       setExpandedMap({});
+      setProjectsRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err?.message || 'No se pudo completar el análisis del repositorio.');
     } finally {
@@ -160,19 +155,14 @@ export function RepoScannerPanel({ authSession }) {
       <div className="w-full max-w-5xl mx-auto space-y-6 pb-16">
         <nav
           aria-label="Módulos de repositorios"
-          className="flex flex-wrap items-center gap-6 border-b border-white/[0.08]"
+          className="flex items-center gap-6 overflow-x-auto border-b border-white/[0.08] whitespace-nowrap"
         >
           {[
-            { id: 'scan', label: 'Analizar repositorio', icon: PackageSearch },
-            { id: 'projects', label: 'Proyectos', icon: FolderGit2 },
+            { id: 'scan', label: 'Proyectos y Escaneo', icon: PackageSearch },
             { id: 'findings', label: 'Hallazgos y Triaje', icon: ShieldAlert },
             { id: 'sbom', label: 'Dependencias y SBOM', icon: Boxes },
-            { id: 'policies', label: 'Políticas', icon: SlidersHorizontal },
-            { id: 'supply_chain', label: 'Cadena de suministro', icon: BookOpen },
-            { id: 'workstation', label: 'Mi estación', icon: Laptop },
-            { id: 'reports', label: 'Reportes', icon: FileText },
-            { id: 'cli', label: 'CLI y Tokens API', icon: Terminal, badge: activeTokensCount },
-            { id: 'github', label: 'Integración GitHub', icon: GitHubIcon, connected: Boolean(ghStatus) },
+            { id: 'governance', label: 'Políticas y Reportes', icon: SlidersHorizontal },
+            { id: 'github_ci', label: 'GitHub, CLI y Tokens', icon: GitHubIcon, badge: activeTokensCount, connected: Boolean(ghStatus) },
           ].map((t) => {
             const Icon = t.icon;
             const active = devTab === t.id;
@@ -181,7 +171,7 @@ export function RepoScannerPanel({ authSession }) {
                 key={t.id}
                 type="button"
                 onClick={() => setDevTab(t.id)}
-                className={`relative inline-flex items-center gap-2 pb-3 text-xs transition-colors cursor-pointer ${
+                className={`relative inline-flex items-center gap-2 pb-3 text-xs transition-colors cursor-pointer shrink-0 ${
                   active ? 'text-slate-100 font-medium' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -206,16 +196,6 @@ export function RepoScannerPanel({ authSession }) {
           })}
         </nav>
 
-        {devTab === 'projects' && (
-          <DevProjectsTab
-            authSession={authSession}
-            onSelectProjectForScan={(proj) => {
-              if (proj?.repoUrl) setRepoUrl(proj.repoUrl);
-              setDevTab('scan');
-            }}
-          />
-        )}
-
         {devTab === 'findings' && (
           <DevFindingsTriageTab authSession={authSession} />
         )}
@@ -224,24 +204,193 @@ export function RepoScannerPanel({ authSession }) {
           <DevDependenciesSbomTab />
         )}
 
-        {devTab === 'policies' && (
-          <DevPoliciesTab authSession={authSession} />
+        {devTab === 'governance' && (
+          <div className="space-y-6">
+            <DevPoliciesTab authSession={authSession} />
+            <DevReportsTab />
+          </div>
         )}
 
-        {devTab === 'supply_chain' && (
-          <DevSupplyChainIntelTab />
-        )}
-
-        {devTab === 'workstation' && (
-          <DevWorkstationTab />
-        )}
-
-        {devTab === 'reports' && (
-          <DevReportsTab />
-        )}
-
-        {devTab === 'cli' && (
+        {devTab === 'github_ci' && (
           <div className="space-y-5">
+            <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#2F6FED]/15 border border-[#2F6FED]/30 text-[#2F6FED]">
+                    <GitHubIcon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-100">Integración GitHub App (Solo lectura)</h2>
+                    <p className="text-[11px] text-slate-400">
+                      Vincula tu organización o cuenta para inspeccionar repositorios privados y Pull Requests sin clonar ni ejecutar código.
+                    </p>
+                  </div>
+                </div>
+                <span className="font-mono rounded-full border border-white/[0.08] bg-[#141923]/75 px-2.5 py-0.5 text-[10.5px] text-slate-400">
+                  Requiere CLOUD_MANAGED
+                </span>
+              </div>
+
+              {!isAdmin ? (
+                <p className="text-xs text-slate-400">
+                  Solo un administrador (ADMIN) puede vincular o desconectar la GitHub App del espacio.
+                </p>
+              ) : ghStatus ? (
+                <div className="rounded-xl bg-[#141923]/75 border border-white/[0.06] p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-100">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      <span>
+                        Instalación #{ghStatus.installationId} {ghStatus.accountLogin ? `(${ghStatus.accountLogin})` : ''}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-400">
+                      Repositorios: {(ghStatus.selectedRepositories || []).length || 'Según selección en GitHub'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={ghBusy}
+                    onClick={async () => {
+                      setGhBusy(true);
+                      setGhError('');
+                      try {
+                        await unlinkGitHubInstallation();
+                        setGhStatus(null);
+                      } catch (err) {
+                        setGhError(err?.message || 'No se pudo desvincular.');
+                      } finally {
+                        setGhBusy(false);
+                      }
+                    }}
+                    className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300 cursor-pointer"
+                  >
+                    Desvincular
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-start gap-3.5">
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2F6FED]/15 text-xs font-mono font-semibold text-[#60A5FA]">
+                      01
+                    </span>
+                    <div className="flex-1 min-w-0 space-y-2.5">
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-100">Autorizar espacio</h3>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          Genera un identificador temporal de vinculación para autorizar la instalación en GitHub.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          disabled={ghBusy}
+                          onClick={async () => {
+                            setGhBusy(true);
+                            setGhError('');
+                            try {
+                              const res = await createGitHubLinkState();
+                              setGhState(res?.state || '');
+                            } catch (err) {
+                              setGhError(err?.message || 'No se pudo generar el state.');
+                            } finally {
+                              setGhBusy(false);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#141923] border border-white/[0.08] hover:border-[#2F6FED] px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors cursor-pointer"
+                        >
+                          <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
+                          <span>Generar código state</span>
+                        </button>
+                        {ghState && (
+                          <code className="font-mono text-[11px] text-emerald-400 bg-[#090B0F] px-2.5 py-1 rounded-lg border border-white/[0.06]">
+                            state: {ghState}
+                          </code>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/[0.06]" />
+
+                  <div className="flex items-start gap-3.5">
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2F6FED]/15 text-xs font-mono font-semibold text-[#60A5FA]">
+                      02
+                    </span>
+                    <div className="flex-1 min-w-0 space-y-3">
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-100">Vincular instalación</h3>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          Encuentras el ID en la URL de tu instalación (github.com/settings/installations/ID).
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        <label className="rounded-xl bg-[#141923]/80 border border-white/[0.08] focus-within:border-[#2F6FED] px-3.5 py-2 cursor-text">
+                          <span className="block text-[11px] text-slate-400">ID de instalación</span>
+                          <input
+                            type="text"
+                            value={ghInstallId}
+                            onChange={(e) => setGhInstallId(e.target.value)}
+                            placeholder="ej. 54812903"
+                            className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-[#141923]/80 border border-white/[0.08] focus-within:border-[#2F6FED] px-3.5 py-2 cursor-text">
+                          <span className="block text-[11px] text-slate-400">Token de usuario GitHub (ghu_...)</span>
+                          <input
+                            type="password"
+                            value={ghUserToken}
+                            onChange={(e) => setGhUserToken(e.target.value)}
+                            placeholder="ghu_..."
+                            className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-[#141923]/80 border border-white/[0.08] focus-within:border-[#2F6FED] px-3.5 py-2 cursor-text">
+                          <span className="block text-[11px] text-slate-400">Organización (opcional)</span>
+                          <input
+                            type="text"
+                            value={ghAccountLogin}
+                            onChange={(e) => setGhAccountLogin(e.target.value)}
+                            placeholder="ej. mi-org"
+                            className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                          />
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={ghBusy || !ghState || !ghInstallId || !ghUserToken}
+                        onClick={async () => {
+                          setGhBusy(true);
+                          setGhError('');
+                          try {
+                            const linked = await linkGitHubInstallation({
+                              state: ghState,
+                              installationId: ghInstallId,
+                              userAccessToken: ghUserToken,
+                              accountLogin: ghAccountLogin,
+                            });
+                            setGhStatus(linked);
+                            setGhUserToken('');
+                          } catch (err) {
+                            setGhError(err?.message || 'No se pudo vincular la instalación.');
+                          } finally {
+                            setGhBusy(false);
+                          }
+                        }}
+                        className="rounded-lg bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-45 px-4 py-2 text-xs font-medium text-white transition-colors cursor-pointer"
+                      >
+                        Vincular instalación
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {ghError && <p className="text-xs text-rose-400">{ghError}</p>}
+            </section>
+
             <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -253,7 +402,7 @@ export function RepoScannerPanel({ authSession }) {
                       OMEGA CLI y GitHub Actions
                     </h2>
                     <p className="text-[11px] text-slate-400">
-                      Analiza tu proyecto desde la terminal sin subir archivos .env, llaves privadas ni .git.
+                      Analiza tu proyecto desde la terminal o en pipelines CI sin subir archivos .env, llaves privadas ni .git.
                     </p>
                   </div>
                 </div>
@@ -287,7 +436,7 @@ export function RepoScannerPanel({ authSession }) {
                   </span>
                   <span>
                     {cliMode === 'ci'
-                      ? 'Genera un token REPO_SCAN en la barra inferior y guárdalo como secreto.'
+                      ? 'Genera un token REPO_SCAN abajo y guárdalo como secreto en GitHub Actions.'
                       : 'No requiere token ni conexión al servidor OMEGA.'}
                   </span>
                 </div>
@@ -325,181 +474,9 @@ export function RepoScannerPanel({ authSession }) {
                 </pre>
               </div>
             </section>
+
             <ApiTokensCard authSession={authSession} onActiveCountChange={setActiveTokensCount} />
           </div>
-        )}
-
-        {devTab === 'github' && (
-          <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.06]">
-              <div className="flex items-center gap-2">
-                <GitHubIcon className="h-4 w-4 text-slate-100" />
-                <h2 className="text-sm font-semibold text-slate-100">Integración GitHub App (Solo lectura)</h2>
-              </div>
-              <span className="font-mono rounded-full border border-white/[0.08] bg-[#141923]/75 px-2.5 py-0.5 text-[10.5px] text-slate-400">
-                Requiere CLOUD_MANAGED
-              </span>
-            </div>
-
-            {!isAdmin ? (
-              <p className="text-xs text-slate-400">
-                Solo un administrador (ADMIN) puede vincular o desconectar la GitHub App del espacio.
-              </p>
-            ) : ghStatus ? (
-              <div className="rounded-xl bg-[#141923]/75 border border-white/[0.06] p-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-medium text-slate-100">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                    <span>
-                      Instalación #{ghStatus.installationId} {ghStatus.accountLogin ? `(${ghStatus.accountLogin})` : ''}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-slate-400">
-                    Repositorios: {(ghStatus.selectedRepositories || []).length || 'Según selección en GitHub'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  disabled={ghBusy}
-                  onClick={async () => {
-                    setGhBusy(true);
-                    setGhError('');
-                    try {
-                      await unlinkGitHubInstallation();
-                      setGhStatus(null);
-                    } catch (err) {
-                      setGhError(err?.message || 'No se pudo desvincular.');
-                    } finally {
-                      setGhBusy(false);
-                    }
-                  }}
-                  className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300 cursor-pointer"
-                >
-                  Desvincular
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="flex items-start gap-3.5">
-                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2F6FED]/15 text-xs font-mono font-semibold text-[#60A5FA]">
-                    01
-                  </span>
-                  <div className="flex-1 min-w-0 space-y-2.5">
-                    <div>
-                      <h3 className="text-xs font-semibold text-slate-100">Autorizar espacio</h3>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        Genera un identificador temporal de vinculación para autorizar la instalación en GitHub.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <button
-                        type="button"
-                        disabled={ghBusy}
-                        onClick={async () => {
-                          setGhBusy(true);
-                          setGhError('');
-                          try {
-                            const res = await createGitHubLinkState();
-                            setGhState(res?.state || '');
-                          } catch (err) {
-                            setGhError(err?.message || 'No se pudo generar el state.');
-                          } finally {
-                            setGhBusy(false);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#141923] border border-white/[0.08] hover:border-[#2F6FED] px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors cursor-pointer"
-                      >
-                        <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" strokeWidth={1.75} />
-                        <span>Generar código state</span>
-                      </button>
-                      {ghState && (
-                        <code className="font-mono text-[11px] text-emerald-400 bg-[#090B0F] px-2.5 py-1 rounded-lg border border-white/[0.06]">
-                          state: {ghState}
-                        </code>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-white/[0.06]" />
-
-                <div className="flex items-start gap-3.5">
-                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2F6FED]/15 text-xs font-mono font-semibold text-[#60A5FA]">
-                    02
-                  </span>
-                  <div className="flex-1 min-w-0 space-y-3">
-                    <div>
-                      <h3 className="text-xs font-semibold text-slate-100">Vincular instalación</h3>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        Encuentras el ID en la URL de tu instalación (github.com/settings/installations/ID).
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                      <label className="rounded-xl bg-[#141923]/80 border border-white/[0.08] focus-within:border-[#2F6FED] px-3.5 py-2 cursor-text">
-                        <span className="block text-[11px] text-slate-400">ID de instalación</span>
-                        <input
-                          type="text"
-                          value={ghInstallId}
-                          onChange={(e) => setGhInstallId(e.target.value)}
-                          placeholder="ej. 54812903"
-                          className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
-                        />
-                      </label>
-                      <label className="rounded-xl bg-[#141923]/80 border border-white/[0.08] focus-within:border-[#2F6FED] px-3.5 py-2 cursor-text">
-                        <span className="block text-[11px] text-slate-400">Token de usuario GitHub (ghu_...)</span>
-                        <input
-                          type="password"
-                          value={ghUserToken}
-                          onChange={(e) => setGhUserToken(e.target.value)}
-                          placeholder="ghu_..."
-                          className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
-                        />
-                      </label>
-                      <label className="rounded-xl bg-[#141923]/80 border border-white/[0.08] focus-within:border-[#2F6FED] px-3.5 py-2 cursor-text">
-                        <span className="block text-[11px] text-slate-400">Organización (opcional)</span>
-                        <input
-                          type="text"
-                          value={ghAccountLogin}
-                          onChange={(e) => setGhAccountLogin(e.target.value)}
-                          placeholder="ej. mi-org"
-                          className="mt-0.5 w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
-                        />
-                      </label>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={ghBusy || !ghState || !ghInstallId || !ghUserToken}
-                      onClick={async () => {
-                        setGhBusy(true);
-                        setGhError('');
-                        try {
-                          const linked = await linkGitHubInstallation({
-                            state: ghState,
-                            installationId: ghInstallId,
-                            userAccessToken: ghUserToken,
-                            accountLogin: ghAccountLogin,
-                          });
-                          setGhStatus(linked);
-                          setGhUserToken('');
-                        } catch (err) {
-                          setGhError(err?.message || 'No se pudo vincular la instalación.');
-                        } finally {
-                          setGhBusy(false);
-                        }
-                      }}
-                      className="rounded-lg bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-45 px-4 py-2 text-xs font-medium text-white transition-colors cursor-pointer"
-                    >
-                      Vincular instalación
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {ghError && <p className="text-xs text-rose-400">{ghError}</p>}
-          </section>
         )}
 
         {devTab === 'scan' && (
@@ -649,7 +626,7 @@ export function RepoScannerPanel({ authSession }) {
                     Los repositorios públicos se analizan sin token. Si es privado, ingresa un token de lectura (solo en memoria) o{' '}
                     <button
                       type="button"
-                      onClick={() => setDevTab('github')}
+                      onClick={() => setDevTab('github_ci')}
                       className="text-[#60A5FA] hover:underline cursor-pointer"
                     >
                       conecta tu GitHub App
@@ -812,6 +789,18 @@ export function RepoScannerPanel({ authSession }) {
             )}
           </section>
         )}
+
+        <DevProjectsTab
+          key={projectsRefreshKey}
+          authSession={authSession}
+          onSelectProjectForScan={(proj) => {
+            if (proj?.repoUrl) {
+              setRepoUrl(proj.repoUrl);
+              setError('');
+            }
+            window.scrollTo?.({ top: 0, behavior: 'smooth' });
+          }}
+        />
           </>
         )}
       </div>

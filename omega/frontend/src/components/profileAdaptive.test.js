@@ -57,10 +57,11 @@ test('la configuración real preserva GENERAL y DEVELOPER y abre LEGAL en expedi
     defaultView: 'inicio',
   });
   assert.deepEqual(config.profiles.DEVELOPER, {
-    visibleModules: ['repo_scanner', 'inicio', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
+    visibleModules: ['repo_scanner', 'inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
     moduleLabels: {
       inicio: 'Proyectos y hallazgos',
       amenazas: 'Cadena de suministro',
+      equipo: 'Mi estación',
       repo_scanner: 'Proyectos',
     },
     ragCorpusScope: 'dev_supply_chain_cti', copilotTone: 'technical_appsec',
@@ -73,6 +74,7 @@ test('la configuración real preserva GENERAL y DEVELOPER y abre LEGAL en expedi
   const devNav = resolveVisibleNavItems(BASE_NAV_ITEMS, config.profiles.DEVELOPER);
   const byId = Object.fromEntries(devNav.map((item) => [item.id, item.label]));
   assert.equal(byId.inicio, 'Proyectos y hallazgos');
+  assert.equal(byId.equipo, 'Mi estación');
   assert.equal(byId.amenazas, 'Cadena de suministro');
   assert.equal(byId.repo_scanner, 'Proyectos');
 });
@@ -95,11 +97,13 @@ test('RepoScannerPanel nunca usa la frase "repo seguro" y conserva el mensaje ho
   assert.ok(src.includes('Sin señales detectadas con las reglas actuales'));
 });
 
-test('Hub Proyectos (RepoScannerPanel) consolida todas las pestañas comerciales de DEVELOPER sin habilitar dev_cli en navegación principal', () => {
+test('Hub Proyectos (RepoScannerPanel) consolida todas las pestañas comerciales de DEVELOPER en 5 pestañas en una sola fila', () => {
   const panelSrc = readFileSync(new URL('./RepoScannerPanel.jsx', import.meta.url), 'utf8');
-  for (const tabId of ['scan', 'projects', 'findings', 'sbom', 'policies', 'supply_chain', 'reports', 'cli', 'github']) {
+  for (const tabId of ['scan', 'findings', 'sbom', 'governance', 'github_ci']) {
     assert.ok(panelSrc.includes(`id: '${tabId}'`), `Falta pestaña ${tabId} en RepoScannerPanel`);
   }
+  assert.equal(panelSrc.includes("id: 'supply_chain'"), false, 'Cadena de suministro vive en la barra superior y no debe duplicarse en Proyectos');
+  assert.equal(panelSrc.includes("id: 'workstation'"), false, 'Mi estación vive en la barra superior y no debe duplicarse en Proyectos');
   for (const compFile of [
     './DevProjectsTab.jsx',
     './DevFindingsTriageTab.jsx',

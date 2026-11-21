@@ -45,11 +45,8 @@ class TenantProfileMigrationAndEndpointTest {
         @MockBean
         private TenantRepository tenantRepository;
 
-    @MockBean
-    private com.omega.platform.repository.DocumentRepository documentRepository;
-
-        @MockBean
-        private JwtService jwtService;
+                @
+                private JwtService jwtService;
 
         @MockBean
         private UserRepository userRepository;
@@ -115,19 +112,34 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.moduleLabels.inicio").value("Proyectos y hallazgos"))
                 .andExpect(jsonPath("$.moduleLabels.amenazas").value("Cadena de suministro"))
                 .andExpect(jsonPath("$.moduleLabels.repo_scanner").value("Proyectos"))
-                .andExpect(jsonPath("$.moduleLabels.equipo").doesNotExist());
+                .andExpect(jsonPath("$.moduleLabels.equipo").value("Mi estación"));
 
-        mockAuth("tok-legal-analyst", UUID.randomUUID(), Role.ANALYST, TenantProfile.LEGAL);
-        mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal-analyst"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.profile").value("LEGAL"))
-                .andExpect(jsonPath("$.defaultView").value("expedientes"))
-                .andExpect(jsonPath("$.ragCorpusScope").value("legal_expedientes"))
-                .andExpect(jsonPath("$.copilotTone").value("forensic_legal"))
-                .andExpect(jsonPath("$.visibleModules").value(org.hamcrest.Matchers.contains("expedientes", "preguntar", "seguridad_despacho", "cuenta")));
+             
+                                        .andExpect(status().isOk())
+                                                .andExpect(jsonPath("$.profile").value("DEVELOPER"
+                                                .andExpect(jsonPath("$.configVersion").value("1.1.0"))
+                                                           
+                                                                .andExpect(jsonPath(
+                                                                .andExpect(jsonPath("$
+                                                                .andExpect(jsonPath("$.visi
+                                                                .andExpect(jsonPath("$.moduleLabels.in
+                                                                .andExpect(jsonPath("$.moduleLa
+                                                                .andExpect(jsonPath("$.moduleLabe
+                                                                .andExpect(jsonPath("$.moduleLabels.equipo")
+                                                
+                                                mockAuth("tok-legal-analyst", UUID.randomUUID(), Role.
+                                                mvc.perform(get("/api/v1/profile/config").hea
 
-                mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
-                mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))
+                                                .andExpect(jsonPath("$.profile").value("LEGAL"))
+                                                .andExpect(jsonPath("$.defaultView").value("cuenta"))
+                                                           
+                                                                .andExpect(jsonP
+                                                                .andExpect(jsonPath("$.vis
+                                                
+                                                mockAuth("tok-gen-client", UUID.randomUUID(),
+                                                mvc.perform(get("/api/v1/profile/config").header("A
+                                                uthorization", "
+                                                Bearer tok-gen-client"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.profile").value("GENERAL"))
                                 .andExpect(jsonPath("$.defaultView").value("inicio"))
