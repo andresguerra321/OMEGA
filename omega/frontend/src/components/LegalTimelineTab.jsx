@@ -13,6 +13,21 @@ const STATUS_LABELS = {
   HIDDEN: 'Oculto',
 };
 
+const CONFIDENCE_META = {
+  HIGH: {
+    label: 'Confianza alta',
+    cls: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300',
+  },
+  MEDIUM: {
+    label: 'Confianza media',
+    cls: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+  },
+  LOW: {
+    label: 'Confianza baja',
+    cls: 'border-rose-400/35 bg-rose-400/10 text-rose-300',
+  },
+};
+
 const STATUS_FILTERS = [
   ['', 'Activos'],
   ['EXTRACTED', 'Por verificar'],
@@ -133,6 +148,7 @@ export function LegalTimelineTab({ value, role, policyAccepted }) {
                 <ol className="divide-y divide-white/[0.06]">
                   {events.map((ev) => {
                     const isEditing = editing?.id === ev.id;
+                    const confidenceMeta = CONFIDENCE_META[ev.confidence] || CONFIDENCE_META.HIGH;
                     return (
                       <li key={ev.id} className="py-4 space-y-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -152,6 +168,12 @@ export function LegalTimelineTab({ value, role, policyAccepted }) {
                               }`}
                             >
                               {STATUS_LABELS[ev.reviewStatus] || ev.reviewStatus}
+                            </span>
+                            <span
+                              title={ev.confidenceReason || confidenceMeta.label}
+                              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${confidenceMeta.cls}`}
+                            >
+                              {confidenceMeta.label}
                             </span>
                           </div>
 
@@ -209,7 +231,12 @@ export function LegalTimelineTab({ value, role, policyAccepted }) {
                             </div>
                           </form>
                         ) : (
-                          <p className="text-sm text-white/85 leading-relaxed">{ev.summary}</p>
+                          <div className="space-y-1">
+                            <p className="text-sm text-white/85 leading-relaxed">{ev.summary}</p>
+                            {ev.confidence && ev.confidence !== 'HIGH' && ev.confidenceReason && (
+                              <p className="text-[11px] text-white/55">{ev.confidenceReason}</p>
+                            )}
+                          </div>
                         )}
 
                         {value.canWrite && !isEditing && (

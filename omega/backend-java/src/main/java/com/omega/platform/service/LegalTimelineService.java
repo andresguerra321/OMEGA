@@ -54,6 +54,18 @@ public class LegalTimelineService {
             "\\b(0?[1-9]|[12]\\d|3[01])\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic)\\.?\\s+(?:de|del)\\s+((?:19|20)\\d{2})\\b",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
     );
+    private static final Pattern ES_SHORTHAND_RANGE = Pattern.compile(
+            "\\b(?:del|desde\\s+el|entre\\s+el)\\s+(0?[1-9]|[12]\\d|3[01])\\s+(?:al|hasta\\s+el|y\\s+el)\\s+(0?[1-9]|[12]\\d|3[01])\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic)\\.?\\s+(?:de|del)\\s+((?:19|20)\\d{2})\\b",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
+    private static final Pattern RANGE_PREFIX = Pattern.compile(
+            "(?:\\b(?:del|desde\\s+el|entre\\s+el|hasta\\s+el|al|y\\s+el)\\s*)$",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
+    private static final Pattern RANGE_SUFFIX = Pattern.compile(
+            "^(?:\\s*(?:al|hasta\\s+el|y\\s+el)\\s+(?:\\d{1,4}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}\\s+de\\s+[a-záéíóú]+))",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
 
     private static final Set<String> VALID_REVIEW_STATUSES = Set.of("EXTRACTED", "CONFIRMED", "CORRECTED", "HIDDEN");
 
@@ -90,6 +102,8 @@ public class LegalTimelineService {
             String summary,
             String reviewStatus,
             boolean autoExtracted,
+            String confidence,
+            String confidenceReason,
             Instant createdAt,
             Instant updatedAt
     ) {}
@@ -102,13 +116,19 @@ public class LegalTimelineService {
             @Size(max = 500) String summary
     ) {}
 
-    public record DetectedDate(LocalDate date, boolean ambiguous, String excerpt) {}
+    public record DetectedDate(
+            LocalDate date,
+            boolean ambiguous,
+            String confidence,
+            String confidenceReason,
+            String excerpt
+    ) {}
 
     @Transactional(readOnly = true)
     public List<TimelineEventView> list(OmegaPrincipal actor, UUID expedienteId, String statusFilter, UUID documentId, boolean includeHidden) {
         authorization.requireReadAccess(actor, expedienteId);
         StringBuilder sql = new StringBuilder("""
-                SELECT id, expediente_id, document_id, chunk_id, page_number, event_date, summary, review_status, created_at, updated_at
+                SELECT id, expediente_id, document_id, chunk_id, page_number, event_date, summary, review_status, confidence, confidence_reason, created_at, updated_at
                 FROM omega_rag.legal_timeline_events
                 WHERE tenant_id = ? AND expediente_id = ?
                 """);
@@ -136,6 +156,8 @@ public class LegalTimelineService {
                 rs.getString("summary"),
                 rs.getString("review_status"),
                 "EXTRACTED".equals(rs.getString("review_status")),
+                rs.getString("confidence"),
+                rs.getString("confidence_reason"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()
         ), params.toArray());
@@ -163,8 +185,8 @@ public class LegalTimelineService {
                     }
                     int rows = jdbc.update("""
                             INSERT INTO omega_rag.legal_timeline_events
-                                (tenant_id, expediente_id, document_id, chunk_id, page_number, event_date, summary, review_status)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, 'EXTRACTED')
+                                (tenant_id, expediente_id, document_id, chunk_id, page_number, event_date, summary, review_status, confidence, confidence_reason)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'EXTRACTED', ?, ?)
                             ON CONFLICT (tenant_id, expediente_id, chunk_id, event_date) DO NOTHING
                             """,
                             actor.tenantId(),
@@ -173,7 +195,9 @@ public class LegalTimelineService {
                             chunk.getId(),
                             chunk.getPageNumber(),
                             Date.valueOf(item.date()),
-                            summary
+                            summary,
+                            item.confidence(),
+                            item.confidenceReason()
                     );
                     insertedOrUpdated += rows;
                 }
@@ -193,7 +217,7 @@ public class LegalTimelineService {
             throw new IllegalArgumentException("Estado de revisión inválido");
         }
         List<TimelineEventView> existing = jdbc.query("""
-                SELECT id, expediente_id, document_id, chunk_id, page_number, event_date, summary, review_status, created_at, updated_at
+                SELECT id, expediente_id, document_id, chunk_id, page_number, event_date, summary, review_status, confidence, confidence_reason, created_at, updated_at
                 FROM omega_rag.legal_timeline_events
                 WHERE id = ? AND tenant_id = ? AND expediente_id = ?
                 """, (rs, rowNum) -> new TimelineEventView(
@@ -206,6 +230,8 @@ public class LegalTimelineService {
                 rs.getString("summary"),
                 rs.getString("review_status"),
                 "EXTRACTED".equals(rs.getString("review_status")),
+                rs.getString("confidence"),
+                rs.getString("confidence_reason"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()
         ), eventId, actor.tenantId(), expedienteId);
@@ -230,13 +256,14 @@ public class LegalTimelineService {
         return new TimelineEventView(
                 current.id(), current.expedienteId(), current.documentId(), current.chunkId(),
                 current.pageNumber(), nextDate, nextSummary, nextStatus, "EXTRACTED".equals(nextStatus),
+                current.confidence(), current.confidenceReason(),
                 current.createdAt(), Instant.now()
         );
     }
 
     /**
-     * Detector determinista de fechas en múltiples formatos (ISO, DD/MM/YYYY, español textual).
-     * Nunca inventa fechas cuando el texto no contiene fechas válidas.
+     * Detector determinista de fechas en múltiples formatos (ISO, DD/MM/YYYY, español textual, rangos).
+     * Asigna nivel de confianza (HIGH, MEDIUM, LOW) y nunca inventa fechas para expresiones relativas ni texto sin fechas.
      */
     public static List<DetectedDate> detectDatesDeterministically(String text) {
         if (text == null || text.isBlank()) {
@@ -244,11 +271,41 @@ public class LegalTimelineService {
         }
         Map<LocalDate, DetectedDate> byDate = new LinkedHashMap<>();
 
+        Matcher rangeEs = ES_SHORTHAND_RANGE.matcher(text);
+        while (rangeEs.find()) {
+            int dayStart = Integer.parseInt(rangeEs.group(1));
+            int dayEnd = Integer.parseInt(rangeEs.group(2));
+            Integer month = SPANISH_MONTHS.get(rangeEs.group(3).toLowerCase(Locale.ROOT));
+            int year = Integer.parseInt(rangeEs.group(4));
+            if (month != null) {
+                String ctx = extractSentenceContext(text, rangeEs.start(), rangeEs.end());
+                LocalDate startDate = safeDate(year, month, dayStart);
+                LocalDate endDate = safeDate(year, month, dayEnd);
+                if (startDate != null) {
+                    byDate.putIfAbsent(startDate, new DetectedDate(
+                            startDate, false, "MEDIUM",
+                            "Extremo de un rango de fechas: verifique inicio y fin", ctx));
+                }
+                if (endDate != null) {
+                    byDate.putIfAbsent(endDate, new DetectedDate(
+                            endDate, false, "MEDIUM",
+                            "Extremo de un rango de fechas: verifique inicio y fin", ctx));
+                }
+            }
+        }
+
         Matcher iso = ISO_DATE.matcher(text);
         while (iso.find()) {
             LocalDate parsed = safeDate(Integer.parseInt(iso.group(1)), Integer.parseInt(iso.group(2)), Integer.parseInt(iso.group(3)));
             if (parsed != null) {
-                byDate.putIfAbsent(parsed, new DetectedDate(parsed, false, extractSentenceContext(text, iso.start(), iso.end())));
+                boolean inRange = isWithinDateRange(text, iso.start(), iso.end());
+                byDate.putIfAbsent(parsed, new DetectedDate(
+                        parsed,
+                        false,
+                        inRange ? "MEDIUM" : "HIGH",
+                        inRange ? "Extremo de un rango de fechas: verifique inicio y fin" : "Formato ISO inequívoco",
+                        extractSentenceContext(text, iso.start(), iso.end())
+                ));
             }
         }
 
@@ -260,7 +317,19 @@ public class LegalTimelineService {
             LocalDate parsed = safeDate(year, second, first);
             if (parsed != null) {
                 boolean ambiguous = first <= 12 && second <= 12 && first != second;
-                byDate.putIfAbsent(parsed, new DetectedDate(parsed, ambiguous, extractSentenceContext(text, dmy.start(), dmy.end())));
+                boolean inRange = isWithinDateRange(text, dmy.start(), dmy.end());
+                String confidence = ambiguous ? "LOW" : (inRange ? "MEDIUM" : "HIGH");
+                String reason = ambiguous
+                        ? (inRange
+                                ? "Fecha ambigua en un rango (DD/MM vs MM/DD): verifique día y mes"
+                                : "Fecha numérica ambigua (DD/MM vs MM/DD): verifique día y mes")
+                        : (inRange
+                                ? "Extremo de un rango de fechas: verifique inicio y fin"
+                                : "Formato DD/MM/YYYY inequívoco");
+                byDate.putIfAbsent(parsed, new DetectedDate(
+                        parsed, ambiguous, confidence, reason,
+                        extractSentenceContext(text, dmy.start(), dmy.end())
+                ));
             }
         }
 
@@ -272,12 +341,25 @@ public class LegalTimelineService {
             if (month != null) {
                 LocalDate parsed = safeDate(year, month, day);
                 if (parsed != null) {
-                    byDate.putIfAbsent(parsed, new DetectedDate(parsed, false, extractSentenceContext(text, es.start(), es.end())));
+                    boolean inRange = isWithinDateRange(text, es.start(), es.end());
+                    byDate.putIfAbsent(parsed, new DetectedDate(
+                            parsed,
+                            false,
+                            inRange ? "MEDIUM" : "HIGH",
+                            inRange ? "Extremo de un rango de fechas: verifique inicio y fin" : "Fecha textual en español inequívoca",
+                            extractSentenceContext(text, es.start(), es.end())
+                    ));
                 }
             }
         }
 
         return List.copyOf(byDate.values());
+    }
+
+    private static boolean isWithinDateRange(String text, int start, int end) {
+        String before = text.substring(Math.max(0, start - 20), start);
+        String after = text.substring(end, Math.min(text.length(), end + 45));
+        return RANGE_PREFIX.matcher(before).find() || RANGE_SUFFIX.matcher(after).find();
     }
 
     private static LocalDate safeDate(int year, int month, int day) {
