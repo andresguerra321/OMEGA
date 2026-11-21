@@ -19,6 +19,7 @@ import {
   UserCheck,
   Bell,
   KeyRound,
+  FolderOpen,
 } from 'lucide-react';
 import {
   fetchApiHealth,
@@ -89,6 +90,9 @@ const RepoScannerPanel = lazy(() =>
 const DevCliModulePanel = lazy(() =>
   import('./components/DevCliModulePanel').then((m) => ({ default: m.DevCliModulePanel }))
 );
+const ExpedientesPanel = lazy(() =>
+  import('./components/ExpedientesPanel').then((m) => ({ default: m.ExpedientesPanel }))
+);
 const AuthModal = lazy(() =>
   import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
 );
@@ -103,6 +107,7 @@ const NAV_ITEMS = [
   { id: 'amenazas', label: 'Amenazas', subtitle: 'Campañas, CVEs y actores', icon: Layers },
   { id: 'preguntar', label: 'Asistente', subtitle: 'Consultas con citas', icon: MessageSquare },
   { id: 'cuenta', label: 'Cuenta y Ajustes', subtitle: 'Perfil, seguridad, ajustes y configuración', icon: UserCheck },
+  { id: 'expedientes', label: 'Expedientes', subtitle: 'Expedientes del despacho', icon: FolderOpen },
 ];
 
 const BOOT_LOADER_STEPS = [
@@ -165,7 +170,7 @@ export default function App() {
     const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
     if (!authSession || !profileConfig?.defaultView || appliedProfileDefaultRef.current === profileKey) return;
     appliedProfileDefaultRef.current = profileKey;
-    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'dev_cli', 'preguntar', 'cuenta'].includes(profileConfig.defaultView)) {
+    if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'dev_cli', 'preguntar', 'cuenta', 'expedientes'].includes(profileConfig.defaultView)) {
       setActiveNav(profileConfig.defaultView);
     }
   }, [authSession, profileConfig?.profile, profileConfig?.defaultView]);
@@ -1456,6 +1461,11 @@ export default function App() {
                     aiEngine={govStats?.ai_engine || null}
                     onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
                   />
+                ) : activeNav === 'expedientes' ? (
+                  <ExpedientesPanel
+                    key={`${authSession?.tenantId}:${authSession?.userId}`}
+                    onOpenAccount={() => handleNavigate('cuenta')}
+                  />
                 ) : activeNav === 'cuenta' ? (
                   <AccountSettingsPanel
                     authSession={authSession}
@@ -1636,7 +1646,7 @@ export default function App() {
         onClose={() => setCommandOpen(false)}
         commandQuery={commandQuery}
         onChangeQuery={setCommandQuery}
-        navItems={NAV_ITEMS}
+        navItems={NAV_ITEMS.filter((item) => item.id !== 'expedientes' || profileConfig?.visibleModules?.includes(item.id))}
         onNavigate={handleNavigate}
         onOpenCopilot={() => setIsCopilotOpen(true)}
         onOpenOnboarding={() => setOnboardingOpen(true)}
