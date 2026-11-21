@@ -6,7 +6,8 @@ import { LegalDocumentAiPanel } from './LegalDocumentAiPanel';
 import { LegalCaseEditor } from './LegalCaseEditor';
 import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY } from '../lib/legalPresentation.js';
 import { LegalLoadState, LegalPagination } from './LegalWorkspacePrimitives';
-import { LegalAccessPreview, LegalActivityPreview, LegalAssistantPreview } from './LegalCasePreviewTabs';
+import { LegalAccessPreview, LegalActivityPreview } from './LegalCasePreviewTabs';
+import { LegalCaseAssistantTab } from './LegalCaseAssistantTab';
 import { LegalDocumentsPanel } from './LegalDocumentsPanel';
 import DossierExportButtons from './DossierExportButtons';
 
@@ -36,7 +37,7 @@ function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, 
       <div role="tablist" aria-label="Secciones del expediente" onKeyDown={moveTab} className="flex gap-1 overflow-x-auto border-b border-white/[0.06] pb-2">{TABS.map(([key, label]) => <button key={key} id={`legal-tab-${key}`} role="tab" type="button" aria-selected={tab === key} aria-controls={`legal-panel-${key}`} tabIndex={tab === key ? 0 : -1} onClick={() => setTab(key)} className={`rounded-lg px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-2 focus-visible:outline-white ${tab === key ? 'border-b-2 border-[#2F6FED] text-white' : 'text-white/60 hover:text-white'}`}>{label}</button>)}</div>
       <section role="tabpanel" id={`legal-panel-${tab}`} aria-labelledby={`legal-tab-${tab}`} tabIndex={0} className="pt-4 focus-visible:outline-2 focus-visible:outline-white">
         {tab === 'documents' && <LegalDocumentsPanel key={value.id} value={value} role={role} policyAccepted={policyAccepted} />}
-        {tab === 'assistant' && <LegalAssistantPreview value={value} onOpenAssistant={onOpenAssistant} />}
+        {tab === 'assistant' && <LegalCaseAssistantTab key={value.id} value={value} policyAccepted={policyAccepted} />}
         {tab === 'access' && <LegalAccessPreview key={value.id} value={value} />}
         {tab === 'activity' && <LegalActivityPreview key={value.id} value={value} currentUserId={currentUserId} />}
       </section>
