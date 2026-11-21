@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import com.omega.platform.config.OmegaProperties;
 import com.omega.platform.integration.forensic.ArchiveSecurityValidator;
 import java.nio.file.*;
+import java.util.Arrays;
 import java.util.zip.*;
 import java.io.*;
 import java.awt.image.BufferedImage;
@@ -47,5 +48,44 @@ class OfficeImageExtractorTest {
         assertThat(extractor.extract(image,"IMAGE").chunks().getFirst().content()).contains("Texto OCR sintético");
         javax.imageio.ImageIO.write(new BufferedImage(4097,1,BufferedImage.TYPE_INT_RGB),"png",image.toFile());
         assertThatThrownBy(() -> extractor.inspect(image)).isInstanceOf(InvalidDocumentException.class);
+
+        // JPEG válido
+        Path jpeg=directory.resolve("synthetic.jpg");
+        javax.imageio.ImageIO.write(new BufferedImage(64,64,BufferedImage.TYPE_INT_RGB),"jpeg",jpeg.toFile());
+        assertThat(extractor.inspect(jpeg).format()).isEqualTo("IMAGE");
+        assertThat(extractor.extract(jpeg,"IMAGE").chunks().getFirst().content()).contains("Texto OCR sintético");
+    }
+
+    @Test void rejectsHostileDocxMacrosZipBombsAndForgedExtensions() throws Exception {
+        var extractor=extractor();
+        String validXml="<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>Texto sintético.</w:t></w:r></w:p></w:body></w:document>";
+
+        // 1. DOCX con macro VBA (vbaProject.bin)
+        Path macroDocx=directory.resolve("hostile-macro.docx");
+        try(var zip=new ZipOutputStream(Files.newOutputStream(macroDocx))) {
+            zip.putNextEntry(new ZipEntry("word/document.xml")); zip.write(validXml.getBytes(java.nio.charset.StandardCharsets.UTF_8)); zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/vbaProject.bin")); zip.write(new byte[]{1,2,3,4}); zip.closeEntry();
+        }
+        assertThatThrownBy(() -> extractor.inspect(macroDocx))
+                .isInstanceOf(InvalidDocumentException.class)
+                .hasMessageContaining("elementos activos");
+
+        // 2. DOCX zip bomb (contenido XML altamente comprimido > 8 MB descomprimido)
+        Path bombDocx=directory.resolve("hostile-bomb.docx");
+        try(var zip=new ZipOutputStream(Files.newOutputStream(bombDocx))) {
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            byte[] zeros=new byte[1024*1024];
+            Arrays.fill(zeros,(byte)'A');
+            for(int i=0;i<9;i++) zip.write(zeros);
+            zip.closeEntry();
+        }
+        assertThatThrownBy(() -> extractor.inspect(bombDocx))
+                .isInstanceOf(InvalidDocumentException.class);
+
+        // 3. Extensión .docx / .png falsa (sin firma binaria válida)
+        Path forged=directory.resolve("forged.docx");
+        Files.writeString(forged,"<html><script>alert(1)</script></html>");
+        assertThatThrownBy(() -> extractor.inspect(forged))
+                .isInstanceOf(InvalidDocumentException.class);
     }
 }

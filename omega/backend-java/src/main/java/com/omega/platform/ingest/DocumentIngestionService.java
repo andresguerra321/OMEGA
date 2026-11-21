@@ -297,7 +297,9 @@ public class DocumentIngestionService {
                     || (header[0] == (byte)0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G')
                     || (header[0] == (byte)0xff && header[1] == (byte)0xd8 && header[2] == (byte)0xff));
             if (!validPdf && !(allowExtraFormats && extra)) {
-                throw new InvalidDocumentException("El archivo no presenta la firma binaria mágica '%PDF-'.");
+                throw new InvalidDocumentException(allowExtraFormats
+                        ? "El archivo no presenta una firma binaria válida (PDF, DOCX, PNG o JPEG)."
+                        : "El archivo no presenta la firma binaria mágica '%PDF-'.");
             }
 
             return HexFormat.of().formatHex(digest.digest());
