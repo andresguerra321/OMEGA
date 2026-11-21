@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Boxes,
   Check,
   ChevronDown,
   ChevronUp,
@@ -26,6 +27,7 @@ import {
 import { ApiTokensCard } from './ApiTokensCard';
 import { DevProjectsTab } from './DevProjectsTab';
 import { DevFindingsTriageTab } from './DevFindingsTriageTab';
+import { DevDependenciesSbomTab } from './DevDependenciesSbomTab';
 
 function GitHubIcon({ className = 'h-4 w-4' }) {
   return (
@@ -156,6 +158,7 @@ export function RepoScannerPanel({ authSession }) {
             { id: 'scan', label: 'Analizar repositorio', icon: PackageSearch },
             { id: 'projects', label: 'Proyectos', icon: FolderGit2 },
             { id: 'findings', label: 'Hallazgos y Triaje', icon: ShieldAlert },
+            { id: 'sbom', label: 'Dependencias y SBOM', icon: Boxes },
             { id: 'cli', label: 'CLI y Tokens API', icon: Terminal, badge: activeTokensCount },
             { id: 'github', label: 'Integración GitHub', icon: GitHubIcon, connected: Boolean(ghStatus) },
           ].map((t) => {
@@ -203,6 +206,10 @@ export function RepoScannerPanel({ authSession }) {
 
         {devTab === 'findings' && (
           <DevFindingsTriageTab authSession={authSession} />
+        )}
+
+        {devTab === 'sbom' && (
+          <DevDependenciesSbomTab />
         )}
 
         {devTab === 'cli' && (

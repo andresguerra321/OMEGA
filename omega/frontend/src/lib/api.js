@@ -681,6 +681,22 @@ export async function revokeDevSuppression(suppressionId) {
   });
 }
 
+export async function listDevDependencies(projectId, { ecosystem = '', q = '' } = {}) {
+  const params = new URLSearchParams();
+  if (ecosystem) params.set('ecosystem', ecosystem);
+  if (q) params.set('q', q);
+  const qs = params.toString();
+  return apiFetch(
+    `/dev/projects/${encodeURIComponent(projectId)}/dependencies${qs ? `?${qs}` : ''}`
+  );
+}
+
+export async function exportDevSbom(projectId, format = 'cyclonedx') {
+  return apiFetch(
+    `/dev/projects/${encodeURIComponent(projectId)}/sbom?format=${encodeURIComponent(format)}`
+  );
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }

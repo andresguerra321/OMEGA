@@ -115,3 +115,21 @@ def test_repo_scan_endpoints_require_internal_service_token(monkeypatch):
     fetch = client.get(f"/api/repo/scan/{body['scan_id']}", headers=headers)
     assert fetch.status_code == 200
     assert fetch.json()["scan_id"] == body["scan_id"]
+
+
+def test_extracts_normalized_dependencies_and_purls_from_multiple_ecosystems():
+    raw = _build_tar_gz(
+        {
+            "package.json": json.dumps({"dependencies": {"lodash": "^4.17.21"}}).encode("utf-8"),
+            "requirements.txt": b"fastapi==0.115.0\n",
+            "Cargo.toml": b'[dependencies]\nserde = "1.0.210"\n',
+        }
+    )
+    res = scan_archive_bytes("deps.tar.gz", raw)
+    by_eco = {d["ecosystem"]: d for d in res.dependencies}
+    assert by_eco["npm"]["name"] == "lodash"
+    assert by_eco["npm"]["purl"] == "pkg:npm/lodash@4.17.21"
+    assert by_eco["pypi"]["name"] == "fastapi"
+    assert by_eco["pypi"]["purl"] == "pkg:pypi/fastapi@0.115.0"
+    assert by_eco["cargo"]["name"] == "serde"
+    assert by_eco["cargo"]["purl"] == "pkg:cargo/serde@1.0.210"

@@ -127,16 +127,28 @@ def scan_archive_bytes(
     findings: list[ScanFinding] = []
     limitations: list[str] = []
     dependencies: list[tuple[str, str, str]] = []
+    dependency_records: list[dict[str, Any]] = []
 
     for rel_path, text in files:
         if (time.monotonic() - started) > timeout_seconds:
             limitations.append("Análisis detenido al alcanzar el límite de tiempo configurado.")
             break
-        _run_static_content_detectors(rel_path, text, findings, dependencies)
+        _run_static_content_detectors(rel_path, text, findings, dependencies, dependency_records)
 
     client = registry_client or RegistryMetadataClient()
     ref_now = now or datetime.now(timezone.utc)
     seen_deps: set[tuple[str, str]] = set()
+    normalized_deps: list[dict[str, Any]] = []
+    seen_dep_records: set[tuple[str, str, str]] = set()
+    for rec in dependency_records:
+        key = (
+            str(rec.get("ecosystem", "")).lower(),
+            str(rec.get("name", "")).lower(),
+            str(rec.get("manifest_path", "")),
+        )
+        if key not in seen_dep_records:
+            seen_dep_records.add(key)
+            normalized_deps.append(rec)
 
     for ecosystem, pkg_name, location in dependencies:
         if (time.monotonic() - started) > timeout_seconds:
@@ -182,6 +194,7 @@ def scan_archive_bytes(
         status="COMPLETED",
         files_scanned=len(files),
         findings=findings,
+        dependencies=normalized_deps,
         limitations=limitations,
         score=score,
         score_breakdown=breakdown,
@@ -232,13 +245,23 @@ def _extract_text_files_in_memory(
     raise ValueError("Formato de archivo no soportado; usa .tar.gz, .tgz o .zip.")
 
 
+def _build_purl(ecosystem: str, name: str, version: str = "") -> str:
+    clean_ver = re.sub(r"^[~^=><!\s]+", "", (version or "").strip())
+    clean_name = name.strip()
+    if ecosystem == "maven" and ":" in clean_name:
+        clean_name = clean_name.replace(":", "/", 1)
+    return f"pkg:{ecosystem}/{clean_name}" + (f"@{clean_ver}" if clean_ver else "")
+
+
 def _run_static_content_detectors(
     rel_path: str,
     text: str,
     findings: list[ScanFinding],
     dependencies: list[tuple[str, str, str]],
+    dependency_records: list[dict[str, Any]] | None = None,
 ) -> None:
     base = rel_path.rsplit("/", 1)[-1].lower()
+    dep_records = dependency_records if dependency_records is not None else []
 
     if base == "package.json":
         try:
@@ -266,8 +289,19 @@ def _run_static_content_detectors(
             for section in ("dependencies", "devDependencies", "optionalDependencies"):
                 deps = pkg.get(section)
                 if isinstance(deps, dict):
-                    for dep_name in deps.keys():
+                    for dep_name, dep_ver in deps.items():
+                        ver_str = str(dep_ver) if isinstance(dep_ver, (str, int, float)) else ""
                         dependencies.append(("npm", str(dep_name), f"{rel_path}:{section}.{dep_name}"))
+                        dep_records.append(
+                            {
+                                "ecosystem": "npm",
+                                "name": str(dep_name),
+                                "version": ver_str,
+                                "purl": _build_purl("npm", str(dep_name), ver_str),
+                                "manifest_path": rel_path,
+                                "direct": True,
+                            }
+                        )
 
     elif base == "package-lock.json":
         try:
@@ -277,16 +311,38 @@ def _run_static_content_detectors(
         if isinstance(lock, dict):
             packages = lock.get("packages") or {}
             if isinstance(packages, dict):
-                for pkg_path in packages.keys():
+                for pkg_path, pkg_info in packages.items():
                     if not pkg_path or "node_modules/" not in str(pkg_path):
                         continue
                     dep_name = str(pkg_path).rsplit("node_modules/", 1)[-1].strip()
+                    ver_str = str(pkg_info.get("version", "")) if isinstance(pkg_info, dict) else ""
                     if dep_name:
                         dependencies.append(("npm", dep_name, f"{rel_path}:{dep_name}"))
+                        dep_records.append(
+                            {
+                                "ecosystem": "npm",
+                                "name": dep_name,
+                                "version": ver_str,
+                                "purl": _build_purl("npm", dep_name, ver_str),
+                                "manifest_path": rel_path,
+                                "direct": str(pkg_path).count("node_modules/") == 1,
+                            }
+                        )
             legacy_deps = lock.get("dependencies") or {}
             if isinstance(legacy_deps, dict):
-                for dep_name in legacy_deps.keys():
+                for dep_name, dep_info in legacy_deps.items():
+                    ver_str = str(dep_info.get("version", "")) if isinstance(dep_info, dict) else ""
                     dependencies.append(("npm", str(dep_name), f"{rel_path}:{dep_name}"))
+                    dep_records.append(
+                        {
+                            "ecosystem": "npm",
+                            "name": str(dep_name),
+                            "version": ver_str,
+                            "purl": _build_purl("npm", str(dep_name), ver_str),
+                            "manifest_path": rel_path,
+                            "direct": True,
+                        }
+                    )
 
     elif base == "pom.xml":
         try:
@@ -295,13 +351,27 @@ def _run_static_content_detectors(
                 if dep.tag.endswith("dependency"):
                     gid = ""
                     aid = ""
+                    ver = ""
                     for child in dep:
                         if child.tag.endswith("groupId") and child.text:
                             gid = child.text.strip()
                         elif child.tag.endswith("artifactId") and child.text:
                             aid = child.text.strip()
+                        elif child.tag.endswith("version") and child.text:
+                            ver = child.text.strip()
                     if gid and aid:
-                        dependencies.append(("maven", f"{gid}:{aid}", rel_path))
+                        coord = f"{gid}:{aid}"
+                        dependencies.append(("maven", coord, rel_path))
+                        dep_records.append(
+                            {
+                                "ecosystem": "maven",
+                                "name": coord,
+                                "version": ver,
+                                "purl": _build_purl("maven", coord, ver),
+                                "manifest_path": rel_path,
+                                "direct": True,
+                            }
+                        )
         except Exception:
             pass
 
@@ -317,23 +387,88 @@ def _run_static_content_detectors(
             if in_require and stripped == ")":
                 in_require = False
                 continue
+            is_indirect = "// indirect" in line
             if stripped.startswith("require "):
-                mod = stripped[len("require "):].strip().split()[0]
-                if mod:
+                parts = stripped[len("require "):].strip().split()
+                if parts:
+                    mod = parts[0]
+                    ver = parts[1] if len(parts) > 1 else ""
                     dependencies.append(("go", mod, f"{rel_path}:{idx}"))
+                    dep_records.append(
+                        {
+                            "ecosystem": "go",
+                            "name": mod,
+                            "version": ver,
+                            "purl": _build_purl("golang", mod, ver),
+                            "manifest_path": rel_path,
+                            "direct": not is_indirect,
+                        }
+                    )
             elif in_require:
-                mod = stripped.split()[0]
-                if mod:
+                parts = stripped.split()
+                if parts:
+                    mod = parts[0]
+                    ver = parts[1] if len(parts) > 1 else ""
                     dependencies.append(("go", mod, f"{rel_path}:{idx}"))
+                    dep_records.append(
+                        {
+                            "ecosystem": "go",
+                            "name": mod,
+                            "version": ver,
+                            "purl": _build_purl("golang", mod, ver),
+                            "manifest_path": rel_path,
+                            "direct": not is_indirect,
+                        }
+                    )
 
     elif base == "requirements.txt":
         for idx, line in enumerate(text.splitlines(), start=1):
             cleaned = line.split("#", 1)[0].strip()
             if not cleaned or cleaned.startswith("-"):
                 continue
-            pkg_name = re.split(r"[=<>!~;\s\[]", cleaned, maxsplit=1)[0].strip()
+            parts = re.split(r"([=<>!~]+)", cleaned, maxsplit=1)
+            pkg_name = re.split(r"[\s\[\];]", parts[0], maxsplit=1)[0].strip()
+            ver = "".join(parts[1:]).split(";", 1)[0].strip() if len(parts) > 1 else ""
             if pkg_name:
                 dependencies.append(("pypi", pkg_name, f"{rel_path}:{idx}"))
+                dep_records.append(
+                    {
+                        "ecosystem": "pypi",
+                        "name": pkg_name,
+                        "version": ver,
+                        "purl": _build_purl("pypi", pkg_name, ver),
+                        "manifest_path": rel_path,
+                        "direct": True,
+                    }
+                )
+
+    elif base == "cargo.toml":
+        in_deps = False
+        for idx, line in enumerate(text.splitlines(), start=1):
+            stripped = line.split("#", 1)[0].strip()
+            if not stripped:
+                continue
+            if stripped.startswith("[") and stripped.endswith("]"):
+                sec = stripped[1:-1].strip().lower()
+                in_deps = sec in ("dependencies", "dev-dependencies", "build-dependencies")
+                continue
+            if in_deps and "=" in stripped:
+                k, v = stripped.split("=", 1)
+                pkg_name = k.strip().strip('"')
+                ver_match = re.search(r'"([^"]+)"', v)
+                ver = ver_match.group(1) if ver_match else ""
+                if pkg_name:
+                    dependencies.append(("cargo", pkg_name, f"{rel_path}:{idx}"))
+                    dep_records.append(
+                        {
+                            "ecosystem": "cargo",
+                            "name": pkg_name,
+                            "version": ver,
+                            "purl": _build_purl("cargo", pkg_name, ver),
+                            "manifest_path": rel_path,
+                            "direct": True,
+                        }
+                    )
 
     elif base == "setup.py":
         match = _PY_SETUP_EXEC_RE.search(text)
