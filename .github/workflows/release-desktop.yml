@@ -122,7 +122,7 @@ jobs:
           npm ci --ignore-scripts
           npm run lint
           npm test
-          npx @tauri-apps/cli@2 build
+          npm exec --no -- tauri build
       - name: Upload Tauri v2 Installers
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

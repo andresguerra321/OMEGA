@@ -322,6 +322,12 @@ class ContainmentEngine:
             record['steps']['originalRemoved'] = True
             self._write_record(record, owner)
 
+    def _restore_file_metadata_fd(self, source: Path, metadata: dict, fd: int):
+        if self._restore_file_metadata is restore_file_metadata:
+            restore_file_metadata(source, metadata, fd=fd)
+        else:
+            self._restore_file_metadata(source, metadata)
+
     def _restore_steps(self, record: dict, owner: str):
         target, steps = record['target'], record['steps']
         if record['actionType'] == 'BLOCK_NETWORK_INDICATOR' and steps.get('firewallAttempted'):
@@ -332,19 +338,57 @@ class ContainmentEngine:
             source = Path(target['originalPath'])
             if source.is_symlink() or any(parent.is_symlink() for parent in source.parents):
                 raise ValueError('La ruta original cambió a un enlace simbólico.')
+            metadata = target.get('fileMetadata', {})
+            mode = target['mode']
+            mtime_ns = target['mtimeNs']
             if source.exists():
                 if sha256_file(str(source)) != target['sha256']:
                     raise ValueError('Existe un archivo diferente en la ruta original; no se sobrescribirá.')
+                if steps.get('sealed'):
+                    if sys.platform != 'win32' and hasattr(os, 'O_NOFOLLOW'):
+                        fd = os.open(str(source), os.O_RDONLY | os.O_NOFOLLOW)
+                        try:
+                            self._restore_file_metadata_fd(source, metadata, fd)
+                            os.fchmod(fd, mode)
+                            os.utime(fd, ns=(mtime_ns, mtime_ns))
+                        finally:
+                            os.close(fd)
+                    else:
+                        self._restore_file_metadata(source, metadata)
+                        source.chmod(mode)
+                        os.utime(source, ns=(mtime_ns, mtime_ns))
             elif steps.get('sealed'):
                 raw = self._decrypt_file(record, owner)
-                with source.open('xb') as stream:
-                    stream.write(raw)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-            if steps.get('sealed'):
-                self._restore_file_metadata(source, target.get('fileMetadata', {}))
-                source.chmod(target['mode'])
-                os.utime(source, ns=(target['mtimeNs'], target['mtimeNs']))
+                if sys.platform != 'win32' and hasattr(os, 'O_DIRECTORY') and hasattr(os, 'O_NOFOLLOW'):
+                    # C-02: Abrir directorio destino con O_DIRECTORY|O_NOFOLLOW y aplicar metadatos sobre el fd abierto
+                    parent_fd = os.open(str(source.parent), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    try:
+                        file_fd = os.open(source.name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=parent_fd)
+                        try:
+                            with os.fdopen(file_fd, 'wb', closefd=False) as stream:
+                                stream.write(raw)
+                                stream.flush()
+                                os.fsync(file_fd)
+                            self._restore_file_metadata_fd(source, metadata, file_fd)
+                            os.fchmod(file_fd, mode)
+                            os.utime(file_fd, ns=(mtime_ns, mtime_ns))
+                        finally:
+                            os.close(file_fd)
+                    finally:
+                        os.close(parent_fd)
+                else:
+                    # Fallback Windows con validación explícita de reparse points/symlinks antes y después
+                    if source.is_symlink() or any(parent.is_symlink() for parent in source.parents):
+                        raise ValueError('La ruta original cambió a un enlace simbólico.')
+                    with source.open('xb') as stream:
+                        stream.write(raw)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    if source.is_symlink():
+                        raise ValueError('La ruta restaurada fue reemplazada por un enlace simbólico.')
+                    self._restore_file_metadata(source, metadata)
+                    source.chmod(mode)
+                    os.utime(source, ns=(mtime_ns, mtime_ns))
             if steps.get('persistenceAttempted'):
                 self._set_persistence(target, restore=True)
 

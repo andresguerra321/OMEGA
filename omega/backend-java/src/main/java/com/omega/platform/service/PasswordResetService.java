@@ -41,6 +41,7 @@ public class PasswordResetService {
     private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final long TOKEN_TTL_MINUTES = 15L;
+    public static final int MAX_TOKEN_ATTEMPTS = 5;
 
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
@@ -142,7 +143,7 @@ public class PasswordResetService {
         return Map.of("recoveryKey", key);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BadCredentialsException.class)
     public PasswordResetResponse confirmReset(PasswordResetConfirmRequest request) {
         String email = normalizeEmail(request.email());
         String code = request.code() == null ? "" : request.code().trim();
@@ -154,26 +155,58 @@ public class PasswordResetService {
                 .orElseThrow(() -> new BadCredentialsException("Código inválido o expirado."));
 
         String hash = sha256Hex(code);
-        List<UUID> tokenIds = jdbcTemplate.query(
-                """
-                SELECT id
-                FROM omega_rag.password_reset_tokens
-                WHERE user_id = ?
-                  AND token_hash = ?
-                  AND used_at IS NULL
-                  AND expires_at > NOW()
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (rs, rowNum) -> UUID.fromString(rs.getString("id")),
-                user.getId(),
-                hash
-        );
+        boolean validOtp = false;
+        boolean recoveryKey = false;
 
-        boolean recoveryKey = code.length() == 48 && jdbcTemplate.update("""
-                DELETE FROM omega_rag.account_recovery_keys WHERE user_id = ? AND key_hash = ?
-                """, user.getId(), hash) == 1;
-        if (tokenIds.isEmpty() && !recoveryKey) {
+        if (code.length() == 48) {
+            recoveryKey = jdbcTemplate.update("""
+                    DELETE FROM omega_rag.account_recovery_keys WHERE user_id = ? AND key_hash = ?
+                    """, user.getId(), hash) == 1;
+        } else {
+            // B-02: Bloquear fila con FOR UPDATE y limitar intentos fallidos por token (MAX_TOKEN_ATTEMPTS = 5)
+            List<Map<String, Object>> activeTokens = jdbcTemplate.queryForList(
+                    """
+                    SELECT id, token_hash, attempts
+                    FROM omega_rag.password_reset_tokens
+                    WHERE user_id = ?
+                      AND used_at IS NULL
+                      AND expires_at > NOW()
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    FOR UPDATE
+                    """,
+                    user.getId()
+            );
+            if (!activeTokens.isEmpty()) {
+                Map<String, Object> tokenRow = activeTokens.get(0);
+                UUID tokenId = (UUID) tokenRow.get("id");
+                String expectedHash = (String) tokenRow.get("token_hash");
+                int attempts = tokenRow.get("attempts") != null ? ((Number) tokenRow.get("attempts")).intValue() : 0;
+                if (attempts >= MAX_TOKEN_ATTEMPTS) {
+                    jdbcTemplate.update("UPDATE omega_rag.password_reset_tokens SET used_at = NOW() WHERE id = ?", tokenId);
+                    throw new BadCredentialsException("El código de recuperación fue invalidado por demasiados intentos fallidos.");
+                }
+                if (expectedHash != null && MessageDigest.isEqual(
+                        expectedHash.getBytes(StandardCharsets.UTF_8),
+                        hash.getBytes(StandardCharsets.UTF_8))) {
+                    validOtp = true;
+                } else {
+                    int nextAttempts = attempts + 1;
+                    if (nextAttempts >= MAX_TOKEN_ATTEMPTS) {
+                        jdbcTemplate.update(
+                                "UPDATE omega_rag.password_reset_tokens SET attempts = ?, used_at = NOW() WHERE id = ?",
+                                nextAttempts, tokenId);
+                    } else {
+                        jdbcTemplate.update(
+                                "UPDATE omega_rag.password_reset_tokens SET attempts = ? WHERE id = ?",
+                                nextAttempts, tokenId);
+                    }
+                    throw new BadCredentialsException("El código de recuperación es inválido o ya expiró.");
+                }
+            }
+        }
+
+        if (!validOtp && !recoveryKey) {
             throw new BadCredentialsException("El código de recuperación es inválido o ya expiró.");
         }
 

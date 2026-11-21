@@ -9,7 +9,11 @@ import com.omega.platform.rag.EmbeddingException;
 import com.omega.platform.rag.EmbeddingProvider;
 import com.omega.platform.repository.DocumentChunkRepository;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.security.Role;
+import com.omega.platform.security.TenantContext;
+import com.omega.platform.security.TenantScope;
 import com.omega.platform.service.AuditLogService;
+import com.omega.platform.storage.ObjectStoragePort;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -49,6 +53,9 @@ public class AsyncDocumentProcessor {
     private final TransactionTemplate transactionTemplate;
     private final IngestTemporaryFiles temporaryFiles;
     private final OfficeImageExtractor officeImageExtractor;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ObjectStoragePort objectStoragePort;
 
     public AsyncDocumentProcessor(
             PdfChunkExtractor pdfChunkExtractor,
@@ -211,6 +218,29 @@ public class AsyncDocumentProcessor {
                             ? (deletedAt == null ? "TEMP_DELETE_FAILED" : (failureReason == null ? "DOCUMENT_PROCESSING_FAILED" : failureReason)) : null);
                     if (deletedAt != null) {
                         doc.setTempDeletedAt(deletedAt);
+                    }
+                    // A-01: Purgar objeto huérfano en almacenamiento S3/MinIO si el documento falló
+                    if (resolvedStatus == DocumentStatus.FAILED
+                            && doc.getStorageBucket() != null && !doc.getStorageBucket().isBlank()
+                            && doc.getStorageObjectKey() != null && !doc.getStorageObjectKey().isBlank()
+                            && objectStoragePort != null) {
+                        boolean boundHere = TenantContext.get().isEmpty();
+                        try {
+                            if (boundHere) {
+                                TenantContext.set(new TenantScope(cmd.tenantId(), cmd.actorUserId(), Role.ADMIN));
+                            }
+                            objectStoragePort.deleteObject(doc.getStorageBucket(), doc.getStorageObjectKey());
+                        } catch (Exception purgeEx) {
+                            log.warn("No se pudo purgar objeto huérfano para documento fallido {}", cmd.documentId());
+                        } finally {
+                            if (boundHere) {
+                                TenantContext.clear();
+                            }
+                        }
+                        doc.setStorageBucket(null);
+                        doc.setStorageObjectKey(null);
+                        doc.setContentSha256(null);
+                        doc.setRetentionUntil(null);
                     }
                     documentRepository.saveAndFlush(doc);
                 });

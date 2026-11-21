@@ -13,6 +13,15 @@ public interface RagAnswerGenerator {
         return generateGroundedAnswer(question, chunks);
     }
 
+    default String generateGroundedAnswer(
+            String question,
+            List<RankedChunk> chunks,
+            String analysisContext,
+            String systemInstructions
+    ) {
+        return generateGroundedAnswer(question, chunks, analysisContext);
+    }
+
     default String generateGeneralAnswer(String question) {
         return null;
     }

@@ -59,6 +59,7 @@ public class RepoScannerProxyController {
             "^(?:https?://(?:www\\.)?github\\.com/)?([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100}?)(?:\\.git)?(?:/tree/([A-Za-z0-9_./-]{1,120}))?/?$"
     );
     private static final Pattern SAFE_BRANCH_PATTERN = Pattern.compile("^[A-Za-z0-9_./-]{1,120}$");
+    private static final Pattern SAFE_SCAN_ID_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
 
     private final RestClient forensicWorkerRestClient;
     private final TenantRepository tenantRepository;
@@ -70,6 +71,9 @@ public class RepoScannerProxyController {
 
     @Autowired(required = false)
     private DevProjectService devProjectService;
+
+    @Autowired(required = false)
+    private com.omega.platform.repository.DevScanRepository devScanRepository;
 
     public RepoScannerProxyController(
             @Qualifier("forensicWorkerRestClient") RestClient forensicWorkerRestClient,
@@ -308,11 +312,27 @@ public class RepoScannerProxyController {
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST', 'CLIENT') or hasAuthority('SCOPE_REPO_SCAN')")
     @SuppressWarnings("unchecked")
     public Map<String, Object> getScanStatus(@PathVariable String scanId) {
-        TenantContext.get()
+        TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
+        if (scanId == null || !SAFE_SCAN_ID_PATTERN.matcher(scanId).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Identificador de escaneo inválido");
+        }
+        // B-04: Verificar propiedad del tenant en DevScanRepository cuando el scanId es un UUID persistido
+        if (devScanRepository != null) {
+            try {
+                UUID parsedId = UUID.fromString(scanId);
+                if (devScanRepository.findById(parsedId).isPresent()
+                        && devScanRepository.findByIdAndTenantId(parsedId, scope.tenantId()).isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Escaneo no encontrado en el espacio actual");
+                }
+            } catch (IllegalArgumentException ignored) {
+                // scanId efímero no-UUID del worker; el aislamiento se propaga mediante X-Tenant-Id
+            }
+        }
         try {
-            return forensicWorkerRestClient.get()
-                    .uri("/api/repo/scan/{scanId}", scanId)
+            var uriSpec = forensicWorkerRestClient.get().uri("/api/repo/scan/{scanId}", scanId);
+            var headerSpec = uriSpec.header("X-Tenant-Id", scope.tenantId().toString());
+            return (headerSpec != null ? headerSpec : uriSpec)
                     .retrieve()
                     .body(Map.class);
         } catch (RestClientResponseException ex) {

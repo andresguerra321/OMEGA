@@ -40,8 +40,13 @@ def validate_archive(name, raw):
         if size < 0 or size > MAX_FILE or total > MAX_TOTAL or count > MAX_ENTRIES or total > max(1, len(raw)) * MAX_RATIO:
             raise ValueError('Archivo bloqueado: bomba de descompresión')
     if lower.endswith('.zip') or raw.startswith(b'PK\x03\x04'):
+        seen_names = set()
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             for item in archive.infolist():
+                norm_name = item.filename.replace('\\', '/')
+                if norm_name in seen_names:
+                    raise ValueError('Archivo bloqueado: nombres de miembro duplicados en ZIP')
+                seen_names.add(norm_name)
                 check(item.filename, item.file_size)
                 mode = item.external_attr >> 16
                 if stat.S_ISLNK(mode) or (stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR)) or item.flag_bits & 1:

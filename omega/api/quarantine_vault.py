@@ -132,21 +132,33 @@ def capture_file_metadata(path: Path) -> dict:
     return {'uid': info.st_uid, 'gid': info.st_gid, 'fileId': info.st_ino, 'ctimeNs': info.st_ctime_ns, 'xattrs': attributes}
 
 
-def restore_file_metadata(path: Path, metadata: dict):
+def restore_file_metadata(path: Path, metadata: dict, *, fd: int | None = None):
     if not metadata:
         return
     if sys.platform == 'win32':
+        if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+            raise ValueError('No se restauran metadatos sobre enlaces simbólicos.')
         response = powershell("$ErrorActionPreference='Stop'; $a=Get-Acl -LiteralPath $env:OMEGA_EVIDENCE_PATH; "
                               "$a.SetSecurityDescriptorSddlForm($env:OMEGA_EVIDENCE_SDDL); Set-Acl -LiteralPath $env:OMEGA_EVIDENCE_PATH -AclObject $a",
                               env=dict(os.environ, OMEGA_EVIDENCE_PATH=str(path), OMEGA_EVIDENCE_SDDL=metadata['sddl']))
         if response.returncode:
             raise RuntimeError('El contenido fue restaurado pero falta recuperar sus permisos originales.')
     else:
-        current = path.stat()
-        if (current.st_uid, current.st_gid) != (metadata['uid'], metadata['gid']):
-            os.chown(path, metadata['uid'], metadata['gid'])
-        for name, value in metadata.get('xattrs', {}).items():
-            os.setxattr(path, name, base64.b64decode(value, validate=True))
+        # C-02: Preferir operaciones sobre el descriptor abierto (fstat/fchown/setxattr(fd)) para evitar TOCTOU
+        if fd is not None:
+            current = os.fstat(fd)
+            if (current.st_uid, current.st_gid) != (metadata['uid'], metadata['gid']):
+                os.fchown(fd, metadata['uid'], metadata['gid'])
+            for name, value in metadata.get('xattrs', {}).items():
+                os.setxattr(fd, name, base64.b64decode(value, validate=True))
+        else:
+            if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+                raise ValueError('No se restauran metadatos sobre enlaces simbólicos.')
+            current = os.lstat(path)
+            if (current.st_uid, current.st_gid) != (metadata['uid'], metadata['gid']):
+                os.chown(path, metadata['uid'], metadata['gid'], follow_symlinks=False)
+            for name, value in metadata.get('xattrs', {}).items():
+                os.setxattr(path, name, base64.b64decode(value, validate=True), follow_symlinks=False)
 
 
 class QuarantineVault:

@@ -214,8 +214,12 @@ public class DocumentIngestionService {
                 throw new IllegalStateException("No se pudo registrar el documento en PostgreSQL.");
             }
 
-            // Almacenamiento opcional S3-compatible (MinIO): solo si la retención está explícitamente habilitada.
-            // En modo zero-retention (por defecto) se omite por completo y el flujo queda intacto.
+            // Almacenamiento opcional S3-compatible (MinIO): solo si la retención está
+            // explícitamente habilitada.
+            // En modo zero-retention (por defecto) se omite por completo y el flujo queda
+            // intacto.
+            String uploadedBucket = null;
+            String uploadedObjectKey = null;
             if (storageProperties != null && storageProperties.isRetentionEnabled()
                     && objectStoragePort != null && storageKeyGenerator != null) {
                 String vaultBucket = storageProperties.getMinio().getVaultBucket();
@@ -225,9 +229,13 @@ public class DocumentIngestionService {
                     long sanitizedSize = Files.size(tempPdfPath);
                     objectStoragePort.putObject(vaultBucket, objectKey, in, sanitizedSize, contentType);
                 } catch (IOException ex) {
-                    throw new com.omega.platform.storage.ObjectStorageException("Error leyendo el documento sanitizado para almacenamiento.", ex);
+                    throw new com.omega.platform.storage.ObjectStorageException(
+                            "Error leyendo el documento sanitizado para almacenamiento.", ex);
                 }
-                Instant retentionUntil = Instant.now().plus(Duration.ofDays(storageProperties.getDefaultRetentionDays()));
+                uploadedBucket = vaultBucket;
+                uploadedObjectKey = objectKey;
+                Instant retentionUntil = Instant.now()
+                        .plus(Duration.ofDays(storageProperties.getDefaultRetentionDays()));
                 transactionTemplate.executeWithoutResult(tx -> documentRepository
                         .findByIdAndTenantId(savedDoc.getId(), principal.tenantId())
                         .ifPresent(doc -> {
@@ -245,9 +253,7 @@ public class DocumentIngestionService {
                                     Map.of(
                                             "expedienteId", expediente.getId().toString(),
                                             "bucket", vaultBucket,
-                                            "sha256Hash", sha256Hash
-                                    )
-                            );
+                                            "sha256Hash", sha256Hash));
                         }));
             }
 
@@ -266,10 +272,22 @@ public class DocumentIngestionService {
                 future = asyncDocumentProcessor.processAsync(cmd);
                 handedOffToAsync = true;
             } catch (TaskRejectedException ex) {
+                // A-01: Purgar objeto huérfano si la cola asíncrona rechaza el documento
+                if (uploadedBucket != null && uploadedObjectKey != null && objectStoragePort != null) {
+                    try {
+                        objectStoragePort.deleteObject(uploadedBucket, uploadedObjectKey);
+                    } catch (Exception purgeEx) {
+                        log.warn("No se pudo purgar objeto huérfano tras TaskRejectedException para documento {}", savedDoc.getId());
+                    }
+                }
                 transactionTemplate.executeWithoutResult(
                         tx -> documentRepository.findByIdAndTenantId(savedDoc.getId(), principal.tenantId())
                                 .ifPresent(doc -> {
                                     doc.setStatus(DocumentStatus.FAILED);
+                                    doc.setStorageBucket(null);
+                                    doc.setStorageObjectKey(null);
+                                    doc.setContentSha256(null);
+                                    doc.setRetentionUntil(null);
                                     documentRepository.saveAndFlush(doc);
                                 }));
                 throw new IllegalStateException("Cola de ingestión asíncrona saturada; intente nuevamente.", ex);
@@ -329,7 +347,8 @@ public class DocumentIngestionService {
         documentRepository.delete(document);
         documentRepository.flush();
         boolean objectPurged = false;
-        if (bucket != null && !bucket.isBlank() && objectKey != null && !objectKey.isBlank() && objectStoragePort != null) {
+        if (bucket != null && !bucket.isBlank() && objectKey != null && !objectKey.isBlank()
+                && objectStoragePort != null) {
             objectStoragePort.deleteObject(bucket, objectKey);
             objectPurged = true;
         }
@@ -337,8 +356,7 @@ public class DocumentIngestionService {
                 expedienteId.toString(), Map.of(
                         "documentId", documentId.toString(),
                         "sha256Hash", document.getSha256Hash(),
-                        "objectPurged", objectPurged
-                ));
+                        "objectPurged", objectPurged));
     }
 
     @Transactional
@@ -347,6 +365,10 @@ public class DocumentIngestionService {
         DocumentEntity doc = documentRepository.findByIdAndTenantId(documentId, principal.tenantId())
                 .filter(d -> d.getExpedienteId().equals(expedienteId))
                 .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado en el expediente actual"));
+        // A-01: Solo permitir descarga de documentos indexados correctamente
+        if (doc.getStatus() != DocumentStatus.INDEXED) {
+            throw new ResourceNotFoundException("El documento no está disponible para descarga.");
+        }
         if (doc.getStorageBucket() == null || doc.getStorageBucket().isBlank()
                 || doc.getStorageObjectKey() == null || doc.getStorageObjectKey().isBlank()
                 || objectStoragePort == null) {
@@ -363,14 +385,13 @@ public class DocumentIngestionService {
                 doc.getId().toString(),
                 Map.of(
                         "expedienteId", expedienteId.toString(),
-                        "sha256Hash", doc.getContentSha256() != null ? doc.getContentSha256() : doc.getSha256Hash()
-                )
-        );
+                        "sha256Hash", doc.getContentSha256() != null ? doc.getContentSha256() : doc.getSha256Hash()));
         return new DocumentDownloadStream(stream, contentType, doc.getId() + "." + ext);
     }
 
     private static String resolveContentTypeForFormat(String format) {
-        if (format == null) return "application/octet-stream";
+        if (format == null)
+            return "application/octet-stream";
         return switch (format.toUpperCase()) {
             case "PDF" -> "application/pdf";
             case "PNG" -> "image/png";
@@ -381,7 +402,8 @@ public class DocumentIngestionService {
     }
 
     private static String resolveExtensionForFormat(String format) {
-        if (format == null) return "bin";
+        if (format == null)
+            return "bin";
         return switch (format.toUpperCase()) {
             case "PDF" -> "pdf";
             case "PNG" -> "png";
@@ -391,7 +413,8 @@ public class DocumentIngestionService {
         };
     }
 
-    public record DocumentDownloadStream(InputStream stream, String contentType, String safeDownloadFilename) {}
+    public record DocumentDownloadStream(InputStream stream, String contentType, String safeDownloadFilename) {
+    }
 
     @Transactional(readOnly = true)
     public DocumentMetadataResponse getDocumentStatus(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {

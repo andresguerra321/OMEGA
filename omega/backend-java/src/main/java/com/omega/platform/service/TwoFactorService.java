@@ -268,26 +268,31 @@ public class TwoFactorService {
 
         jdbcTemplate.update(
                 """
-                INSERT INTO omega_rag.mfa_challenges (id, user_id, purpose, method, email_code_hash, attempts, expires_at, created_at)
-                VALUES (?, ?, 'LOGIN', ?, ?, 0, ?, NOW())
+                INSERT INTO omega_rag.mfa_challenges (id, user_id, purpose, method, email_code_hash, attempts, resend_count, last_sent_at, expires_at, created_at)
+                VALUES (?, ?, 'LOGIN', ?, ?, 0, 0, ?, ?, NOW())
                 """,
                 challengeId,
                 user.getId(),
                 method,
                 emailHash,
+                "EMAIL".equals(method) ? Timestamp.from(Instant.now()) : null,
                 Timestamp.from(Instant.now().plus(CHALLENGE_TTL_MINUTES, ChronoUnit.MINUTES)));
 
         return new LoginChallengeResult(challengeId.toString(), method, maskEmail(user.getEmail()));
     }
+
+    public static final int MAX_EMAIL_RESENDS = 3;
+    public static final long EMAIL_RESEND_COOLDOWN_SECONDS = 60L;
 
     @Transactional
     public MfaEmailSetupResponse resendEmailLoginChallenge(String rawChallengeToken) {
         UUID challengeId = parseChallengeUuid(rawChallengeToken);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 """
-                SELECT id, user_id, method
+                SELECT id, user_id, method, attempts, resend_count, last_sent_at
                 FROM omega_rag.mfa_challenges
                 WHERE id = ? AND purpose = 'LOGIN' AND consumed_at IS NULL AND expires_at > NOW()
+                FOR UPDATE
                 """,
                 challengeId);
         if (rows.isEmpty()) {
@@ -297,15 +302,38 @@ public class TwoFactorService {
         if (!"EMAIL".equals(row.get("method"))) {
             throw new BadCredentialsException("Esta cuenta usa aplicación autenticadora (TOTP).");
         }
+        int attempts = ((Number) row.get("attempts")).intValue();
+        if (attempts >= MAX_ATTEMPTS) {
+            jdbcTemplate.update("UPDATE omega_rag.mfa_challenges SET consumed_at = NOW() WHERE id = ?", challengeId);
+            throw new BadCredentialsException("Demasiados intentos fallidos. Vuelve a iniciar sesión.");
+        }
+        int resendCount = row.get("resend_count") != null ? ((Number) row.get("resend_count")).intValue() : 0;
+        if (resendCount >= MAX_EMAIL_RESENDS) {
+            throw new com.omega.platform.security.TooManyLoginAttemptsException(
+                    "Alcanzaste el máximo de reenvíos para esta verificación. Inicia sesión nuevamente.",
+                    EMAIL_RESEND_COOLDOWN_SECONDS
+            );
+        }
+        Object rawLastSent = row.get("last_sent_at");
+        if (rawLastSent instanceof Timestamp ts) {
+            long elapsedSeconds = java.time.Duration.between(ts.toInstant(), Instant.now()).getSeconds();
+            if (elapsedSeconds < EMAIL_RESEND_COOLDOWN_SECONDS) {
+                long remaining = Math.max(1L, EMAIL_RESEND_COOLDOWN_SECONDS - elapsedSeconds);
+                throw new com.omega.platform.security.TooManyLoginAttemptsException(
+                        "Espera " + remaining + " segundos antes de solicitar un nuevo código.",
+                        remaining
+                );
+            }
+        }
         if (!isSmtpConfigured()) {
             throw new IllegalStateException("SMTP no configurado.");
         }
         UserEntity user = loadActiveUser((UUID) row.get("user_id"));
         String code = TotpUtil.generateNumericOtp6();
+        // B-01: Nunca reiniciar attempts = 0 ni extender indefinidamente expires_at al reenviar.
         jdbcTemplate.update(
-                "UPDATE omega_rag.mfa_challenges SET email_code_hash = ?, attempts = 0, expires_at = ? WHERE id = ?",
+                "UPDATE omega_rag.mfa_challenges SET email_code_hash = ?, resend_count = resend_count + 1, last_sent_at = NOW() WHERE id = ?",
                 TotpUtil.sha256Hex(code),
-                Timestamp.from(Instant.now().plus(CHALLENGE_TTL_MINUTES, ChronoUnit.MINUTES)),
                 challengeId);
         sendTwoFactorEmail(user, code, "Nuevo código de verificación para iniciar sesión");
         return new MfaEmailSetupResponse(

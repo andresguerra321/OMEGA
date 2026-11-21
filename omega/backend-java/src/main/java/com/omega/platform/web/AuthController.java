@@ -55,18 +55,18 @@ public class AuthController {
     private final SessionCookieHelper sessionCookieHelper;
     private final PasswordResetService passwordResetService;
     private final TwoFactorService twoFactorService;
-    private final com.omega.platform.security.LoginRateLimiter recoveryLimiter = new com.omega.platform.security.LoginRateLimiter();
+    private final com.omega.platform.security.LoginRateLimiter recoveryLimiter;
     private final boolean smtpConfigured;
 
     public AuthController(AuthService authService, OmegaProperties properties) {
-        this(authService, properties, null, null, null, "");
+        this(authService, properties, null, null, null, null, "");
     }
 
     public AuthController(
             AuthService authService,
             OmegaProperties properties,
             SessionCookieHelper sessionCookieHelper) {
-        this(authService, properties, sessionCookieHelper, null, null, "");
+        this(authService, properties, sessionCookieHelper, null, null, null, "");
     }
 
     public AuthController(
@@ -75,7 +75,7 @@ public class AuthController {
             SessionCookieHelper sessionCookieHelper,
             PasswordResetService passwordResetService,
             TwoFactorService twoFactorService) {
-        this(authService, properties, sessionCookieHelper, passwordResetService, twoFactorService, "");
+        this(authService, properties, sessionCookieHelper, passwordResetService, twoFactorService, null, "");
     }
 
     @Autowired
@@ -85,12 +85,14 @@ public class AuthController {
             SessionCookieHelper sessionCookieHelper,
             @Autowired(required = false) PasswordResetService passwordResetService,
             @Autowired(required = false) TwoFactorService twoFactorService,
+            @Autowired(required = false) com.omega.platform.security.LoginRateLimiter loginRateLimiter,
             @Value("${spring.mail.host:}") String smtpHost) {
         this.authService = authService;
         this.properties = properties;
         this.sessionCookieHelper = sessionCookieHelper;
         this.passwordResetService = passwordResetService;
         this.twoFactorService = twoFactorService;
+        this.recoveryLimiter = loginRateLimiter != null ? loginRateLimiter : new com.omega.platform.security.LoginRateLimiter();
         this.smtpConfigured = passwordResetService != null && passwordResetService.isSmtpConfigured();
     }
 
@@ -233,8 +235,11 @@ public class AuthController {
 
     @PostMapping("/password-reset/request")
     public PasswordResetResponse requestPasswordReset(@Valid @RequestBody PasswordResetRequest request, HttpServletRequest httpRequest) {
-        recoveryLimiter.assertAllowed(httpRequest.getRemoteAddr(), request.email());
-        recoveryLimiter.recordFailure(httpRequest.getRemoteAddr(), request.email());
+        String ip = httpRequest.getRemoteAddr();
+        recoveryLimiter.assertAllowed(ip, request.email());
+        recoveryLimiter.assertScopedAllowed("pwd-reset-req", request.email(), 5);
+        recoveryLimiter.recordFailure(ip, request.email());
+        recoveryLimiter.recordScopedFailure("pwd-reset-req", request.email(), 5);
         if (passwordResetService == null) {
             throw new IllegalStateException("Servicio de recuperación no inicializado.");
         }
@@ -255,12 +260,15 @@ public class AuthController {
         }
         String ip = httpRequest.getRemoteAddr();
         recoveryLimiter.assertAllowed(ip, request.email());
+        recoveryLimiter.assertScopedAllowed("pwd-reset-confirm", request.email(), 5);
         try {
             PasswordResetResponse response = passwordResetService.confirmReset(request);
             recoveryLimiter.reset(ip, request.email());
+            recoveryLimiter.resetScoped("pwd-reset-confirm", request.email());
             return response;
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             recoveryLimiter.recordFailure(ip, request.email());
+            recoveryLimiter.recordScopedFailure("pwd-reset-confirm", request.email(), 5);
             throw ex;
         }
     }
@@ -270,7 +278,18 @@ public class AuthController {
             @Valid @RequestBody MfaVerifyLoginRequest request,
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse) {
-        AuthTokenResponse response = authService.completeMfaLogin(request.challengeToken(), request.code());
+        String ip = httpServletRequest.getRemoteAddr();
+        recoveryLimiter.assertScopedAllowed("mfa-verify-ip", ip, 25);
+        recoveryLimiter.assertScopedAllowed("mfa-verify-token", request.challengeToken(), 5);
+        AuthTokenResponse response;
+        try {
+            response = authService.completeMfaLogin(request.challengeToken(), request.code());
+            recoveryLimiter.resetScoped("mfa-verify-token", request.challengeToken());
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            recoveryLimiter.recordScopedFailure("mfa-verify-ip", ip, 25);
+            recoveryLimiter.recordScopedFailure("mfa-verify-token", request.challengeToken(), 5);
+            throw ex;
+        }
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
         if (sessionCookieHelper != null && !response.mfaRequired() && response.userId() != null) {
             if (Boolean.FALSE.equals(request.rememberDevice())) {
@@ -285,8 +304,16 @@ public class AuthController {
     }
 
     @PostMapping("/mfa/resend-email")
-    public MfaEmailSetupResponse resendMfaEmail(@Valid @RequestBody MfaChallengeActionRequest request) {
-        return requireTwoFactorService().resendEmailLoginChallenge(request.challengeToken());
+    public MfaEmailSetupResponse resendMfaEmail(
+            @Valid @RequestBody MfaChallengeActionRequest request,
+            HttpServletRequest httpServletRequest) {
+        String ip = httpServletRequest.getRemoteAddr();
+        recoveryLimiter.assertScopedAllowed("mfa-resend-ip", ip, 10);
+        recoveryLimiter.assertScopedAllowed("mfa-resend-token", request.challengeToken(), TwoFactorService.MAX_EMAIL_RESENDS);
+        MfaEmailSetupResponse res = requireTwoFactorService().resendEmailLoginChallenge(request.challengeToken());
+        recoveryLimiter.recordScopedFailure("mfa-resend-ip", ip, 10);
+        recoveryLimiter.recordScopedFailure("mfa-resend-token", request.challengeToken(), TwoFactorService.MAX_EMAIL_RESENDS);
+        return res;
     }
 
     @GetMapping("/mfa/status")

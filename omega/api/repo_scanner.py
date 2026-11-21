@@ -300,7 +300,7 @@ def _extract_text_files_in_memory(
                     continue
                 if len(extracted) >= max_files:
                     break
-                data = zf.read(item.filename)
+                data = zf.read(item)
                 if b"\x00" not in data[:1024]:
                     extracted.append((item.filename, data.decode("utf-8", errors="replace")))
         return extracted
