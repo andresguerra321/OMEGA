@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - 'omega/api/**'
+      - 'omega/rag_engine/**'
+      - 'omega/cli/**'
       - '.github/workflows/api-worker-tests.yml'
   push:
     branches: [main]
     paths:
       - 'omega/api/**'
+      - 'omega/rag_engine/**'
+      - 'omega/cli/**'
       - '.github/workflows/api-worker-tests.yml'
   workflow_dispatch:
 
@@ -25,12 +29,18 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: omega/api/requirements.txt
-      - name: Install omega/api dependencies
+          cache-dependency-path: omega/api/requirements-test.txt
+      - name: Install omega/api test dependencies
         working-directory: omega/api
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pytest
+          python -m pip install -r requirements-test.txt pytest
       - name: Run omega/api pytest suite
         working-directory: omega/api
         run: python -m pytest tests -q
+      - name: Run omega/rag_engine pytest suite
+        working-directory: omega/rag_engine
+        run: python -m pytest -q
+      - name: Run omega/cli pytest suite
+        working-directory: omega/cli
+        run: python -m pytest -q

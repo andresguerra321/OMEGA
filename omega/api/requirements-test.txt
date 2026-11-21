@@ -1,0 +1,5 @@
+# Dependencias de prueba para omega/api (incluye requisitos de producción)
+# jsonschema: paquete oficial en PyPI (mantenedor: Julian Berman, python-jsonschema/jsonschema, licencia MIT).
+# Versión 4.26.0 publicada el 2026-01-07 (>14 días de antigüedad verificada).
+-r requirements.txt
+jsonschema==4.26.0
