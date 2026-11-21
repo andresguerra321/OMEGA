@@ -10,7 +10,6 @@ import {
   PackageSearch,
   Radar,
   Settings,
-  Terminal,
   UserCheck,
 } from 'lucide-react';
 import { resolveVisibleNavItems } from '../lib/useTenantProfileConfig';
@@ -22,7 +21,6 @@ const NAV_ITEMS = [
   { id: 'exposicion', label: 'Enlaces y OSINT', ariaLabel: 'Enlaces, dominios y correos — verificación y OSINT', icon: Radar },
   { id: 'amenazas', label: 'Amenazas', ariaLabel: 'Amenazas — campañas y CVEs', icon: Layers },
   { id: 'repo_scanner', label: 'Proyectos', ariaLabel: 'Proyectos — escaneo estático de repositorios y dependencias', icon: PackageSearch },
-  { id: 'dev_cli', label: 'CLI y CI', ariaLabel: 'CLI y CI — tokens, SARIF y GitHub App', icon: Terminal },
   { id: 'preguntar', label: 'Asistente', ariaLabel: 'Asistente — consultas con citas', icon: MessageSquare, dividerBefore: true },
   { id: 'cuenta', label: 'Cuenta y Ajustes', ariaLabel: 'Cuenta y Ajustes — perfil, seguridad y configuración', icon: UserCheck },
 ];

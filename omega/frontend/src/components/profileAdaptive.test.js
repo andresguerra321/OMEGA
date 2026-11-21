@@ -9,14 +9,13 @@ const BASE_NAV_ITEMS = [
   { id: 'exposicion', label: 'Enlaces y OSINT' },
   { id: 'amenazas', label: 'Amenazas' },
   { id: 'repo_scanner', label: 'Proyectos' },
-  { id: 'dev_cli', label: 'CLI y CI' },
   { id: 'expedientes', label: 'Expedientes' },
   { id: 'seguridad_despacho', label: 'Seguridad' },
   { id: 'preguntar', label: 'Asistente' },
   { id: 'cuenta', label: 'Cuenta y Ajustes' },
 ];
 
-test('perfil DEVELOPER muestra repo_scanner y exposicion, consolida GitHub en un solo módulo y oculta dev_cli', () => {
+test('perfil DEVELOPER muestra repo_scanner y exposicion y no incluye equipo ni dev_cli', () => {
   const visible = resolveVisibleNavItems(BASE_NAV_ITEMS, {
     profile: 'DEVELOPER',
     visibleModules: ['repo_scanner', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
@@ -29,13 +28,12 @@ test('perfil DEVELOPER muestra repo_scanner y exposicion, consolida GitHub en un
   assert.equal(ids.includes('equipo'), false);
 });
 
-test('perfil LEGAL y GENERAL ocultan repo_scanner y dev_cli y conservan módulos estándar y cuenta', () => {
+test('perfil LEGAL y GENERAL ocultan repo_scanner y conservan módulos estándar y cuenta', () => {
   const legal = resolveVisibleNavItems(BASE_NAV_ITEMS, {
     profile: 'LEGAL',
     visibleModules: ['expedientes', 'preguntar', 'seguridad_despacho', 'cuenta'],
   });
   assert.equal(legal.some((i) => i.id === 'repo_scanner'), false);
-  assert.equal(legal.some((i) => i.id === 'dev_cli'), false);
   assert.ok(legal.some((i) => i.id === 'cuenta'));
   assert.ok(legal.some((i) => i.id === 'expedientes'));
   assert.equal(legal.some((i) => i.id === 'amenazas'), false);
@@ -45,7 +43,6 @@ test('perfil LEGAL y GENERAL ocultan repo_scanner y dev_cli y conservan módulos
     visibleModules: ['inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
   });
   assert.equal(general.some((i) => i.id === 'repo_scanner'), false);
-  assert.equal(general.some((i) => i.id === 'dev_cli'), false);
   assert.ok(general.some((i) => i.id === 'inicio'));
   assert.ok(general.some((i) => i.id === 'cuenta'));
 });
@@ -64,7 +61,6 @@ test('la configuración real preserva GENERAL y DEVELOPER y abre LEGAL en expedi
     moduleLabels: {
       inicio: 'Proyectos y hallazgos',
       amenazas: 'Cadena de suministro',
-      equipo: 'Mi estación',
       repo_scanner: 'Proyectos',
     },
     ragCorpusScope: 'dev_supply_chain_cti', copilotTone: 'technical_appsec',
@@ -79,6 +75,14 @@ test('la configuración real preserva GENERAL y DEVELOPER y abre LEGAL en expedi
   assert.equal(byId.inicio, 'Proyectos y hallazgos');
   assert.equal(byId.amenazas, 'Cadena de suministro');
   assert.equal(byId.repo_scanner, 'Proyectos');
+});
+
+test('código muerto de dev_cli y DevCliModulePanel fue eliminado de navegación y rutas', () => {
+  const navSrc = readFileSync(new URL('./SpatialNavPill.jsx', import.meta.url), 'utf8');
+  const appSrc = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.equal(navSrc.includes('dev_cli'), false);
+  assert.equal(appSrc.includes('dev_cli'), false);
+  assert.equal(appSrc.includes('DevCliModulePanel'), false);
 });
 
 test('cuenta permanece visible aunque la configuración no la incluya', () => {

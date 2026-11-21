@@ -114,7 +114,8 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.visibleModules[0]").value("repo_scanner"))
                 .andExpect(jsonPath("$.moduleLabels.inicio").value("Proyectos y hallazgos"))
                 .andExpect(jsonPath("$.moduleLabels.amenazas").value("Cadena de suministro"))
-                .andExpect(jsonPath("$.moduleLabels.equipo").value("Mi estación"));
+                .andExpect(jsonPath("$.moduleLabels.repo_scanner").value("Proyectos"))
+                .andExpect(jsonPath("$.moduleLabels.equipo").doesNotExist());
 
         mockAuth("tok-legal-analyst", UUID.randomUUID(), Role.ANALYST, TenantProfile.LEGAL);
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-legal-analyst"))
