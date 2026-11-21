@@ -50,6 +50,86 @@ _RAW_IP_URL_RE = re.compile(
     r"https?://(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?:/[^\s\"'`]*)?"
 )
 
+_CREDENTIAL_RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
+    (
+        "SECRET-CREDENTIAL-GITHUB-01",
+        "Token personal o de aplicación de GitHub",
+        re.compile(r"\b(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{22,})\b"),
+        (
+            "Se detectó un token de GitHub expuesto en código fuente. "
+            "Guía de rotación: 1) Revócalo inmediatamente en GitHub Settings -> Developer settings -> Personal access tokens. "
+            "2) Revisa los eventos recientes del audit log de la organización. "
+            "3) Inyéctalo mediante secretos del entorno o GitHub Actions Secrets."
+        ),
+    ),
+    (
+        "SECRET-CREDENTIAL-AWS-01",
+        "Clave de acceso de AWS IAM (Access Key ID)",
+        re.compile(r"\b(AKIA[0-9A-Z]{16})\b"),
+        (
+            "Se detectó un identificador de llave AWS IAM expuesto. "
+            "Guía de rotación: 1) Desactiva y elimina la Access Key en AWS IAM Console. "
+            "2) Audita llamadas recientes en AWS CloudTrail para esa credencial. "
+            "3) Migra a roles OIDC o perfiles de instancia temporales."
+        ),
+    ),
+    (
+        "SECRET-CREDENTIAL-AI-API-01",
+        "Llave de API de proveedor LLM / IA",
+        re.compile(r"\b(sk-(?:proj-|ant-api03-)?[A-Za-z0-9_-]{24,}|gsk_[A-Za-z0-9]{24,})\b"),
+        (
+            "Se detectó una llave de API de servicios de IA en texto plano. "
+            "Guía de rotación: 1) Revoca la llave en el panel del proveedor (OpenAI / Anthropic / Groq). "
+            "2) Establece límites de gasto mensual por proyecto. "
+            "3) Carga la credencial desde variables de entorno fuera del control de versiones."
+        ),
+    ),
+    (
+        "SECRET-CREDENTIAL-PRIVATE-KEY-01",
+        "Llave privada criptográfica PEM / OpenSSH",
+        re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----"),
+        (
+            "Se detectó un bloque de llave privada criptográfica dentro del repositorio. "
+            "Guía de rotación: 1) Revoca el certificado o elimina la llave pública autorizada en los servidores destino. "
+            "2) Genera un nuevo par de llaves fuera del árbol Git. "
+            "3) Purga el archivo del historial si el repositorio fue publicado."
+        ),
+    ),
+    (
+        "SECRET-CREDENTIAL-OMEGA-01",
+        "Token de escaneo de API OMEGA",
+        re.compile(r"\b(omega_scan_[A-Za-z0-9_-]{16,})\b"),
+        (
+            "Se detectó un token de API de OMEGA expuesto en el repositorio. "
+            "Guía de rotación: 1) Entra a Proyectos -> CLI y Tokens API en OMEGA y revoca el token de inmediato. "
+            "2) Emite un nuevo token con expiración acotada y guárdalo en el gestor de secretos de tu CI."
+        ),
+    ),
+    (
+        "SECRET-CREDENTIAL-SLACK-01",
+        "Token de bot o webhook de Slack",
+        re.compile(r"\b(xox[baprs]-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{20,})\b"),
+        (
+            "Se detectó un token de integración de Slack expuesto. "
+            "Guía de rotación: 1) Regenera o revoca el token en api.slack.com/apps. "
+            "2) Restringe los scopes OAuth de la aplicación al mínimo necesario."
+        ),
+    ),
+)
+
+_SAFE_PLACEHOLDER_MARKERS = (
+    "example",
+    "placeholder",
+    "dummy",
+    "sample",
+    "your_token",
+    "tu_token",
+    "xxxx",
+    "0000000000",
+    "1234567890",
+    "test_key_do_not_use",
+)
+
 _POPULAR_NPM = (
     "lodash", "express", "react", "react-dom", "axios", "chalk", "commander",
     "debug", "moment", "typescript", "webpack", "eslint", "prettier", "dotenv",
@@ -542,6 +622,39 @@ def _run_static_content_detectors(
                     ),
                 )
             )
+
+    _run_credential_detectors(rel_path, text, findings)
+
+
+def _run_credential_detectors(
+    rel_path: str,
+    text: str,
+    findings: list[ScanFinding],
+) -> None:
+    """Detecta credenciales expuestas redactando SIEMPRE el valor (solo tipo + ubicación + guía de rotación)."""
+    seen_in_file: set[tuple[str, int]] = set()
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        if len(line) > 4000:
+            continue
+        lower_line = line.lower()
+        if any(marker in lower_line for marker in _SAFE_PLACEHOLDER_MARKERS):
+            continue
+        for rule_id, cred_label, pattern, rotation_guide in _CREDENTIAL_RULES:
+            if pattern.search(line):
+                key = (rule_id, line_no)
+                if key in seen_in_file:
+                    continue
+                seen_in_file.add(key)
+                findings.append(
+                    ScanFinding(
+                        rule_id=rule_id,
+                        severity="CRITICAL",
+                        confidence=0.95,
+                        evidence=f"[CREDENTIAL_REDACTED] Tipo: {cred_label} en {rel_path}:{line_no}",
+                        location=f"{rel_path}:{line_no}",
+                        explanation=f"{cred_label} ({rel_path}:{line_no}). {rotation_guide}",
+                    )
+                )
 
 
 def _edit_distance_is_one(a: str, b: str) -> bool:

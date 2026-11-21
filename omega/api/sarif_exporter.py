@@ -31,7 +31,7 @@ SEVERITY_TO_SECURITY_SCORE: dict[str, str] = {
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _SECRET_RE = re.compile(
-    r"(omega_scan_[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{10,}|Bearer\s+[A-Za-z0-9._-]{12,})",
+    r"(omega_scan_[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_]{10,}|github_pat_[A-Za-z0-9_]{10,}|AKIA[0-9A-Z]{16}|sk-(?:proj-|ant-api03-)?[A-Za-z0-9_-]{20,}|gsk_[A-Za-z0-9]{20,}|xox[baprs]-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{16,}|-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|Bearer\s+[A-Za-z0-9._-]{12,})",
     re.IGNORECASE,
 )
 
