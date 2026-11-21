@@ -116,7 +116,16 @@ public class DevSupplyChainIntelService {
             String searchFilter,
             UUID projectId
     ) {
-        UUID tenantId = principal.tenantId();
+        return listAdvisoriesForTenant(principal.tenantId(), ecosystemFilter, searchFilter, projectId);
+    }
+
+    @Transactional(readOnly = true)
+    public SupplyChainCatalogResponse listAdvisoriesForTenant(
+            UUID tenantId,
+            String ecosystemFilter,
+            String searchFilter,
+            UUID projectId
+    ) {
         List<DevDependencyEntity> projectDeps = List.of();
         if (projectId != null) {
             projectRepository.findByIdAndTenantId(projectId, tenantId)

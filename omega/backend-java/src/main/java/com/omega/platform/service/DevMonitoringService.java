@@ -1,5 +1,6 @@
 package com.omega.platform.service;
 
+import com.omega.platform.config.DevMonitoringProperties;
 import com.omega.platform.domain.DevDependencyEntity;
 import com.omega.platform.domain.DevFindingEntity;
 import com.omega.platform.domain.DevMonitorSubscriptionEntity;
@@ -12,6 +13,8 @@ import com.omega.platform.repository.DevMonitorSubscriptionRepository;
 import com.omega.platform.repository.DevProjectRepository;
 import com.omega.platform.repository.DevScanRepository;
 import com.omega.platform.repository.DevSuppressionRepository;
+import com.omega.platform.saas.SubscriptionEntity;
+import com.omega.platform.saas.SubscriptionRepository;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.security.Role;
 import com.omega.platform.service.DevSupplyChainIntelService.AdvisoryWithProjectImpactDto;
@@ -25,6 +28,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +39,16 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Monitoreo continuo del inventario de dependencias almacenado (Bloque DG).
  * Reevalúa `dev_dependencies` contra advisories de cadena de suministro sin re-descargar código fuente,
- * deduplica alertas por fingerprint, respeta supresiones activas y advierte si el feed supera 48 horas sin actualizarse.
+ * tanto bajo demanda (`POST /evaluate`) como de forma programada por plan (`DevContinuousMonitorScheduler`),
+ * deduplica alertas por fingerprint, respeta supresiones activas, tolera fallos de feeds
+ * y advierte si el feed supera la ventana configurada (48h por defecto) sin actualizarse.
  */
 @Service
 public class DevMonitoringService {
 
+    private static final Logger log = LoggerFactory.getLogger(DevMonitoringService.class);
     private static final Set<String> VALID_CHANNELS = Set.of("WEBHOOK", "EMAIL", "UI_ALERT");
     private static final Set<String> VALID_SEVERITIES = Set.of("CRITICAL", "HIGH", "MEDIUM", "LOW");
-    private static final Duration STALE_FEED_THRESHOLD = Duration.ofHours(48);
 
     private final DevProjectRepository projectRepository;
     private final DevScanRepository scanRepository;
@@ -49,9 +57,14 @@ public class DevMonitoringService {
     private final DevSuppressionRepository suppressionRepository;
     private final DevMonitorSubscriptionRepository subscriptionRepository;
     private final DevSupplyChainIntelService supplyChainIntelService;
+    private final SubscriptionRepository saasSubscriptionRepository;
+    private final DevMonitoringProperties monitoringProperties;
     private final AuditLogService auditLogService;
 
     private volatile Instant lastFeedRefreshAt = Instant.now();
+    private volatile Instant lastFeedErrorAt;
+    private volatile String lastFeedErrorMessage;
+    private volatile BiFunction<UUID, UUID, SupplyChainCatalogResponse> catalogFetcherOverride;
 
     public DevMonitoringService(
             DevProjectRepository projectRepository,
@@ -61,6 +74,8 @@ public class DevMonitoringService {
             DevSuppressionRepository suppressionRepository,
             DevMonitorSubscriptionRepository subscriptionRepository,
             DevSupplyChainIntelService supplyChainIntelService,
+            SubscriptionRepository saasSubscriptionRepository,
+            DevMonitoringProperties monitoringProperties,
             AuditLogService auditLogService
     ) {
         this.projectRepository = projectRepository;
@@ -70,11 +85,29 @@ public class DevMonitoringService {
         this.suppressionRepository = suppressionRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.supplyChainIntelService = supplyChainIntelService;
+        this.saasSubscriptionRepository = saasSubscriptionRepository;
+        this.monitoringProperties = monitoringProperties;
         this.auditLogService = auditLogService;
     }
 
     public void setLastFeedRefreshAt(Instant lastFeedRefreshAt) {
         this.lastFeedRefreshAt = lastFeedRefreshAt == null ? Instant.now() : lastFeedRefreshAt;
+    }
+
+    public void setCatalogFetcherOverride(BiFunction<UUID, UUID, SupplyChainCatalogResponse> override) {
+        this.catalogFetcherOverride = override;
+    }
+
+    public void clearFeedFailureState() {
+        this.lastFeedErrorAt = null;
+        this.lastFeedErrorMessage = null;
+    }
+
+    public int resolveFrequencyHours(UUID tenantId) {
+        String planCode = saasSubscriptionRepository.findByTenantId(tenantId)
+                .map(SubscriptionEntity::getPlanCode)
+                .orElse("PERSONAL");
+        return monitoringProperties.frequencyHoursForPlan(planCode);
     }
 
     @Transactional(readOnly = true)
@@ -84,7 +117,7 @@ public class DevMonitoringService {
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado en el espacio actual"));
         List<DevMonitorSubscriptionEntity> subs = subscriptionRepository.findAllByTenantIdAndProjectId(tenantId, project.getId());
         DevMonitorSubscriptionEntity sub = subs.isEmpty() ? null : subs.get(0);
-        return toStatusDto(project.getId(), sub);
+        return toStatusDto(tenantId, project.getId(), sub);
     }
 
     @Transactional
@@ -123,10 +156,11 @@ public class DevMonitoringService {
                 Map.of(
                         "enabled", saved.isEnabled(),
                         "channel", saved.getChannel(),
-                        "minSeverity", saved.getMinSeverity()
+                        "minSeverity", saved.getMinSeverity(),
+                        "frequencyHours", resolveFrequencyHours(tenantId)
                 )
         );
-        return toStatusDto(project.getId(), saved);
+        return toStatusDto(tenantId, project.getId(), saved);
     }
 
     @Transactional
@@ -142,12 +176,69 @@ public class DevMonitoringService {
                         new DevMonitorSubscriptionEntity(tenantId, project.getId(), "WEBHOOK", "HIGH", principal.userId()))
                 : subs.get(0);
 
-        List<DevScanEntity> scans = scanRepository.findAllByTenantIdAndProjectIdOrderByCreatedAtDesc(tenantId, project.getId());
+        return evaluateStoredInventoryInternal(tenantId, principal.userId(), project.getId(), sub, Instant.now(), "MANUAL");
+    }
+
+    /**
+     * Ejecuta la pasada programada del planificador sobre todas las suscripciones activas cuya ventana
+     * según el plan del tenant haya vencido. Nunca descarga código y aísla fallos por suscripción/feed.
+     */
+    @Transactional
+    public ScheduledRunSummary runScheduledEvaluations() {
+        return runScheduledEvaluations(Instant.now());
+    }
+
+    @Transactional
+    public ScheduledRunSummary runScheduledEvaluations(Instant now) {
+        List<DevMonitorSubscriptionEntity> activeSubs = subscriptionRepository.findAllByEnabledTrue();
+        int evaluated = 0;
+        int newAlertsTotal = 0;
+        int failed = 0;
+
+        for (DevMonitorSubscriptionEntity sub : activeSubs) {
+            int frequencyHours = resolveFrequencyHours(sub.getTenantId());
+            if (!isDue(sub.getLastEvaluatedAt(), frequencyHours, now)) {
+                continue;
+            }
+            try {
+                MonitoringEvaluationDto res = evaluateStoredInventoryInternal(
+                        sub.getTenantId(),
+                        sub.getCreatedBy(),
+                        sub.getProjectId(),
+                        sub,
+                        now,
+                        "SCHEDULED"
+                );
+                evaluated++;
+                newAlertsTotal += res.newAlertsCount();
+            } catch (Exception ex) {
+                failed++;
+                recordFeedFailure(now, ex);
+                log.warn(
+                        "DEV_MONITORING_SCHEDULED_FAILED tenant={} project={} reason={}",
+                        sub.getTenantId(),
+                        sub.getProjectId(),
+                        ex.getClass().getSimpleName()
+                );
+            }
+        }
+        return new ScheduledRunSummary(activeSubs.size(), evaluated, newAlertsTotal, failed);
+    }
+
+    private MonitoringEvaluationDto evaluateStoredInventoryInternal(
+            UUID tenantId,
+            UUID actorUserId,
+            UUID projectId,
+            DevMonitorSubscriptionEntity sub,
+            Instant now,
+            String triggerSource
+    ) {
+        List<DevScanEntity> scans = scanRepository.findAllByTenantIdAndProjectIdOrderByCreatedAtDesc(tenantId, projectId);
         if (scans.isEmpty()) {
-            sub.setLastEvaluatedAt(Instant.now());
+            sub.setLastEvaluatedAt(now);
             subscriptionRepository.saveAndFlush(sub);
             return new MonitoringEvaluationDto(
-                    project.getId(),
+                    projectId,
                     null,
                     0,
                     0,
@@ -163,9 +254,8 @@ public class DevMonitoringService {
                 .findAllByTenantIdAndScanIdOrderByEcosystemAscPackageNameAsc(tenantId, latestScan.getId());
         List<DevFindingEntity> existingFindings = findingRepository
                 .findAllByTenantIdAndScanIdOrderByScorePointsDesc(tenantId, latestScan.getId());
-        Instant now = Instant.now();
         List<DevSuppressionEntity> activeSuppressions = suppressionRepository
-                .findAllByTenantIdAndProjectIdOrderByCreatedAtDesc(tenantId, project.getId())
+                .findAllByTenantIdAndProjectIdOrderByCreatedAtDesc(tenantId, projectId)
                 .stream()
                 .filter(s -> s.isActiveAt(now))
                 .toList();
@@ -175,7 +265,7 @@ public class DevMonitoringService {
             existingFingerprints.add(f.getFingerprint());
         }
 
-        SupplyChainCatalogResponse catalog = supplyChainIntelService.listAdvisories(principal, null, null, project.getId());
+        SupplyChainCatalogResponse catalog = fetchCatalogForTenant(tenantId, projectId, now);
         int minRank = severityRank(sub.getMinSeverity());
         int deduplicatedCount = 0;
         int suppressedCount = 0;
@@ -208,7 +298,7 @@ public class DevMonitoringService {
                         + adv.title() + ". Mitigación: " + adv.mitigation();
                 DevFindingEntity finding = findingRepository.saveAndFlush(new DevFindingEntity(
                         tenantId,
-                        project.getId(),
+                        projectId,
                         latestScan.getId(),
                         fp,
                         ruleId,
@@ -235,11 +325,12 @@ public class DevMonitoringService {
 
         auditLogService.record(
                 tenantId,
-                principal.userId(),
+                actorUserId,
                 "DEV_MONITORING_EVALUATED",
                 "DEV_PROJECT",
-                project.getId().toString(),
+                projectId.toString(),
                 Map.of(
+                        "trigger", triggerSource,
                         "evaluatedDependencies", storedDeps.size(),
                         "newAlertsCount", newAlerts.size(),
                         "deduplicatedCount", deduplicatedCount,
@@ -249,7 +340,7 @@ public class DevMonitoringService {
         );
 
         return new MonitoringEvaluationDto(
-                project.getId(),
+                projectId,
                 latestScan.getId(),
                 storedDeps.size(),
                 newAlerts.size(),
@@ -260,30 +351,74 @@ public class DevMonitoringService {
         );
     }
 
-    private MonitoringStatusDto toStatusDto(UUID projectId, DevMonitorSubscriptionEntity sub) {
+    private SupplyChainCatalogResponse fetchCatalogForTenant(UUID tenantId, UUID projectId, Instant now) {
+        BiFunction<UUID, UUID, SupplyChainCatalogResponse> fetcher = catalogFetcherOverride;
+        SupplyChainCatalogResponse response = fetcher != null
+                ? fetcher.apply(tenantId, projectId)
+                : supplyChainIntelService.listAdvisoriesForTenant(tenantId, null, null, projectId);
+        // Al recuperar con éxito un catálogo válido, se limpia cualquier error transitorio previo del feed.
+        if (lastFeedErrorAt != null) {
+            lastFeedErrorAt = null;
+            lastFeedErrorMessage = null;
+            lastFeedRefreshAt = now;
+        }
+        return response;
+    }
+
+    private void recordFeedFailure(Instant now, Exception ex) {
+        this.lastFeedErrorAt = now;
+        this.lastFeedErrorMessage = "Aviso: el último intento de consulta al feed de advisories falló ("
+                + ex.getClass().getSimpleName()
+                + "); el monitoreo reintentará en el siguiente ciclo.";
+    }
+
+    private static boolean isDue(Instant lastEvaluatedAt, int frequencyHours, Instant now) {
+        if (lastEvaluatedAt == null) {
+            return true;
+        }
+        return !lastEvaluatedAt.plus(Duration.ofHours(Math.max(1, frequencyHours))).isAfter(now);
+    }
+
+    private MonitoringStatusDto toStatusDto(UUID tenantId, UUID projectId, DevMonitorSubscriptionEntity sub) {
         boolean stale = isFeedStale();
+        int frequencyHours = resolveFrequencyHours(tenantId);
+        Instant lastEval = sub != null ? sub.getLastEvaluatedAt() : null;
+        Instant nextScheduledAt = (sub != null && sub.isEnabled())
+                ? (lastEval == null ? Instant.now() : lastEval.plus(Duration.ofHours(frequencyHours)))
+                : null;
         return new MonitoringStatusDto(
                 projectId,
                 sub != null ? sub.getId() : null,
                 sub != null && sub.isEnabled(),
                 sub != null ? sub.getChannel() : "WEBHOOK",
                 sub != null ? sub.getMinSeverity() : "HIGH",
-                sub != null ? sub.getLastEvaluatedAt() : null,
+                lastEval,
                 lastFeedRefreshAt,
                 stale,
-                buildStaleNotice()
+                buildStaleNotice(),
+                frequencyHours,
+                nextScheduledAt
         );
     }
 
     private boolean isFeedStale() {
-        return Duration.between(lastFeedRefreshAt, Instant.now()).compareTo(STALE_FEED_THRESHOLD) > 0;
+        if (lastFeedErrorAt != null) {
+            return true;
+        }
+        Duration threshold = Duration.ofHours(Math.max(1, monitoringProperties.getStaleFeedThresholdHours()));
+        return Duration.between(lastFeedRefreshAt, Instant.now()).compareTo(threshold) > 0;
     }
 
     private String buildStaleNotice() {
-        if (!isFeedStale()) {
-            return "Catálogo de advisories actualizado dentro de la ventana de 48h.";
+        if (lastFeedErrorMessage != null) {
+            return lastFeedErrorMessage;
         }
-        return "Aviso: el feed de advisories lleva más de 48 horas sin actualizarse; las alertas pueden no reflejar campañas recientes.";
+        int thresholdHours = Math.max(1, monitoringProperties.getStaleFeedThresholdHours());
+        if (!isFeedStale()) {
+            return "Catálogo de advisories actualizado dentro de la ventana de " + thresholdHours + "h.";
+        }
+        return "Aviso: el feed de advisories lleva más de " + thresholdHours
+                + " horas sin actualizarse; las alertas pueden no reflejar campañas recientes.";
     }
 
     private static int severityRank(String severity) {
@@ -334,7 +469,9 @@ public class DevMonitoringService {
             Instant lastEvaluatedAt,
             Instant feedUpdatedAt,
             boolean feedStaleWarning,
-            String feedStatusMessage
+            String feedStatusMessage,
+            int frequencyHours,
+            Instant nextScheduledAt
     ) {}
 
     public record NewAlertDto(
@@ -355,5 +492,12 @@ public class DevMonitoringService {
             List<NewAlertDto> newAlerts,
             boolean feedStaleWarning,
             String feedStatusMessage
+    ) {}
+
+    public record ScheduledRunSummary(
+            int checkedSubscriptions,
+            int evaluatedCount,
+            int newAlertsTotal,
+            int failedCount
     ) {}
 }

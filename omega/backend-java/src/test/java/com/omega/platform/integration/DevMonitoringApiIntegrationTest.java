@@ -1,5 +1,6 @@
 package com.omega.platform.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.omega.platform.saas.CommercialSaasService;
 import com.omega.platform.service.DevMonitoringService;
 import com.omega.platform.service.DevProjectService;
 import java.time.Instant;
@@ -73,6 +75,7 @@ class DevMonitoringApiIntegrationTest {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private DevProjectService devProjectService;
     @Autowired private DevMonitoringService devMonitoringService;
+    @Autowired private CommercialSaasService commercialSaasService;
 
     @Test
     void reEvaluatesStoredDependenciesWithoutCodeDownloadDeduplicatesAlertsAndFlagsStaleFeeds() throws Exception {
@@ -140,6 +143,77 @@ class DevMonitoringApiIntegrationTest {
         mockMvc.perform(get("/api/v1/dev/projects/{id}/monitoring", projectId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenB))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void schedulerEvaluatesDueSubscriptionsByPlanAndToleratesFeedFailures() throws Exception {
+        JsonNode tenant = registerDevTenant("dev-sched-" + UUID.randomUUID().toString().substring(0, 8));
+        String token = tenant.get("accessToken").asText();
+        UUID tenantId = UUID.fromString(tenant.get("tenantId").asText());
+        UUID userId = UUID.fromString(tenant.get("userId").asText());
+
+        // Plan PRO -> frecuencia configurada de 6h
+        commercialSaasService.updateSubscriptionPlan(tenantId, "PRO");
+
+        MvcResult projRes = mockMvc.perform(post("/api/v1/dev/projects")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Scheduled Billing API\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        UUID projectId = UUID.fromString(objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asText());
+
+        devProjectService.recordScanResult(
+                tenantId, userId, projectId, null, null, "main", "UI",
+                Map.of(
+                        "score", 0.0,
+                        "findings", List.of(),
+                        "dependencies", List.of(Map.of("ecosystem", "npm", "name", "lodahs", "version", "4.17.1"))
+                )
+        );
+
+        mockMvc.perform(put("/api/v1/dev/projects/{id}/monitoring", projectId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\":true,\"channel\":\"WEBHOOK\",\"minSeverity\":\"HIGH\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.frequencyHours").value(6))
+                .andExpect(jsonPath("$.nextScheduledAt").isNotEmpty());
+
+        Instant t0 = Instant.now();
+        // 1. Primera ejecución programada (sin POST /evaluate): evalúa y genera 1 alerta nueva
+        var firstRun = devMonitoringService.runScheduledEvaluations(t0);
+        assertThat(firstRun.evaluatedCount()).isGreaterThanOrEqualTo(1);
+        assertThat(firstRun.newAlertsTotal()).isEqualTo(1);
+        assertThat(firstRun.failedCount()).isZero();
+
+        // 2. Dos horas después (< 6h del plan PRO): no vuelve a evaluar esta suscripción
+        var beforeDueRun = devMonitoringService.runScheduledEvaluations(t0.plus(2, ChronoUnit.HOURS));
+        assertThat(beforeDueRun.evaluatedCount()).isZero();
+
+        // 3. Siete horas después (> 6h del plan PRO) con fallo en el feed: tolera el error y activa alerta visible
+        devMonitoringService.setCatalogFetcherOverride((t, p) -> {
+            throw new IllegalStateException("Feed OSV temporalmente no disponible");
+        });
+        try {
+            var failedRun = devMonitoringService.runScheduledEvaluations(t0.plus(7, ChronoUnit.HOURS));
+            assertThat(failedRun.failedCount()).isGreaterThanOrEqualTo(1);
+
+            mockMvc.perform(get("/api/v1/dev/projects/{id}/monitoring", projectId)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.feedStaleWarning").value(true));
+        } finally {
+            devMonitoringService.setCatalogFetcherOverride(null);
+            devMonitoringService.clearFeedFailureState();
+            devMonitoringService.setLastFeedRefreshAt(Instant.now());
+        }
+
+        // 4. Al recuperarse el feed, la siguiente ejecución programada pasa en verde y deduplica
+        var recoveredRun = devMonitoringService.runScheduledEvaluations(t0.plus(8, ChronoUnit.HOURS));
+        assertThat(recoveredRun.failedCount()).isZero();
+        assertThat(recoveredRun.evaluatedCount()).isGreaterThanOrEqualTo(1);
+        assertThat(recoveredRun.newAlertsTotal()).isZero();
     }
 
     private JsonNode registerDevTenant(String slug) throws Exception {

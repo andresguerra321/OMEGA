@@ -125,6 +125,16 @@ omega:
     read-timeout-ms: 120000
   cti:
     stix-corpus-dir: ${OMEGA_STIX_CORPUS_DIR:/app/corpus_mvp/iocs}
+  dev:
+    monitoring:
+      enabled: ${OMEGA_DEV_MONITORING_ENABLED:true}
+      poll-interval-ms: ${OMEGA_DEV_MONITORING_POLL_MS:300000}
+      initial-delay-ms: ${OMEGA_DEV_MONITORING_INITIAL_DELAY_MS:60000}
+      stale-feed-threshold-hours: ${OMEGA_DEV_MONITORING_STALE_HOURS:48}
+      plan-frequency-hours:
+        PERSONAL: ${OMEGA_DEV_MONITORING_PERSONAL_HOURS:24}
+        PRO: ${OMEGA_DEV_MONITORING_PRO_HOURS:6}
+        ENTERPRISE: ${OMEGA_DEV_MONITORING_ENTERPRISE_HOURS:1}
   legal:
     quotas:
       stuck-processing-minutes: ${OMEGA_LEGAL_STUCK_MINUTES:15}

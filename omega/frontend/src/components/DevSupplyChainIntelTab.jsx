@@ -349,6 +349,31 @@ export function DevSupplyChainIntelTab() {
           )}
         </div>
 
+        {monitoring && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+            <span>
+              Frecuencia programada por plan:{' '}
+              <strong className="text-slate-200">cada {monitoring.frequencyHours || 24}h</strong>
+            </span>
+            {monitoring.lastEvaluatedAt && (
+              <span>
+                Última evaluación:{' '}
+                <strong className="text-slate-200">
+                  {new Date(monitoring.lastEvaluatedAt).toLocaleString()}
+                </strong>
+              </span>
+            )}
+            {monitoring.enabled && monitoring.nextScheduledAt && (
+              <span>
+                Próxima ejecución:{' '}
+                <strong className="text-slate-200">
+                  {new Date(monitoring.nextScheduledAt).toLocaleString()}
+                </strong>
+              </span>
+            )}
+          </div>
+        )}
+
         {monitoring?.feedStaleWarning && (
           <div
             role="alert"
