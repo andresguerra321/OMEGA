@@ -15,10 +15,25 @@ import DossierExportButtons from './DossierExportButtons';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['access', 'Acceso'], ['activity', 'Actividad']];
 
-function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, policyAccepted }) {
+function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUserId, role, policyAccepted }) {
   const [tab, setTab] = useState('documents');
+  const [confirmDeleteCase, setConfirmDeleteCase] = useState(false);
+  const [deletingCase, setDeletingCase] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const load = useCallback(() => legalApi.metadata(id), [id]);
   const request = useLegalData(load);
+  const canDeleteCase = ['ADMIN', 'ANALYST'].includes(role);
+  async function handleDeleteCase() {
+    setDeletingCase(true);
+    setDeleteError('');
+    try {
+      await legalApi.deleteCase(id);
+      onDeleted?.();
+    } catch {
+      setDeleteError('No se pudo eliminar el expediente. Revisa tus permisos e intenta de nuevo.');
+      setDeletingCase(false);
+    }
+  }
   function moveTab(event) {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault(); const current = TABS.findIndex(([key]) => key === tab);
@@ -27,7 +42,24 @@ function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, 
   }
   return <LegalLoadState request={request} label="Abriendo expediente…">{value => <div className="space-y-5">
     <header className="space-y-3">
-      <div className="flex flex-wrap justify-between gap-3"><button type="button" onClick={onBack} className={`${LEGAL_SECONDARY} inline-flex items-center gap-2`}><ArrowLeft size={14} strokeWidth={1.75} />Expedientes</button>{value.canWrite && <button type="button" className={LEGAL_SECONDARY} onClick={() => onEdit(value)}>Editar expediente</button>}</div>
+      <div className="flex flex-wrap justify-between gap-3">
+        <button type="button" onClick={onBack} className={`${LEGAL_SECONDARY} inline-flex items-center gap-2`}><ArrowLeft size={14} strokeWidth={1.75} />Expedientes</button>
+        <div className="flex flex-wrap gap-2">
+          {value.canWrite && <button type="button" className={LEGAL_SECONDARY} onClick={() => onEdit(value)}>Editar expediente</button>}
+          {value.canWrite && canDeleteCase && <button type="button" className="rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-2 text-xs font-medium text-rose-300 cursor-pointer" onClick={() => setConfirmDeleteCase(true)}>Eliminar expediente</button>}
+        </div>
+      </div>
+      {confirmDeleteCase && (
+        <div role="alertdialog" aria-label="Confirmar supresión del expediente" className="rounded-xl border border-rose-500/35 bg-rose-500/10 p-4 space-y-3 text-xs">
+          <p className="text-rose-200 font-medium">Supresión irreversible en cascada</p>
+          <p className="text-white/80">Se eliminarán permanentemente todos los documentos, fragmentos de texto, embeddings, eventos de cronología y permisos asociados. En auditoría solo quedarán identificadores técnicos. Si necesitas entregar constancia al cliente, exporta primero el dossier PDF/JSON.</p>
+          {deleteError && <p role="alert" className="text-rose-300">{deleteError}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={deletingCase} onClick={() => setConfirmDeleteCase(false)} className={LEGAL_SECONDARY}>Cancelar</button>
+            <button type="button" disabled={deletingCase} onClick={() => void handleDeleteCase()} className="rounded-lg bg-rose-600 hover:bg-rose-500 px-3.5 py-2 text-xs font-medium text-white cursor-pointer disabled:opacity-50">{deletingCase ? 'Eliminando…' : 'Confirmar supresión'}</button>
+          </div>
+        </div>
+      )}
       <h2 className="break-words text-xl font-semibold text-white">{value.title}</h2>
       <p className="text-sm text-white/60">{CASE_STATES[value.status]} · {CASE_CLASSES[value.classification]}{value.reference ? ` · ${value.reference}` : ''}</p>
       {value.description && <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{value.description}</p>}
@@ -72,7 +104,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
       <p role="note" className="text-xs text-white/60">El asistente no ofrece asesoría legal. Verifica la información con un profesional.</p>
       <LegalDocumentAiPanel onPolicyChange={setPolicyAccepted} />
       <LegalAdminIssuesPanel role={authSession?.role} />
-      {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
+      {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onDeleted={() => { setSelected(''); request.reload(); }} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1 text-xs text-white/60">Buscar<input name="search" value={filters.search} onChange={change} maxLength={120} placeholder="Título o referencia" className={LEGAL_INPUT} /></label>
           <label className="space-y-1 text-xs text-white/60">Estado<select name="status" value={filters.status} onChange={change} className={LEGAL_INPUT}><option value="">Todos los estados</option>{Object.entries(CASE_STATES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
