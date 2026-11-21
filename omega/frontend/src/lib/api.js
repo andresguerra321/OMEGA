@@ -807,6 +807,27 @@ export async function evaluateDevProjectMonitoring(projectId) {
   });
 }
 
+export async function auditDevWorkstationPosture({
+  consentConfirmed = false,
+  inspectLocalHostMetadata = true,
+  sshKeyPermissiveAcl = false,
+  plaintextPackageManagerRc = false,
+  gitCredentialHelperPlaintext = false,
+  exposedSensitiveEnvNames = [],
+} = {}) {
+  return apiFetch('/dev/workstation/audit', {
+    method: 'POST',
+    body: {
+      consentConfirmed: Boolean(consentConfirmed),
+      inspectLocalHostMetadata: Boolean(inspectLocalHostMetadata),
+      sshKeyPermissiveAcl: Boolean(sshKeyPermissiveAcl),
+      plaintextPackageManagerRc: Boolean(plaintextPackageManagerRc),
+      gitCredentialHelperPlaintext: Boolean(gitCredentialHelperPlaintext),
+      exposedSensitiveEnvNames,
+    },
+  });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }
