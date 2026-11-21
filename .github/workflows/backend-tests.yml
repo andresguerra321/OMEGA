@@ -1,0 +1,33 @@
+name: Backend full tests
+
+on:
+  pull_request:
+    paths:
+      - 'omega/backend-java/**'
+      - '.github/workflows/backend-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'omega/backend-java/**'
+      - '.github/workflows/backend-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: omega/backend-java/pom.xml
+      - name: Check Docker for Testcontainers
+        run: docker info
+      - name: Run complete Java suite
+        working-directory: omega/backend-java
+        run: mvn -B test
