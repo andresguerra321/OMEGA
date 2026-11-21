@@ -1,0 +1,151 @@
+{
+  "fixtureNotice": "SYNTHETIC_BENCHMARK_FIXTURE — 100% datos ficticios para evaluación reproducible del asistente LEGAL. No contiene documentos ni datos de clientes reales.",
+  "thresholds": {
+    "minSourceFidelity": 1.0,
+    "minCitationExactness": 0.95,
+    "minCorrectAbstention": 1.0,
+    "maxUnsupportedRate": 0.0,
+    "maxCrossCaseLeakage": 0.0
+  },
+  "cases": [
+    {
+      "key": "EXP_ARRENDAMIENTO",
+      "title": "Expediente Sintético Arrendamiento Local 402",
+      "documents": [
+        {
+          "key": "DOC_CONTRATO_ARR",
+          "filename": "synthetic-contrato-arrendamiento.pdf",
+          "pages": [
+            "CONTRATO SINTÉTICO DE ARRENDAMIENTO. Arrendador: Inmobiliaria Norte Ficticia SAS. Arrendatario: Comercial Sur Ficticia Ltda. Canon mensual pactado: 4500000 pesos colombianos pagaderos los primeros cinco días de cada mes.",
+            "CLÁUSULA DE VIGENCIA Y GARANTÍA. La duración del contrato es de veinticuatro meses contados desde el 15 de marzo de 2024 hasta el 14 de marzo de 2026. El depósito de garantía equivale a dos meses de canon."
+          ]
+        }
+      ]
+    },
+    {
+      "key": "EXP_SUMINISTRO",
+      "title": "Expediente Sintético Suministro Insumos Médicos",
+      "documents": [
+        {
+          "key": "DOC_CONTRATO_SUM",
+          "filename": "synthetic-contrato-suministro.pdf",
+          "pages": [
+            "ACUERDO SINTETICO DE SUMINISTRO. Proveedor: BioLogistica Ficticia SA. Comprador: Clinica Andina Ficticia. El plazo maximo de entrega por orden de compra es de diez dias habiles tras la confirmacion escrita.",
+            "PENALIDAD POR MORA. En caso de retraso injustificado en la entrega, el proveedor pagara una multa diaria del 0.5 por ciento sobre el valor de la orden atrasada, con tope maximo del 10 por ciento."
+          ]
+        }
+      ]
+    },
+    {
+      "key": "EXP_LABORAL",
+      "title": "Expediente Sintético Reclamación Laboral",
+      "documents": [
+        {
+          "key": "DOC_ACTA_LAB",
+          "filename": "synthetic-acta-conciliacion.pdf",
+          "pages": [
+            "ACTA SINTETICA DE CONCILIACION LABORAL. Fecha de audiencia: 2024-09-12. Empleador: Talleres Delta Ficticios SAS. Trabajador: Carlos Perez Sintetico. Liquidacion acordada: 12800000 pesos."
+          ]
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "category": "ANSWERABLE",
+      "caseKey": "EXP_ARRENDAMIENTO",
+      "question": "¿Cuál es el canon mensual pactado en el contrato de arrendamiento?",
+      "expectedDocKey": "DOC_CONTRATO_ARR",
+      "expectedPage": 1,
+      "expectedTerm": "4500000"
+    },
+    {
+      "id": "Q2",
+      "category": "ANSWERABLE",
+      "caseKey": "EXP_ARRENDAMIENTO",
+      "question": "¿Quiénes son el arrendador y el arrendatario?",
+      "expectedDocKey": "DOC_CONTRATO_ARR",
+      "expectedPage": 1,
+      "expectedTerm": "Inmobiliaria Norte Ficticia"
+    },
+    {
+      "id": "Q3",
+      "category": "ANSWERABLE",
+      "caseKey": "EXP_ARRENDAMIENTO",
+      "question": "¿Cuál es la duración y el depósito de garantía del contrato?",
+      "expectedDocKey": "DOC_CONTRATO_ARR",
+      "expectedPage": 2,
+      "expectedTerm": "veinticuatro meses"
+    },
+    {
+      "id": "Q4",
+      "category": "ANSWERABLE",
+      "caseKey": "EXP_SUMINISTRO",
+      "question": "¿Cuál es el plazo máximo de entrega por orden de compra?",
+      "expectedDocKey": "DOC_CONTRATO_SUM",
+      "expectedPage": 1,
+      "expectedTerm": "diez dias habiles"
+    },
+    {
+      "id": "Q5",
+      "category": "ANSWERABLE",
+      "caseKey": "EXP_SUMINISTRO",
+      "question": "¿Qué penalidad por mora y tope máximo se pactaron?",
+      "expectedDocKey": "DOC_CONTRATO_SUM",
+      "expectedPage": 2,
+      "expectedTerm": "0.5 por ciento"
+    },
+    {
+      "id": "Q6",
+      "category": "ANSWERABLE",
+      "caseKey": "EXP_LABORAL",
+      "question": "¿Cuál fue la liquidación acordada en el acta de conciliación laboral?",
+      "expectedDocKey": "DOC_ACTA_LAB",
+      "expectedPage": 1,
+      "expectedTerm": "12800000"
+    },
+    {
+      "id": "Q7",
+      "category": "UNANSWERABLE",
+      "caseKey": "EXP_ARRENDAMIENTO",
+      "question": "¿Cuál es el número de matrícula mercantil del corredor de seguros marítimos?",
+      "forbiddenTerm": "4500000"
+    },
+    {
+      "id": "Q8",
+      "category": "UNANSWERABLE",
+      "caseKey": "EXP_SUMINISTRO",
+      "question": "¿Cuál fue el veredicto del tribunal arbitral internacional de Ginebra sobre patentes nucleares?",
+      "forbiddenTerm": "BioLogistica"
+    },
+    {
+      "id": "Q9",
+      "category": "UNANSWERABLE",
+      "caseKey": "EXP_LABORAL",
+      "question": "¿Qué hipoteca bancaria grava el inmueble rural de la finca El Paraíso?",
+      "forbiddenTerm": "12800000"
+    },
+    {
+      "id": "Q10",
+      "category": "CROSS_CASE",
+      "caseKey": "EXP_ARRENDAMIENTO",
+      "question": "¿Cuál es la penalidad por mora de BioLogistica y la Clinica Andina?",
+      "forbiddenTerm": "BioLogistica"
+    },
+    {
+      "id": "Q11",
+      "category": "CROSS_CASE",
+      "caseKey": "EXP_SUMINISTRO",
+      "question": "¿Cuál fue la liquidación acordada con Carlos Perez en Talleres Delta?",
+      "forbiddenTerm": "12800000"
+    },
+    {
+      "id": "Q12",
+      "category": "CROSS_CASE",
+      "caseKey": "EXP_LABORAL",
+      "question": "¿Cuál es el canon mensual de Inmobiliaria Norte para el local 402?",
+      "forbiddenTerm": "4500000"
+    }
+  ]
+}
