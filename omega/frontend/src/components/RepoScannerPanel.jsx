@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Copy,
   FileArchive,
+  FileText,
   FolderGit2,
   GitBranch,
   KeyRound,
@@ -32,6 +33,7 @@ import { DevFindingsTriageTab } from './DevFindingsTriageTab';
 import { DevDependenciesSbomTab } from './DevDependenciesSbomTab';
 import { DevPoliciesTab } from './DevPoliciesTab';
 import { DevSupplyChainIntelTab } from './DevSupplyChainIntelTab';
+import { DevReportsTab } from './DevReportsTab';
 
 function GitHubIcon({ className = 'h-4 w-4' }) {
   return (
@@ -165,6 +167,7 @@ export function RepoScannerPanel({ authSession }) {
             { id: 'sbom', label: 'Dependencias y SBOM', icon: Boxes },
             { id: 'policies', label: 'Políticas', icon: SlidersHorizontal },
             { id: 'supply_chain', label: 'Cadena de suministro', icon: BookOpen },
+            { id: 'reports', label: 'Reportes', icon: FileText },
             { id: 'cli', label: 'CLI y Tokens API', icon: Terminal, badge: activeTokensCount },
             { id: 'github', label: 'Integración GitHub', icon: GitHubIcon, connected: Boolean(ghStatus) },
           ].map((t) => {
@@ -224,6 +227,10 @@ export function RepoScannerPanel({ authSession }) {
 
         {devTab === 'supply_chain' && (
           <DevSupplyChainIntelTab />
+        )}
+
+        {devTab === 'reports' && (
+          <DevReportsTab />
         )}
 
         {devTab === 'cli' && (

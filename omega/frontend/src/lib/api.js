@@ -768,6 +768,16 @@ export async function queryDevSupplyChainIntel(question) {
   });
 }
 
+export async function exportDevReportJson(projectId = '') {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  return apiFetch(`/dev/reports/export/json${qs}`);
+}
+
+export async function exportDevReportPdf(projectId = '') {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  return apiFetch(`/dev/reports/export/pdf${qs}`, { responseType: 'blob' });
+}
+
 export async function listApiTokens() {
   return apiFetch('/api-tokens');
 }
