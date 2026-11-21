@@ -1,0 +1,13 @@
+# Requisitos Jurídicos y Operativos para Validar con un Abogado Humano (Q13)
+
+> **Propósito:** Esta lista identifica cuestiones críticas para comercializar OMEGA `LEGAL` que **el código no puede resolver por sí solo** y que deben validarse formalmente con un abogado especialista en protección de datos y ejercicio profesional en la jurisdicción objetivo.
+
+| # | Área jurídica | Pregunta concreta para el abogado |
+| --- | --- | --- |
+| 1 | **Secreto profesional** | ¿El uso de un proveedor externo de IA (OpenAI o Groq) bajo un contrato de no-entrenamiento (Zero Data Retention / DPA) cumple el deber de secreto profesional de nuestra colegiatura/jurisdicción, o debemos exigir exclusivamente despliegue local (`Ollama`) para ciertos tipos de casos? |
+| 2 | **Retención y supresión** | ¿Cuál es el plazo mínimo y máximo legal que debe establecer la política de retención de copias de seguridad (backups) de PostgreSQL, y el procedimiento documentado de re-supresión al restaurar un backup (`docs/legal_retencion_y_backups.md`) satisface los derechos de supresión/olvido aplicables? |
+| 3 | **Transferencia internacional de datos** | Si un despacho ubicado en la UE o Latinoamérica configura proveedores de IA alojados en EE. UU. (OpenAI/Groq), ¿qué cláusulas contractuales tipo (SCC), evaluación de impacto (DPIA) o aviso al titular exige la normativa local antes de aceptar el consentimiento `V19`? |
+| 4 | **Términos de uso (ToS)** | ¿La redacción de los Términos de Uso delimita con suficiencia que OMEGA es una herramienta técnica de organización y búsqueda documental, que **no presta asesoría legal**, y que toda validación fáctica y jurídica recae exclusivamente en el profesional del derecho? |
+| 5 | **Política de tratamiento de datos (DPA / Privacidad)** | ¿El rol contractual de OMEGA queda correctamente definido como **encargado del tratamiento** (y el despacho como **responsable**), detallando explícitamente qué datos derivados se almacenan (fragmentos, embeddings, hashes, auditoría por IDs) y cuáles no se conservan (originales e historial de chat)? |
+| 6 | **Responsabilidad sobre salidas del asistente y cronología** | ¿Es suficiente la combinación de citas obligatorias, abstención determinista, etiqueta *«Extraído automáticamente, verifique»* y descargo permanente de no-asesoría para mitigar responsabilidad civil ante un error de interpretación u omisión en la cronología automática? |
+| 7 | **Plazos procesales y valor probatorio del dossier** | ¿Queda jurídicamente claro en contrato y documentación que OMEGA **no gestiona términos ni alertas procesales**, y que el hash SHA-256 del dossier exportado es únicamente una *verificación técnica de integridad* y **no** una firma electrónica, peritaje ni sello de tiempo probatorio? |

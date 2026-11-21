@@ -127,3 +127,37 @@ de una afirmación: el usuario debe revisar el fragmento y el documento conserva
 El chat principal mantiene un aviso de no asesoría y no permite cambiar a fuentes públicas en LEGAL.
 Las imágenes deben cargarse e indexarse como documentos antes de consultarse; el endpoint multimodal
 efímero no sustituye ese recorrido con citas. GENERAL conserva su selección de fuentes y su generador.
+
+---
+
+## Límites del perfil LEGAL (qué hace y qué NO hace)
+
+> **Advertencia permanente:** OMEGA es una herramienta técnica de apoyo documental. **No ofrece asesoría legal** ni reemplaza el criterio de un abogado habilitado.
+
+| Dimensión | Qué SÍ hace OMEGA (`LEGAL`) | Qué NO hace (fuera de alcance) |
+| --- | --- | --- |
+| **Naturaleza del asistente** | Responde preguntas acotadas a un expediente o a documentos seleccionados citando documento y página, y se abstiene (`LEGAL_ABSTENTION`) cuando no hay fragmentos relevantes. | No emite dictámenes jurídicos, no recomienda estrategia procesal ni sustituye revisión profesional. |
+| **Almacenamiento (Zero-Retention)** | Guarda metadatos, hash SHA-256 del archivo recibido, fragmentos de texto, embeddings y eventos de cronología extraídos. | **Nunca** guarda el PDF/Word/imagen original ni usa almacenamiento en la nube. No persiste historial de chat por defecto. |
+| **Formatos admitidos** | PDF (con OCR opcional), Word (`.docx` sin macros/objetos activos/DTD/referencias externas), PNG y JPEG (validación por firma binaria). | No ejecuta macros, no extrae texto de imágenes incrustadas dentro de `.docx`, ni admite `.doc` binario legado. |
+| **Integridad y dossier** | Exporta dossier PDF y paquete técnico JSON con inventario SHA-256, permisos vigentes, actividad auditada y hash SHA-256 del paquete como **verificación técnica de integridad**. | No constituye firma electrónica con validez jurídica, sello de tiempo calificado ni prueba pericial certificada. |
+| **Cronología** | Extrae fechas de forma determinista con enlace obligatorio a documento y página, etiquetadas como *«Extraído automáticamente, verifique»*, con confirmación/corrección/ocultación auditada. | No gestiona plazos procesales, vencimientos judiciales ni alertas de términos legales. |
+| **Proveedores de IA** | Separa modelo de indexación y modelo de respuestas, muestra destinos (`Se queda en tu equipo` vs `Sale a: <proveedor>`) y exige consentimiento previo del `ADMIN` (`V19`). | No oculta envíos externos ni certifica privacidad del proveedor externo elegido por el despacho. |
+| **Retención y backups** | El borrado de expediente elimina en cascada documentos, fragmentos, embeddings, cronología y permisos; `audit_logs` conserva solo IDs y hashes. | El borrado no purga automáticamente backups históricos de PostgreSQL (ver `docs/legal_retencion_y_backups.md`). |
+
+---
+
+## Guía de prueba manual de punta a punta (corpus sintético)
+
+> Utiliza exclusivamente documentos ficticios (nunca archivos reales de clientes).
+
+1. **Registro y perfil:** Crea un espacio nuevo en OMEGA, inicia sesión como `ADMIN` y cambia el perfil a `LEGAL` en **Cuenta y Ajustes** (confirmando el cambio). Verifica que la vista abre en **Expedientes**.
+2. **Consentimiento de IA (`V19`):** En la tarjeta **IA de tus documentos**, comprueba que aparecen separados **Indexación de documentos** y **Modelo de respuestas** con su destino (*Se queda en tu equipo* o *Sale a: ...*). Intenta cargar un documento antes de aceptar y verifica que queda bloqueado; luego pulsa **Acepto esta política de documentos**.
+3. **Crear expediente:** Pulsa **Nuevo expediente** (o **Cargar expediente de demo (ficticio)**), ingresa título, referencia y clasificación, y ábrelo.
+4. **Cargar documento sintético:** En la pestaña **Documentos**, sube un PDF sintético de 2 páginas con fechas, partes y montos ficticios (o un `.docx`/`.png` sintético). Verifica que pasa a estado **Listo**, abre su ficha, revisa el texto extraído y prueba **Comparar con un archivo local** para comprobar el hash SHA-256 en tu equipo.
+5. **Consulta con cita:** En la pestaña **Asistente** (dentro del expediente), pulsa una acción rápida (p. ej. *Partes, fechas y montos*) o escribe una pregunta sobre un dato presente en el PDF. Haz clic en el botón `[1]` de la cita y confirma que se abre el visor lateral en la página exacta.
+6. **Consulta sin sustento (abstención):** Pregunta por un hecho inexistente en el expediente (p. ej. una hipoteca marítima ficticia). Verifica el badge **Abstención: sin sustento suficiente** y el mensaje fijo `No hay fragmentos relevantes suficientes en este expediente para responder. No es asesoría legal.`
+7. **Cronología:** Abre la pestaña **Cronología**, pulsa **Extraer cronología**, comprueba la etiqueta **Extraído automáticamente, verifique**, abre la cita lateral, y prueba **Confirmar**, **Corregir** y **Ocultar**.
+8. **Permisos y búsqueda:** Crea un usuario `CLIENT`, asígnale permiso `READ` sobre el expediente desde **Acceso**, inicia sesión con ese usuario y confirma que puede leer y buscar en ese expediente, pero no editar ni ver expedientes ajenos.
+9. **Exportar dossier:** En la cabecera del expediente, pulsa **Exportar dossier (PDF)** y **Exportar paquete técnico (JSON)**. Comprueba que incluye inventario SHA-256, permisos vigentes, actividad y hash del paquete descrito como *verificación técnica de integridad*.
+10. **Supresión en cascada:** Como `ADMIN`, pulsa **Eliminar expediente** y confirma la supresión. Verifica que el expediente desaparece de la lista y que en auditoría solo persiste el registro técnico sin contenido documental.
+
