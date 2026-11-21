@@ -67,5 +67,43 @@ V17 corrige alcance en tenants LEGAL. V18 añade metadatos, motivos/formato y re
 cronología con borrado en cascada. Sus comentarios describen la reversa y las pérdidas de metadatos
 que implica; no se ejecuta ninguna reversa automáticamente.
 
-La política de proveedores, consentimiento, flujo completo de UI y guía manual se completan en los
-bloques siguientes. No se acredita todavía el perfil LEGAL como producto terminado.
+## Proveedores y consentimiento
+
+Respuestas e indexación son funciones distintas. Groq sirve respuestas; no proporciona los embeddings
+de este pipeline. Al elegir Groq, AiSetupGate limpia la clave OpenAI guardada en su configuración.
+Si no queda una clave OpenAI activa en el despliegue, los documentos se indexan localmente con
+`lexical-only-tsvector`: la carga y las consultas exactas siguen funcionando, sin búsqueda semántica.
+La prueba de integración ejecuta el proveedor OpenAI real sin clave, comprueba ese fallback y consulta
+el documento con un cliente READ. No usa credenciales ni documentos reales.
+
+Con OpenAI activo, se envían fragmentos al endpoint de embeddings y la pregunta se vectoriza con el
+mismo modelo. Las respuestas pueden enviar fragmentos a los proveedores configurados: servidor
+personalizado, OmniRoute, OpenAI o Groq, según la cadena activa. La política muestra todos los destinos
+posibles sin claves. Un intermediario puede reenviar contenido; no se afirma que un gateway local
+garantice procesamiento local. «Local» en una instalación web se refiere al servidor de OMEGA.
+
+El camino **Configurar todo local (Ollama)** abre la configuración existente de Ollama. Ese modo activa
+los adaptadores locales de respuestas y embeddings y la política soberana existente; requiere una
+instancia y los modelos disponibles. No se instala ni descarga un modelo automáticamente.
+Si el indexador no responde se muestra un motivo seguro y una guía hacia Cuenta → IA.
+
+Antes de cargar o consultar en LEGAL, un ADMIN acepta explícitamente la política vigente:
+`GET /api/v1/legal/document-ai/policy` y `POST /api/v1/legal/document-ai/consent` con su `fingerprint`.
+V19 conserva el hash, la descripción pública de proveedores/modelos/destinos, el id del administrador
+y la fecha. La acción se audita sin claves. Un cambio de modelos, destinos o dimensiones invalida la
+aceptación; una aceptación de configuración anterior se rechaza con 409.
+
+`POST /api/v1/expedientes/{id}/documents/{documentId}/reindex` exige WRITE y ADMIN/ANALYST.
+Reutiliza el texto guardado y actualiza embeddings/modelos en una transacción sin volver a cargar el
+original. Conserva hash, páginas, texto y orden de fragmentos; la operación queda auditada.
+La prueba de cambio de modelo verifica el recorrido completo y la conservación del hash y fragmentos.
+
+En escritorio, la implementación de `desktop_config.rs` guarda claves en `desktop-config.json`, bajo
+el directorio de datos que obtiene Tauri. El archivo es JSON sin cifrado propio; en Unix se aplica
+0600. Los resúmenes públicos solo devuelven indicadores de configuración. Se verificó esta ruta en
+el código, sin abrir credenciales reales del usuario. No se ha verificado cifrado del sistema operativo
+ni protección frente a otros procesos de la misma cuenta. Las claves no se incluyen en la política,
+auditoría o dossier; los tests usan secretos sintéticos y los reportes no vuelcan cuerpos de petición.
+
+El flujo completo de UI y la guía manual se completan en los bloques siguientes. No se acredita
+todavía el perfil LEGAL como producto terminado.

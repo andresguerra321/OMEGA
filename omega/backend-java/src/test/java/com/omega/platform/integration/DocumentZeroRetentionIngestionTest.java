@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -124,6 +125,72 @@ class DocumentZeroRetentionIngestionTest {
     @MockBean
     private EmbeddingProvider embeddingProvider;
 
+    @Autowired
+    private com.omega.platform.config.OmegaProperties properties;
+
+    @Test
+    void legalConsentIsAdminOnlyAndMissingOpenAiKeyStillIndexesWithoutRetainingOriginals() throws Exception {
+        var real=new com.omega.platform.rag.OpenAiEmbeddingProvider(org.springframework.web.client.RestClient.create(),properties);
+        assertThat(properties.rag().openAiApiKey()).isBlank();
+        assertThatThrownBy(() -> real.embedBatch(java.util.List.of("Synthetic text"))).isInstanceOf(EmbeddingException.class);
+        when(embeddingProvider.modelName()).thenReturn(real.modelName()); when(embeddingProvider.dimensions()).thenReturn(real.dimensions());
+        when(embeddingProvider.embedBatch(anyList())).thenAnswer(inv -> real.embedBatch(inv.getArgument(0)));
+        when(embeddingProvider.embedQuery(anyString())).thenAnswer(inv -> real.embedQuery(inv.getArgument(0)));
+        String suffix=UUID.randomUUID().toString().substring(0,8);
+        var registered=registerTenant("policy-"+suffix,"Synthetic","policy@"+suffix+".org");
+        String token=registered.get("accessToken").asText(); UUID tenantId=UUID.fromString(registered.get("tenantId").asText());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/profile")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"profile\":\"LEGAL\",\"confirmed\":true}")).andExpect(status().isOk());
+        UUID caseId=createExpediente(token,"Synthetic policy case");
+        byte[] pdf=buildValidPdf("1. Synthetic evidence","Predator contrato sintético con evidencia de prueba suficiente para verificar su consulta.");
+        mockMvc.perform(multipart("/api/v1/expedientes/"+caseId+"/documents")
+                .file(new MockMultipartFile("file","synthetic.pdf",MediaType.APPLICATION_PDF_VALUE,pdf))
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isConflict());
+        var policyResponse=mockMvc.perform(get("/api/v1/legal/document-ai/policy").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(false))
+                .andExpect(jsonPath("$.disclosure.indexing.provider").value("LOCAL_TEXT")).andReturn();
+        String hash=objectMapper.readTree(policyResponse.getResponse().getContentAsString()).path("fingerprint").asText();
+        var userResponse=mockMvc.perform(post("/api/v1/auth/users").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"reader@"+suffix+".org\",\"password\":\"ReaderClave123!\",\"fullName\":\"Cliente Reader\",\"role\":\"CLIENT\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        String userId=objectMapper.readTree(userResponse.getResponse().getContentAsString()).path("id").asText();
+        var login=mockMvc.perform(post("/api/v1/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tenantSlug\":\"policy-"+suffix+"\",\"email\":\"reader@"+suffix+".org\",\"password\":\"ReaderClave123!\"}"))
+                .andExpect(status().isOk()).andReturn();
+        String reader=objectMapper.readTree(login.getResponse().getContentAsString()).path("accessToken").asText();
+        mockMvc.perform(post("/api/v1/expedientes/"+caseId+"/permissions").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":\""+userId+"\",\"permission\":\"READ\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/legal/document-ai/consent").header(HttpHeaders.AUTHORIZATION,"Bearer "+reader)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"fingerprint\":\""+hash+"\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/legal/document-ai/consent").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"fingerprint\":\""+"0".repeat(64)+"\"}"))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/v1/legal/document-ai/consent").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"fingerprint\":\""+hash+"\"}"))
+                .andExpect(status().isNoContent());
+        var upload=mockMvc.perform(multipart("/api/v1/expedientes/"+caseId+"/documents")
+                .file(new MockMultipartFile("file","synthetic.pdf",MediaType.APPLICATION_PDF_VALUE,pdf))
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isAccepted()).andReturn();
+        UUID documentId=UUID.fromString(objectMapper.readTree(upload.getResponse().getContentAsString()).path("id").asText());
+        var document=awaitTerminalStatus(token,caseId,documentId);
+        assertThat(document.getEmbeddingModel()).isEqualTo(AsyncDocumentProcessor.LEXICAL_FALLBACK_MODEL);
+        assertThat(document.getTempDeletedAt()).isNotNull();
+        mockMvc.perform(post("/api/v1/expedientes/"+caseId+"/query").header(HttpHeaders.AUTHORIZATION,"Bearer "+reader)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"question\":\"Predator contrato\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.citations.length()").value(1));
+        String originalHash=document.getSha256Hash();
+        mockMvc.perform(post("/api/v1/expedientes/"+caseId+"/documents/"+documentId+"/reindex")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+reader)).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/expedientes/"+caseId+"/documents/"+documentId+"/reindex")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isOk());
+        assertThat(documentRepository.findById(documentId).orElseThrow().getSha256Hash()).isEqualTo(originalHash);
+        assertThat(auditLogService.listRecent(tenantId,20)).anySatisfy(entry ->
+                assertThat(entry.getAction()).isEqualTo("DOCUMENT_AI_POLICY_ACCEPTED"));
+    }
+
     @Test
     void completeZeroRetentionLifecycleDeletesTempPdfAndMaintainsImmutableAuditChain() throws Exception {
         stubDeterministicEmbeddings();
@@ -226,6 +293,12 @@ class DocumentZeroRetentionIngestionTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"profile\":\"LEGAL\",\"confirmed\":true}"))
                 .andExpect(status().isOk());
+        var policyResponse=mockMvc.perform(get("/api/v1/legal/document-ai/policy")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+token)).andExpect(status().isOk()).andReturn();
+        String fingerprint=objectMapper.readTree(policyResponse.getResponse().getContentAsString()).path("fingerprint").asText();
+        mockMvc.perform(post("/api/v1/legal/document-ai/consent").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"fingerprint\":\""+fingerprint+"\"}"))
+                .andExpect(status().isNoContent());
         // 2. PDF con acción /Launch
         byte[] launchPdf = buildLaunchMaliciousPdf();
         mockMvc.perform(multipart("/api/v1/expedientes/" + expId + "/documents")

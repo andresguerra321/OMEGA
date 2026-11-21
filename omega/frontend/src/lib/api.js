@@ -562,6 +562,14 @@ export async function fetchProfileConfig() {
   return apiFetch('/profile/config');
 }
 
+export function fetchLegalDocumentAiPolicy() { return apiFetch('/legal/document-ai/policy'); }
+export function acceptLegalDocumentAiPolicy(fingerprint) {
+  return apiFetch('/legal/document-ai/consent', { method: 'POST', body: { fingerprint } });
+}
+export function reindexExpedienteDocument(expedienteId, documentId) {
+  return apiFetch(`/expedientes/${encodeURIComponent(expedienteId)}/documents/${encodeURIComponent(documentId)}/reindex`, { method: 'POST' });
+}
+
 export async function updateTenantProfile(profile, confirmed = false) {
   return apiFetch('/profile', {
     method: 'PUT',

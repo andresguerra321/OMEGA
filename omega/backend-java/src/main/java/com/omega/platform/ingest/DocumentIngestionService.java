@@ -59,6 +59,7 @@ public class DocumentIngestionService {
     private final TenantRepository tenantRepository;
     private final IngestTemporaryFiles temporaryFiles;
     private final OfficeImageExtractor officeImageExtractor;
+    private final com.omega.platform.service.LegalDocumentAiService legalAi;
 
     public DocumentIngestionService(
             OmegaProperties properties,
@@ -71,7 +72,8 @@ public class DocumentIngestionService {
             TransactionTemplate transactionTemplate,
             TenantRepository tenantRepository,
             IngestTemporaryFiles temporaryFiles,
-            OfficeImageExtractor officeImageExtractor
+            OfficeImageExtractor officeImageExtractor,
+            com.omega.platform.service.LegalDocumentAiService legalAi
     ) {
         this.properties = properties;
         this.authorizationService = authorizationService;
@@ -84,6 +86,7 @@ public class DocumentIngestionService {
         this.tenantRepository = tenantRepository;
         this.temporaryFiles = temporaryFiles;
         this.officeImageExtractor = officeImageExtractor;
+        this.legalAi = legalAi;
     }
 
     public IngestAcceptedResult ingestPdf(
@@ -92,6 +95,7 @@ public class DocumentIngestionService {
             MultipartFile file
     ) {
         ExpedienteEntity expediente = authorizationService.requireWriteAccess(principal, expedienteId);
+        legalAi.requireConsent(principal);
         if (file == null || file.isEmpty()) {
             throw new InvalidDocumentException("Debe adjuntar un archivo PDF no vacío.");
         }
@@ -153,6 +157,7 @@ public class DocumentIngestionService {
                 );
                 var tenant = tenantRepository.findActiveForUpdate(principal.tenantId())
                         .orElseThrow(() -> new ResourceNotFoundException("Tenant activo no encontrado"));
+                legalAi.requireConsent(principal);
                 if (!"PDF".equals(format) && tenant.getProfile() != TenantProfile.LEGAL)
                     throw new InvalidDocumentException("Este perfil solo admite PDF.");
                 entity.setDocumentFormat(format);

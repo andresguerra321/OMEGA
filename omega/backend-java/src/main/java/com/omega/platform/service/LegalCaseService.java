@@ -98,6 +98,7 @@ public class LegalCaseService {
             case "UNSAFE_PDF" -> "El PDF contiene elementos activos que no podemos aceptar.";
             case "TEXT_UNAVAILABLE" -> "No se pudo extraer texto. Revisa que el OCR esté disponible y el documento sea legible.";
             case "TEMP_DELETE_FAILED" -> "No se pudo completar la limpieza temporal. Contacta al administrador.";
+            case "INDEXER_UNAVAILABLE" -> "El modelo de indexación no responde. Revisa su conexión y disponibilidad en Cuenta, en la sección de IA.";
             default -> "No se pudo procesar el documento. Revisa el formato y vuelve a intentarlo.";
         };
         return new DocumentView(DocumentIngestionService.toMetadataResponse(value),value.getDocumentFormat(),value.getFailureCode(),reason);

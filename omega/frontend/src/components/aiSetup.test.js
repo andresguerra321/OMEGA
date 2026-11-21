@@ -38,16 +38,16 @@ const { createElement, act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { AiSetupGate } = await import('./AiSetupGate.jsx');
 let root, container;
-let saved = false, saves, probes, completed;
+let saved = false, saves, probes, completed, lastPayload;
 const ready = {configured:true, active_provider:'groq', active_model:'test-model'};
 beforeEach(() => {
   window.localStorage.clear();
-  saved=false; saves=0; probes=0; completed=0;
+  saved=false; saves=0; probes=0; completed=0; lastPayload=null;
   api.fetchSystemGovernance=async()=>({ai_engine:saved?ready:{configured:false}});
   api.testAiEngineConnection=async()=>{probes++;return {ok:true};};
   api.fetchMfaStatus=async()=>({mfaEnabled:true,method:'TOTP'});
-  window.__TAURI_INTERNALS__={invoke:async command=>{
-    assert.equal(command,'save_desktop_runtime_config'); saves++;saved=true;return {ok:true};
+  window.__TAURI_INTERNALS__={invoke:async (command,args)=>{
+    assert.equal(command,'save_desktop_runtime_config'); lastPayload=args.payload; saves++;saved=true;return {ok:true};
   }};
   container=document.createElement('div'); document.body.append(container);root=createRoot(container);
 });
@@ -83,8 +83,18 @@ test('rejected key cannot be saved or bypass the gate',async()=>{
 test('valid key is saved, verified against the running backend, and needs final confirmation',async()=>{
   await render();await click('Configurar copiloto');await key('gsk_test_only');await submit();
   assert.equal(saves,1);assert.equal(probes,2);assert.equal(workspace(),null);
+  assert.equal(lastPayload.clearOpenAiKey,true);
+  assert.equal(lastPayload.groqModel,'openai/gpt-oss-120b');
   assert.equal(container.querySelector('input'),null);
   await click('Entrar a OMEGA');assert.ok(workspace());assert.equal(completed,1);
+});
+
+test('document settings open the existing Ollama path without an API key',async()=>{
+  await render();
+  await act(async()=>window.dispatchEvent(new window.CustomEvent('omega:configure-local-ai')));
+  assert.match(container.textContent,/Ollama/);
+  assert.match(container.textContent,/sin enviar datos fuera/);
+  assert.equal(button('Conectar y continuar').disabled,false);
 });
 test('failed configuration apply never opens workspace',async()=>{
   window.__TAURI_INTERNALS__.invoke=async()=>({ok:false});

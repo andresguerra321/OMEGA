@@ -283,6 +283,7 @@ class HybridRagQueryTest {
     }
 
     private void assertLegalCitation(String token, UUID caseId, UUID documentId) throws Exception {
+        acceptLegalPolicyIfNeeded(token);
         mockMvc.perform(post("/api/v1/expedientes/" + caseId + "/query")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -417,6 +418,13 @@ class HybridRagQueryTest {
                 .andExpect(status().isOk());
         assertThat(documentRepository.findById(docA1).orElseThrow().getStatus())
                 .isEqualTo(DocumentStatus.REINDEX_REQUIRED);
+        String originalHash=documentRepository.findById(docA1).orElseThrow().getSha256Hash();
+        Long fragmentsBefore=jdbcTemplate.queryForObject("SELECT count(*) FROM omega_rag.document_chunks WHERE document_id = ?",Long.class,docA1);
+        mockMvc.perform(post("/api/v1/expedientes/"+expA1+"/documents/"+docA1+"/reindex")
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+tokenA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.embeddingModel").value("local-bge-m3-phase2"));
+        assertThat(documentRepository.findById(docA1).orElseThrow().getSha256Hash()).isEqualTo(originalHash);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM omega_rag.document_chunks WHERE document_id = ?",Long.class,docA1)).isEqualTo(fragmentsBefore);
     }
 
     private UUID uploadPdfAndWaitIndexed(
@@ -447,6 +455,7 @@ class HybridRagQueryTest {
     }
 
     private UUID uploadAndWaitIndexed(String token, UUID expId, String filename, byte[] bytes) throws Exception {
+        acceptLegalPolicyIfNeeded(token);
         MvcResult up = mockMvc.perform(multipart("/api/v1/expedientes/" + expId + "/documents")
                         .file(new MockMultipartFile("file", filename, MediaType.APPLICATION_OCTET_STREAM_VALUE, bytes))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
@@ -483,6 +492,19 @@ class HybridRagQueryTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(res.getResponse().getContentAsString());
+    }
+
+    private void acceptLegalPolicyIfNeeded(String token) throws Exception {
+        var profile=mockMvc.perform(get("/api/v1/profile/config").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andReturn();
+        if(!"LEGAL".equals(objectMapper.readTree(profile.getResponse().getContentAsString()).path("profile").asText())) return;
+        var response=mockMvc.perform(get("/api/v1/legal/document-ai/policy").header(HttpHeaders.AUTHORIZATION,"Bearer "+token))
+                .andExpect(status().isOk()).andReturn();
+        var policy=objectMapper.readTree(response.getResponse().getContentAsString());
+        if(!policy.path("accepted").asBoolean())
+            mockMvc.perform(post("/api/v1/legal/document-ai/consent").header(HttpHeaders.AUTHORIZATION,"Bearer "+token)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"fingerprint\":\""+policy.path("fingerprint").asText()+"\"}"))
+                    .andExpect(status().isNoContent());
     }
 
     private UUID createExpediente(String token, String title) throws Exception {

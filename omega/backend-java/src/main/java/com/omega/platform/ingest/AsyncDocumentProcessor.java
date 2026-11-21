@@ -137,7 +137,8 @@ public class AsyncDocumentProcessor {
 
             finalStatus = DocumentStatus.INDEXED;
         } catch (Exception ex) {
-            failureReason = ex instanceof InvalidDocumentException ? "TEXT_UNAVAILABLE" : "DOCUMENT_PROCESSING_FAILED";
+            failureReason = ex instanceof InvalidDocumentException ? "TEXT_UNAVAILABLE"
+                    : (ex instanceof org.springframework.web.client.RestClientException ? "INDEXER_UNAVAILABLE" : "DOCUMENT_PROCESSING_FAILED");
             log.error("DOCUMENT_PROCESSING_FAILED document={} tenant={}", cmd.documentId(), cmd.tenantId());
         } finally {
             Instant deletedAt = forceDeleteTempFile(cmd.tempPdfPath());

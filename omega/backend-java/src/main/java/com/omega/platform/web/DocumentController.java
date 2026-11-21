@@ -26,9 +26,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class DocumentController {
 
     private final DocumentIngestionService documentIngestionService;
+    private final com.omega.platform.service.LegalDocumentAiService legalAi;
 
-    public DocumentController(DocumentIngestionService documentIngestionService) {
+    public DocumentController(DocumentIngestionService documentIngestionService,
+            com.omega.platform.service.LegalDocumentAiService legalAi) {
         this.documentIngestionService = documentIngestionService;
+        this.legalAi = legalAi;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -55,6 +58,13 @@ public class DocumentController {
     public List<DocumentMetadataResponse> markReindexRequired(
             @AuthenticationPrincipal OmegaPrincipal principal, @PathVariable UUID expedienteId) {
         return documentIngestionService.markReindexRequired(principal, expedienteId);
+    }
+
+    @PostMapping("/{documentId}/reindex")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    public DocumentMetadataResponse reindex(@AuthenticationPrincipal OmegaPrincipal principal,
+            @PathVariable UUID expedienteId,@PathVariable UUID documentId) {
+        return legalAi.reindex(principal,expedienteId,documentId);
     }
 
     @DeleteMapping("/{documentId}")

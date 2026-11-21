@@ -39,6 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class HybridRagQueryService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.service.LegalDocumentAiService legalAi;
 
     private static final Logger log = LoggerFactory.getLogger(HybridRagQueryService.class);
 
@@ -84,6 +86,7 @@ public class HybridRagQueryService {
             RagQueryRequest request
     ) {
         authorizationService.requireReadAccess(principal, expedienteId);
+        if (legalAi != null) legalAi.requireConsent(principal);
         if (commercialSaasService != null && principal != null) {
             boolean sovereign = sovereignModePolicy != null && sovereignModePolicy.enabled();
             try {
