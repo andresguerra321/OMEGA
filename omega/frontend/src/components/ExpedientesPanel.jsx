@@ -9,9 +9,10 @@ import { LegalLoadState, LegalPagination } from './LegalWorkspacePrimitives';
 import { LegalAccessPreview, LegalActivityPreview } from './LegalCasePreviewTabs';
 import { LegalCaseAssistantTab } from './LegalCaseAssistantTab';
 import { LegalDocumentsPanel } from './LegalDocumentsPanel';
+import { LegalTimelineTab } from './LegalTimelineTab';
 import DossierExportButtons from './DossierExportButtons';
 
-const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['access', 'Acceso'], ['activity', 'Actividad']];
+const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['access', 'Acceso'], ['activity', 'Actividad']];
 
 function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, policyAccepted }) {
   const [tab, setTab] = useState('documents');
@@ -38,6 +39,7 @@ function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, 
       <section role="tabpanel" id={`legal-panel-${tab}`} aria-labelledby={`legal-tab-${tab}`} tabIndex={0} className="pt-4 focus-visible:outline-2 focus-visible:outline-white">
         {tab === 'documents' && <LegalDocumentsPanel key={value.id} value={value} role={role} policyAccepted={policyAccepted} />}
         {tab === 'assistant' && <LegalCaseAssistantTab key={value.id} value={value} policyAccepted={policyAccepted} />}
+        {tab === 'timeline' && <LegalTimelineTab key={value.id} value={value} role={role} policyAccepted={policyAccepted} />}
         {tab === 'access' && <LegalAccessPreview key={value.id} value={value} />}
         {tab === 'activity' && <LegalActivityPreview key={value.id} value={value} currentUserId={currentUserId} />}
       </section>

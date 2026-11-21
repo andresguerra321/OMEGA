@@ -26,4 +26,7 @@ export const legalApi = {
   grant: (id, body) => apiFetch(`${casePath(id)}/permissions`, { method: 'POST', body }),
   revoke: (id, userId) => apiFetch(`${casePath(id)}/permissions/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
   activity: (id, options) => apiFetch(`${casePath(id)}/activity/page?${params(options)}`).then(page),
+  timeline: (id, options = {}) => apiFetch(`${casePath(id)}/timeline?${params(options)}`),
+  extractTimeline: id => apiFetch(`${casePath(id)}/timeline/extract`, { method: 'POST' }),
+  reviewTimelineEvent: (id, eventId, body) => apiFetch(`${casePath(id)}/timeline/${encodeURIComponent(eventId)}`, { method: 'PATCH', body }),
 };
