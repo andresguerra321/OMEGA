@@ -107,7 +107,7 @@ class LegalDataLifecycleCascadeTest {
         when(embeddingProvider.embedBatch(anyList())).thenThrow(new EmbeddingException("lexical"));
         when(embeddingProvider.embedQuery(anyString())).thenThrow(new EmbeddingException("lexical"));
 
-        String slug = "q9-" + UUID.randomUUID().toString().substring(0, 8);
+        String slug = "legal-lifecycle-" + UUID.randomUUID().toString().substring(0, 8);
         MvcResult reg = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"tenantSlug\":\"" + slug + "\",\"tenantName\":\"Despacho Sintetico\","

@@ -11,6 +11,7 @@ import { LegalCaseAssistantTab } from './LegalCaseAssistantTab';
 import { LegalDocumentsPanel } from './LegalDocumentsPanel';
 import { LegalTimelineTab } from './LegalTimelineTab';
 import { LegalAdminIssuesPanel } from './LegalAdminIssuesPanel';
+import { LegalFirmSearchPanel } from './LegalFirmSearchPanel';
 import DossierExportButtons from './DossierExportButtons';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['access', 'Acceso'], ['activity', 'Actividad']];
@@ -105,6 +106,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
       <LegalDocumentAiPanel onPolicyChange={setPolicyAccepted} />
       <LegalAdminIssuesPanel role={authSession?.role} />
       {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onDeleted={() => { setSelected(''); request.reload(); }} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
+        <LegalFirmSearchPanel onOpenCase={caseId => setSelected(caseId)} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1 text-xs text-white/60">Buscar<input name="search" value={filters.search} onChange={change} maxLength={120} placeholder="Título o referencia" className={LEGAL_INPUT} /></label>
           <label className="space-y-1 text-xs text-white/60">Estado<select name="status" value={filters.status} onChange={change} className={LEGAL_INPUT}><option value="">Todos los estados</option>{Object.entries(CASE_STATES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
