@@ -5,14 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omega.platform.domain.AuditLogEntity;
 import com.omega.platform.repository.AuditLogRepository;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.repository.ExpedientePermissionRepository;
 import com.omega.platform.security.ExpedienteAuthorizationService;
 import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.security.TenantContext;
 import com.omega.platform.service.AuditLogService;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +30,7 @@ import org.openpdf.text.Phrase;
 import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,14 +42,23 @@ public class ForensicDossierExportService {
     private final AuditLogRepository logs;
     private final AuditLogService audit;
     private final ObjectMapper mapper;
+    private final ExpedientePermissionRepository permissions;
 
     public ForensicDossierExportService(ExpedienteAuthorizationService authorization, DocumentRepository documents,
             AuditLogRepository logs, AuditLogService audit, ObjectMapper mapper) {
+        this(authorization, documents, logs, audit, mapper, null);
+    }
+
+    @Autowired
+    public ForensicDossierExportService(ExpedienteAuthorizationService authorization, DocumentRepository documents,
+            AuditLogRepository logs, AuditLogService audit, ObjectMapper mapper,
+            ExpedientePermissionRepository permissions) {
         this.authorization = authorization;
         this.documents = documents;
         this.logs = logs;
         this.audit = audit;
         this.mapper = mapper;
+        this.permissions = permissions;
     }
 
     @Transactional
@@ -79,7 +93,20 @@ public class ForensicDossierExportService {
                 pdf.add(new Paragraph(finding.explanation(), font(10, false)));
                 pdf.add(new Paragraph(finding.technicalEvidence().toString(), font(9, false)));
             }
-            section(pdf, "4. Certificación de Cadena de Custodia (audit_logs)");
+            section(pdf, "4. Permisos Vigentes del Expediente");
+            PdfPTable permTable = table("Usuario (ID)", "Nivel / Fecha UTC");
+            if (payload.activePermissions().isEmpty()) {
+                row(permTable, "Sin permisos delegados adicionales", "Acceso restringido a propietario y administradores");
+            } else {
+                for (PermissionItem perm : payload.activePermissions()) {
+                    row(permTable, String.valueOf(perm.userId()), perm.permission() + "\n" + perm.grantedAtUtc());
+                }
+            }
+            pdf.add(permTable);
+            section(pdf, "5. Verificación Técnica de Integridad y Cadena de Custodia (audit_logs)");
+            var integrity = payload.packageIntegrity();
+            pdf.add(new Paragraph("Hash del paquete (" + integrity.algorithm() + "): " + integrity.sha256Hash(), font(9, true)));
+            pdf.add(new Paragraph(integrity.disclaimer(), font(9, false)));
             var chain = payload.chainOfCustody();
             pdf.add(new Paragraph(chain.status() + " · " + chain.detail(), font(11, true)));
             pdf.add(new Paragraph("Algoritmo: SHA-256\nGénesis: " + chain.genesisHash() + "\nHash raíz: " + chain.rootHash()
@@ -137,17 +164,44 @@ public class ForensicDossierExportService {
         String summary = evidence.size() + " documento(s) y " + findings.size() + " evento(s) forense(s) registrados. "
                 + (riskRank(risk) >= 3 ? "Existen señales que requieren revisión especializada. " : "Los datos registrados no bastan para certificar ausencia de compromiso. ")
                 + (verification.valid() ? "La cadena almacenada coincide con sus hashes al exportar." : "Se detectó una inconsistencia en la cadena: no debe tratarse como evidencia íntegra.");
+        var activePermissions = permissions == null
+                ? List.<PermissionItem>of()
+                : permissions.findAllByTenantIdAndExpedienteIdOrderByGrantedAtAsc(scope.tenantId(), expedienteId).stream()
+                        .map(p -> new PermissionItem(p.getUserId(), p.getPermission().name(), p.getGrantedAt()))
+                        .toList();
         var chain = new ChainOfCustody(verification.valid() ? "CHAIN_VALID" : "CHAIN_COMPROMISED", "SHA-256",
                 AuditLogService.GENESIS_HASH, sequence.isEmpty() ? AuditLogService.GENESIS_HASH : sequence.getFirst().getCurrentHash(),
                 sequence.isEmpty() ? AuditLogService.GENESIS_HASH : sequence.getLast().getCurrentHash(), verification.verifiedCount(),
                 sequence.size(), verification.brokenEntryId(), verification.detail(), List.copyOf(exportedEntries));
+        var caseMeta = new CaseMetadata(expedienteId, scope.tenantId(), "Expediente " + expedienteId, expediente.getClassification().name(), expediente.getCreatedAt());
+        String pkgHash = computePackageHash(caseMeta, evidence, activePermissions, chain.finalHash(), exportedAt);
+        var packageIntegrity = new PackageIntegrity("SHA-256", pkgHash,
+                "Verificación técnica de integridad del paquete exportado; no constituye firma electrónica ni acredita valor probatorio legal.");
         return new DossierExportPayload("omega-dossier-v1", exportedAt,
-                new CaseMetadata(expedienteId, scope.tenantId(), "Expediente " + expedienteId, expediente.getClassification().name(), expediente.getCreatedAt()),
-                risk, summary, evidence, List.copyOf(findings), chain, List.of(
-                "Informe automatizado de OMEGA: no acredita firma de un perito ni certificación legal o sello de tiempo de una autoridad externa.",
+                caseMeta,
+                risk, summary, evidence, List.copyOf(findings), activePermissions, packageIntegrity, chain, List.of(
+                "Informe automatizado de OMEGA: verificación técnica de integridad; no constituye firma electrónica, certificación jurídica ni sello de tiempo de una autoridad externa.",
                 "CHAIN_VALID verifica la consistencia del snapshot almacenado; no demuestra autenticidad del archivo original ni detecta una reescritura completa de la cadena o eliminación de su cola sin un anclaje externo previo.",
                 "Se verifica toda la cadena del tenant en orden chain_seq. Los registros de otros recursos se incluyen solo como compromisos hash, sin metadatos privados; no se pueden recalcular externamente sin acceso autorizado al registro original.",
-                "Los SHA-256 de documentos son los registrados al ingresar; el PDF original no se conserva en el servidor bajo política Zero-Retention y no se ha vuelto a medir durante esta exportación. ADVERTENCIA LEGAL: el hash SHA-256 certifica integridad criptográfica, pero NO reemplaza la custodia ni la presentación del documento PDF original conservado localmente en el equipo del analista."));
+                "Los SHA-256 de documentos son los registrados al ingresar; el original no se conserva en el servidor bajo política Zero-Retention y no se ha vuelto a medir durante esta exportación. El hash SHA-256 ofrece verificación técnica de integridad, pero NO reemplaza la custodia ni la presentación del documento original conservado localmente."));
+    }
+
+    private static String computePackageHash(CaseMetadata meta, List<EvidenceItem> evidence,
+            List<PermissionItem> permissions, String chainFinalHash, Instant exportedAt) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update((meta.expedienteId() + "|" + meta.tenantId() + "|" + meta.classification() + "|" + exportedAt + "|").getBytes(StandardCharsets.UTF_8));
+            for (EvidenceItem e : evidence) {
+                md.update((e.documentId() + ":" + e.sha256Hash() + ":" + e.status() + "|").getBytes(StandardCharsets.UTF_8));
+            }
+            for (PermissionItem p : permissions) {
+                md.update((p.userId() + ":" + p.permission() + "|").getBytes(StandardCharsets.UTF_8));
+            }
+            md.update((chainFinalHash == null ? "" : chainFinalHash).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(md.digest());
+        } catch (Exception ex) {
+            throw new IllegalStateException("DOSSIER_PACKAGE_HASH_FAILED", ex);
+        }
     }
 
     private JsonNode readMetadata(String raw) {
@@ -179,7 +233,11 @@ public class ForensicDossierExportService {
     }
 
     public record DossierExportPayload(String schemaVersion, Instant exportedAtUtc, CaseMetadata caseMetadata, String riskLevel,
-            String executiveSummary, List<EvidenceItem> evidence, List<FindingItem> findings, ChainOfCustody chainOfCustody, List<String> limitations) {}
+            String executiveSummary, List<EvidenceItem> evidence, List<FindingItem> findings,
+            List<PermissionItem> activePermissions, PackageIntegrity packageIntegrity,
+            ChainOfCustody chainOfCustody, List<String> limitations) {}
+    public record PermissionItem(UUID userId, String permission, Instant grantedAtUtc) {}
+    public record PackageIntegrity(String algorithm, String sha256Hash, String disclaimer) {}
     public record CaseMetadata(UUID expedienteId, UUID tenantId, String title, String classification, Instant createdAtUtc) {}
     public record EvidenceItem(UUID documentId, String originalFilename, String sha256Hash, String status, String classification,
             int totalPages, String embeddingModel, Instant createdAtUtc) {}

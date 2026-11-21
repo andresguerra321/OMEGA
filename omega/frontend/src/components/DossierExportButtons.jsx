@@ -24,15 +24,15 @@ export default function DossierExportButtons({ expedienteId }) {
   return <div className="space-y-2" aria-busy={Boolean(busy)}>
     <div className="flex flex-wrap gap-2">
       <button type="button" disabled={!expedienteId || Boolean(busy)} onClick={() => download('pdf')}
-        className="rounded-lg border border-[#2F6FED]/40 bg-[#2F6FED]/10 px-3 py-2 text-xs text-[#C9D9FF] disabled:opacity-40">
-        {busy === 'pdf' ? 'Preparando informe…' : 'Descargar informe oficial de seguridad (PDF)'}
+        className="rounded-lg border border-[#2F6FED]/40 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-3 py-2 text-xs font-medium text-[#D9E6FF] transition-colors cursor-pointer disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-white">
+        {busy === 'pdf' ? 'Preparando dossier…' : 'Exportar dossier (PDF)'}
       </button>
       <button type="button" disabled={!expedienteId || Boolean(busy)} onClick={() => download('json')}
-        className="rounded-lg border border-white/15 px-3 py-2 text-xs text-[#C2C7D6] disabled:opacity-40">
-        {busy === 'json' ? 'Preparando evidencia…' : 'Exportar evidencia técnica (JSON)'}
+        className="rounded-lg border border-white/[0.1] bg-[#141923]/75 hover:border-white/25 px-3 py-2 text-xs font-medium text-[#C2C7D6] transition-colors cursor-pointer disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-white">
+        {busy === 'json' ? 'Preparando paquete…' : 'Exportar paquete técnico (JSON)'}
       </button>
     </div>
-    <p className="text-[11px] text-[#8F9099]">Informe automatizado del expediente con comprobación de auditoría. No incluye firma profesional de un perito.</p>
-    {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
+    <p className="text-[11px] text-white/55">Verificación técnica de integridad con inventario SHA-256, permisos vigentes y cadena de auditoría. No constituye firma electrónica ni acredita valor probatorio.</p>
+    {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
   </div>;
 }

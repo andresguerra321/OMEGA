@@ -54,13 +54,17 @@ class ForensicDossierExportTest {
         assertThat(pdf.length).isGreaterThan(1000);
         try (var parsed = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             String text = new org.apache.pdfbox.text.PDFTextStripper().getText(parsed);
-            assertThat(text).contains("Resumen Ejecutivo", "Inventario de Evidencia", "Hallazgos", "Cadena de Custodia", "CHAIN_VALID", "a".repeat(64));
+            assertThat(text).contains("Resumen Ejecutivo", "Inventario de Evidencia", "Hallazgos", "Permisos Vigentes", "Verificación Técnica de Integridad", "Cadena de Custodia", "CHAIN_VALID", "a".repeat(64));
         }
         assertThat(ledger.getLast().getAction()).isEqualTo("EXPORT_FORENSIC_DOSSIER");
     }
 
     @Test void recomputesEveryHashAndExportsStoredFindings() {
         var payload = exporter.exportAsJson(caseId);
+        assertThat(payload.packageIntegrity().algorithm()).isEqualTo("SHA-256");
+        assertThat(payload.packageIntegrity().sha256Hash()).matches("[0-9a-f]{64}");
+        assertThat(payload.packageIntegrity().disclaimer()).contains("Verificación técnica de integridad");
+        assertThat(payload.activePermissions()).isEmpty();
         assertThat(payload.chainOfCustody().status()).isEqualTo("CHAIN_VALID");
         assertThat(payload.chainOfCustody().verifiedCount()).isEqualTo(2);
         assertThat(payload.chainOfCustody().rootHash()).isEqualTo(ledger.getFirst().getCurrentHash());

@@ -8,6 +8,7 @@ import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY 
 import { LegalLoadState, LegalPagination } from './LegalWorkspacePrimitives';
 import { LegalAccessPreview, LegalActivityPreview, LegalAssistantPreview } from './LegalCasePreviewTabs';
 import { LegalDocumentsPanel } from './LegalDocumentsPanel';
+import DossierExportButtons from './DossierExportButtons';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['access', 'Acceso'], ['activity', 'Actividad']];
 
@@ -27,6 +28,9 @@ function CaseDetail({ id, onBack, onEdit, onOpenAssistant, currentUserId, role, 
       <h2 className="break-words text-xl font-semibold text-white">{value.title}</h2>
       <p className="text-sm text-white/60">{CASE_STATES[value.status]} · {CASE_CLASSES[value.classification]}{value.reference ? ` · ${value.reference}` : ''}</p>
       {value.description && <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{value.description}</p>}
+      <div className="pt-1">
+        <DossierExportButtons expedienteId={value.id} />
+      </div>
     </header>
     <div className="rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-5 backdrop-blur-md">
       <div role="tablist" aria-label="Secciones del expediente" onKeyDown={moveTab} className="flex gap-1 overflow-x-auto border-b border-white/[0.06] pb-2">{TABS.map(([key, label]) => <button key={key} id={`legal-tab-${key}`} role="tab" type="button" aria-selected={tab === key} aria-controls={`legal-panel-${key}`} tabIndex={tab === key ? 0 : -1} onClick={() => setTab(key)} className={`rounded-lg px-3 py-2 text-sm whitespace-nowrap focus-visible:outline-2 focus-visible:outline-white ${tab === key ? 'border-b-2 border-[#2F6FED] text-white' : 'text-white/60 hover:text-white'}`}>{label}</button>)}</div>
