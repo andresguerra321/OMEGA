@@ -29,4 +29,5 @@ export const legalApi = {
   timeline: (id, options = {}) => apiFetch(`${casePath(id)}/timeline?${params(options)}`),
   extractTimeline: id => apiFetch(`${casePath(id)}/timeline/extract`, { method: 'POST' }),
   reviewTimelineEvent: (id, eventId, body) => apiFetch(`${casePath(id)}/timeline/${encodeURIComponent(eventId)}`, { method: 'PATCH', body }),
+  adminDocumentIssues: () => apiFetch('/legal/admin/documents/issues'),
 };

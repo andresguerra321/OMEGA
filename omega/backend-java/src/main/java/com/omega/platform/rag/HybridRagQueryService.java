@@ -44,6 +44,9 @@ public class HybridRagQueryService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.omega.platform.service.LegalDocumentAiService legalAi;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.service.LegalQuotaService legalQuotaService;
+
     private static final Logger log = LoggerFactory.getLogger(HybridRagQueryService.class);
 
     private final ExpedienteAuthorizationService authorizationService;
@@ -89,6 +92,7 @@ public class HybridRagQueryService {
     ) {
         authorizationService.requireReadAccess(principal, expedienteId);
         if (legalAi != null) legalAi.requireConsent(principal);
+        if (legalQuotaService != null) legalQuotaService.checkQueryRate(principal);
         if (commercialSaasService != null && principal != null) {
             boolean sovereign = sovereignModePolicy != null && sovereignModePolicy.enabled();
             try {

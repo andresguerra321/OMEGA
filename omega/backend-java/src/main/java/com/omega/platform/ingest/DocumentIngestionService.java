@@ -61,6 +61,9 @@ public class DocumentIngestionService {
     private final OfficeImageExtractor officeImageExtractor;
     private final com.omega.platform.service.LegalDocumentAiService legalAi;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.service.LegalQuotaService legalQuotaService;
+
     public DocumentIngestionService(
             OmegaProperties properties,
             ExpedienteAuthorizationService authorizationService,
@@ -105,6 +108,9 @@ public class DocumentIngestionService {
             throw new InvalidDocumentException("El PDF excede el tamaño máximo permitido de " + maxBytes + " bytes.");
         }
 
+        var quotaReservation = legalQuotaService != null
+                ? legalQuotaService.reserveUploadSlot(principal, expedienteId)
+                : null;
         String sanitizedFilename = sanitizeFilename(file.getOriginalFilename());
         boolean allowExtraFormats = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
                 .map(tenant -> tenant.getProfile() == TenantProfile.LEGAL).orElse(false);
@@ -160,6 +166,15 @@ public class DocumentIngestionService {
                 legalAi.requireConsent(principal);
                 if (!"PDF".equals(format) && tenant.getProfile() != TenantProfile.LEGAL)
                     throw new InvalidDocumentException("Este perfil solo admite PDF.");
+                if (tenant.getProfile() == TenantProfile.LEGAL
+                        && documentRepository.existsByTenantIdAndExpedienteIdAndSha256HashAndStatusIn(
+                                principal.tenantId(),
+                                expediente.getId(),
+                                sha256Hash,
+                                List.of(DocumentStatus.PROCESSING, DocumentStatus.INDEXED, DocumentStatus.REINDEX_REQUIRED))) {
+                    throw new com.omega.platform.service.ConflictException(
+                            "Este documento ya fue cargado en este expediente (mismo hash SHA-256).");
+                }
                 entity.setDocumentFormat(format);
                 if (tenant.getProfile() != null) {
                     entity.setCorpusScope(tenant.getProfile());
@@ -213,6 +228,11 @@ public class DocumentIngestionService {
         } finally {
             if (!handedOffToAsync) {
                 temporaryFiles.purge(tempPdfPath);
+                if (legalQuotaService != null) {
+                    legalQuotaService.releaseUploadReservation(quotaReservation);
+                }
+            } else if (legalQuotaService != null) {
+                legalQuotaService.commitUploadReservation(quotaReservation);
             }
         }
     }

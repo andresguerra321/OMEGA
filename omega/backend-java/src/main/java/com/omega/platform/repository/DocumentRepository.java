@@ -28,4 +28,15 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     List<DocumentEntity> findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(UUID tenantId, UUID expedienteId);
 
     long countByTenantIdAndExpedienteIdAndStatus(UUID tenantId, UUID expedienteId, DocumentStatus status);
+
+    boolean existsByTenantIdAndExpedienteIdAndSha256HashAndStatusIn(
+            UUID tenantId, UUID expedienteId, String sha256Hash, java.util.Collection<DocumentStatus> statuses);
+
+    long countByTenantIdAndExpedienteIdAndStatusIn(
+            UUID tenantId, UUID expedienteId, java.util.Collection<DocumentStatus> statuses);
+
+    long countByTenantIdAndStatus(UUID tenantId, DocumentStatus status);
+
+    List<DocumentEntity> findAllByTenantIdAndStatusInOrderByCreatedAtDesc(
+            UUID tenantId, java.util.Collection<DocumentStatus> statuses);
 }

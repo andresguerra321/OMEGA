@@ -125,3 +125,28 @@ omega:
     read-timeout-ms: 120000
   cti:
     stix-corpus-dir: ${OMEGA_STIX_CORPUS_DIR:/app/corpus_mvp/iocs}
+  legal:
+    quotas:
+      stuck-processing-minutes: ${OMEGA_LEGAL_STUCK_MINUTES:15}
+      plans:
+        PERSONAL:
+          max-documents-per-case: ${OMEGA_LEGAL_PERSONAL_MAX_DOCS:50}
+          max-total-bytes-per-case: ${OMEGA_LEGAL_PERSONAL_MAX_BYTES:262144000}
+          monthly-queries: ${OMEGA_LEGAL_PERSONAL_MONTHLY_QUERIES:100}
+          max-concurrent-indexing: ${OMEGA_LEGAL_PERSONAL_MAX_CONCURRENT:2}
+          upload-per-minute: ${OMEGA_LEGAL_PERSONAL_UPLOAD_PER_MIN:10}
+          query-per-minute: ${OMEGA_LEGAL_PERSONAL_QUERY_PER_MIN:20}
+        PRO:
+          max-documents-per-case: ${OMEGA_LEGAL_PRO_MAX_DOCS:500}
+          max-total-bytes-per-case: ${OMEGA_LEGAL_PRO_MAX_BYTES:2097152000}
+          monthly-queries: ${OMEGA_LEGAL_PRO_MONTHLY_QUERIES:1000}
+          max-concurrent-indexing: ${OMEGA_LEGAL_PRO_MAX_CONCURRENT:5}
+          upload-per-minute: ${OMEGA_LEGAL_PRO_UPLOAD_PER_MIN:30}
+          query-per-minute: ${OMEGA_LEGAL_PRO_QUERY_PER_MIN:60}
+        ENTERPRISE:
+          max-documents-per-case: ${OMEGA_LEGAL_ENTERPRISE_MAX_DOCS:5000}
+          max-total-bytes-per-case: ${OMEGA_LEGAL_ENTERPRISE_MAX_BYTES:20971520000}
+          monthly-queries: ${OMEGA_LEGAL_ENTERPRISE_MONTHLY_QUERIES:10000}
+          max-concurrent-indexing: ${OMEGA_LEGAL_ENTERPRISE_MAX_CONCURRENT:16}
+          upload-per-minute: ${OMEGA_LEGAL_ENTERPRISE_UPLOAD_PER_MIN:120}
+          query-per-minute: ${OMEGA_LEGAL_ENTERPRISE_QUERY_PER_MIN:240}

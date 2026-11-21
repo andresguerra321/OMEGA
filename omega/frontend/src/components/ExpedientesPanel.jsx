@@ -10,6 +10,7 @@ import { LegalAccessPreview, LegalActivityPreview } from './LegalCasePreviewTabs
 import { LegalCaseAssistantTab } from './LegalCaseAssistantTab';
 import { LegalDocumentsPanel } from './LegalDocumentsPanel';
 import { LegalTimelineTab } from './LegalTimelineTab';
+import { LegalAdminIssuesPanel } from './LegalAdminIssuesPanel';
 import DossierExportButtons from './DossierExportButtons';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['access', 'Acceso'], ['activity', 'Actividad']];
@@ -70,6 +71,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
       </header>
       <p role="note" className="text-xs text-white/60">El asistente no ofrece asesoría legal. Verifica la información con un profesional.</p>
       <LegalDocumentAiPanel onPolicyChange={setPolicyAccepted} />
+      <LegalAdminIssuesPanel role={authSession?.role} />
       {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1 text-xs text-white/60">Buscar<input name="search" value={filters.search} onChange={change} maxLength={120} placeholder="Título o referencia" className={LEGAL_INPUT} /></label>
