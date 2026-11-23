@@ -54,6 +54,29 @@ def openssl_path():
     return executable
 
 
+def _normalize_pem_material(raw_material: str) -> str:
+    text = raw_material.strip().replace('\r\n', '\n').replace('\\n', '\n')
+    if '-----BEGIN ' not in text:
+        try:
+            decoded = base64.b64decode(text, validate=True).decode('utf-8')
+            if '-----BEGIN ' in decoded:
+                text = decoded.strip().replace('\r\n', '\n')
+        except Exception:
+            pass
+    if not text.endswith('\n'):
+        text += '\n'
+    return text
+
+
+def _run_openssl(args: list[str], env: dict[str, str], context: str) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(args, check=True, timeout=30, capture_output=True, text=True, env=env)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or '').strip().splitlines()
+        summary = detail[-1] if detail else f'exit code {exc.returncode}'
+        raise RuntimeError(f'Error de OpenSSL ({context}): {summary}') from exc
+
+
 def generate(source: Path, output: Path, recursive=False):
     files = sorted((item for item in (source.rglob('*') if recursive else source.iterdir())
                     if item.is_file() and item.suffix.lower() in INSTALLERS), key=lambda item: item.name)
@@ -81,17 +104,45 @@ def generate(source: Path, output: Path, recursive=False):
     material = os.environ.get('RELEASE_SIGNING_KEY', '').strip()
     if material:
         executable = openssl_path()
+        normalized_pem = _normalize_pem_material(material)
         fd, temporary = tempfile.mkstemp(prefix='.omega-release-key-', dir=output)
         try:
             with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as private:
-                private.write(material.replace('\\n', '\n'))
+                private.write(normalized_pem)
             environment = {name: value for name, value in os.environ.items() if name != 'RELEASE_SIGNING_KEY'}
-            subprocess.run([executable, 'dgst', '-sha256', '-sign', temporary, '-passin', 'pass:', '-out', str(signature), str(manifest)],
-                           check=True, timeout=30, capture_output=True, env=environment)
-            subprocess.run([executable, 'pkey', '-in', temporary, '-passin', 'pass:', '-pubout', '-out', str(public_key)],
-                           check=True, timeout=30, capture_output=True, env=environment)
-            subprocess.run([executable, 'dgst', '-sha256', '-verify', str(public_key), '-signature', str(signature), str(manifest)],
-                           check=True, timeout=30, capture_output=True, env=environment)
+            _run_openssl(
+                [executable, 'pkey', '-in', temporary, '-passin', 'pass:', '-pubout', '-out', str(public_key)],
+                environment,
+                'al extraer clave pública de RELEASE_SIGNING_KEY',
+            )
+            key_info = _run_openssl(
+                [executable, 'pkey', '-in', temporary, '-passin', 'pass:', '-text', '-noout'],
+                environment,
+                'al inspeccionar algoritmo de RELEASE_SIGNING_KEY',
+            )
+            is_eddsa = 'ED25519' in key_info.stdout.upper() or 'ED448' in key_info.stdout.upper()
+            if is_eddsa:
+                _run_openssl(
+                    [executable, 'pkeyutl', '-sign', '-rawin', '-in', str(manifest), '-inkey', temporary, '-passin', 'pass:', '-out', str(signature)],
+                    environment,
+                    'al firmar manifiesto con EdDSA',
+                )
+                _run_openssl(
+                    [executable, 'pkeyutl', '-verify', '-pubin', '-inkey', str(public_key), '-rawin', '-in', str(manifest), '-sigfile', str(signature)],
+                    environment,
+                    'al verificar firma EdDSA',
+                )
+            else:
+                _run_openssl(
+                    [executable, 'dgst', '-sha256', '-sign', temporary, '-passin', 'pass:', '-out', str(signature), str(manifest)],
+                    environment,
+                    'al firmar manifiesto SHA-256',
+                )
+                _run_openssl(
+                    [executable, 'dgst', '-sha256', '-verify', str(public_key), '-signature', str(signature), str(manifest)],
+                    environment,
+                    'al verificar firma SHA-256',
+                )
         finally:
             Path(temporary).unlink(missing_ok=True)
     else:

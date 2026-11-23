@@ -360,8 +360,22 @@ export function validateAuthRegisterForm(form, { bootstrapSecretRequired = false
   const emailRes = validateEmail(form?.email);
   if (!emailRes.valid) fieldErrors.email = emailRes.error;
 
-  const orgRes = validateOrganizationName(form?.organizationName, { required: false });
+  const accountType = form?.accountType === 'organization'
+    || (form?.accountType !== 'individual' && String(form?.organizationName ?? '').trim().length > 0)
+    ? 'organization'
+    : 'individual';
+
+  const orgRes = accountType === 'organization'
+    ? validateOrganizationName(form?.organizationName, { required: true })
+    : { valid: true, value: '', error: '' };
   if (!orgRes.valid) fieldErrors.organizationName = orgRes.error;
+
+  const organizationAdminConfirmed = accountType === 'organization'
+    ? Boolean(form?.organizationAdminConfirmed)
+    : false;
+  if (accountType === 'organization' && !organizationAdminConfirmed) {
+    fieldErrors.organizationAdminConfirmed = 'Debes confirmar que eres administrador de esta organización.';
+  }
 
   const pwdRes = validateNewPassword(form?.password);
   if (!pwdRes.valid) fieldErrors.password = pwdRes.error;
@@ -385,7 +399,9 @@ export function validateAuthRegisterForm(form, { bootstrapSecretRequired = false
     sanitized: {
       fullName: nameRes.value,
       email: emailRes.value,
+      accountType,
       organizationName: orgRes.value,
+      organizationAdminConfirmed,
       password: pwdRes.value,
       bootstrapSecret,
       profile: normalizedProfile,

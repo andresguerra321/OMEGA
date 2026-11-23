@@ -313,12 +313,6 @@ export function TwoFactorSettingsCard({ authSession, required = false, onReadyCh
               <span className="text-[13.5px] font-medium text-[#F2F2F4]">
                 Código por correo
               </span>
-              {mfaEnabled && currentMethod === 'EMAIL' && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium border border-[#30D158]/35 bg-[#30D158]/10 text-[#86EFAC]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#30D158]" />
-                  Activo
-                </span>
-              )}
             </div>
             <p className="text-xs text-[#8E95A5]">
               Envía un código de 6 dígitos a tu correo configurado al iniciar sesión.

@@ -172,6 +172,7 @@ export function saveAuthSession(tokenResponse) {
     tenantSlug: tokenResponse.tenantSlug,
     email: tokenResponse.email,
     role: tokenResponse.role,
+    profile: tokenResponse.profile || 'GENERAL',
   };
   inMemoryAuthSession = session;
   scrubLegacyDiskStorage();
@@ -192,6 +193,7 @@ export function restoreCookieAuthSession(principalMe) {
     tenantSlug: principalMe.tenantSlug || existing?.tenantSlug || '',
     email: principalMe.email,
     role: principalMe.role,
+    profile: principalMe.profile || existing?.profile || 'GENERAL',
   };
   inMemoryAuthSession = session;
   emitAuthChanged(session);
@@ -530,6 +532,7 @@ export async function registerAccount({
   email,
   password,
   organizationName,
+  organizationAdminConfirmed,
   bootstrapSecret,
   profile,
 }) {
@@ -552,7 +555,12 @@ export async function registerAccount({
       email: String(email || '').trim().toLowerCase(),
       password,
       profile: normalizedProfile,
-      ...(normalizedOrg ? { organizationName: normalizedOrg } : {}),
+      ...(normalizedOrg
+        ? {
+            organizationName: normalizedOrg,
+            organizationAdminConfirmed: Boolean(organizationAdminConfirmed),
+          }
+        : {}),
     },
   });
   return tokenRes;

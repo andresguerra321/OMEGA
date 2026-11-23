@@ -39,14 +39,39 @@ export function resolveVisibleNavItems(navItems, profileConfig) {
     });
 }
 
+const NICHE_LABELS = Object.freeze({
+  GENERAL: 'General',
+  DEVELOPER: 'Desarrollador',
+  LEGAL: 'Legal',
+});
+
+/**
+ * Formatea la etiqueta visible de rol y nicho para evitar ambigüedad entre
+ * administrador de organización y el perfil/nicho del espacio de trabajo.
+ */
+export function resolveRoleNicheLabel(role, profile) {
+  const normalizedProfile = String(profile || 'GENERAL').trim().toUpperCase();
+  const niche = NICHE_LABELS[normalizedProfile] || NICHE_LABELS.GENERAL;
+  if (role === 'ADMIN') return `Admin · ${niche}`;
+  if (role === 'CLIENT') return `Cliente · ${niche}`;
+  return niche;
+}
+
 export function useTenantProfileConfig(authSession) {
-  const [profileConfig, setProfileConfig] = useState(DEFAULT_PROFILE_CONFIG);
+  const sessionProfile = ['GENERAL', 'DEVELOPER', 'LEGAL'].includes(String(authSession?.profile || '').toUpperCase())
+    ? String(authSession.profile).toUpperCase()
+    : 'GENERAL';
+  const [profileConfig, setProfileConfig] = useState(() => ({
+    ...DEFAULT_PROFILE_CONFIG,
+    profile: sessionProfile,
+  }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const isAuthenticated = Boolean(authSession && (authSession.accessToken || authSession.cookieBacked));
 
   const refresh = useCallback(async () => {
+    const fallbackConfig = { ...DEFAULT_PROFILE_CONFIG, profile: sessionProfile };
     if (!isAuthenticated) {
       setProfileConfig(DEFAULT_PROFILE_CONFIG);
       setError('');
@@ -76,19 +101,20 @@ export function useTenantProfileConfig(authSession) {
         setProfileConfig(normalized);
         return normalized;
       }
-      setProfileConfig(DEFAULT_PROFILE_CONFIG);
-      return DEFAULT_PROFILE_CONFIG;
+      setProfileConfig(fallbackConfig);
+      return fallbackConfig;
     } catch (err) {
       setError(err?.message || 'No se pudo cargar la configuración del perfil del espacio.');
-      return DEFAULT_PROFILE_CONFIG;
+      setProfileConfig(fallbackConfig);
+      return fallbackConfig;
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, sessionProfile]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh, authSession?.tenantId, authSession?.userId]);
+  }, [refresh, authSession?.tenantId, authSession?.userId, authSession?.profile]);
 
   const switchProfile = useCallback(async (nextProfile, confirmed = false) => {
     const updated = await updateTenantProfile(nextProfile, confirmed);

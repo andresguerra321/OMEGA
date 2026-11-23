@@ -711,4 +711,60 @@ class FrontendGatewayIntegrationTest {
                                 .andExpect(header().string(HttpHeaders.SET_COOKIE,
                                                 org.hamcrest.Matchers.containsString("Max-Age=0")));
         }
+
+        @Test
+        void personalRegistrationGetsAnalystWithProfileAndOrgRegistrationRequiresAdminConfirmation() throws Exception {
+                mockMvc.perform(post("/api/v1/auth/register").with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "fullName": "Diego Rojas",
+                                                  "email": "diego.personal.dev@redaccion.org",
+                                                  "password": "OmegaPassword!2026",
+                                                  "profile": "DEVELOPER"
+                                                }
+                                                """))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.role").value("ANALYST"))
+                                .andExpect(jsonPath("$.profile").value("DEVELOPER"));
+
+                mockMvc.perform(post("/api/v1/auth/register").with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "fullName": "Elena Vargas",
+                                                  "email": "elena.unconfirmed@redaccion.org",
+                                                  "password": "OmegaPassword!2026",
+                                                  "organizationName": "Lab Seguridad",
+                                                  "organizationAdminConfirmed": false,
+                                                  "profile": "DEVELOPER"
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest());
+
+                MvcResult orgAdmin = mockMvc.perform(post("/api/v1/auth/register").with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "fullName": "Elena Vargas",
+                                                  "email": "elena.admin.dev@redaccion.org",
+                                                  "password": "OmegaPassword!2026",
+                                                  "organizationName": "Lab Seguridad",
+                                                  "organizationAdminConfirmed": true,
+                                                  "profile": "DEVELOPER"
+                                                }
+                                                """))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.role").value("ADMIN"))
+                                .andExpect(jsonPath("$.profile").value("DEVELOPER"))
+                                .andReturn();
+
+                String token = objectMapper.readTree(orgAdmin.getResponse().getContentAsString())
+                                .get("accessToken").asText();
+                mockMvc.perform(get("/api/v1/auth/me")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.role").value("ADMIN"))
+                                .andExpect(jsonPath("$.profile").value("DEVELOPER"));
+        }
 }

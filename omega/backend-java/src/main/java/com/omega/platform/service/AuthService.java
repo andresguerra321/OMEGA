@@ -30,9 +30,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,7 +93,14 @@ public class AuthService {
             throw new ConflictException("Ya existe una cuenta registrada con este correo electrónico");
         }
 
-        String orgSource = request.organizationName() != null && !request.organizationName().isBlank()
+        boolean hasOrganization = request.organizationName() != null && !request.organizationName().isBlank();
+        if (hasOrganization && Boolean.FALSE.equals(request.organizationAdminConfirmed())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Debes confirmar que eres administrador de la organización para registrar este espacio");
+        }
+
+        String orgSource = hasOrganization
                 ? request.organizationName().trim()
                 : request.fullName().trim();
         String orgName = orgSource.length() > 200 ? orgSource.substring(0, 200) : orgSource;
@@ -99,12 +108,13 @@ public class AuthService {
 
         TenantProfile selectedProfile = request.profile() != null ? request.profile() : TenantProfile.GENERAL;
         TenantEntity tenant = tenantRepository.save(new TenantEntity(uniqueSlug, orgName, selectedProfile));
+        Role assignedRole = hasOrganization ? Role.ADMIN : Role.ANALYST;
         UserEntity adminUser = userRepository.save(new UserEntity(
                 tenant.getId(),
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
                 request.fullName().trim(),
-                Role.ADMIN));
+                assignedRole));
 
         expedienteRepository.save(new ExpedienteEntity(
                 tenant.getId(),
@@ -112,7 +122,7 @@ public class AuthService {
                 "Espacio personal",
                 ClassificationLevel.CONFIDENTIAL));
 
-        return issueTokenResponse(adminUser, tenant.getSlug());
+        return issueTokenResponse(adminUser, tenant.getSlug(), tenant.getProfile());
     }
 
     @Transactional
@@ -135,7 +145,7 @@ public class AuthService {
                 request.adminFullName().trim(),
                 Role.ADMIN));
 
-        return issueTokenResponse(adminUser, tenant.getSlug());
+        return issueTokenResponse(adminUser, tenant.getSlug(), tenant.getProfile());
     }
 
     @Transactional
@@ -241,9 +251,10 @@ public class AuthService {
                     user.getRole(),
                     challenge.challengeToken(),
                     challenge.method(),
-                    challenge.maskedEmail());
+                    challenge.maskedEmail(),
+                    tenant.getProfile());
         }
-        return issueTokenResponse(user, tenant.getSlug());
+        return issueTokenResponse(user, tenant.getSlug(), tenant.getProfile());
     }
 
     public String issueTrustedDeviceToken(UUID userId, long ttlSeconds) {
@@ -258,7 +269,7 @@ public class AuthService {
         UserEntity user = twoFactorService.verifyLoginChallenge(challengeToken, code);
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
                 .orElseThrow(() -> new BadCredentialsException("Organización no disponible"));
-        return issueTokenResponse(user, tenant.getSlug());
+        return issueTokenResponse(user, tenant.getSlug(), tenant.getProfile());
     }
 
     private static String maskEmail(String normalizedEmail) {
@@ -341,15 +352,18 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public PrincipalMeResponse resolveCurrentPrincipal(OmegaPrincipal principal) {
-        String tenantSlug = tenantRepository.findByIdAndActiveTrue(principal.tenantId())
-                .map(TenantEntity::getSlug)
-                .orElse(null);
+        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(principal.tenantId()).orElse(null);
+        String tenantSlug = tenant != null ? tenant.getSlug() : null;
+        TenantProfile profile = tenant != null && tenant.getProfile() != null
+                ? tenant.getProfile()
+                : TenantProfile.GENERAL;
         return new PrincipalMeResponse(
                 principal.userId(),
                 principal.tenantId(),
                 tenantSlug,
                 principal.email(),
-                principal.role());
+                principal.role(),
+                profile);
     }
 
     public void recordLogout(OmegaPrincipal principal) {
@@ -363,7 +377,7 @@ public class AuthService {
                 maskEmail(principal.email().trim().toLowerCase(Locale.ROOT)));
     }
 
-    private AuthTokenResponse issueTokenResponse(UserEntity user, String tenantSlug) {
+    private AuthTokenResponse issueTokenResponse(UserEntity user, String tenantSlug, TenantProfile profile) {
         String token = jwtService.issueToken(
                 user.getId(),
                 user.getTenantId(),
@@ -377,6 +391,11 @@ public class AuthService {
                 user.getTenantId(),
                 tenantSlug,
                 user.getEmail(),
-                user.getRole());
+                user.getRole(),
+                false,
+                null,
+                null,
+                null,
+                profile != null ? profile : TenantProfile.GENERAL);
     }
 }

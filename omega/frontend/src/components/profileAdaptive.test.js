@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { resolveVisibleNavItems } from '../lib/useTenantProfileConfig.js';
+import { resolveRoleNicheLabel, resolveVisibleNavItems } from '../lib/useTenantProfileConfig.js';
 
 const BASE_NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio' },
@@ -116,4 +116,18 @@ test('Hub Proyectos (RepoScannerPanel) consolida todas las pestañas comerciales
     assert.equal(/repo seguro/i.test(cSrc), false);
     assert.ok(cSrc.length > 500);
   }
+});
+
+test('resolveRoleNicheLabel combina rol de organización y nicho sin confundir ADMIN con PERFIL GENERAL', () => {
+  assert.equal(resolveRoleNicheLabel('ADMIN', 'DEVELOPER'), 'Admin · Desarrollador');
+  assert.equal(resolveRoleNicheLabel('ADMIN', 'LEGAL'), 'Admin · Legal');
+  assert.equal(resolveRoleNicheLabel('ADMIN', 'GENERAL'), 'Admin · General');
+  assert.equal(resolveRoleNicheLabel('ANALYST', 'DEVELOPER'), 'Desarrollador');
+  assert.equal(resolveRoleNicheLabel('ANALYST', 'LEGAL'), 'Legal');
+  assert.equal(resolveRoleNicheLabel('CLIENT', 'GENERAL'), 'Cliente · General');
+
+  const accountSrc = readFileSync(new URL('./AccountSettingsPanel.jsx', import.meta.url), 'utf8');
+  assert.ok(accountSrc.includes('authSession?.profile'));
+  assert.ok(accountSrc.includes('Perfil ${nicheText}'));
+  assert.equal(accountSrc.includes('Sesión activa'), false);
 });

@@ -156,3 +156,44 @@ test('validateChatMessage, validateIocInput, validateIocList, validateUploadFile
 
   assert.equal(sanitizeSearchInput('  hola\u0000   mundo  ', 20), ' hola mundo ');
 });
+
+test('registro organizacional exige nombre de organización y confirmación de administrador', () => {
+  const missingOrgAndConfirm = validateAuthRegisterForm({
+    fullName: 'Laura Méndez',
+    email: 'laura@estudio.org',
+    accountType: 'organization',
+    organizationName: '',
+    organizationAdminConfirmed: false,
+    profile: 'DEVELOPER',
+    password: 'OmegaPassword!2026',
+  });
+  assert.equal(missingOrgAndConfirm.valid, false);
+  assert.ok(missingOrgAndConfirm.fieldErrors.organizationName);
+  assert.ok(missingOrgAndConfirm.fieldErrors.organizationAdminConfirmed);
+
+  const validOrg = validateAuthRegisterForm({
+    fullName: 'Laura Méndez',
+    email: 'laura@estudio.org',
+    accountType: 'organization',
+    organizationName: 'Estudio Sur',
+    organizationAdminConfirmed: true,
+    profile: 'DEVELOPER',
+    password: 'OmegaPassword!2026',
+  });
+  assert.equal(validOrg.valid, true);
+  assert.equal(validOrg.sanitized.accountType, 'organization');
+  assert.equal(validOrg.sanitized.organizationAdminConfirmed, true);
+  assert.equal(validOrg.sanitized.profile, 'DEVELOPER');
+
+  const validPersonal = validateAuthRegisterForm({
+    fullName: 'Laura Méndez',
+    email: 'laura.dev@gmail.com',
+    accountType: 'individual',
+    organizationName: 'Ignorado',
+    profile: 'DEVELOPER',
+    password: 'OmegaPassword!2026',
+  });
+  assert.equal(validPersonal.valid, true);
+  assert.equal(validPersonal.sanitized.organizationName, '');
+  assert.equal(validPersonal.sanitized.organizationAdminConfirmed, false);
+});

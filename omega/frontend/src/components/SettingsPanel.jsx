@@ -352,7 +352,7 @@ function TogglePill({ checked, disabled = false, onChange, label }) {
 
 function SplitRow({ title, description, children, className = '' }) {
   return (
-    <div className={`py-7 border-b border-white/[0.07] grid grid-cols-1 lg:grid-cols-12 gap-6 ${className}`}>
+    <div className={`py-5 border-b border-white/[0.06] grid grid-cols-1 lg:grid-cols-12 gap-6 ${className}`}>
       <div className="lg:col-span-4 space-y-1">
         <h2 className="text-sm font-medium text-white">{title}</h2>
         {description && (
@@ -379,6 +379,7 @@ export function SettingsPanel({
   embedded = false,
   saveTrigger = 0,
   onSavedFeedback,
+  onDirtyChange,
 }) {
   const [activeSection, setActiveSection] = useState(initialSection || 'cuenta');
   const [gov, setGov] = useState(null);
@@ -885,6 +886,16 @@ export function SettingsPanel({
     }, 1800);
   }
 
+  const isDirty =
+    topK !== savedTopK ||
+    sourceScope !== savedScope ||
+    passiveLinks !== savedPassiveLinks ||
+    explicitConsent !== savedExplicitConsent;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   useEffect(() => {
     if (saveTrigger > 0) {
       handleSaveChanges();
@@ -949,7 +960,7 @@ export function SettingsPanel({
       )}
 
       {embedded && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-1.5">
+        <div className="flex flex-wrap items-center gap-5 border-b border-white/[0.06]">
           {CONFIG_SECTIONS.map((sec) => {
             const Icon = sec.icon;
             const isActive = activeSection === sec.id;
@@ -958,10 +969,10 @@ export function SettingsPanel({
                 key={sec.id}
                 type="button"
                 onClick={() => scrollToSection(sec.id)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 pb-2.5 -mb-px border-b-[1.5px] text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-[#2F6FED] text-white'
-                    : 'text-[#8E95A5] hover:text-white hover:bg-[#141923]/75'
+                    ? 'border-zinc-100 text-zinc-100'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
@@ -1052,16 +1063,16 @@ export function SettingsPanel({
                   return (
                     <div className="rounded-xl bg-[#141923]/75 border border-white/[0.05] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5 text-xs text-[#D2D6E2]">
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
                         <span>
-                          Postura de seguridad: <strong className="text-white">100%</strong> · Sesión JWT aislada y Zero-Retention activo
+                          Postura de seguridad: <strong className="text-zinc-100">100%</strong> · Sesión JWT aislada y Zero-Retention activo
                         </span>
                       </div>
                       {authSession && (
                         <button
                           type="button"
                           onClick={() => void onPanicPurge?.()}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors cursor-pointer shrink-0"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer shrink-0"
                         >
                           <Lock className="h-3.5 w-3.5" strokeWidth={1.75} />
                           <span>Purga rápida</span>
@@ -1204,31 +1215,31 @@ export function SettingsPanel({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-white break-all">
+                          <span className="text-sm font-medium text-zinc-100 break-all">
                             {authSession.email}
                           </span>
-                          <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-2 py-0.5 text-[10.5px] font-medium text-[#CFE0FF]">
+                          <span className="bg-white/[0.05] border border-white/[0.08] text-zinc-300 text-[11px] font-medium px-2 py-0.5 rounded-md">
                             {authSession.role}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-[#8E95A5]">
                           <span>Workspace ID:</span>
-                          <code className="font-tech text-[#D2D6E2] break-all">
+                          <code className="font-mono text-xs text-zinc-300 break-all">
                             {displayWorkspaceId}
                           </code>
                           <button
                             type="button"
                             onClick={handleCopyWorkspaceId}
-                            className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] px-2 py-0.5 text-[11px] text-[#F2F2F4] transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] px-2 py-0.5 text-[11px] text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
                           >
                             {copiedId ? (
                               <>
-                                <Check className="h-3 w-3 text-[#30D158]" />
-                                <span>Copiado</span>
+                                <Check className="h-3 w-3 text-emerald-400 transition-transform duration-150" />
+                                <span className="text-emerald-400">Copiado</span>
                               </>
                             ) : (
                               <>
-                                <Copy className="h-3 w-3 text-[#8E95A5]" />
+                                <Copy className="h-3 w-3 text-zinc-400 transition-transform duration-150" />
                                 <span>Copiar</span>
                               </>
                             )}
@@ -1240,17 +1251,17 @@ export function SettingsPanel({
                         <button
                           type="button"
                           onClick={() => onOpenAuth?.('Cambia de cuenta o inicia sesión con otro correo.')}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+                          className="group inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
                         >
-                          <KeyRound className="h-3.5 w-3.5 text-[#2F6FED]" />
+                          <KeyRound className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-100 transition-colors duration-150" />
                           <span>Cambiar cuenta</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => onLogout?.()}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+                          className="group inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
                         >
-                          <LogOut className="h-3.5 w-3.5 text-[#8E95A5]" />
+                          <LogOut className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-100 transition-colors duration-150" />
                           <span>Cerrar sesión</span>
                         </button>
                       </div>
@@ -1303,25 +1314,25 @@ export function SettingsPanel({
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div>
                         <div className="text-xs text-[#8E95A5]">Espacios privados</div>
-                        <div className="font-tech mt-1 text-xl font-semibold text-white">
+                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
                           {Number(tenantStats?.expedientes || 0)}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-[#8E95A5]">PDFs indexados</div>
-                        <div className="font-tech mt-1 text-xl font-semibold text-white">
+                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
                           {Number(tenantStats?.documents || 0)}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-[#8E95A5]">Zero-Retention purgados</div>
-                        <div className="font-tech mt-1 text-xl font-semibold text-[#30D158]">
+                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
                           {Number(tenantStats?.zero_retention_purged_pdfs || 0)}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-[#8E95A5]">Activos OSINT</div>
-                        <div className="font-tech mt-1 text-xl font-semibold text-white">
+                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
                           {Number(tenantStats?.osint_assets || 0)}
                         </div>
                       </div>

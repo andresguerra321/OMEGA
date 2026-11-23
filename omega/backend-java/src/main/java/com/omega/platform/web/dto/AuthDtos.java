@@ -65,10 +65,20 @@ public final class AuthDtos {
             @Size(max = 200, message = "La organización no puede superar 200 caracteres")
             @Pattern(regexp = ValidationPatterns.OPTIONAL_ORGANIZATION_NAME_REGEX, message = "Ingresa un nombre de organización válido (al menos 2 letras, sin símbolos especiales)")
             String organizationName,
-            TenantProfile profile
+            TenantProfile profile,
+            Boolean organizationAdminConfirmed
     ) {
         public RegisterAccountRequest(String fullName, String email, String password, String organizationName) {
-            this(fullName, email, password, organizationName, TenantProfile.GENERAL);
+            this(fullName, email, password, organizationName, TenantProfile.GENERAL, null);
+        }
+
+        public RegisterAccountRequest(
+                String fullName,
+                String email,
+                String password,
+                String organizationName,
+                TenantProfile profile) {
+            this(fullName, email, password, organizationName, profile, null);
         }
     }
 
@@ -121,18 +131,27 @@ public final class AuthDtos {
             String mfaChallengeToken,
             String mfaMethod,
             String maskedEmail,
-            String recoveryKey
+            String recoveryKey,
+            TenantProfile profile
     ) {
         public AuthTokenResponse(String accessToken, String tokenType, long expiresInSeconds, UUID userId,
                 UUID tenantId, String tenantSlug, String email, Role role, boolean mfaRequired,
                 String mfaChallengeToken, String mfaMethod, String maskedEmail) {
             this(accessToken, tokenType, expiresInSeconds, userId, tenantId, tenantSlug, email, role,
-                    mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, null);
+                    mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, null, TenantProfile.GENERAL);
+        }
+
+        public AuthTokenResponse(String accessToken, String tokenType, long expiresInSeconds, UUID userId,
+                UUID tenantId, String tenantSlug, String email, Role role, boolean mfaRequired,
+                String mfaChallengeToken, String mfaMethod, String maskedEmail, TenantProfile profile) {
+            this(accessToken, tokenType, expiresInSeconds, userId, tenantId, tenantSlug, email, role,
+                    mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, null,
+                    profile != null ? profile : TenantProfile.GENERAL);
         }
 
         public AuthTokenResponse withRecoveryKey(String key) {
             return new AuthTokenResponse(accessToken, tokenType, expiresInSeconds, userId, tenantId,
-                    tenantSlug, email, role, mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, key);
+                    tenantSlug, email, role, mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, key, profile);
         }
 
         public AuthTokenResponse(
@@ -145,7 +164,7 @@ public final class AuthDtos {
                 String email,
                 Role role) {
             this(accessToken, tokenType, expiresInSeconds, userId, tenantId, tenantSlug, email, role,
-                    false, null, null, null);
+                    false, null, null, null, null, TenantProfile.GENERAL);
         }
 
         public static AuthTokenResponse mfaChallenge(
@@ -156,7 +175,8 @@ public final class AuthDtos {
                 Role role,
                 String challengeToken,
                 String mfaMethod,
-                String maskedEmail) {
+                String maskedEmail,
+                TenantProfile profile) {
             return new AuthTokenResponse(
                     null,
                     "MfaChallenge",
@@ -169,7 +189,23 @@ public final class AuthDtos {
                     true,
                     challengeToken,
                     mfaMethod,
-                    maskedEmail);
+                    maskedEmail,
+                    null,
+                    profile != null ? profile : TenantProfile.GENERAL);
+        }
+
+        public static AuthTokenResponse mfaChallenge(
+                UUID userId,
+                UUID tenantId,
+                String tenantSlug,
+                String email,
+                Role role,
+                String challengeToken,
+                String mfaMethod,
+                String maskedEmail) {
+            return mfaChallenge(
+                    userId, tenantId, tenantSlug, email, role,
+                    challengeToken, mfaMethod, maskedEmail, TenantProfile.GENERAL);
         }
     }
 
@@ -189,10 +225,15 @@ public final class AuthDtos {
             UUID tenantId,
             String tenantSlug,
             String email,
-            Role role
+            Role role,
+            TenantProfile profile
     ) {
         public PrincipalMeResponse(UUID userId, UUID tenantId, String email, Role role) {
-            this(userId, tenantId, null, email, role);
+            this(userId, tenantId, null, email, role, TenantProfile.GENERAL);
+        }
+
+        public PrincipalMeResponse(UUID userId, UUID tenantId, String tenantSlug, String email, Role role) {
+            this(userId, tenantId, tenantSlug, email, role, TenantProfile.GENERAL);
         }
     }
 

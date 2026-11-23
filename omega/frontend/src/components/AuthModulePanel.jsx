@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight,
   Building2,
+  Check,
   CheckCircle2,
   Cpu,
   Eye,
@@ -101,7 +102,9 @@ export function AuthAccessForm({
   const [regForm, setRegForm] = useState({
     fullName: '',
     email: '',
+    accountType: 'individual',
     organizationName: '',
+    organizationAdminConfirmed: false,
     profile: 'GENERAL',
     password: '',
     bootstrapSecret: '',
@@ -1271,34 +1274,128 @@ export function AuthAccessForm({
           </div>
 
           <div>
-            <label
-              htmlFor={`${uid}-reg-org`}
-              className={`block text-[11.5px] font-medium mb-1 ${labelTone}`}
-            >
-              Organización o medio <span className="text-[#9FA6B8]">(opcional)</span>
-            </label>
-            <div className="group relative flex items-center">
-              <Building2 className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] group-focus-within:scale-110 transition-all duration-150 absolute left-3.5 pointer-events-none" />
-              <input
-                id={`${uid}-reg-org`}
-                type="text"
-                maxLength={140}
-                aria-invalid={Boolean(fieldErrors.organizationName)}
-                value={regForm.organizationName}
-                onChange={(e) => {
-                  setRegForm((p) => ({ ...p, organizationName: e.target.value }));
-                  clearFieldError('register', 'organizationName');
-                }}
-                placeholder="Redacción Independiente / Investigador"
-                className={`w-full h-9.5 pl-9.5 pr-3.5 rounded-[10px] border text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputClass('organizationName')}`}
-              />
+            <span className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}>
+              Tipo de cuenta
+            </span>
+            <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Tipo de cuenta">
+              {[
+                { id: 'individual', label: 'Personal', hint: 'Espacio individual' },
+                { id: 'organization', label: 'Organización', hint: 'Espacio administrado' },
+              ].map((opt) => {
+                const active = regForm.accountType === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => {
+                      setRegForm((p) => ({
+                        ...p,
+                        accountType: opt.id,
+                        ...(opt.id === 'individual'
+                          ? { organizationName: '', organizationAdminConfirmed: false }
+                          : {}),
+                      }));
+                      clearFieldError('register', 'organizationName');
+                      clearFieldError('register', 'organizationAdminConfirmed');
+                    }}
+                    className={`rounded-lg px-2.5 py-2 text-left border transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-[#2F6FED]/15 border-[#2F6FED] text-white'
+                        : 'bg-[#141923]/75 border-white/[0.05] text-[#9FA6B8] hover:text-white hover:border-white/[0.12]'
+                    }`}
+                  >
+                    <div className="text-[12px] font-medium leading-tight">{opt.label}</div>
+                    <div className="mt-0.5 text-[10px] leading-snug text-[#8E95A5]">
+                      {opt.hint}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            {fieldErrors.organizationName && (
-              <p className="motion-safe:animate-fade-up mt-1 text-[11px] text-[#FFB4AE]">
-                {fieldErrors.organizationName}
-              </p>
-            )}
           </div>
+
+          {regForm.accountType === 'organization' && (
+            <div className="space-y-2.5">
+              <div>
+                <label
+                  htmlFor={`${uid}-reg-org`}
+                  className={`block text-[11.5px] font-medium mb-1 ${labelTone}`}
+                >
+                  Nombre de la organización
+                </label>
+                <div className="group relative flex items-center">
+                  <Building2 className="h-3.5 w-3.5 text-[#9FA6B8] group-focus-within:text-[#6EA0FF] group-focus-within:scale-110 transition-all duration-150 absolute left-3.5 pointer-events-none" />
+                  <input
+                    id={`${uid}-reg-org`}
+                    type="text"
+                    required
+                    maxLength={140}
+                    aria-invalid={Boolean(fieldErrors.organizationName)}
+                    value={regForm.organizationName}
+                    onChange={(e) => {
+                      setRegForm((p) => ({ ...p, organizationName: e.target.value }));
+                      clearFieldError('register', 'organizationName');
+                    }}
+                    placeholder="Ej. Redacción Sur / Estudio Legal"
+                    className={`w-full h-9.5 pl-9.5 pr-3.5 rounded-[10px] border text-[13px] text-[#F2F2F4] focus:outline-none transition-all duration-200 ${inputClass('organizationName')}`}
+                  />
+                </div>
+                {fieldErrors.organizationName && (
+                  <p className="motion-safe:animate-fade-up mt-1 text-[11px] text-[#FFB4AE]">
+                    {fieldErrors.organizationName}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={Boolean(regForm.organizationAdminConfirmed)}
+                  onClick={() => {
+                    setRegForm((p) => ({
+                      ...p,
+                      organizationAdminConfirmed: !p.organizationAdminConfirmed,
+                    }));
+                    clearFieldError('register', 'organizationAdminConfirmed');
+                  }}
+                  className={`w-full flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors cursor-pointer ${
+                    regForm.organizationAdminConfirmed
+                      ? 'border-[#2F6FED] bg-[#2F6FED]/15 text-[#F2F2F4]'
+                      : fieldErrors.organizationAdminConfirmed
+                        ? 'border-[#FF453A]/75 bg-[#141923]/75 text-[#D8DCE6]'
+                        : 'border-white/[0.07] bg-[#141923]/75 text-[#B8C0D0] hover:border-white/[0.14]'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                      regForm.organizationAdminConfirmed
+                        ? 'border-[#2F6FED] bg-[#2F6FED] text-white'
+                        : 'border-white/25 bg-[#0A0A0C]/60'
+                    }`}
+                  >
+                    {regForm.organizationAdminConfirmed && <Check className="h-3 w-3" strokeWidth={2.5} />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[12px] font-medium leading-snug text-[#F2F2F4]">
+                      Confirmo que soy administrador de esta organización
+                    </span>
+                    <span className="block mt-0.5 text-[10.5px] leading-snug text-[#8E95A5]">
+                      Tu cuenta tendrá rol de administrador junto con el perfil elegido.
+                    </span>
+                  </span>
+                </button>
+                {fieldErrors.organizationAdminConfirmed && (
+                  <p className="motion-safe:animate-fade-up mt-1 text-[11px] text-[#FFB4AE]">
+                    {fieldErrors.organizationAdminConfirmed}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <span className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}>

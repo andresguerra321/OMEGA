@@ -88,6 +88,23 @@ class ReleaseIntegrityTest(unittest.TestCase):
             self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
             self.assertEqual(list((root / 'release').glob('.omega-release-key-*')), [])
 
+    def test_ed25519_and_base64_pem_signing_verify_cleanly(self):
+        import base64
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            key = root / 'ed25519.pem'
+            executable = openssl_path()
+            subprocess.run([executable, 'genpkey', '-algorithm', 'ED25519', '-out', str(key)], check=True, capture_output=True)
+            (root / 'OMEGA.exe').write_bytes(b'installer ed25519 fixture')
+            encoded_pem = base64.b64encode(key.read_bytes()).decode('ascii')
+            with patch.dict(os.environ, {'RELEASE_SIGNING_KEY': encoded_pem}):
+                manifest = generate(root, root / 'release')
+            public = root / 'release/RELEASE_SIGNING_PUBLIC_KEY.pem'
+            signature = root / 'release/SHA256SUMS.txt.sig'
+            verify_cmd = [executable, 'pkeyutl', '-verify', '-pubin', '-inkey', str(public), '-rawin', '-in', str(manifest), '-sigfile', str(signature)]
+            self.assertEqual(subprocess.run(verify_cmd, capture_output=True).returncode, 0)
+            self.assertEqual(list((root / 'release').glob('.omega-release-key-*')), [])
+
 
 if __name__ == '__main__':
     unittest.main()
