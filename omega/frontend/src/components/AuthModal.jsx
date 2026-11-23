@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { AuthAccessForm } from './AuthModulePanel';
 import { OmegaBrandMark } from './OmegaBrandMark';
+import { PilotTrustAndSupportDialog } from './PilotOpsPanel';
 import { backdropVariants, popVariants } from '../lib/motion';
 
 export function AuthModal({
@@ -11,6 +13,7 @@ export function AuthModal({
   reasonMessage = '',
   onOpenCuenta,
 }) {
+  const [trustDialog, setTrustDialog] = useState({ open: false, mode: 'trust' });
   return (
     <AnimatePresence>
     {isOpen && (
@@ -59,6 +62,23 @@ export function AuthModal({
             }}
           />
 
+          <div className="pt-2 border-t border-white/[0.07] flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
+            <button
+              type="button"
+              onClick={() => setTrustDialog({ open: true, mode: 'invite' })}
+              className="text-[#2F6FED] hover:underline cursor-pointer"
+            >
+              Unirme con código de invitación
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrustDialog({ open: true, mode: 'trust' })}
+              className="text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
+            >
+              Zero-Retention, Planes y Términos
+            </button>
+          </div>
+
           {onOpenCuenta && (
             <div className="pt-2 border-t border-white/[0.07] text-center">
               <button
@@ -74,6 +94,16 @@ export function AuthModal({
             </div>
           )}
         </div>
+        <PilotTrustAndSupportDialog
+          isOpen={trustDialog.open}
+          initialMode={trustDialog.mode}
+          currentView="auth-modal"
+          onClose={() => setTrustDialog((prev) => ({ ...prev, open: false }))}
+          onInvitationAccepted={(session) => {
+            if (session) onAuthenticated?.(session);
+            onClose?.();
+          }}
+        />
       </motion.div>
     </motion.div>
     )}

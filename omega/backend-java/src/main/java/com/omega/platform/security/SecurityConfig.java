@@ -84,10 +84,12 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config", "/api/v1/auth/csrf")
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config", "/api/v1/auth/csrf",
+                                "/api/v1/public/status")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout",
                                 "/api/v1/auth/register", "/api/v1/auth/tenants/register",
+                                "/api/v1/auth/invitations/accept",
                                 "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
                                 "/api/v1/auth/mfa/verify", "/api/v1/auth/mfa/resend-email")
                         .permitAll()

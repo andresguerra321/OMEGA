@@ -16,6 +16,7 @@ import DossierExportButtons from './DossierExportButtons';
 import { RecoveryKeyCard } from './RecoveryKeyCard';
 import { SaasFleetCard } from './SaasFleetCard';
 import { ApiTokensCard } from './ApiTokensCard';
+import { PilotWorkspaceCard } from './PilotOpsPanel';
 
 const SettingsPanel = lazy(() =>
   import('./SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
@@ -470,6 +471,7 @@ export function AccountSettingsPanel({
 
             {mainTab === 'respaldo' && (
               <div className="space-y-4">
+                <PilotWorkspaceCard authSession={authSession} currentView="cuenta-respaldo" />
                 <RecoveryKeyCard />
                 <ApiTokensCard authSession={authSession} />
                 {isAdmin && <SaasFleetCard authSession={authSession} />}

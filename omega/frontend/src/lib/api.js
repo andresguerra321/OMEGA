@@ -1338,3 +1338,65 @@ export async function dispatchTestAlert({ severity = 'HIGH', title, message, web
     },
   });
 }
+
+// ---------- Piloto: Embudo Zero-PII, Invitaciones, Soporte y Estado Público ----------
+
+export async function fetchPilotFunnel() {
+  return apiFetch('/pilot/funnel');
+}
+
+export async function recordPilotTelemetry(eventName, properties = {}) {
+  return apiFetch('/pilot/telemetry', {
+    method: 'POST',
+    body: { eventName, properties },
+  });
+}
+
+export async function fetchTeamInvitations() {
+  return apiFetch('/auth/invitations');
+}
+
+export async function createTeamInvitation({ email, role = 'ANALYST' } = {}) {
+  return apiFetch('/auth/invitations', {
+    method: 'POST',
+    body: { email, role },
+  });
+}
+
+export async function revokeTeamInvitation(invitationId) {
+  return apiFetch(`/auth/invitations/${encodeURIComponent(invitationId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function acceptTeamInvitation({ token, fullName, password } = {}) {
+  const res = await apiFetch('/auth/invitations/accept', {
+    method: 'POST',
+    body: { token, fullName, password },
+  });
+  if (res?.accessToken) {
+    saveAuthSession(res);
+  }
+  return res;
+}
+
+export async function submitSupportTicket({
+  category = 'BUG',
+  summary,
+  currentView = '',
+  lastErrorCode = '',
+} = {}) {
+  return apiFetch('/support/report', {
+    method: 'POST',
+    body: { category, summary, currentView, lastErrorCode },
+  });
+}
+
+export async function fetchSupportTickets() {
+  return apiFetch('/support/tickets');
+}
+
+export async function fetchPublicSystemStatus() {
+  return apiFetch('/public/status');
+}
+
