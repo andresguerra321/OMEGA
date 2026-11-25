@@ -33,6 +33,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.springframework.context.annotation.Import(PaidWorkspaceFixture.class)
 class PilotLaunchRoadmapIntegrationTest {
 
     private static final String EXTERNAL_DB_URL = System.getenv("OMEGA_TEST_DB_URL");

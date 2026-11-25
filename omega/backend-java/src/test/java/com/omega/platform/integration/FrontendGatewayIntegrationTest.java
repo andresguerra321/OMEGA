@@ -47,6 +47,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.springframework.context.annotation.Import(PaidWorkspaceFixture.class)
 class FrontendGatewayIntegrationTest {
 
         private static final String EXPECTED_INTERNAL_TOKEN = "omega-test-internal-service-token";
