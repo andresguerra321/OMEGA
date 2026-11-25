@@ -63,13 +63,22 @@ public class BillingController {
     public Map<String,Object> refresh(@AuthenticationPrincipal OmegaPrincipal actor) {
         access.requireManager(actor);billing.reconcile(actor.tenantId());return summary(actor);
     }
+    @org.springframework.beans.factory.annotation.Value("${OMEGA_MP_WEBHOOK_MAX_AGE_SECONDS:300}")
+    private long webhookMaxAgeSeconds = MercadoPagoSignature.DEFAULT_MAX_AGE_SECONDS;
+
     @PostMapping("/webhooks/mercadopago")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void webhook(HttpServletRequest request) {
         mp.requireEnabled();
         String id=request.getParameter("data.id"), topic=request.getParameter("type");
         if (id==null || !id.matches("[a-zA-Z0-9_-]{1,100}")
-                || !MercadoPagoSignature.valid(mp.webhookSecret,request.getHeader("x-signature"),request.getHeader("x-request-id"),id))
+                || !MercadoPagoSignature.valid(
+                        mp.webhookSecret,
+                        request.getHeader("x-signature"),
+                        request.getHeader("x-request-id"),
+                        id,
+                        java.time.Instant.now(),
+                        webhookMaxAgeSeconds))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Firma de notificación inválida");
         if (!Set.of("payment","subscription_authorized_payment","subscription_preapproval").contains(topic==null?"":topic)) return;
         String key=ApiTokenService.sha256Hex(topic+":"+id+":"+request.getHeader("x-signature")+":"+request.getHeader("x-request-id"));

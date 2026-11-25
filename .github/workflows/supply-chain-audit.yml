@@ -76,4 +76,4 @@ jobs:
       - name: Run VICE local audit on omega/
         env:
           VICE_ACCEPT_TERMS: '1'
-        run: npx --yes vice-security@1.4.2 audit omega --ci --min-score 90
+        run: npx --yes vice-security@3.5.0 audit omega --ci --min-score 90

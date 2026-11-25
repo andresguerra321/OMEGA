@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -33,7 +32,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.util.HtmlUtils;
 
 @Service
 public class TwoFactorService {
@@ -51,6 +49,7 @@ public class TwoFactorService {
     private final JavaMailSender mailSender;
     private final String smtpHost;
     private final String smtpFrom;
+    @Value("${OMEGA_SUPPORT_EMAIL:}") private String supportEmail;
     private final byte[] totpAtRestKey;
 
     public record LoginChallengeResult(String challengeToken, String method, String maskedEmail) {
@@ -502,14 +501,16 @@ public class TwoFactorService {
                     + "Tu código de verificación (válido por 5 minutos) es: " + code + "\n";
 
             String html = OmegaEmailTemplate.Spec.builder(title)
-                    .preheader("Tu código de verificación de OMEGA es " + code + " (válido por 5 minutos).")
+                    .preheader("Tu código de verificación de OMEGA caduca en 5 minutos.")
                     .addParagraph("Hola " + greetingName + ", usa el siguiente código de verificación para confirmar tu acceso a OMEGA.")
                     .verificationCode(code, "Válido por 5 minutos · Uso único")
                     .addParagraph("Si no intentaste iniciar sesión ni configurar la verificación en dos pasos, cambia tu contraseña de inmediato.")
                     .recipientEmail(user.getEmail())
+                    .supportEmail(supportEmail==null || supportEmail.isBlank()?smtpFrom:supportEmail)
                     .render();
 
             helper.setText(plainText, html);
+            OmegaEmailTemplate.attachMark(helper);
             mailSender.send(mimeMessage);
         } catch (Exception ex) {
             log.warn("Error enviando correo 2FA a {}: {}", maskEmail(user.getEmail()), ex.getMessage());
@@ -517,19 +518,6 @@ public class TwoFactorService {
         }
     }
 
-    private static String buildOtpCellsHtml(String code) {
-        StringBuilder cells = new StringBuilder();
-        for (int i = 0; i < code.length(); i++) {
-            cells.append("<td style=\"padding:0 4px;user-select:none;-webkit-user-select:none;\">")
-                    .append("<div style=\"width:44px;height:54px;line-height:54px;text-align:center;")
-                    .append("background-color:#141418;border:1px solid rgba(47,111,237,0.55);border-radius:12px;")
-                    .append("font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;")
-                    .append("font-size:26px;font-weight:700;color:#F2F2F4;user-select:none;-webkit-user-select:none;\">")
-                    .append(code.charAt(i))
-                    .append("</div></td>");
-        }
-        return cells.toString();
-    }
 
     private static String maskEmail(String email) {
         int at = email.indexOf('@');

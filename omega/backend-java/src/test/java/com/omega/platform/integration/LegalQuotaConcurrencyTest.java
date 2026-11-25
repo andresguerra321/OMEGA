@@ -44,6 +44,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.springframework.context.annotation.Import(PaidWorkspaceFixture.class)
 class LegalQuotaConcurrencyTest {
 
     private static final String EXTERNAL_DB_URL = System.getenv("OMEGA_TEST_DB_URL");
@@ -107,7 +108,8 @@ class LegalQuotaConcurrencyTest {
                         .content("{\"profile\":\"LEGAL\",\"confirmed\":true}"))
                 .andExpect(status().isOk());
 
-        var personal = quotaProperties.forPlan("PERSONAL");
+        OmegaPrincipal actor = new OmegaPrincipal(userId, tenantId, "admin@" + slug + ".invalid", Role.ADMIN, true);
+        var personal = quotaProperties.forPlan(quotaService.currentPlanSummary(actor).planCode());
         int origQueryLimit = personal.getQueryPerMinute();
         int origUploadLimit = personal.getUploadPerMinute();
         int origConcurrent = personal.getMaxConcurrentIndexing();
@@ -115,7 +117,6 @@ class LegalQuotaConcurrencyTest {
         personal.setUploadPerMinute(2);
         personal.setMaxConcurrentIndexing(2);
 
-        OmegaPrincipal actor = new OmegaPrincipal(userId, tenantId, "admin@" + slug + ".invalid", Role.ADMIN, true);
         UUID caseId = UUID.randomUUID();
         ExecutorService pool = Executors.newFixedThreadPool(8);
         try {

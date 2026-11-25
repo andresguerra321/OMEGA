@@ -663,8 +663,10 @@ public class PilotOpsService {
                     .addMetadata("Vigencia", "72 horas")
                     .verificationCode(rawToken, "Código de invitación")
                     .recipientEmail(email)
+                    .supportEmail(smtpFrom.trim())
                     .render();
             helper.setText(plainText, html);
+            OmegaEmailTemplate.attachMark(helper);
             mailSender.send(msg);
             return true;
         } catch (Exception ex) {

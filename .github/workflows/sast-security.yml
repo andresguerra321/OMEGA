@@ -100,7 +100,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install Semgrep
-        run: python -m pip install semgrep==1.99.0
+        run: |
+          # Semgrep 1.99's OpenTelemetry dependency still imports pkg_resources.
+          python -m pip install setuptools==80.9.0 semgrep==1.99.0
+          semgrep --version
 
       - name: Run Semgrep SAST scan (SARIF + JSON)
         id: semgrep_scan
@@ -129,6 +132,10 @@ jobs:
           if [ "${SEMGREP_RC}" -ge 2 ]; then
             echo "::error::Semgrep falló con código de error técnico (${SEMGREP_RC})."
             exit "${SEMGREP_RC}"
+          fi
+          if [ ! -s omega-semgrep.json ] || [ ! -s omega-semgrep.sarif ]; then
+            echo "::error::Semgrep no generó los reportes JSON y SARIF; el escaneo no se considera completado."
+            exit 2
           fi
 
       - name: Run Semgrep Gate Evaluator Unit Tests

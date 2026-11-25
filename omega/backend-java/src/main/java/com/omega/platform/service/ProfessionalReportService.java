@@ -171,7 +171,8 @@ public class ProfessionalReportService {
             jdbc.update("""
                 INSERT INTO omega_rag.transactional_mail(tenant_id,actor_user_id,event_key,subject,body) VALUES (?,?,?,?,?) ON CONFLICT(event_key) DO NOTHING
                 """,actor.tenantId(),actor.userId(),"report:"+id,"OMEGA · Tu informe está disponible",
-                    "Tu informe " + id + " está disponible en Cuenta → Informes. Inicia sesión para consultarlo. Este correo no incluye documentos ni contenido del expediente.");
+                    "Tu informe ya está disponible en Cuenta → Informes.\n\nInforme: " + id + "\nFecha: " + now
+                    + "\n\nInicia sesión para consultarlo. Este correo no incluye documentos ni contenido del expediente.");
             audit.record(actor.tenantId(),actor.userId(),"PROFESSIONAL_REPORT_CREATED","REPORT",id.toString(),Map.of("profile",profile,"schemaVersion","omega-report-v1"));
             return Map.of("id",id,"title",title,"profile",profile,"created_at",now,"creditsCharged",0);
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) { throw new IllegalStateException("No se pudo guardar el informe",ex); }

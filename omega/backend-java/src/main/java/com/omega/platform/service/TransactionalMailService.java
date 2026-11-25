@@ -18,6 +18,8 @@ public class TransactionalMailService {
     private final TransactionTemplate tx;
     private final boolean enabled;
     private final String from;
+    @Value("${OMEGA_SUPPORT_EMAIL:}")
+    private String supportEmail;
 
     public TransactionalMailService(
             JdbcTemplate jdbc,
@@ -60,7 +62,9 @@ public class TransactionalMailService {
                     helper.setFrom(from, "OMEGA Security");
                     helper.setTo(recipient);
                     helper.setSubject(subject);
-                    helper.setText(body, renderHtml(subject, body, recipient));
+                    helper.setText(body, OmegaEmailTemplate.renderPlainBody(subject,body,recipient,
+                            supportEmail==null || supportEmail.isBlank()?from:supportEmail));
+                    OmegaEmailTemplate.attachMark(helper);
                     mailSender.send(message);
                     jdbc.update(
                             "UPDATE omega_rag.transactional_mail SET status='SENT',sent_at=now(),attempts=attempts+1,body='' WHERE id=?",

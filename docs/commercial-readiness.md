@@ -43,7 +43,7 @@ La automatización de emisión fiscal figura como `NOT_CONFIGURED`. El usuario h
 
 Se reutiliza el SMTP existente. La tabla `transactional_mail` registra eventos de pago aprobado, rechazo/cancelación de pago, reversión, cancelación de renovación y disponibilidad de informe. Los eventos de renovación aprobada utilizan el mismo flujo de cobros. Las claves únicas evitan encolar otra vez el mismo evento. La entrega ocurre separada de la activación del plan.
 
-Los avisos utilizan HTML con la identidad de OMEGA y una alternativa de texto. El banner se incluye en el mensaje mediante Content-ID, reutilizando el recurso de los códigos de verificación; no requiere imágenes remotas. Asunto y cuerpo se escapan para mostrarlos como texto. Ver [pruebas y vistas del diseño](qa/2026-11-25-mail/README.md).
+Los avisos utilizan la plantilla compartida de OMEGA en modo claro por defecto y oscuro donde el cliente lo admite, con una alternativa de texto. El isotipo pequeño se incluye mediante Content-ID; se eliminó el banner 3D y no se requieren imágenes remotas. Asunto, cuerpo y metadatos se escapan para mostrarlos como texto. Ver [pruebas y vistas del diseño actual](qa/2026-11-25-mail-minimal/README.md).
 
 ```dotenv
 OMEGA_TRANSACTIONAL_MAIL_ENABLED=false

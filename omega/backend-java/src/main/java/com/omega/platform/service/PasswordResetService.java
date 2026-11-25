@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -33,7 +32,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.util.HtmlUtils;
 
 @Service
 public class PasswordResetService {
@@ -51,6 +49,7 @@ public class PasswordResetService {
     private final JavaMailSender mailSender;
     private final String smtpHost;
     private final String smtpFrom;
+    @Value("${OMEGA_SUPPORT_EMAIL:}") private String supportEmail;
 
     @Autowired
     public PasswordResetService(
@@ -248,30 +247,19 @@ public class PasswordResetService {
                 + "Si no solicitaste este cambio, ignora este mensaje.\n";
 
         String html = OmegaEmailTemplate.Spec.builder("Restablecer contraseña")
-                .preheader("Tu código de recuperación de OMEGA es " + code + " (válido por 15 minutos).")
+                .preheader("Restablece tu contraseña con un código de uso único, válido por 15 minutos.")
                 .addParagraph("Hola " + greetingName + ", recibimos una solicitud para restablecer la contraseña de tu cuenta en OMEGA.")
                 .verificationCode(code, "Válido por 15 minutos · Uso único")
                 .addParagraph("Si no solicitaste este cambio, puedes ignorar este correo de forma segura; tu contraseña actual seguirá intacta.")
                 .recipientEmail(user.getEmail())
+                .supportEmail(supportEmail==null || supportEmail.isBlank()?smtpFrom:supportEmail)
                 .render();
 
         helper.setText(plainText, html);
+        OmegaEmailTemplate.attachMark(helper);
         mailSender.send(mimeMessage);
     }
 
-    private static String buildOtpCellsHtml(String code) {
-        StringBuilder cells = new StringBuilder();
-        for (int i = 0; i < code.length(); i++) {
-            cells.append("<td style=\"padding:0 4px;user-select:none;-webkit-user-select:none;\">")
-                    .append("<div style=\"width:44px;height:54px;line-height:54px;text-align:center;")
-                    .append("background-color:#141418;border:1px solid rgba(47,111,237,0.55);border-radius:12px;")
-                    .append("font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;")
-                    .append("font-size:26px;font-weight:700;color:#F2F2F4;user-select:none;-webkit-user-select:none;\">")
-                    .append(code.charAt(i))
-                    .append("</div></td>");
-        }
-        return cells.toString();
-    }
 
     private Optional<UserEntity> resolveTargetUser(String email, String tenantSlug) {
         if (tenantSlug != null && !tenantSlug.isBlank()) {

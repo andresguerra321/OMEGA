@@ -953,14 +953,36 @@ export function BillingPanel({
           </div>
           <p className="text-xs text-[#8E929B] leading-relaxed">
             {summary.reserved > 0 ? `${summary.reserved} reservados en operaciones pendientes. ` : ''}
-            {paid
-              ? `Acceso pagado hasta ${date(summary.paidUntil)}.${
-                  summary.cancelAtPeriodEnd ? ' La renovación está cancelada.' : ''
-                }`
-              : catalog?.enforced === false
-                ? 'Los límites comerciales se aplican al activar las pruebas de pagos o desplegar en producción.'
-                : 'General incluye 30 créditos de bienvenida, una sola vez. Desarrollador y Legal requieren Pro o Enterprise.'}
+            {summary.inGracePeriod
+              ? `Período de gracia activo hasta ${date(summary.graceUntil)} (${summary.graceDays || 5} días tras el vencimiento). Actualiza tu medio de pago en Mercado Pago para evitar pasar a Gratis.`
+              : paid
+                ? `Acceso pagado hasta ${date(summary.paidUntil)}.${
+                    summary.cancelAtPeriodEnd ? ' La renovación está cancelada.' : ''
+                  }`
+                : catalog?.enforced === false
+                  ? 'Los límites comerciales se aplican al activar las pruebas de pagos o desplegar en producción.'
+                  : 'General incluye 30 créditos de bienvenida, una sola vez. Desarrollador y Legal requieren Pro o Enterprise.'}
           </p>
+          {summary.inGracePeriod && (
+            <div
+              role="status"
+              className="flex items-start gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3.5 py-2.5 text-xs text-amber-200"
+            >
+              <AlertCircle size={14} strokeWidth={1.6} className="mt-0.5 shrink-0 text-amber-300" />
+              <span>
+                Tu cobro de renovación no se confirmó. Conservas tu plan en período de gracia hasta
+                el <strong>{date(summary.graceUntil)}</strong>; no se emitirán nuevos créditos
+                mensuales hasta confirmar el pago.
+              </span>
+            </div>
+          )}
+          {paid && !summary.inGracePeriod && (
+            <p className="text-[11.5px] text-[#8E929B] leading-relaxed">
+              Cambios de plan: si deseas cambiar entre Pro y Enterprise o modificar tu ciclo
+              (Mensual/Anual), el cambio se aplica al finalizar tu período actual (
+              {date(summary.paidUntil)}) para evitar cobros duplicados.
+            </p>
+          )}
         </div>
       )}
 

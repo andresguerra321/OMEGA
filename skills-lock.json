@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "skills": {
+    "explainer-engaging": {
+      "source": "Barty-Bart/motion-graphics",
+      "commit": "3d83d987d658601d8a1269eb691622bdcd427335",
+      "sourceType": "github",
+      "skillPath": "skills/explainer-engaging/SKILL.md",
+      "computedHash": "77b0d09eb4d9d2bcf50d785ce09577d11092fd09fd2d75ba559cc5673c9f7217"
+    },
+    "sound-effects": {
+      "source": "Barty-Bart/motion-graphics",
+      "commit": "3d83d987d658601d8a1269eb691622bdcd427335",
+      "sourceType": "github",
+      "skillPath": "skills/sound-effects/SKILL.md",
+      "computedHash": "4be0b3d6d09b0d1d60edc4110e9dd845db42f4bcf8b65b21028d0f5a087ba9c7"
+    }
+  }
+}

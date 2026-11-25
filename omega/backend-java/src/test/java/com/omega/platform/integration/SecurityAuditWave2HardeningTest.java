@@ -62,6 +62,7 @@ import org.springframework.web.server.ResponseStatusException;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.springframework.context.annotation.Import(PaidWorkspaceFixture.class)
 class SecurityAuditWave2HardeningTest {
 
     private static final String EXTERNAL_DB_URL = System.getenv("OMEGA_TEST_DB_URL");
@@ -253,7 +254,7 @@ class SecurityAuditWave2HardeningTest {
 
         OmegaPrincipal principal = new OmegaPrincipal(
                 session.userId(), session.tenantId(), session.email(), Role.ADMIN, true);
-        long planMaxBytes = legalQuotaProperties.forPlan("PERSONAL").getMaxTotalBytesPerCase();
+        long planMaxBytes = legalQuotaService.currentPlanSummary(principal).maxTotalBytesPerCase();
 
         // Persist a document occupying almost the entire case byte quota
         DocumentEntity doc = new DocumentEntity(

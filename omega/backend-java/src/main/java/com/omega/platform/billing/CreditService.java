@@ -28,9 +28,42 @@ public class CreditService {
     public boolean enforced() { return policy.enforced(); }
 
     public static String effectivePlan(Map<String, Object> sub, OffsetDateTime now) {
-        return Boolean.TRUE.equals(sub.get("paid_verified"))
-                && time(sub.get("current_period_end")).isAfter(now)
-                && !"FREE".equals(sub.get("plan_code")) ? sub.get("plan_code").toString() : "FREE";
+        return effectivePlan(sub, now, 0);
+    }
+
+    public static String effectivePlan(Map<String, Object> sub, OffsetDateTime now, int graceDays) {
+        if (!Boolean.TRUE.equals(sub.get("paid_verified")) || "FREE".equals(sub.get("plan_code"))) {
+            return "FREE";
+        }
+        OffsetDateTime periodEnd = time(sub.get("current_period_end"));
+        if (periodEnd.isAfter(now)) {
+            return sub.get("plan_code").toString();
+        }
+        if (inGracePeriod(sub, now, graceDays)) {
+            return sub.get("plan_code").toString();
+        }
+        return "FREE";
+    }
+
+    public static boolean inGracePeriod(Map<String, Object> sub, OffsetDateTime now, int graceDays) {
+        if (graceDays <= 0 || !Boolean.TRUE.equals(sub.get("paid_verified")) || "FREE".equals(sub.get("plan_code"))) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(sub.get("cancel_at_period_end"))) {
+            return false;
+        }
+        OffsetDateTime periodEnd = time(sub.get("current_period_end"));
+        return !periodEnd.isAfter(now) && periodEnd.plusDays(graceDays).isAfter(now);
+    }
+
+    public static OffsetDateTime graceUntil(Map<String, Object> sub, int graceDays) {
+        if (graceDays <= 0 || !Boolean.TRUE.equals(sub.get("paid_verified")) || "FREE".equals(sub.get("plan_code"))) {
+            return null;
+        }
+        if (Boolean.TRUE.equals(sub.get("cancel_at_period_end"))) {
+            return null;
+        }
+        return time(sub.get("current_period_end")).plusDays(graceDays);
     }
 
     public static OffsetDateTime time(Object value) {
@@ -44,7 +77,7 @@ public class CreditService {
     }
 
     public boolean isPaid(UUID tenant) {
-        return !"FREE".equals(effectivePlan(subscription(tenant), OffsetDateTime.now(ZoneOffset.UTC)));
+        return !"FREE".equals(effectivePlan(subscription(tenant), OffsetDateTime.now(ZoneOffset.UTC), policy.graceDays()));
     }
 
     public void requirePaid(UUID tenant) {
@@ -74,12 +107,18 @@ public class CreditService {
             lock(tenant);
             Map<String, Object> sub = provision(tenant);
             ensureGrants(tenant, sub);
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+            int graceDays = policy.graceDays();
+            boolean inGrace = inGracePeriod(sub, now, graceDays);
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("planCode", effectivePlan(sub, OffsetDateTime.now(ZoneOffset.UTC)));
+            result.put("planCode", effectivePlan(sub, now, graceDays));
             result.put("enforced", enforced());
             result.put("billingInterval", sub.get("billing_interval"));
-            result.put("status", "FREE".equals(result.get("planCode")) ? "ACTIVE" : sub.get("status"));
+            result.put("status", inGrace ? "GRACE_PERIOD" : ("FREE".equals(result.get("planCode")) ? "ACTIVE" : sub.get("status")));
             result.put("paidUntil", Boolean.TRUE.equals(sub.get("paid_verified")) ? sub.get("current_period_end") : null);
+            result.put("inGracePeriod", inGrace);
+            result.put("graceUntil", inGrace ? graceUntil(sub, graceDays) : null);
+            result.put("graceDays", graceDays);
             result.put("cancelAtPeriodEnd", sub.get("cancel_at_period_end"));
             result.put("balance", jdbc.queryForObject("SELECT coalesce(sum(remaining),0) FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now()", Long.class, tenant));
             result.put("reserved", jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM omega_rag.credit_reservations WHERE tenant_id=? AND status='RESERVED'", Long.class, tenant));
@@ -96,7 +135,7 @@ public class CreditService {
         return tx.execute(s -> {
             lock(tenant);
             Map<String,Object> sub = provision(tenant);
-            boolean paid = !"FREE".equals(effectivePlan(sub, OffsetDateTime.now(ZoneOffset.UTC)));
+            boolean paid = !"FREE".equals(effectivePlan(sub, OffsetDateTime.now(ZoneOffset.UTC), policy.graceDays()));
             if (operation.paidOnly && !paid) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
                     "Esta función requiere un plan de pago.");
             ensureGrants(tenant, sub);
@@ -190,7 +229,8 @@ public class CreditService {
     private void ensureGrants(UUID tenant, Map<String,Object> sub) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         grant(tenant, "welcome:" + tenant, "WELCOME", 30, now.plusYears(100));
-        if ("FREE".equals(effectivePlan(sub, now))) return;
+        // No emitir créditos mensuales nuevos si el período pagado ya venció (incluido durante días de gracia).
+        if ("FREE".equals(effectivePlan(sub, now, 0))) return;
         OffsetDateTime start = time(sub.get("current_period_start"));
         OffsetDateTime end = time(sub.get("current_period_end"));
         long index = Math.max(0, ChronoUnit.MONTHS.between(start, now));

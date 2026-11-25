@@ -2,9 +2,12 @@ package com.omega.platform.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.net.URI;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.web.util.HtmlUtils;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.mail.javamail.MimeMessageHelper;
 
 /**
  * Plantilla HTML transaccional unificada de OMEGA (nivel Stripe / Linear / Apple).
@@ -43,7 +46,8 @@ public final class OmegaEmailTemplate {
             String ctaLabel,
             String ctaUrl,
             String securityNote,
-            String recipientEmail
+            String recipientEmail,
+            String supportEmail
     ) {
         public static Builder builder(String title) {
             return new Builder(title);
@@ -61,6 +65,7 @@ public final class OmegaEmailTemplate {
         private String ctaUrl;
         private String securityNote = DEFAULT_SECURITY_NOTE;
         private String recipientEmail;
+        private String supportEmail;
 
         private Builder(String title) {
             this.title = title == null ? "" : title.trim();
@@ -109,6 +114,11 @@ public final class OmegaEmailTemplate {
             return this;
         }
 
+        public Builder supportEmail(String email) {
+            this.supportEmail = email;
+            return this;
+        }
+
         public Spec build() {
             return new Spec(
                     title,
@@ -120,7 +130,8 @@ public final class OmegaEmailTemplate {
                     ctaLabel,
                     ctaUrl,
                     securityNote,
-                    recipientEmail
+                    recipientEmail,
+                    supportEmail
             );
         }
 
@@ -133,8 +144,12 @@ public final class OmegaEmailTemplate {
      * Renderiza un correo genérico en cola (subject + texto plano con párrafos y posibles filas "Clave: Valor").
      */
     public static String renderPlainBody(String subject, String body, String recipientEmail) {
+        return renderPlainBody(subject,body,recipientEmail,null);
+    }
+
+    public static String renderPlainBody(String subject,String body,String recipientEmail,String supportEmail) {
         String cleanTitle = stripBrandPrefix(subject);
-        Builder builder = Spec.builder(cleanTitle).recipientEmail(recipientEmail);
+        Builder builder = Spec.builder(cleanTitle).recipientEmail(recipientEmail).supportEmail(supportEmail);
         String safeBody = body == null ? "" : body.trim();
         if (!safeBody.isEmpty()) {
             String[] blocks = safeBody.split("\\R\\s*\\R");
@@ -172,6 +187,10 @@ public final class OmegaEmailTemplate {
         return subject.replaceFirst("^OMEGA\\s*[·—-]\\s*", "").trim();
     }
 
+    public static void attachMark(MimeMessageHelper helper) throws jakarta.mail.MessagingException {
+        helper.addInline("omegaMark",new ClassPathResource("mail/omega-mark.png"),"image/png");
+    }
+
     public static String render(Spec spec) {
         String safeTitle = HtmlUtils.htmlEscape(spec.title() == null ? "" : spec.title());
         String preheaderRaw = spec.preheader() != null && !spec.preheader().isBlank()
@@ -183,7 +202,7 @@ public final class OmegaEmailTemplate {
         for (String p : spec.paragraphs()) {
             String escaped = HtmlUtils.htmlEscape(p).replace("\r\n", "\n").replace("\n", "<br>");
             paragraphsHtml.append(
-                    "<p class=\"omega-text-secondary\" style=\"margin:0 0 14px 0;font-size:14px;line-height:1.6;color:#475569;\">"
+                    "<p class=\"omega-text-secondary\" style=\"margin:0 0 14px 0;font-size:14px;line-height:1.6;color:#475569;overflow-wrap:anywhere;\">"
             ).append(escaped).append("</p>");
         }
 
@@ -199,6 +218,13 @@ public final class OmegaEmailTemplate {
                 ? "Recibes este correo por actividad en tu cuenta " + HtmlUtils.htmlEscape(spec.recipientEmail().trim()) + "."
                 : "Recibes este correo por actividad en tu cuenta de OMEGA.";
 
+        String supportLink="";
+        try {
+            var contact=new jakarta.mail.internet.InternetAddress(spec.supportEmail(),true);
+            contact.validate();
+            supportLink="<a class=\"omega-text-muted\" href=\"mailto:"+HtmlUtils.htmlEscape(contact.getAddress())+"\" style=\"color:#64748B;text-decoration:underline;\">Soporte y seguridad</a>";
+        } catch(Exception ignored) { /* A missing contact must not create a broken email link. */ }
+
         return """
                 <!DOCTYPE html>
                 <html lang="es" xmlns="http://www.w3.org/1999/xhtml">
@@ -212,7 +238,6 @@ public final class OmegaEmailTemplate {
                     :root { color-scheme: light dark; supported-color-schemes: light dark; }
                     @media only screen and (max-width: 600px) {
                       .omega-card-pad { padding: 24px 20px !important; }
-                      .omega-outer-pad { padding: 20px 12px !important; }
                     }
                     @media (prefers-color-scheme: dark) {
                       body, .omega-bg { background-color: #090B10 !important; color: #F1F5F9 !important; }
@@ -220,25 +245,32 @@ public final class OmegaEmailTemplate {
                       .omega-brand-mark { background-color: #161B26 !important; border-color: #273042 !important; color: #F1F5F9 !important; }
                       .omega-text-primary { color: #F1F5F9 !important; }
                       .omega-text-secondary { color: #94A3B8 !important; }
-                      .omega-text-muted { color: #64748B !important; }
+                      .omega-text-muted { color: #94A3B8 !important; }
                       .omega-divider { border-top-color: #1F2633 !important; }
                       .omega-box { background-color: #161B26 !important; border-color: #1F2633 !important; }
                       .omega-row-sep { border-bottom-color: #1F2633 !important; }
                     }
+                    [data-ogsc] .omega-bg { background-color:#090B10!important; }
+                    [data-ogsc] .omega-card { background-color:#11151E!important;border-color:#1F2633!important; }
+                    [data-ogsc] .omega-text-primary { color:#F1F5F9!important; }
+                    [data-ogsc] .omega-text-secondary,[data-ogsc] .omega-text-muted { color:#94A3B8!important; }
+                    [data-ogsc] .omega-divider { border-top-color:#1F2633!important; }
+                    [data-ogsc] .omega-box { background-color:#161B26!important;border-color:#1F2633!important; }
                   </style>
                 </head>
                 <body class="omega-bg" style="margin:0;padding:0;background-color:#F6F8FA;font-family:%s;color:#0F172A;-webkit-font-smoothing:antialiased;">
                   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:transparent;">%s&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
-                  <table role="presentation" class="omega-bg" width="100%%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F6F8FA;">
+                  <table role="presentation" class="omega-bg" width="100%%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F6F8FA;table-layout:fixed;">
                     <tr>
                       <td class="omega-outer-pad" align="center" style="padding:32px 16px;">
-                        <table role="presentation" class="omega-card" width="540" cellpadding="0" cellspacing="0" border="0" style="width:100%%;max-width:540px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;">
+                        <!--[if mso]><table role="presentation" width="540" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+                        <table role="presentation" class="omega-card" width="540" cellpadding="0" cellspacing="0" border="0" style="width:100%%;max-width:540px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;table-layout:fixed;">
                           <tr>
                             <td class="omega-card-pad" style="padding:32px 36px;">
                               <!-- Cabecera minimalista alineada a la izquierda -->
                               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
-                                  <td class="omega-brand-mark" align="center" valign="middle" width="24" height="24" style="width:24px;height:24px;border-radius:6px;background-color:#F8FAFC;border:1px solid #E5E7EB;font-family:%s;font-size:14px;font-weight:600;line-height:22px;color:#0F172A;text-align:center;">&#937;</td>
+                                  <td valign="middle" width="24" height="24" style="width:24px;height:24px;font-family:%s;"><img src="cid:omegaMark" alt="Ω" width="24" height="24" style="display:block;width:24px;height:24px;border:0;"></td>
                                   <td style="padding-left:10px;font-size:14px;font-weight:600;letter-spacing:0.08em;line-height:24px;color:#0F172A;" class="omega-text-primary">OMEGA</td>
                                 </tr>
                               </table>
@@ -249,7 +281,7 @@ public final class OmegaEmailTemplate {
                               </table>
                               <div style="height:28px;line-height:28px;font-size:1px;">&nbsp;</div>
                               <!-- Título y cuerpo -->
-                              <h1 class="omega-text-primary" style="margin:0 0 14px 0;font-size:20px;font-weight:600;letter-spacing:-0.02em;line-height:1.3;color:#0F172A;">%s</h1>
+                              <h1 class="omega-text-primary" style="margin:0 0 14px 0;font-size:20px;font-weight:600;letter-spacing:-0.02em;line-height:1.3;color:#0F172A;overflow-wrap:anywhere;">%s</h1>
                               %s
                               %s
                               %s
@@ -260,13 +292,14 @@ public final class OmegaEmailTemplate {
                             </td>
                           </tr>
                         </table>
+                        <!--[if mso]></td></tr></table><![endif]-->
                         <!-- Footer discreto al pie de la tarjeta -->
                         <table role="presentation" width="540" cellpadding="0" cellspacing="0" border="0" style="width:100%%;max-width:540px;">
                           <tr>
-                            <td class="omega-text-muted" style="padding:18px 8px 0 8px;font-size:11px;line-height:1.6;color:#64748B;text-align:left;">
-                              <strong style="font-weight:600;color:#64748B;">OMEGA</strong> · Análisis, evidencia e informes<br>
+                            <td class="omega-text-muted" style="padding:18px 8px 0 8px;font-size:11px;line-height:1.6;color:#64748B;text-align:left;overflow-wrap:anywhere;word-break:break-word;">
+                              <strong class="omega-text-muted" style="font-weight:600;color:#64748B;">OMEGA</strong> · Análisis, evidencia e informes<br>
                               %s<br>
-                              Soporte y seguridad · Gestiona tus notificaciones desde tu cuenta en OMEGA.
+                              %s
                             </td>
                           </tr>
                         </table>
@@ -285,7 +318,8 @@ public final class OmegaEmailTemplate {
                 summarySlot,
                 ctaSlot,
                 safeSecurityNote,
-                reasonLine
+                reasonLine,
+                supportLink
         );
     }
 
@@ -320,12 +354,12 @@ public final class OmegaEmailTemplate {
             if (hasCode) {
                 inner.append("<div style=\"height:14px;line-height:14px;font-size:1px;\">&nbsp;</div>");
             }
-            inner.append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">");
+            inner.append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"table-layout:fixed;\">");
             int total = spec.metadataRows().size();
             for (int i = 0; i < total; i++) {
                 MetadataRow row = spec.metadataRows().get(i);
                 String borderBottom = (i < total - 1) ? "border-bottom:1px solid #E5E7EB;" : "";
-                String rowClass = (i < total - 1) ? " class=\"omega-row-sep\"" : "";
+                String rowClass = (i < total - 1) ? " class=\"omega-row-sep omega-text-secondary\"" : " class=\"omega-text-secondary\"";
                 inner.append("<tr>")
                         .append("<td").append(rowClass)
                         .append(" style=\"padding:6px 8px 6px 0;font-size:12px;line-height:1.5;color:#64748B;vertical-align:top;").append(borderBottom).append("\">")
@@ -333,7 +367,7 @@ public final class OmegaEmailTemplate {
                         .append("</td>")
                         .append("<td").append(rowClass)
                         .append(" align=\"right\" style=\"padding:6px 0 6px 8px;font-family:").append(FONT_MONO)
-                        .append(";font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums;color:#0F172A;vertical-align:top;").append(borderBottom).append("\">")
+                        .append(";font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums;color:#0F172A;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;").append(borderBottom).append("\">")
                         .append("<span class=\"omega-text-primary\">")
                         .append(HtmlUtils.htmlEscape(row.value()))
                         .append("</span></td>")
@@ -358,23 +392,24 @@ public final class OmegaEmailTemplate {
             return "";
         }
         String url = spec.ctaUrl().trim();
-        if (!url.startsWith("https://") && !url.startsWith("http://")) {
-            return "";
-        }
+        try {
+            URI target=URI.create(url);
+            if(!"https".equalsIgnoreCase(target.getScheme()) || target.getHost()==null || target.getUserInfo()!=null || url.contains("\r") || url.contains("\n")) return "";
+        } catch(IllegalArgumentException ex) { return ""; }
         String safeLabel = HtmlUtils.htmlEscape(spec.ctaLabel().trim());
         String safeUrl = HtmlUtils.htmlEscape(url);
         return """
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 8px 0;">
                   <tr>
-                    <td align="left" style="border-radius:8px;background-color:#2F6FED;">
+                    <td align="left" bgcolor="#2F6FED" style="border-radius:8px;background-color:#2F6FED;mso-padding-alt:11px 20px;">
                       <a href="%s" target="_blank" rel="noopener noreferrer" style="display:inline-block;background-color:#2F6FED;color:#FFFFFF;font-size:13px;font-weight:500;line-height:1.2;padding:11px 20px;border-radius:8px;text-decoration:none;">%s</a>
                     </td>
                   </tr>
                 </table>
                 <p class="omega-text-muted" style="margin:8px 0 0 0;font-size:11px;line-height:1.5;color:#64748B;word-break:break-all;">
-                  O abre este enlace directamente: <span style="font-family:%s;">%s</span>
+                  O abre este enlace directamente: <a class="omega-text-secondary" href="%s" style="font-family:%s;color:#475569;text-decoration:underline;">%s</a>
                 </p>
-                """.formatted(safeUrl, safeLabel, FONT_MONO, safeUrl);
+                """.formatted(safeUrl, safeLabel, safeUrl, FONT_MONO, safeUrl);
     }
 
     private static String truncate(String value, int maxLen) {

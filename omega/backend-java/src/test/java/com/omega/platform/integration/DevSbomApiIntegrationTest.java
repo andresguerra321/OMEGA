@@ -30,6 +30,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.springframework.context.annotation.Import(PaidWorkspaceFixture.class)
 class DevSbomApiIntegrationTest {
 
     private static final String EXTERNAL_DB_URL = System.getenv("OMEGA_TEST_DB_URL");
