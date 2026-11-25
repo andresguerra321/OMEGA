@@ -80,10 +80,11 @@ class TransactionalMailTransportTest {
             String html = part(mime, "text/html");
             assertThat(html)
                     .contains("color-scheme", "prefers-color-scheme: dark", "#F6F8FA", "#FFFFFF", "#090B10", "#11151E", "max-width:540px")
-                    .contains("Pro Mensual", "$59.900 COP", "Los avisos de pagos e informes", "registered@example.invalid")
+                    .contains("Pro Mensual", "$59.900 COP", "Los avisos de pagos e informes", "registered@example.invalid", "cid:omegaMark")
                     .doesNotContain("cid:omegaBanner", "#0A0A0C", "OMEGA SECURITY · TU CUENTA");
             assertThat(mime.getFrom()[0].toString()).contains("OMEGA Security");
             assertThat(part(mime, "image/jpeg")).isEmpty();
+            assertThat(part(mime, "image/png")).isEqualTo("image/png");
             assertThat(mime.getAllRecipients()[0].toString()).isEqualTo("registered@example.invalid");
             verify(jdbc).update(contains("status='SENT'"), eq(id));
             verify(jdbc).update(contains("body=''"), eq(id));

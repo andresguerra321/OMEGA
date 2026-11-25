@@ -244,8 +244,11 @@ public class BillingService {
     }
 
     private void notifyPayment(Map<String,Object> checkout,String id,String state,String subject,String body) {
+        String summary="\n\nMonto: " + checkout.get("amount") + " " + checkout.get("currency")
+                + "\nPlan: " + ("TOPUP".equals(checkout.get("kind"))?"Recarga de créditos":checkout.get("plan_code"))
+                + "\nReferencia: " + id;
         jdbc.update("INSERT INTO omega_rag.transactional_mail(tenant_id,actor_user_id,event_key,subject,body) VALUES (?,?,?,?,?) ON CONFLICT(event_key) DO NOTHING",
-                checkout.get("tenant_id"),checkout.get("actor_user_id"),"payment:"+id+":"+state,subject,body);
+                checkout.get("tenant_id"),checkout.get("actor_user_id"),"payment:"+id+":"+state,subject,body+summary);
     }
 
     @Scheduled(fixedDelayString="${omega.billing.reconcile-delay-ms:300000}")
