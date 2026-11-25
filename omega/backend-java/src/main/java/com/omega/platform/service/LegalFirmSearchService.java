@@ -18,38 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LegalFirmSearchService {
 
-    private final JdbcTemplate jdbc;
-    private final AuditLogService audit;
-
-    public LegalFirmSearchService(JdbcTemplate jdbc, AuditLogService audit) {
-        this.jdbc = jdbc;
-        this.audit = audit;
-    }
-
-    public record FirmSearchHit(
-            String matchType,
-            UUID expedienteId,
-            String expedienteTitle,
-            String caseReference,
-            UUID documentId,
-            Integer pageNumber,
-            String excerpt
-    ) {}
-
-    @Transactional
-    public PageView<FirmSearchHit> search(OmegaPrincipal actor, String rawQuery, int page, int size) {
-        int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(50, size));
-        String q = rawQuery == null ? "" : rawQuery.strip();
-        if (q.length() < 2) {
-            return new PageView<>(List.of(), safePage, safeSize, 0, 0);
-        }
-        String likePattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
-        boolean isAdmin = actor.role() == Role.ADMIN;
-        UUID tenantId = actor.tenantId();
-        UUID userId = actor.userId();
-
-        String baseCte = """
+    // Query structure is fixed at compile time; search text and permissions are bound below.
+    private static final String BASE_CTE = """
                 WITH accessible_cases AS (
                     SELECT e.id, e.title, e.case_reference, e.description, e.updated_at
                     FROM omega_rag.expedientes e
@@ -99,9 +69,47 @@ public class LegalFirmSearchService {
                     WHERE c.content ILIKE ? ESCAPE '\\'
                 )
                 """;
+    private static final String COUNT_SQL = BASE_CTE + "SELECT COUNT(*) FROM combined_hits";
+    private static final String SEARCH_SQL = BASE_CTE + """
+                        SELECT match_type, expediente_id, expediente_title, case_reference, document_id, page_number, excerpt
+                        FROM combined_hits
+                        ORDER BY rank_group ASC, sort_ts DESC, expediente_id ASC, page_number ASC NULLS FIRST
+                        LIMIT ? OFFSET ?
+                        """;
+
+    private final JdbcTemplate jdbc;
+    private final AuditLogService audit;
+
+    public LegalFirmSearchService(JdbcTemplate jdbc, AuditLogService audit) {
+        this.jdbc = jdbc;
+        this.audit = audit;
+    }
+
+    public record FirmSearchHit(
+            String matchType,
+            UUID expedienteId,
+            String expedienteTitle,
+            String caseReference,
+            UUID documentId,
+            Integer pageNumber,
+            String excerpt
+    ) {}
+
+    @Transactional
+    public PageView<FirmSearchHit> search(OmegaPrincipal actor, String rawQuery, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(50, size));
+        String q = rawQuery == null ? "" : rawQuery.strip();
+        if (q.length() < 2) {
+            return new PageView<>(List.of(), safePage, safeSize, 0, 0);
+        }
+        String likePattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        boolean isAdmin = actor.role() == Role.ADMIN;
+        UUID tenantId = actor.tenantId();
+        UUID userId = actor.userId();
 
         Long totalObj = jdbc.queryForObject(
-                baseCte + "SELECT COUNT(*) FROM combined_hits",
+                COUNT_SQL,
                 Long.class,
                 tenantId, isAdmin, userId, userId,
                 likePattern, likePattern, likePattern,
@@ -111,12 +119,7 @@ public class LegalFirmSearchService {
         int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
 
         List<FirmSearchHit> hits = total == 0 ? List.of() : jdbc.query(
-                baseCte + """
-                        SELECT match_type, expediente_id, expediente_title, case_reference, document_id, page_number, excerpt
-                        FROM combined_hits
-                        ORDER BY rank_group ASC, sort_ts DESC, expediente_id ASC, page_number ASC NULLS FIRST
-                        LIMIT ? OFFSET ?
-                        """,
+                SEARCH_SQL,
                 (rs, rowNum) -> {
                     String docIdStr = rs.getString("document_id");
                     Object pageObj = rs.getObject("page_number");

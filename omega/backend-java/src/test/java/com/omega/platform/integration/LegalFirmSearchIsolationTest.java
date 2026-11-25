@@ -164,6 +164,12 @@ class LegalFirmSearchIsolationTest {
         assertThat(adminBody.path("totalElements").asLong()).isGreaterThanOrEqualTo(3);
         assertThat(adminBody.path("content").size()).isEqualTo(2);
         assertThat(adminSearch.getResponse().getContentAsString()).doesNotContain(caseB1.toString());
+        for(String query:java.util.List.of("%' OR TRUE --","%_")) {
+            var literal=mockMvc.perform(get("/api/v1/expedientes/search").param("q",query)
+                    .header(HttpHeaders.AUTHORIZATION,"Bearer "+clientToken))
+                .andExpect(status().isOk()).andReturn();
+            assertThat(objectMapper.readTree(literal.getResponse().getContentAsString()).path("totalElements").asLong()).isZero();
+        }
     }
 
     private String registerLegalTenant(String slug, String email) throws Exception {
