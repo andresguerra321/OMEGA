@@ -37,3 +37,5 @@ El run `45630338177` ejecutó 244 pruebas y encontró 40 fallos: suites funciona
 Las pruebas de cuotas consultan el plan realmente activo para comprobar el mismo límite y sus condiciones de carrera. La reproducción local completa se realiza en Linux con Testcontainers, una base separada por suite y los recursos SQL/corpus del repositorio.
 
 La última ejecución completa local ejecutó 248 pruebas: 246 pasaron y quedaron dos supuestos de cuotas sobre PERSONAL. Después de corregirlos se repitieron sus dos suites (6 pruebas), todas aprobadas. La confirmación completa del commit final corresponde al run de GitHub Actions asociado al PR.
+
+El [run completo del PR](https://github.com/andresguerra321/OMEGA/actions/runs/45700109267) pasó después de esas correcciones. El PR también descubrió dos problemas previos de herramientas: el pin VICE 1.4.2 no estaba publicado y Semgrep 1.99 fallaba al importar `pkg_resources`. Se fijó VICE 3.5.0, se añadió setuptools 80.9.0 para el Semgrep fijado y se exige que produzca ambos reportes antes de continuar. Se conserva el umbral VICE 90 y el evaluador Semgrep fail-closed; sus seis pruebas pasaron.
