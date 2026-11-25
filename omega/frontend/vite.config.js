@@ -11,7 +11,7 @@ export default defineConfig({
       output: {
         codeSplitting: {
           groups: [
-            { name: 'vendor-three', test: /node_modules[\\/]three/ },
+            { name: 'vendor-three', test: /node_modules[\\/](three|@react-three|postprocessing|three-stdlib|maath|troika)/ },
             { name: 'vendor-motion', test: /node_modules[\\/]framer-motion/ },
             { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)/ },
             { name: 'vendor-markdown', test: /node_modules[\\/](react-markdown|remark-gfm|unified|mdast|micromark|hast)/ },

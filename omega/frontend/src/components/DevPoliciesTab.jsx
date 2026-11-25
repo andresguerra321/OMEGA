@@ -11,7 +11,10 @@ import {
 import { OmegaSelect } from './OmegaSelect';
 
 export function DevPoliciesTab({ authSession }) {
-  const isAdmin = authSession?.role === 'ADMIN';
+  const isAdmin =
+    authSession?.role === 'ADMIN' ||
+    Boolean(authSession?.canManageAccount) ||
+    authSession?.accountType === 'INDIVIDUAL';
   const [projects, setProjects] = useState([]);
   const [scopeProjectId, setScopeProjectId] = useState('');
   const [failOnSeverity, setFailOnSeverity] = useState('HIGH');

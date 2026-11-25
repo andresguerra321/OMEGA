@@ -1,5 +1,6 @@
 import { Suspense, lazy, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { CreditConfirmationDialog } from './components/CreditConfirmationDialog';
 import { pageVariants, popVariants } from './lib/motion';
 import {
   Plus,
@@ -44,6 +45,7 @@ import { useDesktopBootstrap } from './lib/useDesktopBootstrap';
 import { useTenantProfileConfig } from './lib/useTenantProfileConfig';
 import { DesktopStartupGate } from './components/DesktopStartupGate';
 import { AiSetupGate } from './components/AiSetupGate';
+import { MembershipGate } from './components/MembershipGate';
 import { OmegaAmbientBackdrop } from './components/OmegaAmbientBackdrop';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaBrandMark } from './components/OmegaBrandMark';
@@ -145,6 +147,14 @@ export default function App() {
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
   const [threatJump, setThreatJump] = useState({ query: '', key: 0 });
   const [settingsJump, setSettingsJump] = useState({ section: '', key: 0 });
+  useEffect(() => {
+    const openBilling = () => {
+      setActiveNav('cuenta');
+      setSettingsJump((previous) => ({ section: 'plan', key: previous.key + 1 }));
+    };
+    window.addEventListener('omega:billing-required', openBilling);
+    return () => window.removeEventListener('omega:billing-required', openBilling);
+  }, []);
   const [osintJump, setOsintJump] = useState({ value: '', type: 'domain', key: 0 });
   const [intelTab, setIntelTab] = useState('link');
   const [selectedNodeId, setSelectedNodeId] = useState('windows');
@@ -167,17 +177,18 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
-  const { profileConfig, switchProfile } = useTenantProfileConfig(authSession);
+  const { profileConfig, switchProfile, refresh: refreshProfile } = useTenantProfileConfig(authSession);
   const privateOnlyWorkspace = profileConfig?.ragCorpusScope === 'legal_expedientes';
   const appliedProfileDefaultRef = useRef('');
   useEffect(() => {
     const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
     if (!authSession || !profileConfig?.defaultView || appliedProfileDefaultRef.current === profileKey) return;
     appliedProfileDefaultRef.current = profileKey;
+    if (activeNav === 'cuenta') return;
     if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'preguntar', 'cuenta', 'expedientes'].includes(profileConfig.defaultView)) {
       setActiveNav(profileConfig.defaultView);
     }
-  }, [authSession, profileConfig?.profile, profileConfig?.defaultView]);
+  }, [authSession, profileConfig?.profile, profileConfig?.defaultView, activeNav]);
   const [verifyingSession, setVerifyingSession] = useState(true);
   const [enteringWorkspace, setEnteringWorkspace] = useState(false);
   const [authGateReason, setAuthGateReason] = useState('');
@@ -329,32 +340,32 @@ export default function App() {
 
     const authPromise = shouldFetchPrincipal
       ? fetchCurrentPrincipal()
-          .then((me) => {
-            if (cancelled) return;
-            if (me?.userId && me?.tenantId) {
-              const restored = restoreCookieAuthSession(me);
-              if (restored) {
-                setAuthSession(restored);
-              }
+        .then((me) => {
+          if (cancelled) return;
+          if (me?.userId && me?.tenantId) {
+            const restored = restoreCookieAuthSession(me);
+            if (restored) {
+              setAuthSession(restored);
             }
-          })
-          .catch(async (err) => {
-            if (cancelled) return;
-            if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
-              clearAuthSession();
-              setAuthSession(null);
-              if (hadInMemorySession) {
-                setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
-              }
+          }
+        })
+        .catch(async (err) => {
+          if (cancelled) return;
+          if (err?.requiresAuth || err?.status === 401 || err?.status === 403) {
+            clearAuthSession();
+            setAuthSession(null);
+            if (hadInMemorySession) {
+              setAuthGateReason('Tu sesión expiró o no es válida. Inicia sesión para continuar.');
             }
-          })
+          }
+        })
       : Promise.resolve();
 
     const holdPromise =
       minHoldMs > 0
         ? new Promise((resolve) => {
-            setTimeout(resolve, minHoldMs);
-          })
+          setTimeout(resolve, minHoldMs);
+        })
         : Promise.resolve();
 
     void Promise.all([authPromise, holdPromise]).finally(() => {
@@ -421,7 +432,9 @@ export default function App() {
     const hasPending = expedienteDocs.some(
       (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
     );
-    if (!hasPending || !activeExpedienteId || !authSession) return undefined;
+    const inDocRelevantView =
+      activeNav === 'expedientes' || activeNav === 'preguntar' || activeNav === 'cuenta';
+    if (!hasPending || !activeExpedienteId || !authSession || !inDocRelevantView) return undefined;
     const timer = setInterval(() => {
       void listExpedienteDocuments(activeExpedienteId)
         .then((docs) => {
@@ -431,10 +444,10 @@ export default function App() {
             void refreshSystemTelemetry();
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }, 2500);
     return () => clearInterval(timer);
-  }, [expedienteDocs, activeExpedienteId, authSession, refreshSystemTelemetry]);
+  }, [expedienteDocs, activeExpedienteId, authSession, activeNav, refreshSystemTelemetry]);
 
   async function handleUploadExpedientePdf(file) {
     if (!file || uploadingPdf) return;
@@ -632,8 +645,8 @@ export default function App() {
     const historyPayload = forceNewSession
       ? []
       : messages
-          .filter((m) => !m.isError)
-          .map((m) => ({ role: m.role, content: m.content }));
+        .filter((m) => !m.isError)
+        .map((m) => ({ role: m.role, content: m.content }));
     setLoadingChat(true);
     const t0 = performance.now();
 
@@ -643,22 +656,22 @@ export default function App() {
       if (privateOnlyWorkspace && options?.imageFile) throw new Error('Carga la imagen como documento del expediente antes de consultarla.');
       const res = options?.imageFile
         ? await sendMultimodalQuery({
-            expedienteId: targetExpedienteId,
-            imageFile: options.imageFile,
-            question: query,
-          })
+          expedienteId: targetExpedienteId,
+          imageFile: options.imageFile,
+          question: query,
+        })
         : await sendChatQuery(
-            query,
-            historyPayload,
-            topK,
-            effectiveScope,
-            pinnedContextPayload,
-            {
-              expedienteId: targetExpedienteId,
-              generalMode: privateOnlyWorkspace ? false : generalChatMode,
-              analysisContext: options?.analysisContext ?? (lastAnalysisContext || null),
-            },
-          );
+          query,
+          historyPayload,
+          topK,
+          effectiveScope,
+          pinnedContextPayload,
+          {
+            expedienteId: targetExpedienteId,
+            generalMode: privateOnlyWorkspace ? false : generalChatMode,
+            analysisContext: options?.analysisContext ?? (lastAnalysisContext || null),
+          },
+        );
       const latency = ((performance.now() - t0) / 1000).toFixed(2);
       const assistantTurn = {
         id: crypto.randomUUID(),
@@ -680,12 +693,12 @@ export default function App() {
         prev.map((s) =>
           s.id === targetSessionId
             ? {
-                ...s,
-                updatedAt: new Date().toISOString(),
-                context: res.resolved_context || s.context || null,
-                lastRewrittenQuery: res.rewritten_query || res.standalone_query || null,
-                messages: [...s.messages, assistantTurn],
-              }
+              ...s,
+              updatedAt: new Date().toISOString(),
+              context: res.resolved_context || s.context || null,
+              lastRewrittenQuery: res.rewritten_query || res.standalone_query || null,
+              messages: [...s.messages, assistantTurn],
+            }
             : s
         )
       );
@@ -948,8 +961,8 @@ export default function App() {
       const holdPromise =
         minHoldMs > 0
           ? new Promise((resolve) => {
-              setTimeout(resolve, minHoldMs);
-            })
+            setTimeout(resolve, minHoldMs);
+          })
           : Promise.resolve();
       const maxWait = new Promise((resolve) => {
         setTimeout(resolve, 2600);
@@ -1004,717 +1017,729 @@ export default function App() {
 
   return (
     <DesktopStartupGate bootstrap={desktopBootstrap}>
-    <AiSetupGate key={authSession?.userId || 'signed-out'} accountId={authSession?.userId} authSession={authSession} enabled={isSignedIn && !enteringWorkspace && !verifyingSession}
-      forceSetup={newAccountSetup} onLogout={handleLogout}
-      onComplete={() => { setNewAccountSetup(false); void refreshSystemTelemetry(); }}>
-    <AnimatePresence mode="wait" initial={false}>
-      {verifyingSession || enteringWorkspace ? (
-        <motion.div
-          key={screenKey}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { duration: 0.22 } }}
-          exit={{ opacity: 0, scale: 0.99, transition: { duration: 0.2 } }}
-          className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-[#0A0A0C] text-[#F2F2F4] select-none"
-        >
-          <OmegaAuthBackdrop />
-          <OmegaLoader
-            key={enteringWorkspace ? 'entering' : 'boot'}
-            steps={enteringWorkspace ? LOGIN_LOADER_STEPS : BOOT_LOADER_STEPS}
-            stepIntervalMs={enteringWorkspace ? 420 : 380}
-            label={enteringWorkspace ? 'Preparando cabina OMEGA' : 'Iniciando OMEGA'}
-          />
-        </motion.div>
-      ) : !isSignedIn ? (
-        <motion.div
-          key="screen-auth-gate"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { duration: 0.28 } }}
-          exit={{ opacity: 0, transition: { duration: 0.18 } }}
-          className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4]"
-        >
-          <OmegaAuthBackdrop />
-          <AuthModulePanel
-            gateMode
-            authSession={null}
-            apiOnline={apiOnline}
-            bootstrapping={desktopBootstrap.pending}
-            reasonMessage={authGateReason}
-            onAuthenticated={completeAuthenticationTransition}
-          />
-        </motion.div>
-      ) : (
-        <motion.div
-          key="screen-workspace"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { duration: 0.3 } }}
-          exit={{ opacity: 0, transition: { duration: 0.18 } }}
-          className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none"
-        >
-      <main
-        ref={workspaceMainRef}
-        tabIndex={-1}
-        className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text focus:outline-none"
-      >
-        <HostProtectionPanel session={authSession} expanded={activeNav === 'equipo'} desktop={isDesktop} expedienteId={activeExpedienteId || null} />
-        <Suspense
-          fallback={
-            <div className="flex-1 flex items-center justify-center">
-              <OmegaLoader />
-            </div>
-          }
-        >
+      <MembershipGate authSession={isSignedIn && !verifyingSession ? authSession : null} onLogout={handleLogout} onProfileChanged={refreshProfile}>
+      <AiSetupGate key={authSession?.userId || 'signed-out'} accountId={authSession?.userId} authSession={authSession} enabled={isSignedIn && !enteringWorkspace && !verifyingSession}
+        forceSetup={newAccountSetup} onLogout={handleLogout}
+        onComplete={() => { setNewAccountSetup(false); void refreshSystemTelemetry(); }}>
         <AnimatePresence mode="wait" initial={false}>
-        {isHome ? (
-          <motion.div
-            key="home-stage"
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="flex-1 min-h-0 flex flex-col"
-          >
-          <SecurityPostureStage
-            isDesktop={isDesktop}
-            activeNav={activeNav}
-            onSelectNav={(id) => handleNavigate(id)}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={setSelectedNodeId}
-            pcAudit={pcAudit}
-            pcScannedAt={pcScannedAt}
-            usbStatus={usbStatus}
-            lastLinkResult={lastLinkResult}
-            govStats={govStats}
-            apiOnline={apiOnline}
-            isLoadingChat={loadingChat}
-            scanningPc={scanningPc}
-            syncingStix={syncingStix}
-            onRunPcScan={handleRunPcScan}
-            onSyncStix={handleSyncStix}
-            stageFeedback={stageFeedback}
-            onDismissStageFeedback={() => setStageFeedback(null)}
-            onOpenCopilot={handleOpenCopilot}
-            onOpenCommandPalette={() => {
-              setCommandOpen(true);
-              setCommandQuery('');
-            }}
-            onOpenOnboarding={() => setOnboardingOpen(true)}
-            onNavigate={handleNavigate}
-            onLinkVerified={handleLinkVerified}
-            onPanicPurge={handlePanicPurge}
-            authSession={authSession}
-            visibleModuleIds={profileConfig?.visibleModules}
-            profileConfig={profileConfig}
-          />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="instrument-shell"
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="relative isolate flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
-          >
-            <OmegaAmbientBackdrop
-              opacityClassName={privateOnlyWorkspace ? 'opacity-30' : undefined}
-              intensity={
-                activeNav === 'exposicion' || activeNav === 'enlace'
-                  ? 'focused'
-                  : 'workspace'
-              }
-            />
-
-            {/* Barra Principal Unificada */}
-            <header
-              aria-label="Barra principal OMEGA"
-              className="relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.06] bg-[#090B0E]/75 backdrop-blur-md flex items-center justify-between gap-2 select-none"
+          {verifyingSession || enteringWorkspace ? (
+            <motion.div
+              key={screenKey}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.22 } }}
+              exit={{ opacity: 0, scale: 0.99, transition: { duration: 0.2 } }}
+              className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center bg-[#0A0A0C] text-[#F2F2F4] select-none"
             >
-              <div className="relative z-10 min-w-0 flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleNavigate(
-                      profileConfig?.visibleModules?.includes('inicio')
-                        ? 'inicio'
-                        : profileConfig?.defaultView || 'inicio'
-                    )
-                  }
-                  className="titlebar-no-drag inline-flex items-center gap-2 rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  title="Volver a Inicio"
-                >
-                  <OmegaBrandMark />
-                </button>
-
-                <ChevronRight className="hidden lg:inline h-3.5 w-3.5 text-slate-600 shrink-0" strokeWidth={1.75} />
-                <span className="hidden lg:inline text-[13px] font-medium text-[#F2F2F4] truncate max-w-[115px] xl:max-w-[145px]">
-                  {activeNavItem.label}
-                </span>
-              </div>
-
-              {/* Barra de navegación segmentada matemáticamente centrada */}
-              <div className="titlebar-no-drag hidden md:flex items-center justify-center md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-20">
-                <SpatialNavPill
-                  activeNav={activeNav}
-                  onSelectNav={(id) => handleNavigate(id)}
-                  pcVerdict={pcVerdict}
-                  usbConnected={usbConnected}
-                  apiOnline={apiOnline}
-                  isLoadingChat={loadingChat}
-                  authConnected={Boolean(authSession)}
-                  visibleModuleIds={profileConfig?.visibleModules}
-                  moduleLabels={profileConfig?.moduleLabels}
-                />
-              </div>
-
-              {/* Controles globales derechos unificados en todas las vistas */}
-              <div className="relative z-10 flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOperatorMenuOpen(false);
-                    setCommandOpen(true);
-                    setCommandQuery('');
-                  }}
-                  aria-label="Abrir búsqueda rápida (⌘K)"
-                  title="Saltar a módulo o acción (⌘K)"
-                  className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-2 transition-colors cursor-pointer"
-                >
-                  <Search className="h-[13px] w-[13px]" strokeWidth={1.75} />
-                  <kbd className="text-[11px] text-slate-500 font-sans hidden sm:inline">⌘K</kbd>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOperatorMenuOpen(false);
-                    setIsCopilotOpen((v) => !v);
-                  }}
-                  aria-label="Abrir o cerrar copiloto lateral"
-                  title="Copiloto (Ctrl+J)"
-                  className={`p-2 rounded-lg relative inline-flex items-center justify-center transition-colors cursor-pointer ${
-                    isCopilotOpen
-                      ? 'bg-white/[0.08] text-slate-100'
-                      : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.05]'
-                  }`}
-                >
-                  <Bell className="h-[15px] w-[15px]" strokeWidth={1.75} />
-                  {reportsCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 text-[10px] font-medium leading-none bg-[#2F6FED] text-white px-1.5 py-0.5 rounded-full">
-                      {reportsCount}
-                    </span>
-                  )}
-                </button>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!authSession) {
-                        handleNavigate('cuenta');
-                        return;
-                      }
-                      setOperatorMenuOpen((v) => !v);
-                    }}
-                    aria-expanded={authSession ? operatorMenuOpen : undefined}
-                    title={
-                      authSession
-                        ? `Cuenta: ${authSession.email} (${authSession.role})`
-                        : 'Iniciar sesión o crear cuenta OMEGA'
-                    }
-                    className="px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] inline-flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
-                  >
-                    {authSession ? (
-                      <>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <span className="hidden lg:inline max-w-[110px] truncate">
-                          {authSession.email?.split('@')[0] || authSession.tenantSlug}
-                        </span>
-                        <ChevronDown className="h-3 w-3 text-slate-400 hidden lg:inline" strokeWidth={1.75} />
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-                        <span className="hidden lg:inline">Entrar</span>
-                      </>
-                    )}
-                  </button>
-
-                  {authSession && operatorMenuOpen && (
-                    <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-[#0F131B]/95 backdrop-blur-md border border-white/[0.07] shadow-[0_12px_32px_rgba(0,0,0,0.55)] p-1.5 z-50 space-y-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOperatorMenuOpen(false);
-                          handleNavigate('cuenta');
-                        }}
-                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      >
-                        <UserCheck className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-                        <span>Cuenta y Ajustes</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOperatorMenuOpen(false);
-                          setOnboardingOpen(true);
-                        }}
-                        className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      >
-                        <BookOpen className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-                        <span>Guía interactiva</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {authSession && (
-                  <>
-                    <span aria-hidden="true" className="h-4 w-px bg-white/[0.08] mx-0.5 shrink-0" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOperatorMenuOpen(false);
-                        void handlePanicPurge();
-                      }}
-                      title="Purga rápida de emergencia: borra tokens, memoria volátil y caché local"
-                      aria-label="Purga rápida de emergencia"
-                      className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                      <span className="hidden xl:inline">Purga</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            </header>
-
-            {/* Sub-barra contextual de conversación cuando existen mensajes o historial */}
-            {activeNav === 'preguntar' && (messages.length > 0 || sessions.length > 0) && (
-              <header
-                aria-label="Controles de sesión de chat"
-                className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-white/[0.07] bg-[#0A0A0C]/65 flex items-center justify-between gap-2 select-none"
+              <OmegaAuthBackdrop />
+              <OmegaLoader
+                key={enteringWorkspace ? 'entering' : 'boot'}
+                steps={enteringWorkspace ? LOGIN_LOADER_STEPS : BOOT_LOADER_STEPS}
+                stepIntervalMs={enteringWorkspace ? 420 : 380}
+                label={enteringWorkspace ? 'Preparando cabina OMEGA' : 'Iniciando OMEGA'}
+              />
+            </motion.div>
+          ) : !isSignedIn ? (
+            <motion.div
+              key="screen-auth-gate"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.28 } }}
+              exit={{ opacity: 0, transition: { duration: 0.18 } }}
+              className="roam-obsidian-sheet relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4]"
+            >
+              <OmegaAuthBackdrop />
+              <AuthModulePanel
+                gateMode
+                authSession={null}
+                apiOnline={apiOnline}
+                bootstrapping={desktopBootstrap.pending}
+                reasonMessage={authGateReason}
+                onAuthenticated={completeAuthenticationTransition}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="screen-workspace"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.3 } }}
+              exit={{ opacity: 0, transition: { duration: 0.18 } }}
+              className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#0A0A0C] text-[#F2F2F4] select-none"
+            >
+              <main
+                ref={workspaceMainRef}
+                tabIndex={-1}
+                className="relative flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden select-text focus:outline-none"
               >
-                <div className="relative min-w-0 flex-1 max-w-[210px] sm:max-w-[300px]">
-                  <button
-                    type="button"
-                    onClick={() => setSessionsMenuOpen((v) => !v)}
-                    className="h-7 w-full px-2 sm:px-2.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] flex items-center gap-1.5 text-[11.5px] text-[#F2F2F4] transition-colors cursor-pointer"
-                  >
-                    <MessageSquare className="h-3 w-3 text-[#2F6FED] shrink-0" />
-                    <span className="truncate flex-1 text-left">
-                      {activeSession?.title || 'Nueva consulta'}
-                    </span>
-                    <ChevronDown className="h-3 w-3 text-[#9A9AA2] shrink-0" />
-                  </button>
-
-                  <AnimatePresence>
-                  {sessionsMenuOpen && (
-                    <motion.div variants={popVariants} initial="initial" animate="animate" exit="exit" className="apple-group origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] bg-[#141418]/96 p-1.5 z-50 space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSessionsMenuOpen(false);
-                          startNewInvestigation();
-                        }}
-                        className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
+                <HostProtectionPanel session={authSession} expanded={activeNav === 'equipo'} desktop={isDesktop} expedienteId={activeExpedienteId || null} />
+                <Suspense
+                  fallback={
+                    <div className="flex-1 flex items-center justify-center">
+                      <OmegaLoader />
+                    </div>
+                  }
+                >
+                  <AnimatePresence mode="wait" initial={false}>
+                    {isHome ? (
+                      <motion.div
+                        key="home-stage"
+                        variants={pageVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="flex-1 min-h-0 flex flex-col"
                       >
-                        <Plus className="h-3.5 w-3.5 text-[#2F6FED]" />
-                        <span>Nueva consulta limpia</span>
-                      </button>
+                        <SecurityPostureStage
+                          isDesktop={isDesktop}
+                          activeNav={activeNav}
+                          onSelectNav={(id) => handleNavigate(id)}
+                          selectedNodeId={selectedNodeId}
+                          onSelectNode={setSelectedNodeId}
+                          pcAudit={pcAudit}
+                          pcScannedAt={pcScannedAt}
+                          usbStatus={usbStatus}
+                          lastLinkResult={lastLinkResult}
+                          govStats={govStats}
+                          apiOnline={apiOnline}
+                          isLoadingChat={loadingChat}
+                          scanningPc={scanningPc}
+                          syncingStix={syncingStix}
+                          onRunPcScan={handleRunPcScan}
+                          onSyncStix={handleSyncStix}
+                          stageFeedback={stageFeedback}
+                          onDismissStageFeedback={() => setStageFeedback(null)}
+                          onOpenCopilot={handleOpenCopilot}
+                          onOpenCommandPalette={() => {
+                            setCommandOpen(true);
+                            setCommandQuery('');
+                          }}
+                          onOpenOnboarding={() => setOnboardingOpen(true)}
+                          onNavigate={handleNavigate}
+                          onLinkVerified={handleLinkVerified}
+                          onPanicPurge={handlePanicPurge}
+                          authSession={authSession}
+                          visibleModuleIds={profileConfig?.visibleModules}
+                          profileConfig={profileConfig}
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="instrument-shell"
+                        variants={pageVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="relative isolate flex-1 min-h-0 flex flex-col overflow-hidden text-[#F2F2F4]"
+                      >
+                        <OmegaAmbientBackdrop
+                          opacityClassName={privateOnlyWorkspace ? 'opacity-30' : undefined}
+                          intensity={
+                            activeNav === 'exposicion' || activeNav === 'enlace'
+                              ? 'focused'
+                              : 'workspace'
+                          }
+                        />
 
-                      <div className="h-px bg-white/[0.08] my-1" />
-
-                      <div className="max-h-[240px] overflow-y-auto space-y-0.5">
-                        {sessions.map((sess) => {
-                          const selected = sess.id === currentSessionId;
-                          return (
-                            <div
-                              key={sess.id}
-                              className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${
-                                selected
-                                  ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4]'
-                                  : 'text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4]'
-                              }`}
+                        {/* Barra Principal Unificada */}
+                        <header
+                          aria-label="Barra principal OMEGA"
+                          className="relative z-20 min-h-[60px] h-[60px] shrink-0 px-3.5 sm:px-7 border-b border-white/[0.06] bg-[#090B0E]/75 backdrop-blur-md flex items-center justify-between gap-2 select-none"
+                        >
+                          <div className="relative z-10 min-w-0 flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleNavigate(
+                                  profileConfig?.visibleModules?.includes('inicio')
+                                    ? 'inicio'
+                                    : profileConfig?.defaultView || 'inicio'
+                                )
+                              }
+                              className="titlebar-no-drag inline-flex items-center gap-2 rounded-[10px] px-1.5 py-1 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                              title="Volver a Inicio"
                             >
+                              <OmegaBrandMark />
+                            </button>
+
+                            <ChevronRight className="hidden lg:inline h-3.5 w-3.5 text-slate-600 shrink-0" strokeWidth={1.75} />
+                            <span className="hidden lg:inline text-[13px] font-medium text-[#F2F2F4] truncate max-w-[115px] xl:max-w-[145px]">
+                              {activeNavItem.label}
+                            </span>
+                          </div>
+
+                          {/* Barra de navegación segmentada matemáticamente centrada */}
+                          <div className="titlebar-no-drag hidden md:flex items-center justify-center md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-20">
+                            <SpatialNavPill
+                              activeNav={activeNav}
+                              onSelectNav={(id) => handleNavigate(id)}
+                              pcVerdict={pcVerdict}
+                              usbConnected={usbConnected}
+                              apiOnline={apiOnline}
+                              isLoadingChat={loadingChat}
+                              authConnected={Boolean(authSession)}
+                              visibleModuleIds={profileConfig?.visibleModules}
+                              moduleLabels={profileConfig?.moduleLabels}
+                            />
+                          </div>
+
+                          {/* Controles globales derechos unificados en todas las vistas */}
+                          <div className="relative z-10 flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOperatorMenuOpen(false);
+                                setCommandOpen(true);
+                                setCommandQuery('');
+                              }}
+                              aria-label="Abrir búsqueda rápida (⌘K)"
+                              title="Saltar a módulo o acción (⌘K)"
+                              className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Search className="h-[13px] w-[13px]" strokeWidth={1.75} />
+                              <kbd className="text-[11px] text-slate-500 font-sans hidden sm:inline">⌘K</kbd>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOperatorMenuOpen(false);
+                                setIsCopilotOpen((v) => !v);
+                              }}
+                              aria-label="Abrir o cerrar copiloto lateral"
+                              title="Copiloto (Ctrl+J)"
+                              className={`p-2 rounded-lg relative inline-flex items-center justify-center transition-colors cursor-pointer ${isCopilotOpen
+                                ? 'bg-white/[0.08] text-slate-100'
+                                : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.05]'
+                                }`}
+                            >
+                              <Bell className="h-[15px] w-[15px]" strokeWidth={1.75} />
+                              {reportsCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 text-[10px] font-medium leading-none bg-[#2F6FED] text-white px-1.5 py-0.5 rounded-full">
+                                  {reportsCount}
+                                </span>
+                              )}
+                            </button>
+
+                            <div className="relative">
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setCurrentSessionId(sess.id);
-                                  setSelectedCitation(null);
-                                  setSessionsMenuOpen(false);
+                                  if (!authSession) {
+                                    handleNavigate('cuenta');
+                                    return;
+                                  }
+                                  setOperatorMenuOpen((v) => !v);
                                 }}
-                                className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                                aria-expanded={authSession ? operatorMenuOpen : undefined}
+                                title={
+                                  authSession
+                                    ? `Cuenta: ${authSession.email} (${authSession.role})`
+                                    : 'Iniciar sesión o crear cuenta OMEGA'
+                                }
+                                className="px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] inline-flex items-center gap-2 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
                               >
-                                <span className="block truncate font-medium">{sess.title}</span>
-                                <span className="font-tech text-[10.5px] text-[#9A9AA2]">
-                                  {formatRelativeTime(sess.updatedAt)}
-                                </span>
+                                {authSession ? (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                    <span className="hidden lg:inline max-w-[110px] truncate">
+                                      {authSession.email?.split('@')[0] || authSession.tenantSlug}
+                                    </span>
+                                    <ChevronDown className="h-3 w-3 text-slate-400 hidden lg:inline" strokeWidth={1.75} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <KeyRound className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                                    <span className="hidden lg:inline">Entrar</span>
+                                  </>
+                                )}
                               </button>
 
+                              {authSession && operatorMenuOpen && (
+                                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-[#0F131B]/95 backdrop-blur-md border border-white/[0.07] shadow-[0_12px_32px_rgba(0,0,0,0.55)] p-1.5 z-50 space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOperatorMenuOpen(false);
+                                      handleNavigate('cuenta');
+                                    }}
+                                    className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                                  >
+                                    <UserCheck className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                                    <span>Cuenta y Ajustes</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOperatorMenuOpen(false);
+                                      setOnboardingOpen(true);
+                                    }}
+                                    className="w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                                  >
+                                    <BookOpen className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                                    <span>Guía interactiva</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {authSession && (
+                              <>
+                                <span aria-hidden="true" className="h-4 w-px bg-white/[0.08] mx-0.5 shrink-0" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOperatorMenuOpen(false);
+                                    void handlePanicPurge();
+                                  }}
+                                  title="Purga rápida de emergencia: borra tokens, memoria volátil y caché local"
+                                  aria-label="Purga rápida de emergencia"
+                                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                                  <span className="hidden xl:inline">Purga</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </header>
+
+                        {/* Sub-barra contextual de conversación cuando existen mensajes o historial */}
+                        {activeNav === 'preguntar' && (messages.length > 0 || sessions.length > 0) && (
+                          <header
+                            aria-label="Controles de sesión de chat"
+                            className="relative z-15 min-h-[42px] shrink-0 px-3.5 sm:px-7 py-1.5 border-b border-white/[0.07] bg-[#0A0A0C]/65 flex items-center justify-between gap-2 select-none"
+                          >
+                            <div className="relative min-w-0 flex-1 max-w-[210px] sm:max-w-[300px]">
                               <button
                                 type="button"
-                                onClick={(e) => deleteSession(e, sess.id)}
-                                title="Eliminar conversación"
-                                aria-label="Eliminar conversación"
-                                className="p-1 rounded-[6px] text-[#9A9AA2] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
+                                onClick={() => setSessionsMenuOpen((v) => !v)}
+                                className="h-7 w-full px-2 sm:px-2.5 rounded-[7px] border border-white/[0.08] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] flex items-center gap-1.5 text-[11.5px] text-[#F2F2F4] transition-colors cursor-pointer"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <MessageSquare className="h-3 w-3 text-[#2F6FED] shrink-0" />
+                                <span className="truncate flex-1 text-left">
+                                  {activeSession?.title || 'Nueva consulta'}
+                                </span>
+                                <ChevronDown className="h-3 w-3 text-[#9A9AA2] shrink-0" />
                               </button>
+
+                              <AnimatePresence>
+                                {sessionsMenuOpen && (
+                                  <motion.div variants={popVariants} initial="initial" animate="animate" exit="exit" className="apple-group origin-top-left absolute left-0 mt-1.5 w-[min(300px,calc(100vw-1.75rem))] rounded-[13px] bg-[#141418]/96 p-1.5 z-50 space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSessionsMenuOpen(false);
+                                        startNewInvestigation();
+                                      }}
+                                      className="w-full flex items-center gap-2 rounded-[9px] px-2.5 py-2 text-[12.5px] font-medium text-[#F2F2F4] hover:bg-[rgba(28,36,56,0.65)] transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="h-3.5 w-3.5 text-[#2F6FED]" />
+                                      <span>Nueva consulta limpia</span>
+                                    </button>
+
+                                    <div className="h-px bg-white/[0.08] my-1" />
+
+                                    <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                                      {sessions.map((sess) => {
+                                        const selected = sess.id === currentSessionId;
+                                        return (
+                                          <div
+                                            key={sess.id}
+                                            className={`group flex items-center justify-between gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[12px] ${selected
+                                              ? 'bg-[rgba(28,36,56,0.65)] text-[#F2F2F4]'
+                                              : 'text-[#9A9AA2] hover:bg-white/[0.05] hover:text-[#F2F2F4]'
+                                              }`}
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentSessionId(sess.id);
+                                                setSelectedCitation(null);
+                                                setSessionsMenuOpen(false);
+                                              }}
+                                              className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                                            >
+                                              <span className="block truncate font-medium">{sess.title}</span>
+                                              <span className="font-tech text-[10.5px] text-[#9A9AA2]">
+                                                {formatRelativeTime(sess.updatedAt)}
+                                              </span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={(e) => deleteSession(e, sess.id)}
+                                              title="Eliminar conversación"
+                                              aria-label="Eliminar conversación"
+                                              className="p-1 rounded-[6px] text-[#9A9AA2] hover:text-[#FF7A73] hover:bg-white/[0.08] cursor-pointer"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                  </AnimatePresence>
-                </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {messages.length > 0 && activeConversationCitations.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsSourcesPanelOpen((v) => !v)}
-                      title={`Fuentes (${activeConversationCitations.length})`}
-                      className={`h-7 px-2 sm:px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                        isSourcesPanelOpen
-                          ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4]'
-                          : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4]'
-                      }`}
-                    >
-                      <BookOpen className="h-3 w-3 shrink-0 text-[#2F6FED]" />
-                      <span>Fuentes ({activeConversationCitations.length})</span>
-                    </button>
-                  )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {messages.length > 0 && activeConversationCitations.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsSourcesPanelOpen((v) => !v)}
+                                  title={`Fuentes (${activeConversationCitations.length})`}
+                                  className={`h-7 px-2 sm:px-2.5 rounded-[7px] border flex items-center gap-1.5 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${isSourcesPanelOpen
+                                    ? 'border-[#2F6FED]/55 bg-[rgba(28,36,56,0.65)] text-[#F2F2F4]'
+                                    : 'border-white/[0.08] bg-white/[0.04] text-[#9A9AA2] hover:bg-[rgba(28,36,56,0.65)] hover:text-[#F2F2F4]'
+                                    }`}
+                                >
+                                  <BookOpen className="h-3 w-3 shrink-0 text-[#2F6FED]" />
+                                  <span>Fuentes ({activeConversationCitations.length})</span>
+                                </button>
+                              )}
 
-                  {messages.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleExportSession}
-                      title="Exportar investigación"
-                      aria-label="Exportar investigación"
-                      className="h-7 px-2 sm:px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] border border-white/[0.08] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F2F2F4] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-                    >
-                      <Download className="h-3 w-3 text-[#9A9AA2] shrink-0" />
-                      <span className="hidden min-[360px]:inline">Exportar</span>
-                    </button>
-                  )}
-                </div>
-              </header>
-            )}
-
-              {/* Navegación móvil en anchos estrechos */}
-              <div className="md:hidden shrink-0 border-b border-white/[0.06] py-1.5 flex justify-center">
-                <SpatialNavPill
-                  compact
-                  activeNav={activeNav}
-                  onSelectNav={(id) => handleNavigate(id)}
-                  pcVerdict={pcVerdict}
-                  usbConnected={usbConnected}
-                  apiOnline={apiOnline}
-                  isLoadingChat={loadingChat}
-                  authConnected={Boolean(authSession)}
-                  visibleModuleIds={profileConfig?.visibleModules}
-                />
-              </div>
-
-              {/* Contenido del instrumento activo */}
-              <div className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
-               <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={activeNav}
-                  variants={pageVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  className="flex-1 min-h-0 flex flex-col overflow-hidden"
-                >
-                {activeNav === 'preguntar' ? (
-                  <ChatWorkspace
-                    privateOnly={privateOnlyWorkspace}
-                    disclaimer={privateOnlyWorkspace ? 'No es asesoría legal. Verifica cada afirmación en los documentos citados.' : ''}
-                    messages={messages}
-                    loading={loadingChat}
-                    topK={topK}
-                    onChangeTopK={setTopK}
-                    generalChatMode={privateOnlyWorkspace ? false : generalChatMode}
-                    onToggleGeneralChatMode={privateOnlyWorkspace ? undefined : () => setGeneralChatMode((v) => !v)}
-                    sourceScope={sourceScope}
-                    onChangeSourceScope={setSourceScope}
-                    onSendMessage={handleSend}
-                    onRetryFailedTurn={handleRetryFailedTurn}
-                    chatContext={activeChatContext}
-                    lastRewrittenQuery={activeSession?.lastRewrittenQuery || null}
-                    onUpdateChatContext={handleUpdateChatContext}
-                    onClearChatContext={handleClearChatContext}
-                    activeCitation={selectedCitation}
-                    onSelectCitation={handleSelectCitation}
-                    isSourcesOpen={isSourcesPanelOpen}
-                    onToggleSources={() => setIsSourcesPanelOpen((v) => !v)}
-                    onCloseSources={() => setIsSourcesPanelOpen(false)}
-                    allConversationCitations={activeConversationCitations}
-                    hasHistory={sessions.length > 0}
-                    onResumeLastSession={() => {
-                      if (sessions.length > 0) {
-                        setCurrentSessionId(sessions[0].id);
-                        setSelectedCitation(null);
-                      }
-                    }}
-                    textareaRef={textareaRef}
-                    authSession={authSession}
-                    onOpenAuth={openAuthModal}
-                    usePrivateDocs={privateOnlyWorkspace || usePrivateDocs}
-                    onTogglePrivateDocs={(nextVal) => setUsePrivateDocs(Boolean(nextVal))}
-                    privateDocs={expedienteDocs}
-                    activeExpedienteId={activeExpedienteId}
-                    loadingDocs={loadingExpedientes}
-                    uploadingPdf={uploadingPdf}
-                    docNotice={expedienteNotice}
-                    docError={expedienteError}
-                    onDismissDocBanner={() => {
-                      setExpedienteNotice('');
-                      setExpedienteError('');
-                    }}
-                    onUploadPdf={handleUploadExpedientePdf}
-                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
-                    aiEngine={govStats?.ai_engine || null}
-                    onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
-                  />
-                ) : activeNav === 'expedientes' ? (
-                  <ExpedientesPanel
-                    key={`${authSession?.tenantId}:${authSession?.userId}`}
-                    authSession={authSession}
-                    onOpenAssistant={(id) => {
-                      setActiveExpedienteId(id); setExpedienteDocs([]); setCurrentSessionId(null); setDraftContext(null);
-                      setSelectedCitation(null); setIsSourcesPanelOpen(false); setUsePrivateDocs(true); handleNavigate('preguntar');
-                    }}
-                  />
-                ) : activeNav === 'cuenta' ? (
-                  <AccountSettingsPanel
-                    authSession={authSession}
-                    onLogout={handleLogout}
-                    onOpenAuth={openAuthModal}
-                    onPanicPurge={handlePanicPurge}
-                    govStats={govStats}
-                    privateDocs={expedienteDocs}
-                    activeExpedienteId={activeExpedienteId}
-                    loadingDocs={loadingExpedientes}
-                    uploadingPdf={uploadingPdf}
-                    docNotice={expedienteNotice}
-                    docError={expedienteError}
-                    onDismissDocBanner={() => {
-                      setExpedienteNotice('');
-                      setExpedienteError('');
-                    }}
-                    onUploadPdf={handleUploadExpedientePdf}
-                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
-                    onOpenChat={(preferPrivate) => {
-                      if (preferPrivate && activeExpedienteId) {
-                        setUsePrivateDocs(true);
-                      }
-                      handleNavigate('preguntar');
-                    }}
-                    topK={topK}
-                    onChangeTopK={setTopK}
-                    sourceScope={sourceScope}
-                    onChangeSourceScope={setSourceScope}
-                    initialSection={settingsJump.section}
-                    initialSectionKey={settingsJump.key}
-                    onAiConfigured={() => void refreshSystemTelemetry()}
-                  />
-                ) : activeNav === 'amenazas' ? (
-                  profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
-                    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
-                      <div className="w-full max-w-5xl mx-auto pb-16">
-                        <DevSupplyChainIntelTab />
-                      </div>
-                    </div>
-                  ) : (
-                    <CampaignsPanel
-                      onAskInChat={askInChat}
-                      onVerifyLink={(url) => handleNavigate('enlace', { url })}
-                      onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
-                      initialSearch={threatJump.query}
-                      initialSearchKey={threatJump.key}
-                    />
-                  )
-                ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
-                  <div className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-8 flex flex-col">
-                    {activeNav === 'equipo' && (
-                      profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
-                        <div className="w-full max-w-5xl mx-auto pb-16">
-                          <DevWorkstationTab />
-                        </div>
-                      ) : (
-                        <MvtVerifierPanel
-                          key={`mvt-${deviceNavKey}`}
-                          onAskInChat={askInChat}
-                          onVerifyLink={(url) => handleNavigate('enlace', { url })}
-                          onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
-                          initialTab={deviceInitialTab}
-                          preloadedAudit={pcAudit}
-                          onAuditUpdate={handlePcAuditComplete}
-                        />
-                      )
-                    )}
-                    {activeNav === 'exposicion' && (
-                      <div className="flex-1 flex flex-col">
-                        {intelTab === 'link' ? (
-                          <LinkVerifierPanel
-                            onAskInChat={askInChat}
-                            onAuditDomain={(assetValue) => {
-                              setOsintJump((prev) => ({ value: assetValue, type: 'domain', key: prev.key + 1 }));
-                              setIntelTab('osint');
-                            }}
-                            onSwitchMode={(mode) => {
-                              setOsintJump((prev) => ({
-                                value: '',
-                                type: mode === 'domain' ? 'domain' : 'institutional_email',
-                                key: prev.key + 1,
-                              }));
-                              setIntelTab('osint');
-                            }}
-                            onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
-                            onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
-                            initialUrl={linkJump.url}
-                            initialCheckKey={linkJump.key}
-                            onLinkVerified={handleLinkVerified}
-                          />
-                        ) : (
-                          <OsintPanel
-                            onAskInChat={askInChat}
-                            onVerifyLink={(url) => {
-                              setLinkJump((prev) => ({ url, key: prev.key + 1 }));
-                              setIntelTab('link');
-                            }}
-                            onSwitchMode={(mode) => {
-                              if (mode === 'link') setIntelTab('link');
-                            }}
-                            onAuditDevice={(tab = 'pc') => handleNavigate('equipo', { tab })}
-                            onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
-                            initialAsset={osintJump}
-                            initialJumpKey={osintJump.key}
-                          />
+                              {messages.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={handleExportSession}
+                                  title="Exportar investigación"
+                                  aria-label="Exportar investigación"
+                                  className="h-7 px-2 sm:px-2.5 rounded-[7px] bg-white/[0.04] hover:bg-[rgba(28,36,56,0.65)] border border-white/[0.08] flex items-center gap-1.5 text-[11.5px] font-medium text-[#F2F2F4] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                                >
+                                  <Download className="h-3 w-3 text-[#9A9AA2] shrink-0" />
+                                  <span className="hidden min-[360px]:inline">Exportar</span>
+                                </button>
+                              )}
+                            </div>
+                          </header>
                         )}
-                      </div>
+
+                        {/* Navegación móvil en anchos estrechos */}
+                        <div className="md:hidden shrink-0 border-b border-white/[0.06] py-1.5 flex justify-center">
+                          <SpatialNavPill
+                            compact
+                            activeNav={activeNav}
+                            onSelectNav={(id) => handleNavigate(id)}
+                            pcVerdict={pcVerdict}
+                            usbConnected={usbConnected}
+                            apiOnline={apiOnline}
+                            isLoadingChat={loadingChat}
+                            authConnected={Boolean(authSession)}
+                            visibleModuleIds={profileConfig?.visibleModules}
+                            moduleLabels={profileConfig?.moduleLabels}
+                          />
+                        </div>
+
+                        {/* Contenido del instrumento activo */}
+                        <div className="relative z-10 flex-1 min-h-0 flex flex-col overflow-hidden">
+                          <AnimatePresence mode="wait" initial={false}>
+                            <motion.div
+                              key={activeNav}
+                              variants={pageVariants}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                              className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                            >
+                              {activeNav === 'preguntar' ? (
+                                <ChatWorkspace
+                                  privateOnly={privateOnlyWorkspace}
+                                  disclaimer={privateOnlyWorkspace ? 'No es asesoría legal. Verifica cada afirmación en los documentos citados.' : ''}
+                                  messages={messages}
+                                  loading={loadingChat}
+                                  topK={topK}
+                                  onChangeTopK={setTopK}
+                                  generalChatMode={privateOnlyWorkspace ? false : generalChatMode}
+                                  onToggleGeneralChatMode={privateOnlyWorkspace ? undefined : () => setGeneralChatMode((v) => !v)}
+                                  sourceScope={sourceScope}
+                                  onChangeSourceScope={setSourceScope}
+                                  onSendMessage={handleSend}
+                                  onRetryFailedTurn={handleRetryFailedTurn}
+                                  chatContext={activeChatContext}
+                                  lastRewrittenQuery={activeSession?.lastRewrittenQuery || null}
+                                  onUpdateChatContext={handleUpdateChatContext}
+                                  onClearChatContext={handleClearChatContext}
+                                  activeCitation={selectedCitation}
+                                  onSelectCitation={handleSelectCitation}
+                                  isSourcesOpen={isSourcesPanelOpen}
+                                  onToggleSources={() => setIsSourcesPanelOpen((v) => !v)}
+                                  onCloseSources={() => setIsSourcesPanelOpen(false)}
+                                  allConversationCitations={activeConversationCitations}
+                                  hasHistory={sessions.length > 0}
+                                  onResumeLastSession={() => {
+                                    if (sessions.length > 0) {
+                                      setCurrentSessionId(sessions[0].id);
+                                      setSelectedCitation(null);
+                                    }
+                                  }}
+                                  textareaRef={textareaRef}
+                                  authSession={authSession}
+                                  onOpenAuth={openAuthModal}
+                                  usePrivateDocs={privateOnlyWorkspace || usePrivateDocs}
+                                  onTogglePrivateDocs={(nextVal) => setUsePrivateDocs(Boolean(nextVal))}
+                                  privateDocs={expedienteDocs}
+                                  activeExpedienteId={activeExpedienteId}
+                                  loadingDocs={loadingExpedientes}
+                                  uploadingPdf={uploadingPdf}
+                                  docNotice={expedienteNotice}
+                                  docError={expedienteError}
+                                  onDismissDocBanner={() => {
+                                    setExpedienteNotice('');
+                                    setExpedienteError('');
+                                  }}
+                                  onUploadPdf={handleUploadExpedientePdf}
+                                  onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                                  aiEngine={govStats?.ai_engine || null}
+                                  onOpenAiSetup={() => handleNavigate('ajustes', { settingsSection: 'ia' })}
+                                />
+                              ) : activeNav === 'expedientes' ? (
+                                <ExpedientesPanel
+                                  key={`${authSession?.tenantId}:${authSession?.userId}`}
+                                  authSession={authSession}
+                                  onOpenAssistant={(id) => {
+                                    setActiveExpedienteId(id); setExpedienteDocs([]); setCurrentSessionId(null); setDraftContext(null);
+                                    setSelectedCitation(null); setIsSourcesPanelOpen(false); setUsePrivateDocs(true); handleNavigate('preguntar');
+                                  }}
+                                />
+                              ) : activeNav === 'cuenta' ? (
+                                <AccountSettingsPanel
+                                  authSession={authSession}
+                                  onLogout={handleLogout}
+                                  onOpenAuth={openAuthModal}
+                                  onPanicPurge={handlePanicPurge}
+                                  govStats={govStats}
+                                  privateDocs={expedienteDocs}
+                                  activeExpedienteId={activeExpedienteId}
+                                  loadingDocs={loadingExpedientes}
+                                  uploadingPdf={uploadingPdf}
+                                  docNotice={expedienteNotice}
+                                  docError={expedienteError}
+                                  onDismissDocBanner={() => {
+                                    setExpedienteNotice('');
+                                    setExpedienteError('');
+                                  }}
+                                  onUploadPdf={handleUploadExpedientePdf}
+                                  onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                                  onOpenChat={(preferPrivate) => {
+                                    if (preferPrivate && activeExpedienteId) {
+                                      setUsePrivateDocs(true);
+                                    }
+                                    handleNavigate('preguntar');
+                                  }}
+                                  topK={topK}
+                                  onChangeTopK={setTopK}
+                                  sourceScope={sourceScope}
+                                  onChangeSourceScope={setSourceScope}
+                                  initialSection={settingsJump.section}
+                                  initialSectionKey={settingsJump.key}
+                                  onAiConfigured={() => void refreshSystemTelemetry()}
+                                  profileConfig={profileConfig}
+                                  onSwitchProfile={switchProfile}
+                                />
+                              ) : activeNav === 'amenazas' ? (
+                                profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
+                                  <div className="flex-1 min-h-0 overflow-y-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-6">
+                                    <div className="w-full max-w-[1440px] 2xl:max-w-[1600px] mx-auto pb-16">
+                                      <DevSupplyChainIntelTab />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <CampaignsPanel
+                                    onAskInChat={askInChat}
+                                    onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                                    onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
+                                    initialSearch={threatJump.query}
+                                    initialSearchKey={threatJump.key}
+                                  />
+                                )
+                              ) : activeNav === 'equipo' || activeNav === 'exposicion' || activeNav === 'enlace' ? (
+                                <div className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-8 flex flex-col">
+                                  {activeNav === 'equipo' && (
+                                    profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
+                                      <div className="w-full max-w-[1440px] 2xl:max-w-[1600px] mx-auto pb-16">
+                                        <DevWorkstationTab
+                                          onAskInChat={askInChat}
+                                          onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                                          onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                                          initialDeviceTab={deviceInitialTab}
+                                          preloadedAudit={pcAudit}
+                                          onAuditUpdate={handlePcAuditComplete}
+                                          deviceNavKey={deviceNavKey}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <MvtVerifierPanel
+                                        key={`mvt-${deviceNavKey}`}
+                                        onAskInChat={askInChat}
+                                        onVerifyLink={(url) => handleNavigate('enlace', { url })}
+                                        onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                                        initialTab={deviceInitialTab}
+                                        preloadedAudit={pcAudit}
+                                        onAuditUpdate={handlePcAuditComplete}
+                                      />
+                                    )
+                                  )}
+                                  {activeNav === 'exposicion' && (
+                                    <div className="flex-1 flex flex-col">
+                                      {intelTab === 'link' ? (
+                                        <LinkVerifierPanel
+                                          onAskInChat={askInChat}
+                                          onAuditDomain={(assetValue) => {
+                                            setOsintJump((prev) => ({ value: assetValue, type: 'domain', key: prev.key + 1 }));
+                                            setIntelTab('osint');
+                                          }}
+                                          onSwitchMode={(mode) => {
+                                            setOsintJump((prev) => ({
+                                              value: '',
+                                              type: mode === 'domain' ? 'domain' : 'institutional_email',
+                                              key: prev.key + 1,
+                                            }));
+                                            setIntelTab('osint');
+                                          }}
+                                          onAuditDevice={(tab = 'android') => handleNavigate('equipo', { tab })}
+                                          onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                                          initialUrl={linkJump.url}
+                                          initialCheckKey={linkJump.key}
+                                          onLinkVerified={handleLinkVerified}
+                                        />
+                                      ) : (
+                                        <OsintPanel
+                                          onAskInChat={askInChat}
+                                          onVerifyLink={(url) => {
+                                            setLinkJump((prev) => ({ url, key: prev.key + 1 }));
+                                            setIntelTab('link');
+                                          }}
+                                          onSwitchMode={(mode) => {
+                                            if (mode === 'link') setIntelTab('link');
+                                          }}
+                                          onAuditDevice={(tab = 'pc') => handleNavigate('equipo', { tab })}
+                                          onOpenThreat={(campaignQuery) => handleNavigate('amenazas', { campaignQuery })}
+                                          initialAsset={osintJump}
+                                          initialJumpKey={osintJump.key}
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : activeNav === 'repo_scanner' ? (
+                                <RepoScannerPanel authSession={authSession} />
+                              ) : (
+                                <AccountSettingsPanel
+                                  authSession={authSession}
+                                  onLogout={handleLogout}
+                                  onOpenAuth={openAuthModal}
+                                  onPanicPurge={handlePanicPurge}
+                                  govStats={govStats}
+                                  privateDocs={expedienteDocs}
+                                  activeExpedienteId={activeExpedienteId}
+                                  loadingDocs={loadingExpedientes}
+                                  uploadingPdf={uploadingPdf}
+                                  docNotice={expedienteNotice}
+                                  docError={expedienteError}
+                                  onDismissDocBanner={() => {
+                                    setExpedienteNotice('');
+                                    setExpedienteError('');
+                                  }}
+                                  onUploadPdf={handleUploadExpedientePdf}
+                                  onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
+                                  onOpenChat={(preferPrivate) => {
+                                    if (preferPrivate && activeExpedienteId) {
+                                      setUsePrivateDocs(true);
+                                    }
+                                    handleNavigate('preguntar');
+                                  }}
+                                  topK={topK}
+                                  onChangeTopK={setTopK}
+                                  sourceScope={sourceScope}
+                                  onChangeSourceScope={setSourceScope}
+                                  initialSection={settingsJump.section}
+                                  initialSectionKey={settingsJump.key}
+                                  onAiConfigured={() => void refreshSystemTelemetry()}
+                                  profileConfig={profileConfig}
+                                  onSwitchProfile={switchProfile}
+                                />
+                              )}
+                            </motion.div>
+                          </AnimatePresence>
+                        </div>
+                      </motion.div>
                     )}
-                  </div>
-                ) : activeNav === 'repo_scanner' ? (
-                  <RepoScannerPanel authSession={authSession} />
-                ) : (
-                  <AccountSettingsPanel
-                    authSession={authSession}
-                    onLogout={handleLogout}
-                    onOpenAuth={openAuthModal}
-                    onPanicPurge={handlePanicPurge}
-                    govStats={govStats}
-                    privateDocs={expedienteDocs}
-                    activeExpedienteId={activeExpedienteId}
-                    loadingDocs={loadingExpedientes}
-                    uploadingPdf={uploadingPdf}
-                    docNotice={expedienteNotice}
-                    docError={expedienteError}
-                    onDismissDocBanner={() => {
-                      setExpedienteNotice('');
-                      setExpedienteError('');
-                    }}
-                    onUploadPdf={handleUploadExpedientePdf}
-                    onRefreshDocs={() => refreshActiveExpedienteDocs(activeExpedienteId)}
-                    onOpenChat={(preferPrivate) => {
-                      if (preferPrivate && activeExpedienteId) {
-                        setUsePrivateDocs(true);
-                      }
-                      handleNavigate('preguntar');
-                    }}
-                    topK={topK}
-                    onChangeTopK={setTopK}
-                    sourceScope={sourceScope}
-                    onChangeSourceScope={setSourceScope}
-                    initialSection={settingsJump.section}
-                    initialSectionKey={settingsJump.key}
-                    onAiConfigured={() => void refreshSystemTelemetry()}
-                    profileConfig={profileConfig}
-                    onSwitchProfile={switchProfile}
-                  />
-                )}
-                </motion.div>
-               </AnimatePresence>
-              </div>
-          </motion.div>
-          )}
-        </AnimatePresence>
-        </Suspense>
-        </main>
+                  </AnimatePresence>
+                </Suspense>
+              </main >
 
-      {/* Panel Deslizable No Destructivo de Copiloto */}
-      <Suspense fallback={null}>
-      <CopilotDrawer
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-        onOpenFullWorkspace={() => handleNavigate('preguntar')}
-        activeSession={activeSession}
-        isLoading={loadingChat}
-        failedPrompt={drawerFailedPrompt}
-        onRetryFailedTurn={() =>
-          lastMsg?.isError &&
-          handleRetryFailedTurn(messages.length - 1, lastMsg.retryQuery, lastMsg.sourceScope)
-        }
-        activeCitation={selectedCitation}
-        onSelectCitation={(cit) => {
-          handleSelectCitation(cit);
-          setIsCopilotOpen(false);
-          setActiveNav('preguntar');
-        }}
-        onSendPrompt={(promptText) =>
-          handleSend(promptText, 'Todas las fuentes', {
-            forceNewSession: !currentSessionId,
-          })
-        }
-        pinnedContext={pinnedCopilotContext}
-        onClearPinnedContext={() => setPinnedCopilotContext('')}
-        reportsCount={reportsCount}
-      />
+              {/* Panel Deslizable No Destructivo de Copiloto */}
+              < Suspense fallback={null} >
+                <CopilotDrawer
+                  isOpen={isCopilotOpen}
+                  onClose={() => setIsCopilotOpen(false)}
+                  onOpenFullWorkspace={() => handleNavigate('preguntar')}
+                  activeSession={activeSession}
+                  isLoading={loadingChat}
+                  failedPrompt={drawerFailedPrompt}
+                  onRetryFailedTurn={() =>
+                    lastMsg?.isError &&
+                    handleRetryFailedTurn(messages.length - 1, lastMsg.retryQuery, lastMsg.sourceScope)
+                  }
+                  activeCitation={selectedCitation}
+                  onSelectCitation={(cit) => {
+                    handleSelectCitation(cit);
+                    setIsCopilotOpen(false);
+                    setActiveNav('preguntar');
+                  }}
+                  onSendPrompt={(promptText) =>
+                    handleSend(promptText, 'Todas las fuentes', {
+                      forceNewSession: !currentSessionId,
+                    })
+                  }
+                  pinnedContext={pinnedCopilotContext}
+                  onClearPinnedContext={() => setPinnedCopilotContext('')}
+                  reportsCount={reportsCount}
+                />
 
-      {/* Paleta Spotlight (⌘K) */}
-      <CommandPaletteModal
-        isOpen={commandOpen}
-        onClose={() => setCommandOpen(false)}
-        commandQuery={commandQuery}
-        onChangeQuery={setCommandQuery}
-        navItems={resolvedNavItems.filter((item) => item.id !== 'expedientes' || profileConfig?.visibleModules?.includes(item.id))}
-        onNavigate={handleNavigate}
-        onOpenCopilot={() => setIsCopilotOpen(true)}
-        onOpenOnboarding={() => setOnboardingOpen(true)}
-        sessions={sessions}
-        onSelectSession={(sessionId) => {
-          setCurrentSessionId(sessionId);
-          setSelectedCitation(null);
-          setActiveNav('preguntar');
-        }}
-      />
+                {/* Paleta Spotlight (⌘K) */}
+                <CommandPaletteModal
+                  isOpen={commandOpen}
+                  onClose={() => setCommandOpen(false)}
+                  commandQuery={commandQuery}
+                  onChangeQuery={setCommandQuery}
+                  navItems={resolvedNavItems.filter((item) => item.id !== 'expedientes' || profileConfig?.visibleModules?.includes(item.id))}
+                  onNavigate={handleNavigate}
+                  onOpenCopilot={() => setIsCopilotOpen(true)}
+                  onOpenOnboarding={() => setOnboardingOpen(true)}
+                  sessions={sessions}
+                  onSelectSession={(sessionId) => {
+                    setCurrentSessionId(sessionId);
+                    setSelectedCitation(null);
+                    setActiveNav('preguntar');
+                  }}
+                />
 
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => {
-          setAuthModalOpen(false);
-          setAuthModalReason('');
-        }}
-        onAuthenticated={completeAuthenticationTransition}
-        reasonMessage={authModalReason}
-        onOpenCuenta={() => handleNavigate('cuenta')}
-      />
+                <AuthModal
+                  isOpen={authModalOpen}
+                  onClose={() => {
+                    setAuthModalOpen(false);
+                    setAuthModalReason('');
+                  }}
+                  onAuthenticated={completeAuthenticationTransition}
+                  reasonMessage={authModalReason}
+                  onOpenCuenta={() => handleNavigate('cuenta')}
+                />
 
-      <OnboardingTourModal
-        isOpen={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
-        onNavigate={(targetNav) => handleNavigate(targetNav)}
-        onOpenCopilot={handleOpenCopilot}
-        authSession={authSession}
-      />
-      </Suspense>
-        </motion.div>
-      )}
-    </AnimatePresence>
-    </AiSetupGate>
-    </DesktopStartupGate>
+                <OnboardingTourModal
+                  isOpen={onboardingOpen}
+                  onClose={() => setOnboardingOpen(false)}
+                  onNavigate={(targetNav) => handleNavigate(targetNav)}
+                  onOpenCopilot={handleOpenCopilot}
+                  authSession={authSession}
+                />
+              </Suspense >
+            </motion.div >
+          )
+          }
+        </AnimatePresence >
+      </AiSetupGate >
+      </MembershipGate>
+      <CreditConfirmationDialog />
+    </DesktopStartupGate >
   );
 }

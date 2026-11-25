@@ -34,23 +34,41 @@ public class GitHubIntegrationController {
 
     private final GitHubAppIntegrationService integrationService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.repository.TenantRepository tenantRepository;
+
     public GitHubIntegrationController(GitHubAppIntegrationService integrationService) {
         this.integrationService = integrationService;
     }
 
+    private void requireAdminOrIndividualOwner(TenantScope scope) {
+        if (scope.role() == com.omega.platform.security.Role.ADMIN) {
+            return;
+        }
+        boolean isIndividualOwner = tenantRepository != null
+                && tenantRepository.findByIdAndActiveTrue(scope.tenantId())
+                        .map(t -> "INDIVIDUAL".equalsIgnoreCase(t.getAccountType()))
+                        .orElse(false);
+        if (!isIndividualOwner) {
+            throw new AccessDeniedException("Solo un administrador puede gestionar la integración de GitHub App.");
+        }
+    }
+
     @PostMapping("/state")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public LinkStateResponse createLinkState() {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
+        requireAdminOrIndividualOwner(scope);
         return integrationService.createLinkState(scope.tenantId(), scope.userId());
     }
 
     @PostMapping("/link")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public InstallationView linkInstallation(@Valid @RequestBody LinkInstallationRequest request) {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
+        requireAdminOrIndividualOwner(scope);
         return integrationService.completeInstallationLink(
                 scope.tenantId(),
                 scope.userId(),
@@ -62,20 +80,22 @@ public class GitHubIntegrationController {
     }
 
     @GetMapping("/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public ResponseEntity<InstallationView> getStatus() {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
+        requireAdminOrIndividualOwner(scope);
         return integrationService.getInstallationStatus(scope.tenantId())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @DeleteMapping("/link")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public Map<String, Object> unlinkInstallation() {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
+        requireAdminOrIndividualOwner(scope);
         integrationService.unlinkInstallation(scope.tenantId(), scope.userId());
         return Map.of("unlinked", true);
     }

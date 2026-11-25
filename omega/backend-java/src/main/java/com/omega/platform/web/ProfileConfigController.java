@@ -30,6 +30,11 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/profile")
 public class ProfileConfigController {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountAccessService accountAccess;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
+
 
     private final TenantRepository tenantRepository;
     private final TenantProfileConfigService configService;
@@ -63,12 +68,11 @@ public class ProfileConfigController {
      * Solo ADMIN puede ejecutarlo y requiere confirmación explícita.
      */
     @PutMapping
-    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public ProfileConfig updateTenantProfile(@Valid @RequestBody UpdateTenantProfileRequest request) {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
-        if (scope.role() != Role.ADMIN) {
+        if (accountAccess != null ? !accountAccess.canManage(scope.tenantId(), scope.userId(), scope.role()) : scope.role() != Role.ADMIN) {
             throw new AccessDeniedException("Solo un administrador del espacio puede cambiar el perfil");
         }
         if (!Boolean.TRUE.equals(request.confirmed())) {
@@ -76,6 +80,7 @@ public class ProfileConfigController {
                     HttpStatus.BAD_REQUEST,
                     "Debes confirmar explícitamente el cambio de perfil del espacio");
         }
+        if (credits != null && request.profile() != TenantProfile.GENERAL) credits.requirePaid(scope.tenantId());
         TenantEntity tenant = tenantRepository.findActiveForUpdate(scope.tenantId())
                 .orElseThrow(() -> new AccessDeniedException("Tenant inactivo o inexistente"));
 

@@ -617,7 +617,7 @@ export function MvtVerifierPanel({
     return (
       <div
         ref={resultContainerRef}
-        className="animate-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6"
+        className="animate-fade-up w-full max-w-[1280px] 2xl:max-w-[1440px] mx-auto pt-2 pb-12 space-y-6"
       >
         {/* Barra superior */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
@@ -647,7 +647,7 @@ export function MvtVerifierPanel({
           return (
             <ActionConfirmationBanner
               tone={bannerTone}
-              message={incomplete ? `Revisión incompleta: faltan datos de ${result.coverageGaps?.join(', ') || 'la captura del equipo'}. Los resultados disponibles no permiten completar el análisis.` : `Revisión en RAM completada (${result.analyzedCount} indicadores · ${result.matchesCount} coincidencia(s) CTI · ${yaraHits.length} YARA · ${behavioralAnomalies.length} anomalía(s) · 0 bytes en disco).`}
+              message={incomplete ? `Revisión incompleta: faltan datos de ${result.coverageGaps?.join(', ') || 'la captura del equipo'}. Los resultados disponibles no permiten completar el análisis.` : `Revisión completada (${result.analyzedCount} indicadores · ${result.matchesCount} coincidencia(s) CTI · ${yaraHits.length} YARA · ${behavioralAnomalies.length} anomalía(s)). Se conservan observaciones saneadas para el historial, no los archivos originales.`}
               onDismiss={() => setDismissedResultKey(resultKey)}
             />
           );
@@ -726,7 +726,7 @@ export function MvtVerifierPanel({
               {result.filesAnalyzed ? ` · ${result.filesAnalyzed} artefacto(s) en RAM` : ''}
               {` · ${result.analyzedCount} indicadores evaluados`}
               {hardeningReport?.cached_dns_count > 0 ? ` · ${hardeningReport.cached_dns_count} DNS en caché` : ''}
-              {' · 0 bytes guardados'}
+              {' · Observaciones saneadas guardadas'}
             </div>
           </div>
         </section>
@@ -1229,7 +1229,7 @@ export function MvtVerifierPanel({
 
   return (
     <div className="animate-fade-up flex-1 flex flex-col justify-center py-4 px-3 sm:px-6">
-      <div className="w-full max-w-[880px] mx-auto space-y-6">
+      <div className="w-full max-w-[1280px] 2xl:max-w-[1440px] mx-auto space-y-6">
         {/* A. Header Compacto + Barra de Estado del Motor */}
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
@@ -1238,6 +1238,7 @@ export function MvtVerifierPanel({
             </h1>
             <p className="mt-1 text-[13.5px] text-[#9A9AA2]">
               Audita PC, Android o iPhone en RAM sin guardar archivos personales.
+              {' '}Las observaciones saneadas de las evaluaciones nuevas quedan disponibles en Cuenta → Informes, dentro de «Análisis personales».
             </p>
           </div>
 

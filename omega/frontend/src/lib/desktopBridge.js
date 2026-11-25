@@ -14,6 +14,12 @@ export function isDesktopApp(win = typeof window !== 'undefined' ? window : null
   return detectDesktopRuntime(win) === 'tauri-v2';
 }
 
+export async function openBillingCheckout(url, win = typeof window !== 'undefined' ? window : null) {
+  if (!isDesktopApp(win)) return false;
+  await win.__TAURI_INTERNALS__.invoke('open_billing_checkout', { url });
+  return true;
+}
+
 export function getMobileDesktopBridge(win = typeof window !== 'undefined' ? window : null) {
   if (!isDesktopApp(win)) return null;
   const invoke = (command, args = {}) => win.__TAURI_INTERNALS__.invoke(command, args);

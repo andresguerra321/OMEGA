@@ -22,6 +22,7 @@ import java.util.UUID;
         }
 )
 public class UserEntity {
+    public void setRole(Role role) { this.role = java.util.Objects.requireNonNull(role); }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

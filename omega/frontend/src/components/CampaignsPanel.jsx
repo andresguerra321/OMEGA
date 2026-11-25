@@ -542,7 +542,7 @@ export function CampaignsPanel({
         </div>
 
         {loadingDetail ? (
-          <div className="max-w-[820px] w-full mx-auto py-8">
+          <div className="max-w-[1360px] 2xl:max-w-[1520px] w-full mx-auto py-8">
             <PanelSkeleton label="Cargando ficha técnica, CVEs e IOCs..." lines={5} />
           </div>
         ) : detailError ? (
@@ -561,7 +561,7 @@ export function CampaignsPanel({
             />
           </div>
         ) : (
-          <div className="animate-fade-up w-full max-w-[820px] mx-auto space-y-6 pb-8">
+          <div className="animate-fade-up w-full max-w-[1360px] 2xl:max-w-[1520px] mx-auto space-y-6 pb-8">
             {actionNote && (
               <ActionConfirmationBanner
                 message={actionNote}

@@ -1095,3 +1095,142 @@ h2 {
     transform: scale(1.03);
   }
 }
+
+@keyframes omega-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes omega-breathe {
+  0%,
+  100% {
+    transform: scale(0.97);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes omega-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes omega-orb-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes omega-greet-left {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+@keyframes omega-greet-right {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+.omega-eclipse-orbit-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  padding: 2px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(96, 165, 250, 0.75) 55deg,
+    rgba(37, 99, 235, 0.9) 110deg,
+    transparent 180deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: omega-orbit 9s linear infinite;
+  will-change: transform;
+}
+
+.omega-eclipse-orbit-glow {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  padding: 5px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(96, 165, 250, 0.55) 55deg,
+    rgba(37, 99, 235, 0.7) 110deg,
+    transparent 180deg
+  );
+  filter: blur(8px);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: omega-orbit 9s linear infinite;
+  will-change: transform;
+}
+
+.omega-eclipse-breathe-halo {
+  animation: omega-breathe 4.5s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.omega-glyph-float {
+  animation: omega-float 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.omega-orb-enter {
+  animation: omega-orb-enter 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.omega-greet-left {
+  animation: omega-greet-left 650ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.omega-greet-right {
+  animation: omega-greet-right 650ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both;
+}

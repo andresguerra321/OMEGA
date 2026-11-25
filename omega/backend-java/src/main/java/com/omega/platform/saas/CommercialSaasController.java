@@ -21,6 +21,11 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/saas")
 public class CommercialSaasController {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountAccessService accountAccess;
+
 
     public record HeartbeatRequest(
             @NotBlank String deviceUid,
@@ -48,7 +53,13 @@ public class CommercialSaasController {
 
     @GetMapping("/summary")
     public Map<String, Object> summary(@AuthenticationPrincipal OmegaPrincipal principal) {
-        return saasService.getSaasSummary(principal.tenantId(), principal.userId());
+        Map<String,Object> result = saasService.getSaasSummary(principal.tenantId(), principal.userId());
+        if (credits != null) {
+            Map<String,Object> ledger = credits.summary(principal.tenantId());
+            long balance = ((Number)ledger.get("balance")).longValue();
+            result.put("aiQuota", Map.of("cloudLimit",balance,"cloudUsed",0,"cloudRemaining",balance,"periodYm","saldo actual","sovereignUsed",0));
+        }
+        return result;
     }
 
     @PostMapping("/devices/heartbeat")
@@ -77,11 +88,11 @@ public class CommercialSaasController {
     }
 
     @PostMapping("/devices/{deviceId}/revoke")
-    @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> revokeDevice(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @PathVariable UUID deviceId) {
         try {
+            if (accountAccess != null) accountAccess.requireManager(principal);
             DeviceEntity device = saasService.revokeDevice(principal.tenantId(), deviceId);
             return Map.of(
                     "id", device.getId().toString(),
@@ -97,16 +108,7 @@ public class CommercialSaasController {
     public Map<String, Object> updatePlan(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody PlanUpdateRequest request) {
-        try {
-            SubscriptionEntity sub = saasService.updateSubscriptionPlan(principal.tenantId(), request.planCode());
-            return Map.of(
-                    "planCode", sub.getPlanCode(),
-                    "status", sub.getStatus(),
-                    "maxDevices", sub.getMaxDevices(),
-                    "monthlyAiQuota", sub.getMonthlyAiQuota());
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
-        }
+        throw new ResponseStatusException(HttpStatus.GONE, "Los planes requieren un pago confirmado en Mi plan y cr\u00e9ditos.");
     }
 
     @PostMapping("/alerts/dispatch")

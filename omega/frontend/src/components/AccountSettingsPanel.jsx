@@ -1,12 +1,9 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight,
   Check,
   FileText,
   KeyRound,
   RefreshCw,
-  Settings,
-  Shield,
   Upload,
   X,
 } from 'lucide-react';
@@ -15,11 +12,45 @@ import DossierExportButtons from './DossierExportButtons';
 import { RecoveryKeyCard } from './RecoveryKeyCard';
 import { SaasFleetCard } from './SaasFleetCard';
 import { ApiTokensCard } from './ApiTokensCard';
+import { BillingPanel } from './BillingPanel';
+import { ProfessionalReportsPanel } from './ProfessionalReportsPanel';
+import { CommercialBillingPanel } from './CommercialBillingPanel';
+import { resolveRoleNicheLabel } from '../lib/useTenantProfileConfig.js';
 import { PilotWorkspaceCard } from './PilotOpsPanel';
 
 const SettingsPanel = lazy(() =>
   import('./SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
+
+const SIDEBAR_GROUPS = [
+  {
+    title: 'General',
+    items: [
+      { id: 'cuenta', label: 'Mi perfil y sesión' },
+      { id: 'plan', label: 'Mi plan y créditos' },
+      { id: 'informes', label: 'Informes' },
+      { id: 'comercial', label: 'Documentos y facturación' },
+      { id: 'permisos', label: 'Permisos y ética' },
+    ],
+  },
+  {
+    title: 'Inteligencia',
+    items: [
+      { id: 'ia', label: 'Motor de IA' },
+      { id: 'rag', label: 'Motor RAG' },
+      { id: 'corpus', label: 'Corpus indexado' },
+    ],
+  },
+  {
+    title: 'Datos',
+    items: [
+      { id: 'biblioteca', label: 'Biblioteca PDFs' },
+      { id: 'respaldo', label: 'Recuperación y Flota' },
+    ],
+  },
+];
+
+const SETTINGS_SECTION_IDS = new Set(['cuenta', 'permisos', 'ia', 'rag', 'corpus']);
 
 function shortHash(hash) {
   if (!hash) return '';
@@ -28,14 +59,13 @@ function shortHash(hash) {
 
 /**
  * Módulo unificado de Cuenta y Ajustes de OMEGA.
- * Consolida identidad, configuración del sistema, 2FA, biblioteca PDF y control de sesión.
+ * Shell de 2 columnas (navegación lateral izquierda + canvas abierto #09090B).
  */
 export function AccountSettingsPanel({
   authSession,
   onLogout,
   onOpenAuth,
   onPanicPurge,
-  govStats = null,
   privateDocs = [],
   activeExpedienteId = '',
   loadingDocs = false,
@@ -56,7 +86,11 @@ export function AccountSettingsPanel({
   profileConfig = null,
   onSwitchProfile,
 }) {
-  const [mainTab, setMainTab] = useState('config');
+  const [activeNav, setActiveNav] = useState(() =>
+    initialSection && (SETTINGS_SECTION_IDS.has(initialSection) || initialSection === 'biblioteca' || initialSection === 'respaldo' || ['plan', 'informes', 'comercial'].includes(initialSection))
+      ? initialSection
+      : 'cuenta',
+  );
   const [saveTrigger, setSaveTrigger] = useState(0);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -66,9 +100,15 @@ export function AccountSettingsPanel({
   const [profileError, setProfileError] = useState('');
   const fileInputRef = useRef(null);
 
-  const tenantStats = govStats?.tenant_stats || null;
-  const indexedCount = privateDocs.filter((d) => d.status === 'INDEXED').length;
-  const isAdmin = authSession?.role === 'ADMIN';
+  useEffect(() => {
+    if (!initialSection) return;
+    if (SETTINGS_SECTION_IDS.has(initialSection) || initialSection === 'biblioteca' || initialSection === 'respaldo' || ['plan', 'informes', 'comercial'].includes(initialSection)) {
+      setActiveNav(initialSection);
+    }
+  }, [initialSection, initialSectionKey]);
+
+  const isAdmin = authSession?.role === 'ADMIN' && authSession?.accountType !== 'INDIVIDUAL';
+  const canManage = authSession?.canManageAccount || isAdmin;
   const activeProfile = profileConfig?.profile || authSession?.profile || 'GENERAL';
   const nicheText =
     activeProfile === 'DEVELOPER'
@@ -79,73 +119,70 @@ export function AccountSettingsPanel({
   const displayHandle = authSession?.tenantSlug
     ? `@${authSession.tenantSlug}`
     : authSession?.email || 'Cuenta activa';
-  const roleLabel = authSession?.role || 'ANALYST';
+  const roleLabel = resolveRoleNicheLabel(authSession?.role, activeProfile, authSession?.accountType);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="mx-auto max-w-[1200px] space-y-6 pb-16">
-        {/* Header de Identidad y Espacio (Banner Minimalista + Avatar Anclado) */}
-        <header className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.06] overflow-hidden">
-          <div
-            aria-hidden="true"
-            className="h-[68px] bg-[#0E1015] bg-[radial-gradient(rgba(255,255,255,0.02)_1px,transparent_1px)] [background-size:16px_16px] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] border-b border-white/[0.06]"
-          />
-
-          <div className="px-5 sm:px-6 pb-5">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-              <div className="flex items-end gap-4 min-w-0">
-                <div
-                  aria-label={`Avatar de ${authSession?.email || 'cuenta activa'}`}
-                  className="-mt-8 relative w-16 h-16 shrink-0 inline-flex items-center justify-center rounded-full bg-[#141923] border border-white/[0.08] ring-4 ring-[#0F131B] select-none"
-                >
-                  <span className="font-semibold tracking-wider text-base text-zinc-100">
-                    {buildProfileInitials(authSession)}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-[#0F131B]"
-                  />
-                </div>
-
-                <div className="min-w-0 pt-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-base font-semibold tracking-[-0.02em] text-zinc-100 truncate">
-                      {displayHandle}
-                    </h1>
-                    <span className="bg-white/[0.05] border border-white/[0.08] text-zinc-300 text-[11px] font-medium px-2 py-0.5 rounded-md">
-                      {roleLabel}
-                    </span>
+    <div className="flex-1 min-h-0 overflow-y-auto bg-transparent px-3 sm:px-6 lg:px-8 py-5 sm:py-6">
+        <div className="w-full max-w-[1440px] 2xl:max-w-[1560px] mx-auto pb-16">
+          {/* Contenedor Glass unificado y responsive (Sidebar izquierda + Contenido derecha) */}
+          <div className="motion-safe:animate-fade-up rounded-2xl bg-[#0D1119]/62 backdrop-blur-xl border border-white/[0.08] shadow-[0_24px_64px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden grid grid-cols-1 md:grid-cols-[220px_1fr] lg:grid-cols-[248px_1fr]">
+            {/* Columna izquierda: Navegación lateral dentro del bloque glass */}
+            <aside className="border-b md:border-b-0 md:border-r border-white/[0.06] bg-black/20 p-4 sm:p-5 lg:p-6 flex flex-col justify-between gap-6">
+              <div className="space-y-5">
+                <div className="px-2.5 space-y-1">
+                  <div className="text-[13.5px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                    Configuración
                   </div>
-                  <p className="mt-0.5 text-[13px] font-normal text-[#8A8F98] truncate">
-                    {authSession?.tenantSlug ? `${authSession.email} · ` : ''}
-                    {`Perfil ${nicheText}`}
-                  </p>
+                  <div className="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-zinc-400">
+                    <span className="h-[5px] w-[5px] rounded-full bg-emerald-400 motion-safe:animate-pulse" />
+                    <span>Zero-Retention</span>
+                  </div>
                 </div>
+
+                {SIDEBAR_GROUPS.map((group) => (
+                  <div key={group.title} className="space-y-1">
+                    <div className="px-2.5 text-[11px] uppercase tracking-wider text-zinc-500 font-medium">
+                      {group.title}
+                    </div>
+                    <nav aria-label={group.title} className="flex flex-wrap md:flex-nowrap md:flex-col gap-1 md:gap-0.5 pb-1 md:pb-0">
+                      {group.items.map((item) => {
+                        const isActive = activeNav === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setActiveNav(item.id)}
+                            className={`md:w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-left shrink-0 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer ${isActive
+                              ? 'bg-white/[0.07] text-[#EDEDEF] font-medium'
+                              : 'text-[#7E8691] hover:text-zinc-200 hover:bg-white/[0.03]'
+                              }`}
+                          >
+                            <span className="whitespace-nowrap">{item.label}</span>
+                            {item.id === 'biblioteca' && (
+                              <span className="font-mono text-[11px] text-zinc-500 tabular-nums">
+                                {privateDocs.length}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </nav>
+                  </div>
+                ))}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onOpenAuth?.('Inicia sesión con otra cuenta registrada.')}
-                  className="group h-8 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 hover:border-white/[0.14] px-3 text-xs font-medium text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
-                >
-                  <KeyRound
-                    className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-100 transition-colors duration-150"
-                    strokeWidth={1.75}
-                  />
-                  <span>Cambiar cuenta</span>
-                </button>
-
+              {/* Acción global de guardado accesible desde cualquier pestaña */}
+              <div className="pt-4 border-t border-white/[0.06] hidden md:block">
                 <button
                   type="button"
                   disabled={!isDirty && !savedFeedback}
                   onClick={() => {
-                    setMainTab('config');
+                    if (!SETTINGS_SECTION_IDS.has(activeNav)) setActiveNav('rag');
                     setSaveTrigger((n) => n + 1);
                   }}
-                  className={`h-8 inline-flex items-center gap-1.5 rounded-lg px-3.5 text-xs font-medium transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] ${isDirty || savedFeedback
-                    ? 'bg-[#2F6FED] hover:bg-[#2F6FED]/90 text-white border border-transparent cursor-pointer'
-                    : 'bg-white/[0.04] border border-white/[0.06] text-zinc-500 opacity-50 pointer-events-none'
+                  className={`w-full h-8 inline-flex items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors ${isDirty || savedFeedback
+                    ? 'bg-[#EDEDEF] hover:bg-white text-[#09090B] cursor-pointer'
+                    : 'bg-white/[0.03] border border-white/[0.06] text-zinc-500 opacity-55 pointer-events-none'
                     }`}
                 >
                   {savedFeedback ? (
@@ -158,420 +195,383 @@ export function AccountSettingsPanel({
                   )}
                 </button>
               </div>
-            </div>
-          </div>
-        </header>
+            </aside>
 
-        {/* Layout Asimétrico de 2 Columnas (8 / 4) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Columna Principal (8/12): Configuración, Seguridad 2FA y Biblioteca */}
-          <div className="lg:col-span-8 min-w-0 space-y-4">
-            <div className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.06] p-1">
-              <button
-                type="button"
-                onClick={() => setMainTab('config')}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer ${
-                  mainTab === 'config'
-                    ? 'bg-white/[0.08] text-zinc-100 border-white/[0.08]'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
-                <span>Configuración y Seguridad</span>
-              </button>
+            {/* Columna derecha: Contenido principal dentro del bloque glass */}
+            <div key={activeNav} className="min-w-0 p-4 sm:p-6 lg:p-8 motion-safe:animate-fade-up">
+              {/* Banner con efecto logo OMEGA AI detrás de la info de la cuenta */}
+              {activeNav === 'cuenta' && (
+                <header className="relative mb-6 rounded-xl bg-[#0B0F18]/85 border border-white/[0.1] overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_24px_rgba(47,111,237,0.18)] px-4 sm:px-5 py-4">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_68%_135%_at_50%_130%,rgba(47,111,237,0.48),rgba(47,111,237,0.14)_46%,transparent_76%)]"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.035)_1px,transparent_1px)] [background-size:16px_16px]"
+                  />
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 w-16 h-16 text-[#F8FAFC] opacity-[0.07]"
+                  >
+                    <path
+                      d="M5 18.5H9.2V16.2C7.4 14.9 6.3 12.9 6.3 10.6C6.3 7.3 8.85 4.8 12 4.8C15.15 4.8 17.7 7.3 17.7 10.6C17.7 12.9 16.6 14.9 14.8 16.2V18.5H19"
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
 
-              <button
-                type="button"
-                onClick={() => setMainTab('biblioteca')}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer ${
-                  mainTab === 'biblioteca'
-                    ? 'bg-white/[0.08] text-zinc-100 border-white/[0.08]'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <FileText className="h-3.5 w-3.5" strokeWidth={1.75} />
-                <span>Biblioteca PDFs ({privateDocs.length})</span>
-              </button>
+                  <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div
+                        aria-label={`Avatar de ${authSession?.email || 'cuenta activa'}`}
+                        className="relative w-12 h-12 shrink-0 inline-flex items-center justify-center rounded-full bg-[#0F131B]/90 border border-white/[0.14] overflow-hidden select-none shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_0_16px_rgba(47,111,237,0.22)]"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(47,111,237,0.45),transparent_72%)]"
+                        />
+                        <span className="relative z-10 font-semibold tracking-wider text-xs text-[#F8FAFC]">
+                          {buildProfileInitials(authSession)}
+                        </span>
+                      </div>
 
-              <button
-                type="button"
-                onClick={() => setMainTab('respaldo')}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer ${
-                  mainTab === 'respaldo'
-                    ? 'bg-white/[0.08] text-zinc-100 border-white/[0.08]'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <Shield className="h-3.5 w-3.5" strokeWidth={1.75} />
-                <span>Recuperación y Flota</span>
-              </button>
-            </div>
-
-            {mainTab === 'config' && (
-              <>
-                {isAdmin && onSwitchProfile && (
-                  <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-5 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h2 className="text-sm font-semibold text-[#F2F2F4]">Perfil del espacio</h2>
-                        <p className="mt-0.5 text-xs text-[#9A9AA2]">
-                          Adapta módulos visibles y alcance del asistente sin borrar ni migrar datos existentes.
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h1 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF] truncate">
+                            {displayHandle}
+                          </h1>
+                          <span className="font-mono text-[11px] text-zinc-400">
+                            {roleLabel}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[12.5px] text-zinc-400 truncate">
+                          {authSession?.tenantSlug ? `${authSession.email} · ` : ''}
+                          {`Perfil ${nicheText}`}
                         </p>
                       </div>
-                      <span className="font-tech rounded-full border border-white/[0.08] bg-[#141923]/75 px-2.5 py-0.5 text-[10.5px] text-[#9A9AA2]">
-                        Activo: {activeProfile}
-                      </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {[
-                        { id: 'GENERAL', label: 'General', desc: 'Spyware, CTI y verificación estándar' },
-                        { id: 'DEVELOPER', label: 'Developer', desc: 'Repositorios y cadena de suministro' },
-                        { id: 'LEGAL', label: 'Legal', desc: 'Expedientes y lenguaje probatorio' },
-                      ].map((opt) => {
-                        const selected = (pendingProfile || activeProfile) === opt.id;
-                        return (
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onOpenAuth?.('Inicia sesión con otra cuenta registrada.')}
+                        className="h-8 inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] hover:border-white/[0.22] bg-[#0B0F18]/70 hover:bg-[#0B0F18]/90 px-3 text-xs font-medium text-zinc-200 hover:text-[#EDEDEF] transition-colors cursor-pointer"
+                      >
+                        <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+                        <span>Cambiar cuenta</span>
+                      </button>
+                    </div>
+                  </div>
+                </header>
+              )}
+
+              {/* Botón Guardar cambios en móvil cuando haya cambios pendientes */}
+              {(isDirty || savedFeedback) && (
+                <div className="mb-4 flex justify-end md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!SETTINGS_SECTION_IDS.has(activeNav)) setActiveNav('rag');
+                      setSaveTrigger((n) => n + 1);
+                    }}
+                    className="h-8 inline-flex items-center gap-1.5 rounded-md bg-[#EDEDEF] hover:bg-white px-3.5 text-xs font-medium text-[#09090B] transition-colors cursor-pointer"
+                  >
+                    {savedFeedback ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Guardado</span>
+                      </>
+                    ) : (
+                      <span>Guardar cambios</span>
+                    )}
+                  </button>
+                </div>
+              )}
+            {activeNav === 'plan' && <BillingPanel key={authSession?.tenantId} authSession={authSession} />}
+            {activeNav === 'informes' && <ProfessionalReportsPanel profile={activeProfile} activeExpedienteId={activeExpedienteId} />}
+            {activeNav === 'comercial' && <CommercialBillingPanel canManage={canManage} />}
+              {SETTINGS_SECTION_IDS.has(activeNav) && (
+                <>
+                  <Suspense
+                    fallback={
+                      <div className="py-6 text-xs text-[#7E8691]">
+                        Cargando configuración del sistema...
+                      </div>
+                    }
+                  >
+                    <SettingsPanel
+                      embedded
+                      activeSectionOverride={activeNav}
+                      topK={topK}
+                      onChangeTopK={onChangeTopK}
+                      sourceScope={sourceScope}
+                      onChangeSourceScope={onChangeSourceScope}
+                      authSession={authSession}
+                      onOpenAuth={onOpenAuth}
+                      onLogout={onLogout}
+                      onPanicPurge={onPanicPurge}
+                      initialSection={initialSection}
+                      initialSectionKey={initialSectionKey}
+                      onAiConfigured={onAiConfigured}
+                      saveTrigger={saveTrigger}
+                      onSavedFeedback={setSavedFeedback}
+                      onDirtyChange={setIsDirty}
+                    />
+                  </Suspense>
+
+                  {activeNav === 'cuenta' && canManage && onSwitchProfile && (
+                    <section className="border-t border-white/[0.06] py-6 space-y-3.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h2 className="text-[14px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                            Perfil del espacio
+                          </h2>
+                          <p className="mt-0.5 text-[12.5px] text-[#7E8691]">
+                            Adapta módulos visibles y alcance del asistente sin borrar datos existentes.
+                          </p>
+                        </div>
+                        <span className="font-mono text-[11px] text-zinc-400">
+                          Activo: {activeProfile}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { id: 'GENERAL', label: 'General', desc: 'Spyware, CTI y verificación estándar' },
+                          { id: 'DEVELOPER', label: 'Developer', desc: 'Repositorios y cadena de suministro' },
+                          { id: 'LEGAL', label: 'Legal', desc: 'Expedientes y lenguaje probatorio' },
+                        ].map((opt) => {
+                          const selected = (pendingProfile || activeProfile) === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                setPendingProfile(opt.id);
+                                setProfileConfirm(false);
+                                setProfileError('');
+                              }}
+                              className={`rounded-md border p-3 text-left transition-colors cursor-pointer ${selected
+                                ? 'bg-white/[0.05] border-white/30 text-[#EDEDEF]'
+                                : 'border-white/[0.07] bg-white/[0.015] text-zinc-400 hover:border-white/[0.16] hover:text-zinc-200'
+                                }`}
+                            >
+                              <div className="text-[13px] font-medium">{opt.label}</div>
+                              <div className="mt-0.5 text-[11.5px] text-zinc-500">{opt.desc}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {pendingProfile && pendingProfile !== activeProfile && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                           <button
-                            key={opt.id}
                             type="button"
-                            onClick={() => {
-                              setPendingProfile(opt.id);
-                              setProfileConfirm(false);
-                              setProfileError('');
-                            }}
-                            className={`rounded-xl border p-3 text-left transition-colors cursor-pointer ${selected
-                              ? 'border-[#2F6FED] bg-[#2F6FED]/12 text-[#F2F2F4]'
-                              : 'border-white/[0.06] bg-[#141923]/75 text-[#9A9AA2] hover:text-[#F2F2F4]'
-                              }`}
+                            role="switch"
+                            aria-checked={profileConfirm}
+                            onClick={() => setProfileConfirm((v) => !v)}
+                            className="inline-flex items-center gap-2.5 text-xs text-zinc-300 cursor-pointer"
                           >
-                            <div className="text-xs font-semibold">{opt.label}</div>
-                            <div className="mt-0.5 text-[11px] text-[#8E95A5]">{opt.desc}</div>
+                            <span
+                              className={`inline-flex h-[20px] w-9 items-center rounded-full p-0.5 transition-colors ${profileConfirm ? 'bg-[#EDEDEF]' : 'bg-white/[0.12]'
+                                }`}
+                            >
+                              <span
+                                className={`h-4 w-4 rounded-full transition-transform ${profileConfirm ? 'translate-x-4 bg-[#09090B]' : 'translate-x-0 bg-zinc-300'
+                                  }`}
+                              />
+                            </span>
+                            <span>Confirmo cambiar el espacio a {pendingProfile} (queda en auditoría)</span>
                           </button>
+
+                          <button
+                            type="button"
+                            disabled={!profileConfirm || switchingProfile}
+                            onClick={async () => {
+                              setSwitchingProfile(true);
+                              setProfileError('');
+                              try {
+                                await onSwitchProfile(pendingProfile, true);
+                                setPendingProfile('');
+                                setProfileConfirm(false);
+                              } catch (err) {
+                                setProfileError(err?.message || 'No se pudo cambiar el perfil del espacio.');
+                              } finally {
+                                setSwitchingProfile(false);
+                              }
+                            }}
+                            className="h-8 rounded-md bg-[#EDEDEF] hover:bg-white disabled:opacity-45 disabled:cursor-not-allowed px-3 text-xs font-medium text-[#09090B] transition-colors cursor-pointer"
+                          >
+                            {switchingProfile ? 'Aplicando...' : 'Aplicar perfil'}
+                          </button>
+                        </div>
+                      )}
+
+                      {profileError && (
+                        <p className="text-xs text-[#E5484D]">{profileError}</p>
+                      )}
+                    </section>
+                  )}
+                </>
+              )}
+
+              {activeNav === 'biblioteca' && (
+                <section className="space-y-6">
+                  <div className="pb-5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                        Biblioteca privada de PDFs
+                      </h2>
+                      <p className="mt-0.5 text-[13px] text-[#7E8691]">
+                        Consultable desde <span className="text-zinc-200">Mis PDFs</span> en el Asistente sin guardar el archivo original.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (file) void onUploadPdf?.(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={uploadingPdf}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="h-8 inline-flex items-center gap-1.5 rounded-md bg-[#EDEDEF] hover:bg-white disabled:opacity-45 px-3 text-xs font-medium text-[#09090B] transition-colors cursor-pointer"
+                      >
+                        <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>{uploadingPdf ? 'Procesando en RAM...' : 'Subir PDF'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={loadingDocs}
+                        onClick={() => onRefreshDocs?.()}
+                        aria-label="Actualizar biblioteca privada"
+                        className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16] text-zinc-400 hover:text-[#EDEDEF] transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${loadingDocs ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {(docNotice || docError) && (
+                    <div
+                      className={`flex items-center justify-between gap-2 rounded-md border px-3.5 py-2.5 text-xs ${docError
+                        ? 'border-[#E5484D]/35 bg-[#E5484D]/10 text-[#FFB4AE]'
+                        : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
+                        }`}
+                    >
+                      <span className="truncate">{docError || docNotice}</span>
+                      {onDismissDocBanner && (
+                        <button
+                          type="button"
+                          aria-label="Cerrar aviso"
+                          onClick={onDismissDocBanner}
+                          className="shrink-0 opacity-75 hover:opacity-100 cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pb-5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[13px] font-medium text-[#EDEDEF]">Exportación de expediente</div>
+                      <p className="mt-0.5 text-xs text-[#7E8691]">
+                        Descarga el informe en PDF o exporta la evidencia estructurada en JSON.
+                      </p>
+                    </div>
+                    <DossierExportButtons expedienteId={activeExpedienteId} profile={activeProfile} />
+                  </div>
+
+                  {privateDocs.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-white/[0.12] bg-white/[0.015] py-8 px-6 text-center space-y-1.5">
+                      <FileText className="h-[18px] w-[18px] text-zinc-400 mx-auto" strokeWidth={1.75} />
+                      <div className="text-[13px] font-medium text-[#EDEDEF]">
+                        Tu biblioteca privada está vacía
+                      </div>
+                      <p className="text-xs text-[#7E8691] max-w-md mx-auto">
+                        Adjunta informes técnicos o peritajes en PDF para citarlos por página en el chat con cero retención del archivo fuente.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/[0.06]">
+                      {privateDocs.map((doc) => {
+                        const isIndexed = doc.status === 'INDEXED';
+                        const isFailed = doc.status === 'FAILED';
+                        return (
+                          <div
+                            key={doc.id}
+                            className="py-3 flex flex-wrap items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full shrink-0 ${isIndexed
+                                  ? 'bg-emerald-400'
+                                  : isFailed
+                                    ? 'bg-[#E5484D]'
+                                    : 'bg-amber-400 animate-pulse'
+                                  }`}
+                              />
+                              <div className="min-w-0">
+                                <div className="text-[13px] font-medium text-[#EDEDEF] truncate">
+                                  {doc.originalFilename}
+                                </div>
+                                <div className="font-mono text-[11px] text-[#7E8691] flex flex-wrap items-center gap-2 mt-0.5">
+                                  <span>{doc.status}</span>
+                                  <span>·</span>
+                                  <span>{doc.chunkCount || 0} fragmentos</span>
+                                  {doc.sha256Hash && (
+                                    <>
+                                      <span>·</span>
+                                      <span>SHA-256: {shortHash(doc.sha256Hash)}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {isIndexed && onOpenChat && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenChat(true)}
+                                className="h-7 rounded-md border border-white/[0.08] hover:border-white/[0.18] bg-white/[0.02] hover:bg-white/[0.05] px-2.5 text-xs font-medium text-zinc-200 transition-colors cursor-pointer"
+                              >
+                                Consultar en chat
+                              </button>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
+                  )}
+                </section>
+              )}
 
-                    {pendingProfile && pendingProfile !== activeProfile && (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/[0.06]">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={profileConfirm}
-                          onClick={() => setProfileConfirm((v) => !v)}
-                          className="inline-flex items-center gap-2 text-xs text-[#D1D5DB] cursor-pointer"
-                        >
-                          <span
-                            className={`inline-flex h-4 w-7 items-center rounded-full p-0.5 transition-colors ${profileConfirm ? 'bg-[#2F6FED]' : 'bg-white/[0.12]'
-                              }`}
-                          >
-                            <span
-                              className={`h-3 w-3 rounded-full bg-white transition-transform ${profileConfirm ? 'translate-x-3' : 'translate-x-0'
-                                }`}
-                            />
-                          </span>
-                          <span>Confirmo cambiar el espacio a {pendingProfile} (queda en auditoría)</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={!profileConfirm || switchingProfile}
-                          onClick={async () => {
-                            setSwitchingProfile(true);
-                            setProfileError('');
-                            try {
-                              await onSwitchProfile(pendingProfile, true);
-                              setPendingProfile('');
-                              setProfileConfirm(false);
-                            } catch (err) {
-                              setProfileError(err?.message || 'No se pudo cambiar el perfil del espacio.');
-                            } finally {
-                              setSwitchingProfile(false);
-                            }
-                          }}
-                          className="rounded-lg bg-[#2F6FED] hover:bg-[#255ED4] disabled:opacity-45 disabled:cursor-not-allowed px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
-                        >
-                          {switchingProfile ? 'Aplicando...' : 'Aplicar perfil'}
-                        </button>
-                      </div>
-                    )}
-
-                    {profileError && (
-                      <p className="text-xs text-rose-400">{profileError}</p>
-                    )}
-                  </section>
-                )}
-
-                <Suspense
-                  fallback={
-                    <div className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 text-xs text-[#9A9AA2]">
-                      Cargando configuración del sistema...
-                    </div>
-                  }
-                >
-                  <SettingsPanel
-                    embedded
-                    topK={topK}
-                    onChangeTopK={onChangeTopK}
-                    sourceScope={sourceScope}
-                    onChangeSourceScope={onChangeSourceScope}
-                    authSession={authSession}
-                    onOpenAuth={onOpenAuth}
-                    onLogout={onLogout}
-                    onPanicPurge={onPanicPurge}
-                    initialSection={initialSection}
-                    initialSectionKey={initialSectionKey}
-                    onAiConfigured={onAiConfigured}
-                    saveTrigger={saveTrigger}
-                    onSavedFeedback={setSavedFeedback}
-                    onDirtyChange={setIsDirty}
-                  />
-                </Suspense>
-              </>
-            )}
-
-            {mainTab === 'biblioteca' && (
-              <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-5 sm:p-6 space-y-5">
-                <div className="pb-4 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-semibold text-[#F2F2F4]">
-                        Biblioteca privada de PDFs
-                      </h2>
-                      <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 font-tech text-[10.5px] text-emerald-400">
-                        Zero-Retention
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-[#9A9AA2]">
-                      Consultable desde <span className="text-[#F2F2F4]">Mis PDFs</span> en el Asistente sin guardar el archivo original.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = '';
-                        if (file) void onUploadPdf?.(file);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={uploadingPdf}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] hover:bg-[#2F6FED]/90 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
-                    >
-                      <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      <span>{uploadingPdf ? 'Procesando en RAM...' : 'Subir PDF'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loadingDocs}
-                      onClick={() => onRefreshDocs?.()}
-                      aria-label="Actualizar biblioteca privada"
-                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-white/[0.07] bg-[#141923]/75 hover:border-white/[0.14] text-[#9A9AA2] hover:text-[#F2F2F4] transition-colors cursor-pointer"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${loadingDocs ? 'animate-spin' : ''}`} strokeWidth={1.75} />
-                    </button>
-                  </div>
+              {activeNav === 'respaldo' && (
+                <div className="space-y-6">
+                  <PilotWorkspaceCard authSession={authSession} currentView="cuenta-respaldo" />
+                  <RecoveryKeyCard />
+                  {activeProfile === 'DEVELOPER' && <ApiTokensCard authSession={authSession} />}
+                  {canManage && <SaasFleetCard authSession={authSession} mode="fleet" />}
                 </div>
-
-                {(docNotice || docError) && (
-                  <div
-                    className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-xs ${docError
-                      ? 'border-rose-500/35 bg-rose-500/10 text-rose-300'
-                      : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
-                      }`}
-                  >
-                    <span className="truncate">{docError || docNotice}</span>
-                    {onDismissDocBanner && (
-                      <button
-                        type="button"
-                        aria-label="Cerrar aviso"
-                        onClick={onDismissDocBanner}
-                        className="shrink-0 opacity-75 hover:opacity-100 cursor-pointer"
-                      >
-                        <X className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <div className="pb-4 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-[#F2F2F4]">Exportación de expediente</div>
-                    <p className="mt-0.5 text-xs text-[#9A9AA2]">
-                      Descarga el informe en PDF o exporta la evidencia estructurada en JSON.
-                    </p>
-                  </div>
-                  <DossierExportButtons expedienteId={activeExpedienteId} />
-                </div>
-
-                {privateDocs.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-white/[0.08] bg-[#141923]/75 p-6 text-center space-y-2">
-                    <FileText className="h-5 w-5 text-[#2F6FED] mx-auto" strokeWidth={1.75} />
-                    <div className="text-sm font-medium text-[#F2F2F4]">
-                      Tu biblioteca privada está vacía
-                    </div>
-                    <p className="text-xs text-[#9A9AA2] max-w-md mx-auto">
-                      Adjunta informes técnicos o peritajes en PDF para citarlos por página en el chat con cero retención del archivo fuente.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-white/[0.06]">
-                    {privateDocs.map((doc) => {
-                      const isIndexed = doc.status === 'INDEXED';
-                      const isFailed = doc.status === 'FAILED';
-                      return (
-                        <div
-                          key={doc.id}
-                          className="py-3 flex flex-wrap items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span
-                              className={`h-2 w-2 rounded-full shrink-0 ${isIndexed
-                                ? 'bg-emerald-400'
-                                : isFailed
-                                  ? 'bg-rose-500'
-                                  : 'bg-amber-400 animate-pulse'
-                                }`}
-                            />
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-[#F2F2F4] truncate">
-                                {doc.originalFilename}
-                              </div>
-                              <div className="font-tech text-[11px] text-[#9A9AA2] flex flex-wrap items-center gap-2 mt-0.5">
-                                <span>{doc.status}</span>
-                                <span>·</span>
-                                <span>{doc.chunkCount || 0} fragmentos</span>
-                                {doc.sha256Hash && (
-                                  <>
-                                    <span>·</span>
-                                    <span>SHA-256: {shortHash(doc.sha256Hash)}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {isIndexed && onOpenChat && (
-                            <button
-                              type="button"
-                              onClick={() => onOpenChat(true)}
-                              className="rounded-lg border border-white/[0.07] bg-[#141923]/75 hover:border-[#2F6FED]/50 px-3 py-1.5 text-xs font-medium text-[#F2F2F4] transition-colors cursor-pointer"
-                            >
-                              Consultar en chat
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            )}
-
-            {mainTab === 'respaldo' && (
-              <div className="space-y-4">
-                <PilotWorkspaceCard authSession={authSession} currentView="cuenta-respaldo" />
-                <RecoveryKeyCard />
-                <ApiTokensCard authSession={authSession} />
-                {isAdmin && <SaasFleetCard authSession={authSession} />}
-              </div>
-            )}
+              )}
+            </div>
           </div>
-
-          {/* Columna Lateral (4/12): Telemetría de Solo Lectura */}
-          <aside className="lg:col-span-4 rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.06] p-5 space-y-5">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-zinc-100">Actividad del espacio</h2>
-                <span className="inline-flex items-center gap-1.5 font-tech text-[11px] text-[#8A8F98]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  En vivo
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-[#141923]/75 border border-white/[0.05] px-3 py-2.5">
-                  <div className="text-[11px] text-[#8A8F98]">Archivos eliminados</div>
-                  <div className="mt-1 text-base font-semibold text-zinc-100 tabular-nums">
-                    {Number(tenantStats?.zero_retention_purged_pdfs ?? indexedCount)}
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-[#141923]/75 border border-white/[0.05] px-3 py-2.5">
-                  <div className="text-[11px] text-[#8A8F98]">Activos monitoreados</div>
-                  <div className="mt-1 text-base font-semibold text-zinc-100 tabular-nums">
-                    {Number(tenantStats?.osint_assets || 0)}
-                  </div>
-                </div>
-
-                <div className="col-span-2 rounded-xl bg-[#141923]/75 border border-white/[0.05] px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-[11px] text-[#8A8F98]">Sesión</span>
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Protegida
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-[#8A8F98]">Ficha técnica</div>
-              <dl className="divide-y divide-white/[0.06] text-xs">
-                <div className="py-2.5 flex items-center justify-between gap-2">
-                  <dt className="text-[#8A8F98]">Organización</dt>
-                  <dd className="font-mono text-zinc-200 truncate">
-                    @{authSession?.tenantSlug || 'personal'}
-                  </dd>
-                </div>
-                <div className="py-2.5 flex items-center justify-between gap-2">
-                  <dt className="text-[#8A8F98]">Modo de memoria</dt>
-                  <dd className="text-zinc-200 font-medium">Cero retención en disco</dd>
-                </div>
-                <div className="py-2.5 flex items-center justify-between gap-2">
-                  <dt className="text-[#8A8F98]">Llave de recuperación</dt>
-                  <dd>
-                    <button
-                      type="button"
-                      onClick={() => setMainTab('respaldo')}
-                      className="group inline-flex items-center gap-1 text-zinc-300 hover:text-white font-medium transition-colors duration-150 cursor-pointer"
-                    >
-                      <span>Gestionar</span>
-                      <ArrowRight
-                        className="h-3 w-3 transition-transform duration-150 group-hover:translate-x-0.5"
-                        strokeWidth={1.75}
-                      />
-                    </button>
-                  </dd>
-                </div>
-                {isAdmin && (
-                  <div className="py-2.5 flex items-center justify-between gap-2">
-                    <dt className="text-[#8A8F98]">Flota SaaS</dt>
-                    <dd>
-                      <button
-                        type="button"
-                        onClick={() => setMainTab('respaldo')}
-                        className="group inline-flex items-center gap-1 text-zinc-300 hover:text-white font-medium transition-colors duration-150 cursor-pointer"
-                      >
-                        <span>Ver resumen</span>
-                        <ArrowRight
-                          className="h-3 w-3 transition-transform duration-150 group-hover:translate-x-0.5"
-                          strokeWidth={1.75}
-                        />
-                      </button>
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          </aside>
         </div>
       </div>
-    </div>
-  );
+      );
 }

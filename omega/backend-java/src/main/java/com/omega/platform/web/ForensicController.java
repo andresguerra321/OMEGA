@@ -29,6 +29,16 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping({"/api/v1/forensics", "/api/v1/forensic"})
 public class ForensicController {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountAccessService accountAccess;
+
+    private void requireManager(OmegaPrincipal principal) {
+        if(accountAccess!=null) accountAccess.requireManager(principal);
+        else if(principal==null || principal.role()!=com.omega.platform.security.Role.ADMIN)
+            throw new org.springframework.security.access.AccessDeniedException("Solo el titular o un administrador puede gestionar este equipo.");
+    }
 
     private final ForensicBridgeService forensicBridgeService;
 
@@ -37,56 +47,64 @@ public class ForensicController {
     }
 
     @PostMapping("/containment/challenge")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public Map<String, Object> containmentChallenge(@AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody com.omega.platform.integration.forensic.ForensicWorkerContracts.ContainmentCredentials credentials) {
+        requireManager(principal);
         return forensicBridgeService.containmentChallenge(principal, credentials.currentPassword());
     }
 
     @PostMapping("/containment/execute")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public Map<String, Object> executeContainment(@AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody com.omega.platform.integration.forensic.ForensicWorkerContracts.ContainmentRequest request) {
+        requireManager(principal);
         return forensicBridgeService.executeContainment(principal, request);
     }
 
     @PostMapping("/containment/rollback/{actionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public Map<String, Object> rollbackContainment(@AuthenticationPrincipal OmegaPrincipal principal, @PathVariable String actionId,
             @Valid @RequestBody com.omega.platform.integration.forensic.ForensicWorkerContracts.ContainmentCredentials credentials) {
+        requireManager(principal);
         return forensicBridgeService.rollbackContainment(principal, actionId, credentials);
     }
 
     @GetMapping("/containment/history")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public Map<String, Object> containmentHistory(@AuthenticationPrincipal OmegaPrincipal principal) {
+        requireManager(principal);
         return forensicBridgeService.containmentHistory(principal);
     }
 
     @GetMapping("/host/realtime/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeStatus hostStatus(
             @AuthenticationPrincipal OmegaPrincipal principal) {
+        requireManager(principal);
         return forensicBridgeService.hostRealtimeStatus(principal);
     }
 
     @PostMapping("/host/realtime/toggle")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeStatus toggleHost(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @RequestBody @Valid com.omega.platform.integration.forensic.ForensicWorkerContracts.RealtimeToggleRequest request) {
+        requireManager(principal);
         return forensicBridgeService.toggleHostRealtime(principal, request.enabled());
     }
 
     @PostMapping("/host/persistence/audit")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public com.omega.platform.integration.forensic.ForensicWorkerContracts.PersistenceAuditResponse hostPersistence(
             @AuthenticationPrincipal OmegaPrincipal principal) {
+        requireManager(principal);
         return forensicBridgeService.auditHostPersistence(principal);
     }
 
     @PostMapping(value = "/triage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.FORENSIC_STANDARD)
     public ParallelTriageResponse parallelTriage(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @RequestParam(required = false) UUID expedienteId,
@@ -96,6 +114,7 @@ public class ForensicController {
     }
 
     @PostMapping("/link/verify")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.LINK_VERIFY)
     public LinkVerifyResponse verifyLink(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody VerifyLinkRequest request
@@ -105,6 +124,7 @@ public class ForensicController {
 
     @PostMapping(value = "/yara/scan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.YARA_SCAN)
     public YaraScanResponse yaraScan(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @RequestParam(required = false) UUID expedienteId,
@@ -137,6 +157,7 @@ public class ForensicController {
 
     @PostMapping("/triage/device-live")
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.FORENSIC_STANDARD)
     public Map<String, Object> triageLiveDevice(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @RequestParam(required = false) UUID expedienteId,
@@ -147,6 +168,7 @@ public class ForensicController {
 
     @PostMapping("/triage/pc-live")
     @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.FORENSIC_DEEP)
     public Map<String, Object> triagePcLive(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @RequestParam(required = false) UUID expedienteId,
@@ -191,13 +213,29 @@ public class ForensicController {
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody MobileAuditRequest request
     ) {
-        return forensicBridgeService.startMobileUsbAudit(
+        boolean metered = credits != null && credits.enforced();
+        UUID reservation = !metered ? null : credits.reserve(principal.tenantId(),principal.userId(),
+                com.omega.platform.billing.CreditOperation.FORENSIC_STANDARD,15,null);
+        Map<String,Object> result;
+        try { result = forensicBridgeService.startMobileUsbAudit(
                 principal,
                 request.platform(),
                 request.deviceId(),
                 request.backupPassword(),
                 Boolean.TRUE.equals(request.asyncMode())
-        );
+        ); } catch (RuntimeException ex) {
+            if (metered) credits.settle(principal.tenantId(),reservation,0);
+            throw ex;
+        }
+        if(metered) {
+            String status=String.valueOf(result.getOrDefault("status",""));
+            if("COMPLETED".equalsIgnoreCase(status)) credits.settle(principal.tenantId(),reservation,15);
+            else if(result.get("jobId") != null) {
+                credits.attachReference(principal.tenantId(),reservation,"mobile:"+result.get("jobId"));
+                credits.settleMobile(principal.tenantId(),result.get("jobId").toString(),status);
+            } else credits.settle(principal.tenantId(),reservation,0);
+        }
+        return result;
     }
 
     @GetMapping("/mobile/audit/{jobId}")
@@ -206,7 +244,9 @@ public class ForensicController {
             @AuthenticationPrincipal OmegaPrincipal principal,
             @PathVariable String jobId
     ) {
-        return forensicBridgeService.getMobileUsbAuditJob(principal, jobId);
+        Map<String,Object> result=forensicBridgeService.getMobileUsbAuditJob(principal, jobId);
+        if(credits!=null) credits.settleMobile(principal.tenantId(),jobId,String.valueOf(result.getOrDefault("status","")));
+        return result;
     }
 
     public record MobileAuditRequest(

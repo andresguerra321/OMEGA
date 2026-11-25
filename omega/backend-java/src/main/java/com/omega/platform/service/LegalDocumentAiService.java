@@ -18,6 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class LegalDocumentAiService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountAccessService accountAccess;
+    private boolean manages(OmegaPrincipal actor) {
+        return accountAccess != null ? accountAccess.canManage(actor.tenantId(), actor.userId(), actor.role()) : actor.role()==Role.ADMIN;
+    }
+
     private final OmegaProperties properties;
     private final EmbeddingProvider embeddings;
     private final RagAnswerGenerator answers;
@@ -47,13 +53,13 @@ public class LegalDocumentAiService {
         if(properties.ai().ollama()!=null) endpoints += "\n"+properties.ai().ollama().baseUrl();
         String fingerprint=hash(json(disclosure)+"\n"+embeddings.dimensions()+"\n"+hash(endpoints));
         var accepted=jdbc.queryForList("SELECT policy_hash FROM omega_rag.legal_document_ai_consents WHERE tenant_id = ?",String.class,actor.tenantId());
-        return new Policy(fingerprint,disclosure,!accepted.isEmpty() && accepted.getFirst().equals(fingerprint),actor.role()==Role.ADMIN);
+        return new Policy(fingerprint,disclosure,!accepted.isEmpty() && accepted.getFirst().equals(fingerprint),manages(actor));
     }
 
     @Transactional
     public void accept(OmegaPrincipal actor,String fingerprint) {
         Policy current=policy(actor);
-        if(actor.role()!=Role.ADMIN) throw new org.springframework.security.access.AccessDeniedException("Solo un administrador puede aceptar esta política");
+        if(!manages(actor)) throw new org.springframework.security.access.AccessDeniedException("Solo un administrador puede aceptar esta política");
         if(!current.fingerprint().equals(fingerprint)) throw new ConflictException("La configuración cambió. Revisa la política actual antes de aceptar.");
         if(current.accepted()) return;
         jdbc.update("""
@@ -123,6 +129,7 @@ public class LegalDocumentAiService {
     }
 
     @Transactional
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.LEGAL_INDEX)
     public DocumentMetadataResponse reindex(OmegaPrincipal actor,UUID caseId,UUID documentId) {
         authorization.requireWriteAccess(actor,caseId); requireConsent(actor);
         var document=documents.findScopedForUpdate(documentId,actor.tenantId()).filter(value -> value.getExpedienteId().equals(caseId))

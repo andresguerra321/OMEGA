@@ -1,0 +1,26 @@
+{
+  "scope": "Inspección de fuentes locales; no ejecución del backend ni auditoría de seguridad",
+  "productVersion": "2.0.9",
+  "claims": [
+    { "label": "MVT / YARA en RAM", "sources": ["README.md", "omega/frontend/src/components/MvtVerifierPanel.jsx", "omega/api/triage_orchestrator.py"] },
+    { "label": "Sensores HMAC", "sources": ["omega/sensor-rust/src/hmac_auth.rs", "omega/backend-java/src/main/java/com/omega/platform/config/SensorHmac.java"] },
+    { "label": "RAG híbrido y aislamiento por tenant", "sources": ["omega/backend-java/src/main/java/com/omega/platform/rag/HybridRagQueryService.java"] },
+    { "label": "Contención requiere sensor y autorización administrativa", "sources": ["omega/frontend/src/components/ContainmentPanel.jsx"] },
+    { "label": "Modo soberano restringe servicios y almacenamiento externos", "sources": ["omega/backend-java/src/main/java/com/omega/platform/config/SovereignModePolicy.java"], "limit": "Política de aplicación; aislamiento físico requiere controles de red" },
+    { "label": "Zero-Retention elimina originales; MinIO almacena originales solo con retención habilitada", "sources": ["omega/backend-java/src/main/java/com/omega/platform/ingest/DocumentIngestionService.java", "omega/backend-java/src/test/java/com/omega/platform/integration/MinioObjectStorageIntegrationTest.java"] }
+  ],
+  "requestedMetrics": [
+    { "text": "0 Critical", "status": "pending-evidence", "render": false, "requires": "Informe de seguridad con alcance, commit y fecha" },
+    { "text": "392+ tests passing", "status": "pending-evidence", "render": false, "requires": "Salida de CI o suite del mismo commit con total y resultado" }
+  ],
+  "visualSources": [
+    "PRODUCT.md",
+    "omega/frontend/src/components/SpatialNavPill.jsx",
+    "omega/frontend/src/components/SecurityPostureStage.jsx",
+    "omega/frontend/src/components/OmegaBrandMark.jsx",
+    "omega/frontend/src/components/OmegaAmbientBackdrop.jsx",
+    "docs/assets/omega-v2-0-1-showcase.jpg",
+    "docs/assets/omega-v2-0-1-shield-pillars.jpg"
+  ],
+  "visualScope": "Reconstrucción editorial del flujo; no captura en vivo. El showcase aparece desaturado. Shield-pillars se revisó como referencia, sin introducir sus líneas decorativas."
+}

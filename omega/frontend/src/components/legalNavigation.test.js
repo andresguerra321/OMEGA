@@ -72,7 +72,7 @@ test('navegación por perfil y estados reales de Expedientes', async (t) => {
     assert.match(document.body.textContent, /Sale a: Groq/);
     globalThis.fetch = async url => String(url).endsWith('/policy') ? json(policy) : String(url).endsWith('/metadata') ? json(synthetic) : json(emptyPage);
     await act(async () => findButton('Caso sintético').click());
-    assert.equal(document.querySelectorAll('[role="tab"]').length, 5);
+    assert.equal(document.querySelectorAll('[role="tab"]').length, 6);
     assert.ok(document.getElementById('legal-tab-timeline'));
     assert.match(document.body.textContent, /aún no tiene documentos/);
     await act(async () => document.querySelector('[role="tab"]').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));

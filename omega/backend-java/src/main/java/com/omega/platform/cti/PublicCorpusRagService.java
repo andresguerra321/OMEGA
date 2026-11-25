@@ -63,6 +63,7 @@ public class PublicCorpusRagService {
     }
 
     @Transactional
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.AI_QUERY)
     public RagQueryResponse queryPublicCorpus(OmegaPrincipal principal, PublicCtiQueryRequest request) {
         String generationQuestion = RagConversation.generationQuestion(request.question(), request.history());
         String retrievalQuestion = RagConversation.retrievalQuestion(request.question(), request.history());

@@ -7,6 +7,7 @@ import com.omega.platform.rag.EmbeddingException;
 import com.omega.platform.security.TooManyLoginAttemptsException;
 import com.omega.platform.service.ConflictException;
 import com.omega.platform.service.ResourceNotFoundException;
+import com.omega.platform.storage.ObjectStorageException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -21,6 +22,21 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(org.springframework.web.client.RestClientException.class)
+    public ProblemDetail handleExternalServiceError(org.springframework.web.client.RestClientException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
+                "No se pudo consultar el servicio externo. Vuelve a intentarlo en unos momentos.");
+        detail.setTitle("Servicio externo no disponible");
+        return detail;
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ProblemDetail> handleStatus(org.springframework.web.server.ResponseStatusException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(ex.getStatusCode(),
+                ex.getReason() == null ? "No se pudo completar la solicitud." : ex.getReason());
+        return ResponseEntity.status(ex.getStatusCode()).headers(ex.getHeaders()).body(detail);
+    }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentials(BadCredentialsException ex) {
@@ -94,6 +110,15 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleForensicWorkerError(ForensicWorkerException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
         pd.setTitle("Error del microservicio forense interno");
+        return pd;
+    }
+
+    @ExceptionHandler(ObjectStorageException.class)
+    public ProblemDetail handleObjectStorageError(ObjectStorageException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "El servicio de almacenamiento documental no está disponible en este momento.");
+        pd.setTitle("Almacenamiento temporalmente no disponible");
         return pd;
     }
 

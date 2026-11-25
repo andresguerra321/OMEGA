@@ -41,9 +41,10 @@ public class DevTriageController {
             @RequestParam(required = false) UUID projectId,
             @RequestParam(required = false) String severity,
             @RequestParam(required = false) String ruleId,
-            @RequestParam(required = false) String triageStatus
+            @RequestParam(required = false) String triageStatus,
+            @RequestParam(defaultValue = "true") boolean latestOnly
     ) {
-        return triageService.listFindings(principal, projectId, severity, ruleId, triageStatus);
+        return triageService.listFindings(principal, projectId, severity, ruleId, triageStatus,latestOnly);
     }
 
     @PatchMapping("/findings/{findingId}/triage")

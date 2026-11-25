@@ -13,13 +13,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CommercialSaasService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
+
 
     public record PlanLimits(String planCode, int maxDevices, int monthlyAiQuota) {}
 
     public static final Map<String, PlanLimits> PLAN_CATALOG = Map.of(
-            "PERSONAL", new PlanLimits("PERSONAL", 3, 100),
-            "PRO", new PlanLimits("PRO", 10, 1000),
-            "ENTERPRISE", new PlanLimits("ENTERPRISE", 100, 10000)
+            "FREE", new PlanLimits("FREE", 1, 30),
+            "PRO", new PlanLimits("PRO", 5, 500),
+            "ENTERPRISE", new PlanLimits("ENTERPRISE", 25, 3000)
     );
 
     private final SubscriptionRepository subscriptionRepository;
@@ -40,9 +43,9 @@ public class CommercialSaasService {
 
     @Transactional
     public SubscriptionEntity getOrProvisionSubscription(UUID tenantId) {
-        return subscriptionRepository.findByTenantId(tenantId).orElseGet(() -> {
+        SubscriptionEntity result = subscriptionRepository.findByTenantId(tenantId).orElseGet(() -> {
             OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-            PlanLimits defaults = PLAN_CATALOG.get("PERSONAL");
+            PlanLimits defaults = PLAN_CATALOG.get("FREE");
             SubscriptionEntity sub = new SubscriptionEntity();
             sub.setId(UUID.randomUUID());
             sub.setTenantId(tenantId);
@@ -55,6 +58,14 @@ public class CommercialSaasService {
             sub.setUpdatedAt(now);
             return subscriptionRepository.save(sub);
         });
+        if (credits != null && credits.enforced() && (!result.isPaidVerified() || !result.getCurrentPeriodEnd().isAfter(OffsetDateTime.now(ZoneOffset.UTC)))) {
+            SubscriptionEntity view = new SubscriptionEntity();
+            view.setId(result.getId()); view.setTenantId(tenantId); view.setPlanCode("FREE");
+            view.setStatus("ACTIVE"); view.setMaxDevices(1); view.setMonthlyAiQuota(30);
+            view.setCurrentPeriodStart(result.getCurrentPeriodStart()); view.setCurrentPeriodEnd(result.getCurrentPeriodEnd());
+            return view;
+        }
+        return result;
     }
 
     @Transactional
@@ -62,7 +73,7 @@ public class CommercialSaasService {
         String normalized = rawPlanCode == null ? "" : rawPlanCode.trim().toUpperCase(Locale.ROOT);
         PlanLimits target = PLAN_CATALOG.get(normalized);
         if (target == null) {
-            throw new IllegalArgumentException("Plan no soportado: " + rawPlanCode + ". Usa PERSONAL, PRO o ENTERPRISE.");
+            throw new IllegalArgumentException("Plan no soportado: " + rawPlanCode + ". Usa FREE, PRO o ENTERPRISE.");
         }
         SubscriptionEntity sub = getOrProvisionSubscription(tenantId);
         sub.setPlanCode(target.planCode());
@@ -81,6 +92,7 @@ public class CommercialSaasService {
             String hostname,
             String osPlatform,
             String sensorVersion) {
+        if (credits != null) credits.lock(tenantId);
         String cleanUid = deviceUid == null ? "" : deviceUid.trim();
         if (cleanUid.isEmpty()) {
             throw new IllegalArgumentException("deviceUid es obligatorio.");

@@ -76,7 +76,7 @@ const TOUR_STEPS = [
 
 const DEMO_FLOW_STEPS = [
   { label: 'Conectar equipo o pegar URL', detail: 'Snapshot RAM / URL aislada' },
-  { label: 'Inspección en RAM', detail: '0 bytes escritos en disco' },
+  { label: 'Resultados privados', detail: 'Observaciones con acceso controlado' },
   { label: 'Veredicto limpio', detail: '0 coincidencias CTI · Listo', clean: true },
 ];
 
@@ -350,7 +350,7 @@ function OnboardingTourDialog({
                       <span>FLUJO EN MEMORIA RAM</span>
                       <span className="inline-flex items-center gap-1.5 text-emerald-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        0 B en disco
+                        Resultados privados
                       </span>
                     </div>
 

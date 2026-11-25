@@ -240,11 +240,7 @@ export function PilotTrustAndSupportDialog({
                 2. Planes y Cuotas Verificadas del Piloto
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {(publicStatus?.plans || [
-                  { planCode: 'PERSONAL', label: 'Personal', monthlyRepoScans: 30, maxDocumentsPerCase: 25, maxDevices: 1 },
-                  { planCode: 'PRO', label: 'Pro Equipos', monthlyRepoScans: 300, maxDocumentsPerCase: 150, maxDevices: 5 },
-                  { planCode: 'ENTERPRISE', label: 'Enterprise', monthlyRepoScans: 3000, maxDocumentsPerCase: 1000, maxDevices: 25 },
-                ]).map((p) => (
+                {(publicStatus?.plans || []).map((p) => (
                   <div
                     key={p.planCode}
                     className="rounded-xl bg-[#141923]/75 border border-white/[0.05] p-3 space-y-1.5"
@@ -254,8 +250,8 @@ export function PilotTrustAndSupportDialog({
                     </div>
                     <div className="text-xs font-medium text-[#F2F2F4]">{p.label}</div>
                     <ul className="text-[11px] text-[#9A9AA2] space-y-1 pt-1">
-                      <li>{p.monthlyRepoScans} escaneos repo / mes</li>
-                      <li>{p.maxDocumentsPerCase} docs / expediente</li>
+                      <li>{p.monthlyCredits} créditos {p.planCode === 'FREE' ? 'de bienvenida' : 'mensuales'}</li>
+                      <li>{p.planCode === 'FREE' ? 'Solo perfil General' : `${p.maxDocumentsPerCase} docs / expediente`}</li>
                       <li>Hasta {p.maxDevices} equipos en flota</li>
                     </ul>
                   </div>

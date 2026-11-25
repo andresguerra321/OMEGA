@@ -54,6 +54,7 @@ public class OsintController {
     }
 
     @PostMapping("/assets/{assetId}/scan")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.LINK_VERIFY)
     public OsintScanReport scanAsset(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @PathVariable UUID assetId

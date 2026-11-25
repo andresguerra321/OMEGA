@@ -35,7 +35,21 @@ SCAN_TTL_SECONDS = 600.0
 MAX_STORED_SCANS = 100
 
 _SUSPICIOUS_SCRIPT_RE = re.compile(
-    r"(?i)(curl\s+[^|\n]+\|\s*(ba)?sh|wget\s+[^|\n]+\|\s*(ba)?sh|powershell\s+-enc|eval\s*\(|base64\s+-d|nc\s+-e)"
+    r"(?i)(curl\s+[^|\n]+\|\s*(ba)?sh|wget\s+[^|\n]+\|\s*(ba)?sh|powershell\s+-enc|eval\s*\(|base64\s+-d|nc\s+-e|node\s+-e\b)"
+)
+
+_DIRECT_MANIFEST_FILENAMES = frozenset(
+    {
+        "package.json",
+        "package-lock.json",
+        "requirements.txt",
+        "pom.xml",
+        "go.mod",
+        "cargo.toml",
+        "setup.py",
+        "pyproject.toml",
+        ".env",
+    }
 )
 _PY_SETUP_EXEC_RE = re.compile(
     r"(?i)(subprocess\.(Popen|run|call)|os\.system\s*\(|urllib\.request\.urlopen|exec\s*\(|__import__\s*\()"
@@ -195,15 +209,20 @@ def scan_archive_bytes(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     now: datetime | None = None,
 ) -> ScanStatus:
-    """Ejecuta un escaneo estático en memoria sobre un archivo comprimido."""
+    """Ejecuta un escaneo estático en memoria sobre un archivo comprimido o manifiesto directo."""
     scan_id = f"scan_{uuid.uuid4().hex[:16]}"
     if len(raw) > max_bytes:
         raise ValueError("El archivo supera el límite máximo permitido en RAM.")
 
-    validate_archive(filename, raw)
-
     started = time.monotonic()
-    files = _extract_text_files_in_memory(filename, raw, max_files=max_files)
+    clean_base = filename.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if clean_base.lower() in _DIRECT_MANIFEST_FILENAMES and not raw.startswith((b"PK\x03\x04", b"\x1f\x8b")):
+        if b"\x00" in raw[:1024]:
+            raise ValueError("El manifiesto enviado contiene datos binarios no permitidos.")
+        files = [(clean_base, raw.decode("utf-8-sig", errors="replace"))]
+    else:
+        validate_archive(filename, raw)
+        files = _extract_text_files_in_memory(filename, raw, max_files=max_files)
     findings: list[ScanFinding] = []
     limitations: list[str] = []
     dependencies: list[tuple[str, str, str]] = []
@@ -302,7 +321,7 @@ def _extract_text_files_in_memory(
                     break
                 data = zf.read(item)
                 if b"\x00" not in data[:1024]:
-                    extracted.append((item.filename, data.decode("utf-8", errors="replace")))
+                    extracted.append((item.filename.replace("\\", "/"), data.decode("utf-8-sig", errors="replace")))
         return extracted
 
     if lower.endswith((".tar", ".tgz", ".tar.gz")):
@@ -319,7 +338,7 @@ def _extract_text_files_in_memory(
                     continue
                 data = fh.read()
                 if b"\x00" not in data[:1024]:
-                    extracted.append((member.name, data.decode("utf-8", errors="replace")))
+                    extracted.append((member.name.replace("\\", "/"), data.decode("utf-8-sig", errors="replace")))
         return extracted
 
     raise ValueError("Formato de archivo no soportado; usa .tar.gz, .tgz o .zip.")
@@ -340,6 +359,8 @@ def _run_static_content_detectors(
     dependencies: list[tuple[str, str, str]],
     dependency_records: list[dict[str, Any]] | None = None,
 ) -> None:
+    rel_path = rel_path.replace("\\", "/")
+    text = text.lstrip("\ufeff")
     base = rel_path.rsplit("/", 1)[-1].lower()
     dep_records = dependency_records if dependency_records is not None else []
 

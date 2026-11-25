@@ -54,6 +54,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/repo")
 public class RepoScannerProxyController {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService creditService;
+
 
     private static final int MAX_REMOTE_ARCHIVE_BYTES = 25 * 1024 * 1024;
     private static final int MAX_GITHUB_REDIRECTS = 3;
@@ -122,11 +125,6 @@ public class RepoScannerProxyController {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debes adjuntar un archivo .tar.gz, .tgz o .zip");
         }
-        if (apiTokenService != null) {
-            Object attr = request.getAttribute(ApiTokenAuthenticationFilter.API_TOKEN_ID_ATTR);
-            UUID apiTokenId = attr instanceof UUID uuid ? uuid : null;
-            apiTokenService.consumeScanQuotaAndTokenUse(tenant.getId(), apiTokenId);
-        }
 
         byte[] bytes;
         try {
@@ -184,11 +182,6 @@ public class RepoScannerProxyController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre de la rama no es válido");
         }
 
-        if (apiTokenService != null) {
-            Object attr = request.getAttribute(ApiTokenAuthenticationFilter.API_TOKEN_ID_ATTR);
-            UUID apiTokenId = attr instanceof UUID uuid ? uuid : null;
-            apiTokenService.consumeScanQuotaAndTokenUse(tenant.getId(), apiTokenId);
-        }
 
         String tarballUrl = "https://api.github.com/repos/" + owner + "/" + repo + "/tarball"
                 + (branch.isEmpty() ? "" : "/" + URLEncoder.encode(branch, StandardCharsets.UTF_8).replace("+", "%20"));
@@ -357,6 +350,23 @@ public class RepoScannerProxyController {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> forwardArchiveToScanner(UUID tenantId, String filename, byte[] bytes) {
+        if (creditService == null || !creditService.enforced()) { consumeApiToken(tenantId); return forwardArchiveToScannerUnmetered(tenantId, filename, bytes); }
+        return creditService.execute(tenantId, TenantContext.get().orElseThrow().userId(), com.omega.platform.billing.CreditOperation.REPO_SCAN,
+                com.omega.platform.billing.CreditOperation.repositoryCredits(bytes.length), () -> {
+                    consumeApiToken(tenantId);
+                    return forwardArchiveToScannerUnmetered(tenantId, filename, bytes);
+                });
+    }
+
+    private void consumeApiToken(UUID tenantId) {
+        if (apiTokenService == null) return;
+        var attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        Object token = attrs instanceof org.springframework.web.context.request.ServletRequestAttributes request
+                ? request.getRequest().getAttribute(ApiTokenAuthenticationFilter.API_TOKEN_ID_ATTR) : null;
+        apiTokenService.consumeScanQuotaAndTokenUse(tenantId, token instanceof UUID id ? id : null);
+    }
+
+    private Map<String, Object> forwardArchiveToScannerUnmetered(UUID tenantId, String filename, byte[] bytes) {
         var body = new LinkedMultiValueMap<String, Object>();
         HttpHeaders partHeaders = new HttpHeaders();
         partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename(filename).build());

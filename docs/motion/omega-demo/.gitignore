@@ -1,0 +1,6 @@
+.sound-effects/
+sound-effects-cache/
+final/.render-cache/
+final/mix_raw.wav
+final/sound-effects-cache/
+final/.audio-work/

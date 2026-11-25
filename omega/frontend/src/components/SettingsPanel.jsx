@@ -12,15 +12,11 @@ import {
   Layers,
   Lock,
   LogOut,
-  Microscope,
   RefreshCw,
-  RotateCcw,
-  Scale,
   Shield,
   ShieldCheck,
   Sparkles,
   UserPlus,
-  Zap,
 } from 'lucide-react';
 import {
   approveCorpusCandidate,
@@ -251,56 +247,32 @@ function findAiPreset(id) {
 }
 
 const TOPK_OPTIONS = [
-  {
-    value: 4,
-    label: '4 fragmentos',
-    caption: 'Respuesta rápida',
-    icon: Zap,
-  },
-  {
-    value: 6,
-    label: '6 fragmentos',
-    caption: 'Balanceado (Recomendado)',
-    icon: Scale,
-  },
-  {
-    value: 10,
-    label: '10 fragmentos',
-    caption: 'Auditoría exhaustiva',
-    icon: Microscope,
-  },
-  {
-    value: 14,
-    label: '14 fragmentos',
-    caption: 'Cobertura integral',
-    icon: Layers,
-  },
+  { value: 4, label: 'Rápido' },
+  { value: 6, label: 'Balanceado' },
+  { value: 10, label: 'Exhaustivo' },
+  { value: 14, label: 'Integral' },
 ];
 
 const SOURCE_OPTIONS = [
   {
     value: 'Todas las fuentes',
     title: 'Todas',
-    description: 'Cruce global sobre todo el corpus.',
-    icon: Layers,
+    description: 'Cruce global sobre todo el corpus verificado.',
   },
   {
     value: 'Citizen Lab',
     title: 'Citizen Lab',
     description: 'Investigaciones Pegasus, Candiru y QuaDream.',
-    icon: Shield,
   },
   {
     value: 'Amnesty Tech',
     title: 'Amnesty Tech',
     description: 'Metodología forense MVT y Predator.',
-    icon: ShieldCheck,
   },
   {
     value: 'Google TAG',
     title: 'Google TAG',
     description: 'Análisis de cadenas 0-day y vendedores.',
-    icon: Globe,
   },
 ];
 
@@ -312,20 +284,6 @@ const EMPTY_GOVERNANCE = {
 function formatDateTag(rawDate) {
   if (!rawDate) return 'N/D';
   return String(rawDate).slice(0, 10);
-}
-
-function RadioDot({ selected }) {
-  return (
-    <span
-      className={`h-4 w-4 rounded-full inline-flex items-center justify-center shrink-0 transition-all duration-150 ${
-        selected
-          ? 'bg-[#2F6FED] shadow-[0_0_0_2px_rgba(47,111,237,0.25)]'
-          : 'border border-white/20 bg-black/30'
-      }`}
-    >
-      {selected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-    </span>
-  );
 }
 
 function TogglePill({ checked, disabled = false, onChange, label }) {
@@ -341,25 +299,29 @@ function TogglePill({ checked, disabled = false, onChange, label }) {
       }}
       className={`w-10 h-[22px] rounded-full p-0.5 transition-colors duration-200 flex items-center shrink-0 ${
         checked
-          ? 'bg-[#2F6FED] justify-end shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]'
-          : 'bg-white/[0.14] justify-start'
-      } ${disabled ? 'opacity-80 cursor-not-allowed' : 'cursor-pointer'}`}
+          ? 'bg-[#EDEDEF] justify-end'
+          : 'bg-white/[0.12] justify-start'
+      } ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
     >
-      <span className="h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.45)] transition-transform duration-200" />
+      <span
+        className={`h-[18px] w-[18px] rounded-full shadow transition-transform duration-200 ${
+          checked ? 'bg-[#09090B]' : 'bg-zinc-300'
+        }`}
+      />
     </button>
   );
 }
 
 function SplitRow({ title, description, children, className = '' }) {
   return (
-    <div className={`py-5 border-b border-white/[0.06] grid grid-cols-1 lg:grid-cols-12 gap-6 ${className}`}>
-      <div className="lg:col-span-4 space-y-1">
-        <h2 className="text-sm font-medium text-white">{title}</h2>
+    <div className={`py-6 border-t border-white/[0.06] space-y-4 ${className}`}>
+      <div className="space-y-0.5">
+        <h2 className="text-[14px] font-medium tracking-[-0.015em] text-[#EDEDEF]">{title}</h2>
         {description && (
-          <p className="text-xs text-[#8E95A5] leading-relaxed">{description}</p>
+          <p className="text-[12.5px] text-[#7E8691] leading-relaxed">{description}</p>
         )}
       </div>
-      <div className="lg:col-span-8 min-w-0">{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -377,6 +339,7 @@ export function SettingsPanel({
   initialSectionKey = 0,
   onAiConfigured,
   embedded = false,
+  activeSectionOverride = '',
   saveTrigger = 0,
   onSavedFeedback,
   onDirtyChange,
@@ -920,31 +883,40 @@ export function SettingsPanel({
   const stats = effectiveGov.corpus_stats;
   const tenantStats = effectiveGov.tenant_stats || null;
   const sources = effectiveGov.indexed_sources || [];
+  const currentSection = activeSectionOverride || activeSection;
   const activeSectionMeta =
-    CONFIG_SECTIONS.find((sec) => sec.id === activeSection) || CONFIG_SECTIONS[0];
+    CONFIG_SECTIONS.find((sec) => sec.id === currentSection) || CONFIG_SECTIONS[0];
+
+  const govAi = gov?.ai_engine || null;
+  const aiConfigured = Boolean(desktopAiConfig ? desktopAiConfig.configured : govAi?.configured);
+  const activeProvider = desktopAiConfig?.activeProvider || govAi?.active_provider || 'extractive';
+  const activeModel = desktopAiConfig?.activeModel || govAi?.active_model || 'omega-extractive-fallback';
+
+  const expedientesCount = Number(tenantStats?.expedientes || 0);
+  const documentsCount = Number(tenantStats?.documents || 0);
 
   return (
-    <div className={embedded ? 'space-y-4' : 'h-full flex flex-col min-h-0'}>
+    <div className={embedded ? '' : 'h-full flex flex-col min-h-0 bg-[#09090B]'}>
       {!embedded && (
-        <div className="shrink-0 border-b border-white/[0.08] bg-[#0A0A0C]/65 px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-[15px] sm:text-[17px]">
-            <span className="font-semibold tracking-[-0.02em] text-[#F2F2F4]">Ajustes</span>
-            <span className="text-[#7C7D87]">›</span>
-            <span className="text-[#9FA6B8] font-medium">{activeSectionMeta.label}</span>
+        <div className="shrink-0 border-b border-white/[0.06] bg-[#09090B] px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-[14px]">
+            <span className="font-medium tracking-[-0.015em] text-[#EDEDEF]">Ajustes</span>
+            <span className="text-zinc-600">/</span>
+            <span className="text-[#7E8691]">{activeSectionMeta.label}</span>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 shrink-0">
+          <div className="flex items-center justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={handleDiscardChanges}
-              className="rounded-lg text-[12.5px] text-[#9A9AA2] hover:text-[#F2F2F4] px-2.5 py-1.5 transition-colors cursor-pointer"
+              className="h-8 rounded-md text-xs text-zinc-400 hover:text-[#EDEDEF] px-2.5 transition-colors cursor-pointer"
             >
               Descartar
             </button>
             <button
               type="button"
               onClick={handleSaveChanges}
-              className="rounded-lg bg-[#2F6FED] hover:bg-[#2F6FED]/90 text-white px-3.5 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="h-8 rounded-md bg-[#EDEDEF] hover:bg-white text-[#09090B] px-3 text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               {savedFeedback ? (
                 <>
@@ -959,72 +931,46 @@ export function SettingsPanel({
         </div>
       )}
 
-      {embedded && (
-        <div className="flex flex-wrap items-center gap-5 border-b border-white/[0.06]">
-          {CONFIG_SECTIONS.map((sec) => {
-            const Icon = sec.icon;
-            const isActive = activeSection === sec.id;
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => scrollToSection(sec.id)}
-                className={`inline-flex items-center gap-1.5 pb-2.5 -mb-px border-b-[1.5px] text-xs font-medium transition-colors duration-150 cursor-pointer ${
-                  isActive
-                    ? 'border-zinc-100 text-zinc-100'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                <span>{sec.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Área Scrollable dividida en 2 columnas (Sidebar Untitled UI + Contenido Split-Row) */}
       <div
         ref={scrollContainerRef}
-        className={embedded ? 'bg-transparent' : 'flex-1 overflow-y-auto bg-transparent px-4 sm:px-8 py-6'}
+        className={embedded ? '' : 'flex-1 overflow-y-auto px-4 sm:px-8 py-7'}
       >
         <div
           className={
             embedded
-              ? 'animate-fade-up'
-              : 'animate-fade-up mx-auto max-w-[1120px] grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8 lg:gap-12 pb-24'
+              ? ''
+              : 'w-full max-w-[1440px] 2xl:max-w-[1560px] mx-auto grid grid-cols-1 md:grid-cols-[220px_1fr] lg:grid-cols-[248px_1fr] gap-8 md:gap-10 pb-20'
           }
         >
-          {/* Columna izquierda: Navegación categorizada */}
+          {/* Sidebar izquierda cuando no está embebido */}
           {!embedded && (
-            <aside className="md:sticky md:top-0 md:self-start space-y-6">
-              {['CUENTA', 'ESPACIO DE TRABAJO'].map((groupName) => {
-                const items = CONFIG_SECTIONS.filter((sec) => sec.group === groupName);
+            <aside className="md:sticky md:top-0 md:self-start space-y-5">
+              {[
+                { title: 'General', ids: ['cuenta', 'permisos'] },
+                { title: 'Inteligencia', ids: ['ia', 'rag', 'corpus'] },
+              ].map((group) => {
+                const items = group.ids
+                  .map((id) => CONFIG_SECTIONS.find((s) => s.id === id))
+                  .filter(Boolean);
                 return (
-                  <div key={groupName} className="space-y-1.5">
-                    <div className="px-3 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-[#7C7D87]">
-                      {groupName}
+                  <div key={group.title} className="space-y-1">
+                    <div className="px-2.5 text-[11px] uppercase tracking-wider text-zinc-500 font-medium">
+                      {group.title}
                     </div>
-                    <div className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar">
+                    <div className="flex md:flex-col gap-0.5 overflow-x-auto no-scrollbar">
                       {items.map((sec) => {
-                        const Icon = sec.icon;
-                        const isActive = activeSection === sec.id;
+                        const isActive = currentSection === sec.id;
                         return (
                           <button
                             key={sec.id}
                             type="button"
                             onClick={() => scrollToSection(sec.id)}
-                            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-left shrink-0 transition-colors duration-150 cursor-pointer ${
+                            className={`w-full rounded-md px-2.5 py-1.5 text-[13px] text-left shrink-0 transition-colors cursor-pointer ${
                               isActive
-                                ? 'bg-[#2F6FED]/12 text-white font-medium'
-                                : 'text-[#8E95A5] hover:text-white hover:bg-white/[0.04]'
+                                ? 'bg-white/[0.06] text-[#EDEDEF] font-medium'
+                                : 'text-[#7E8691] hover:text-zinc-200 hover:bg-white/[0.03]'
                             }`}
                           >
-                            <Icon
-                              className={`h-4 w-4 shrink-0 ${
-                                isActive ? 'text-[#2F6FED]' : 'text-[#7C7D87]'
-                              }`}
-                            />
                             <span className="whitespace-nowrap">{sec.label}</span>
                           </button>
                         );
@@ -1036,258 +982,134 @@ export function SettingsPanel({
             </aside>
           )}
 
-          {/* Columna derecha: Header con breadcrumb, banner de estado y filas Split-Row */}
-          <div className="min-w-0 rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-5 sm:p-6">
-            <header className="space-y-4 pb-6 border-b border-white/[0.06]">
-              <div className="space-y-1.5">
-                <div className="text-xs text-[#8E95A5]">
-                  Configuración <span className="mx-1 text-white/25">/</span>{' '}
-                  <span className="text-[#F2F2F4]">{activeSectionMeta.label}</span>
-                </div>
-                <h1 className="text-2xl font-semibold tracking-tight text-white">
-                  {activeSectionMeta.label}
-                </h1>
-                <p className="text-sm text-[#8E95A5] truncate">
-                  {activeSectionMeta.subtitle}
-                </p>
+          {/* Columna de contenido abierta sobre #09090B (sin macro-tarjeta exterior) */}
+          <div className="min-w-0">
+            {(govError || (Boolean(authSession) && loadingGov) || actionBanner) && (
+              <div className="space-y-3 mb-5">
+                {govError && (
+                  <PanelErrorBanner
+                    message={govError}
+                    onRetry={handleRetryGovernance}
+                    onDismiss={() => setGovError('')}
+                  />
+                )}
+
+                {Boolean(authSession) && loadingGov && (
+                  <PanelSkeleton
+                    label="Cargando estado del sistema y trazabilidad..."
+                    lines={2}
+                  />
+                )}
+
+                {actionBanner && (
+                  <ActionConfirmationBanner
+                    tone={actionBanner.tone}
+                    message={actionBanner.message}
+                    onDismiss={() => setActionBanner(null)}
+                  />
+                )}
               </div>
+            )}
 
-              {/* Banner compacto de estado específico por módulo */}
-              {(() => {
-                const govAi = gov?.ai_engine || null;
-                const aiConfigured = Boolean(desktopAiConfig ? desktopAiConfig.configured : govAi?.configured);
-                const activeProvider = desktopAiConfig?.activeProvider || govAi?.active_provider || 'extractive';
-                const activeModel = desktopAiConfig?.activeModel || govAi?.active_model || 'omega-extractive-fallback';
+            {/* 1. Mi perfil y sesión */}
+            {currentSection === 'cuenta' && (
+              <section ref={cuentaRef}>
+                <header className="pb-5">
+                  <h2 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                    Mi perfil y sesión
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-[#7E8691]">
+                    Identidad del espacio, aislamiento de sesión y verificación en dos pasos.
+                  </p>
+                </header>
 
-                if (activeSection === 'cuenta') {
-                  return (
-                    <div className="rounded-xl bg-[#141923]/75 border border-white/[0.05] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 text-xs text-[#D2D6E2]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span>
-                          Postura de seguridad: <strong className="text-zinc-100">100%</strong> · Sesión JWT aislada y Zero-Retention activo
-                        </span>
-                      </div>
-                      {authSession && (
-                        <button
-                          type="button"
-                          onClick={() => void onPanicPurge?.()}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 text-xs font-medium text-rose-300 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer shrink-0"
-                        >
-                          <Lock className="h-3.5 w-3.5" strokeWidth={1.75} />
-                          <span>Purga rápida</span>
-                        </button>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (activeSection === 'ia') {
-                  return (
-                    <div className="rounded-xl bg-[#141923]/75 border border-white/[0.05] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 text-xs text-[#D2D6E2]">
-                        <span
-                          className={`h-2 w-2 rounded-full shrink-0 ${
-                            aiConfigured ? 'bg-emerald-400' : 'bg-amber-400'
-                          }`}
-                        />
-                        <span>
-                          {aiConfigured ? (
-                            <>
-                              Motor activo: <strong className="text-white">{activeProvider}</strong> ·{' '}
-                              <span className="font-tech text-[#8E95A5]">{activeModel}</span>
-                            </>
-                          ) : (
-                            'Sin motor conectado · Modo extractivo activo'
-                          )}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={testingAiConn}
-                        onClick={handleTestAiConnection}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer shrink-0"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${testingAiConn ? 'animate-spin' : ''}`} />
-                        <span>{testingAiConn ? 'Probando...' : 'Probar conexión'}</span>
-                      </button>
-                    </div>
-                  );
-                }
-
-                if (activeSection === 'corpus') {
-                  return (
-                    <div className="rounded-xl bg-white/[0.02] border border-white/[0.07] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 text-xs text-[#D2D6E2]">
-                        <Database className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
-                        <span className="font-tech">
-                          {stats
-                            ? `${stats.reports} Reportes · ${stats.chunks} Fragmentos · ${Number(stats.iocs || 0).toLocaleString('en-US')} IOCs`
-                            : 'Sesión requerida para métricas del corpus'}
-                        </span>
-                      </div>
-                      {authSession && (
-                        <button
-                          type="button"
-                          disabled={discoveryBusy}
-                          onClick={async () => {
-                            setDiscoveryBusy(true);
-                            try {
-                              await scanCorpusDiscovery();
-                              const items = await fetchCorpusDiscovery('PENDING');
-                              setDiscoveryQueue(Array.isArray(items) ? items : []);
-                            } catch {} finally {
-                              setDiscoveryBusy(false);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#2F6FED]/45 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer shrink-0"
-                        >
-                          <Globe className="h-3.5 w-3.5 text-[#6EA0FF]" />
-                          <span>Buscar en RSS</span>
-                        </button>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (activeSection === 'rag') {
-                  return (
-                    <div className="rounded-xl bg-white/[0.02] border border-white/[0.07] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 text-xs text-[#D2D6E2]">
-                        <Layers className="h-3.5 w-3.5 text-[#2F6FED] shrink-0" />
-                        <span>
-                          Recuperación híbrida RRF · <strong className="text-white">Top-{topK}</strong> fragmentos
-                        </span>
-                      </div>
-                      <span className="font-tech text-xs text-[#8E95A5]">
-                        Fuente: {sourceScope || 'Todas'}
-                      </span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="rounded-xl bg-white/[0.02] border border-white/[0.07] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 text-xs text-[#D2D6E2]">
-                      <ShieldCheck className="h-3.5 w-3.5 text-[#30D158] shrink-0" />
-                      <span>Procesamiento temporal en RAM · Cero retención en disco</span>
-                    </div>
-                    <span className="font-tech text-xs text-[#30D158]">Activo</span>
-                  </div>
-                );
-              })()}
-            </header>
-
-            <div className="space-y-4 pt-4">
-              {govError && (
-                <PanelErrorBanner
-                  message={govError}
-                  onRetry={handleRetryGovernance}
-                  onDismiss={() => setGovError('')}
-                />
-              )}
-
-              {Boolean(authSession) && loadingGov && (
-                <PanelSkeleton
-                  label="Cargando estado del sistema y trazabilidad..."
-                  lines={3}
-                />
-              )}
-
-              {actionBanner && (
-                <ActionConfirmationBanner
-                  tone={actionBanner.tone}
-                  message={actionBanner.message}
-                  onDismiss={() => setActionBanner(null)}
-                />
-              )}
-            </div>
-
-            {/* Bloque 1 — Mi perfil y sesión (Split-Row Untitled UI) */}
-            {activeSection === 'cuenta' && (
-            <section ref={cuentaRef}>
-              <SplitRow
-                title="Identidad y Espacio"
-                description="Cuenta activa, rol asignado e identificador único del espacio de trabajo."
-              >
                 {authSession ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-zinc-100 break-all">
-                            {authSession.email}
-                          </span>
-                          <span className="bg-white/[0.05] border border-white/[0.08] text-zinc-300 text-[11px] font-medium px-2 py-0.5 rounded-md">
-                            {authSession.role}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-[#8E95A5]">
-                          <span>Workspace ID:</span>
-                          <code className="font-mono text-xs text-zinc-300 break-all">
-                            {displayWorkspaceId}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={handleCopyWorkspaceId}
-                            className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.08] px-2 py-0.5 text-[11px] text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
-                          >
-                            {copiedId ? (
-                              <>
-                                <Check className="h-3 w-3 text-emerald-400 transition-transform duration-150" />
-                                <span className="text-emerald-400">Copiado</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3 w-3 text-zinc-400 transition-transform duration-150" />
-                                <span>Copiar</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => onOpenAuth?.('Cambia de cuenta o inicia sesión con otro correo.')}
-                          className="group inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
-                        >
-                          <KeyRound className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-100 transition-colors duration-150" />
-                          <span>Cambiar cuenta</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onLogout?.()}
-                          className="group inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-zinc-100 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer"
-                        >
-                          <LogOut className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-100 transition-colors duration-150" />
-                          <span>Cerrar sesión</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="inline-flex items-center gap-2 text-sm font-medium text-white">
-                        <Lock className="h-4 w-4 text-[#2F6FED]" />
-                        <span>Sin cuenta conectada</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-[#8E95A5]">
-                        <span>ID local:</span>
-                        <code className="font-tech text-[#D2D6E2]">{displayWorkspaceId}</code>
+                  <dl className="border-t border-white/[0.06]">
+                    <div className="border-b border-white/[0.05] py-3 px-2 -mx-2 rounded-md transition-colors duration-150 hover:bg-white/[0.02] flex items-center justify-between gap-4 text-[13px]">
+                      <dt className="text-[#7E8691] shrink-0">Workspace ID</dt>
+                      <dd className="flex items-center gap-2 min-w-0">
+                        <code className="font-mono text-[12.5px] text-zinc-300 truncate">
+                          {displayWorkspaceId}
+                        </code>
                         <button
                           type="button"
                           onClick={handleCopyWorkspaceId}
-                          className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] px-1.5 py-0.5 text-[11px] text-[#F2F2F4] cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:text-[#EDEDEF] hover:bg-white/[0.05] transition-all duration-150 active:scale-[0.96] cursor-pointer shrink-0"
+                        >
+                          {copiedId ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-400 transition-transform duration-150 scale-110" strokeWidth={1.75} />
+                              <span className="text-emerald-400">Copiado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" strokeWidth={1.75} />
+                              <span>Copiar</span>
+                            </>
+                          )}
+                        </button>
+                      </dd>
+                    </div>
+
+                    <div className="border-b border-white/[0.05] py-3 px-2 -mx-2 rounded-md transition-colors duration-150 hover:bg-white/[0.02] flex items-center justify-between gap-4 text-[13px]">
+                      <dt className="text-[#7E8691] shrink-0">Rol y espacio</dt>
+                      <dd className="font-mono text-[12.5px] text-zinc-300 truncate">
+                        {authSession.role} · @{authSession.tenantSlug || 'personal'}
+                      </dd>
+                    </div>
+
+                    <div className="border-b border-white/[0.05] py-3 px-2 -mx-2 rounded-md transition-colors duration-150 hover:bg-white/[0.02] flex items-center justify-between gap-4 text-[13px]">
+                      <dt className="text-[#7E8691] shrink-0">Recursos privados</dt>
+                      <dd className="font-mono text-[12.5px] text-zinc-300 tabular-nums">
+                        {expedientesCount} {expedientesCount === 1 ? 'espacio' : 'espacios'} · {documentsCount} PDFs
+                      </dd>
+                    </div>
+
+                    <div className="border-b border-white/[0.05] py-3 px-2 -mx-2 rounded-md transition-colors duration-150 hover:bg-white/[0.02] flex flex-wrap items-center justify-between gap-3 text-[13px]">
+                      <div className="flex items-center gap-2.5">
+                        <dt className="text-[#7E8691]">Sesión</dt>
+                        <span className="text-zinc-300 text-[12.5px]">
+                          Aislada · Zero-Retention
+                        </span>
+                      </div>
+                      <dd className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onLogout?.()}
+                          className="h-7 inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] hover:border-white/[0.16] px-2.5 text-xs text-zinc-400 hover:text-[#EDEDEF] transition-all duration-150 active:scale-[0.98] cursor-pointer"
+                        >
+                          <LogOut className="h-3 w-3" strokeWidth={1.75} />
+                          <span>Cerrar sesión</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onPanicPurge?.()}
+                          className="h-7 inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 text-xs text-zinc-400 hover:text-[#E5484D] hover:border-[#E5484D]/30 transition-all duration-150 active:scale-[0.98] cursor-pointer"
+                        >
+                          <Lock className="h-3 w-3" strokeWidth={1.75} />
+                          <span>Purga rápida</span>
+                        </button>
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <div className="border-t border-white/[0.06] py-5 flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-[13px] font-medium text-[#EDEDEF]">Sin cuenta conectada</div>
+                      <div className="flex items-center gap-2 text-xs text-[#7E8691]">
+                        <span>ID local:</span>
+                        <code className="font-mono text-zinc-300">{displayWorkspaceId}</code>
+                        <button
+                          type="button"
+                          onClick={handleCopyWorkspaceId}
+                          className="rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:text-[#EDEDEF] hover:bg-white/[0.05] cursor-pointer"
                         >
                           {copiedId ? 'Copiado' : 'Copiar'}
                         </button>
                         <button
                           type="button"
                           onClick={handleRotateId}
-                          className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] px-1.5 py-0.5 text-[11px] text-[#F2F2F4] cursor-pointer"
+                          className="rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:text-[#EDEDEF] hover:bg-white/[0.05] cursor-pointer"
                         >
                           {rotated ? 'Rotado' : 'Rotar'}
                         </button>
@@ -1295,251 +1117,273 @@ export function SettingsPanel({
                     </div>
                     <button
                       type="button"
-                      onClick={() => onOpenAuth?.('Inicia sesión o crea una cuenta para sincronizar tu biblioteca privada y OSINT.')}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] hover:brightness-110 px-3.5 py-2 text-xs font-medium text-white cursor-pointer"
+                      onClick={() =>
+                        onOpenAuth?.('Inicia sesión o crea una cuenta para sincronizar tu biblioteca privada y OSINT.')
+                      }
+                      className="h-8 inline-flex items-center gap-1.5 rounded-md bg-[#EDEDEF] hover:bg-white px-3 text-xs font-medium text-[#09090B] transition-colors cursor-pointer"
                     >
-                      <KeyRound className="h-3.5 w-3.5" />
-                      <span>Iniciar sesión / Registrarse</span>
+                      <KeyRound className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      <span>Iniciar sesión</span>
                     </button>
                   </div>
                 )}
-              </SplitRow>
 
-              {authSession && (
-                <>
-                  <SplitRow
-                    title="Métricas de Actividad"
-                    description="Resumen de recursos privados procesados dentro de tu organización."
-                  >
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div>
-                        <div className="text-xs text-[#8E95A5]">Espacios privados</div>
-                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
-                          {Number(tenantStats?.expedientes || 0)}
-                        </div>
+                {authSession && (
+                  <>
+                    {/* Verificación en dos pasos (2FA) */}
+                    <div className="py-6 space-y-4">
+                      <div className="space-y-0.5">
+                        <h3 className="text-[14px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                          Verificación en dos pasos (2FA)
+                        </h3>
+                        <p className="text-[12.5px] text-[#7E8691]">
+                          Solicita un segundo código al iniciar sesión.
+                        </p>
                       </div>
-                      <div>
-                        <div className="text-xs text-[#8E95A5]">PDFs indexados</div>
-                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
-                          {Number(tenantStats?.documents || 0)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-[#8E95A5]">Zero-Retention purgados</div>
-                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
-                          {Number(tenantStats?.zero_retention_purged_pdfs || 0)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-[#8E95A5]">Activos OSINT</div>
-                        <div className="mt-1 text-xl font-semibold text-zinc-100 tabular-nums">
-                          {Number(tenantStats?.osint_assets || 0)}
-                        </div>
-                      </div>
+                      <TwoFactorSettingsCard authSession={authSession} embedded />
                     </div>
-                  </SplitRow>
 
-                  <SplitRow
-                    title="Verificación en dos pasos (2FA)"
-                    description="Protege el acceso solicitando un segundo código al iniciar sesión."
-                  >
-                    <TwoFactorSettingsCard authSession={authSession} embedded />
-                  </SplitRow>
+                    {/* Opciones avanzadas plegables */}
+                    <div className="border-t border-white/[0.06] py-5">
+                      <details className="group">
+                        <summary className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer list-none select-none">
+                          <span>
+                            {authSession.role === 'ADMIN'
+                              ? 'Opciones avanzadas: clave de recuperación, auditoría SHA-256 y equipo'
+                              : 'Opciones avanzadas: clave de recuperación sin correo'}
+                          </span>
+                          <span className="font-mono text-[11px] text-zinc-500 group-open:rotate-180 transition-transform duration-150">
+                            ▾
+                          </span>
+                        </summary>
 
-                  <SplitRow
-                    title="Recuperación sin correo"
-                    description="Genera una clave de respaldo fuera de línea. Crear una nueva invalida la anterior."
-                  >
-                    <RecoveryKeyCard embedded />
-                  </SplitRow>
-
-                  {authSession.role === 'ADMIN' && (
-                    <SplitRow
-                      title="Auditoría y equipo"
-                      description="Verifica la cadena SHA-256 de eventos o registra analistas en tu espacio."
-                      className="border-b-0"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={verifyingAudit}
-                            onClick={handleVerifyAuditChain}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#2F6FED]/45 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 cursor-pointer transition-colors"
-                          >
-                            <FileCheck2 className={`h-3.5 w-3.5 ${verifyingAudit ? 'animate-pulse' : ''}`} />
-                            <span>
-                              {verifyingAudit ? 'Verificando SHA-256...' : 'Verificar cadena de auditoría'}
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setShowInviteForm((v) => !v)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white cursor-pointer transition-colors"
-                          >
-                            <UserPlus className="h-3.5 w-3.5 text-[#30D158]" />
-                            <span>Crear analista / cliente</span>
-                          </button>
-                        </div>
-
-                        {showInviteForm && (
-                          <form
-                            noValidate
-                            onSubmit={handleInviteSubmit}
-                            className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3.5"
-                          >
-                            <input
-                              type="text"
-                              required
-                              minLength={2}
-                              maxLength={120}
-                              value={inviteForm.fullName}
-                              onChange={(e) => {
-                                setInviteForm((f) => ({
-                                  ...f,
-                                  fullName: stripUnsafeChars(e.target.value, 120),
-                                }));
-                                if (actionBanner?.tone === 'danger') setActionBanner(null);
-                              }}
-                              placeholder="Nombre completo"
-                              className="h-9 rounded-lg border border-white/[0.1] bg-[#0A0A0C] px-3 text-xs text-white placeholder-[#8E95A5]"
-                            />
-                            <input
-                              type="email"
-                              required
-                              maxLength={254}
-                              value={inviteForm.email}
-                              onChange={(e) => {
-                                setInviteForm((f) => ({
-                                  ...f,
-                                  email: stripUnsafeChars(e.target.value, 254),
-                                }));
-                                if (actionBanner?.tone === 'danger') setActionBanner(null);
-                              }}
-                              placeholder="usuario@organizacion.org"
-                              className="h-9 rounded-lg border border-white/[0.1] bg-[#0A0A0C] px-3 text-xs text-white placeholder-[#8E95A5]"
-                            />
-                            <input
-                              type="password"
-                              required
-                              minLength={12}
-                              maxLength={128}
-                              value={inviteForm.password}
-                              onChange={(e) => {
-                                setInviteForm((f) => ({
-                                  ...f,
-                                  password: stripUnsafeChars(e.target.value, 128),
-                                }));
-                                if (actionBanner?.tone === 'danger') setActionBanner(null);
-                              }}
-                              placeholder="Contraseña inicial (mín. 12 caracteres)"
-                              className="h-9 rounded-lg border border-white/[0.1] bg-[#0A0A0C] px-3 text-xs text-white placeholder-[#8E95A5]"
-                            />
-                            <div className="flex items-center gap-2">
-                              <select
-                                aria-label="Rol del nuevo usuario"
-                                value={inviteForm.role}
-                                onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))}
-                                className="h-9 flex-1 rounded-lg border border-white/[0.1] bg-[#0A0A0C] px-2.5 text-xs text-white"
-                              >
-                                <option value="ANALYST">ANALYST (forense + CTI)</option>
-                                <option value="CLIENT">CLIENT (lectura + IOCs)</option>
-                                <option value="ADMIN">ADMIN (gestión total)</option>
-                              </select>
-                              <button
-                                type="submit"
-                                disabled={invitingUser}
-                                className="h-9 rounded-lg bg-[#2F6FED] hover:brightness-110 px-3.5 text-xs font-medium text-white disabled:opacity-50 cursor-pointer"
-                              >
-                                {invitingUser ? '...' : 'Añadir'}
-                              </button>
+                        <div className="mt-4 space-y-5 border-l border-white/[0.08] pl-4">
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium text-zinc-200">
+                              Recuperación sin correo
                             </div>
-                          </form>
-                        )}
+                            <RecoveryKeyCard embedded />
+                          </div>
 
-                        {auditVerification && (
-                          <div className="space-y-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3.5">
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                              <span
-                                className={`font-semibold ${
-                                  auditVerification.valid ? 'text-[#30D158]' : 'text-[#FF453A]'
-                                }`}
-                              >
-                                {auditVerification.valid ? 'Integridad SHA-256 verificada' : 'Ruptura de cadena detectada'}
-                              </span>
-                              <span className="font-tech text-[11px] text-[#8E95A5]">
-                                {auditVerification.verifiedCount}/{auditVerification.totalEntries} eventos ·{' '}
-                                {auditVerification.detail}
-                              </span>
-                            </div>
-                            {auditLogs.length > 0 && (
-                              <div className="max-h-40 overflow-y-auto divide-y divide-white/[0.05]">
-                                {auditLogs.map((ev) => (
-                                  <div
-                                    key={ev.id}
-                                    className="py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-tech"
-                                  >
-                                    <span className="text-[#F2F2F4]">
-                                      #{ev.chainSeq} · {ev.action} ({ev.resourceType})
+                          {authSession.role === 'ADMIN' && (
+                            <div className="space-y-3 pt-3 border-t border-white/[0.06]">
+                              <div className="text-xs font-medium text-zinc-200">
+                                Auditoría SHA-256 y miembros
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={verifyingAudit}
+                                  onClick={handleVerifyAuditChain}
+                                  className="h-8 inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16] hover:text-[#EDEDEF] px-3 text-xs font-medium text-zinc-300 disabled:opacity-50 cursor-pointer transition-colors"
+                                >
+                                  <FileCheck2 className={`h-3.5 w-3.5 text-zinc-400 ${verifyingAudit ? 'animate-pulse' : ''}`} />
+                                  <span>
+                                    {verifyingAudit ? 'Verificando SHA-256...' : 'Verificar cadena de auditoría'}
+                                  </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setShowInviteForm((v) => !v)}
+                                  className="h-8 inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16] hover:text-[#EDEDEF] px-3 text-xs font-medium text-zinc-300 cursor-pointer transition-colors"
+                                >
+                                  <UserPlus className="h-3.5 w-3.5 text-zinc-400" />
+                                  <span>Crear analista / cliente</span>
+                                </button>
+                              </div>
+
+                              {showInviteForm && (
+                                <form
+                                  noValidate
+                                  onSubmit={handleInviteSubmit}
+                                  className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-md border border-white/[0.07] bg-white/[0.015] p-3"
+                                >
+                                  <input
+                                    type="text"
+                                    required
+                                    minLength={2}
+                                    maxLength={120}
+                                    value={inviteForm.fullName}
+                                    onChange={(e) => {
+                                      setInviteForm((f) => ({
+                                        ...f,
+                                        fullName: stripUnsafeChars(e.target.value, 120),
+                                      }));
+                                      if (actionBanner?.tone === 'danger') setActionBanner(null);
+                                    }}
+                                    placeholder="Nombre completo"
+                                    className="h-8 rounded-md border border-white/[0.08] bg-[#09090B] px-2.5 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <input
+                                    type="email"
+                                    required
+                                    maxLength={254}
+                                    value={inviteForm.email}
+                                    onChange={(e) => {
+                                      setInviteForm((f) => ({
+                                        ...f,
+                                        email: stripUnsafeChars(e.target.value, 254),
+                                      }));
+                                      if (actionBanner?.tone === 'danger') setActionBanner(null);
+                                    }}
+                                    placeholder="usuario@organizacion.org"
+                                    className="h-8 rounded-md border border-white/[0.08] bg-[#09090B] px-2.5 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <input
+                                    type="password"
+                                    required
+                                    minLength={12}
+                                    maxLength={128}
+                                    value={inviteForm.password}
+                                    onChange={(e) => {
+                                      setInviteForm((f) => ({
+                                        ...f,
+                                        password: stripUnsafeChars(e.target.value, 128),
+                                      }));
+                                      if (actionBanner?.tone === 'danger') setActionBanner(null);
+                                    }}
+                                    placeholder="Contraseña inicial (mín. 12 caracteres)"
+                                    className="h-8 rounded-md border border-white/[0.08] bg-[#09090B] px-2.5 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      aria-label="Rol del nuevo usuario"
+                                      value={inviteForm.role}
+                                      onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))}
+                                      className="h-8 flex-1 rounded-md border border-white/[0.08] bg-[#09090B] px-2 text-xs text-[#EDEDEF] focus:outline-none focus:border-white/30"
+                                    >
+                                      <option value="ANALYST">ANALYST (forense + CTI)</option>
+                                      <option value="CLIENT">CLIENT (lectura + IOCs)</option>
+                                      <option value="ADMIN">ADMIN (gestión total)</option>
+                                    </select>
+                                    <button
+                                      type="submit"
+                                      disabled={invitingUser}
+                                      className="h-8 rounded-md bg-[#EDEDEF] hover:bg-white px-3 text-xs font-medium text-[#09090B] disabled:opacity-50 cursor-pointer"
+                                    >
+                                      {invitingUser ? '...' : 'Añadir'}
+                                    </button>
+                                  </div>
+                                </form>
+                              )}
+
+                              {auditVerification && (
+                                <div className="space-y-2 rounded-md border border-white/[0.07] bg-white/[0.015] p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <span
+                                      className={`font-medium ${
+                                        auditVerification.valid ? 'text-emerald-400' : 'text-[#E5484D]'
+                                      }`}
+                                    >
+                                      {auditVerification.valid ? 'Integridad SHA-256 verificada' : 'Ruptura de cadena detectada'}
                                     </span>
-                                    <span className="text-[#8E95A5]">
-                                      {String(ev.currentHash || '').slice(0, 14)}… · {formatDateTag(ev.createdAt)}
+                                    <span className="font-mono text-[11px] text-[#7E8691]">
+                                      {auditVerification.verifiedCount}/{auditVerification.totalEntries} eventos ·{' '}
+                                      {auditVerification.detail}
                                     </span>
                                   </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </SplitRow>
-                  )}
-                </>
-              )}
-            </section>
+                                  {auditLogs.length > 0 && (
+                                    <div className="max-h-40 overflow-y-auto divide-y divide-white/[0.05]">
+                                      {auditLogs.map((ev) => (
+                                        <div
+                                          key={ev.id}
+                                          className="py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono"
+                                        >
+                                          <span className="text-zinc-200">
+                                            #{ev.chainSeq} · {ev.action} ({ev.resourceType})
+                                          </span>
+                                          <span className="text-[#7E8691]">
+                                            {String(ev.currentHash || '').slice(0, 14)}… · {formatDateTag(ev.createdAt)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    </div>
+                  </>
+                )}
+              </section>
             )}
 
-            {/* Bloque 2 — Motor de IA (Split-Row Untitled UI) */}
-            {activeSection === 'ia' && (
-            <section ref={iaRef}>
-              {gov?.airGappedMode === true && (
-                <div role="status" className="mt-4 rounded-xl border border-[#30D158]/30 bg-[#30D158]/10 p-3.5 text-sm text-[#8AEBA1]">
-                  <strong>Modo Soberano Local · Ningún dato sale de tu equipo</strong>
-                  <p className="mt-1 text-xs">IA local y consultas externas deshabilitadas en OMEGA. Requiere servicios locales sin reenvío; el aislamiento físico de red depende de la configuración del equipo.</p>
-                </div>
-              )}
-              {(() => {
-                const currentPreset = findAiPreset(aiProviderDraft);
-                const savedHint =
-                  aiProviderDraft === 'groq'
-                    ? desktopAiConfig?.groqHint
-                    : aiProviderDraft === 'openai'
-                      ? desktopAiConfig?.openAiHint
-                      : aiProviderDraft === 'omniroute'
-                        ? desktopAiConfig?.omniRouteHint
-                        : desktopAiConfig?.customProvider === aiProviderDraft
-                          ? desktopAiConfig?.customHint
-                          : '';
-                const docsTargetUrl =
-                  aiProviderDraft === 'omniroute' && desktopAiConfig?.omniRouteDashboardUrl
-                    ? desktopAiConfig.omniRouteDashboardUrl
-                    : currentPreset.docsUrl;
-                const detectedModels = Array.isArray(aiProbeResult?.detected_models)
-                  ? aiProbeResult.detected_models
-                  : [];
+            {/* 2. Motor de IA */}
+            {currentSection === 'ia' && (
+              <section ref={iaRef}>
+                <header className="pb-5 flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h2 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                        Motor de IA
+                      </h2>
+                      <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-zinc-400">
+                        <span
+                          className={`h-[6px] w-[6px] rounded-full shrink-0 ${
+                            aiConfigured ? 'bg-emerald-400' : 'bg-amber-400'
+                          }`}
+                        />
+                        <span>{aiConfigured ? activeProvider : 'extractivo'}</span>
+                        {aiConfigured && (
+                          <span className="text-zinc-500 hidden sm:inline">· {activeModel}</span>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-[13px] text-[#7E8691]">
+                      Configura tu proveedor LLM (Groq, Ollama local, Gemini, OpenAI o API compatible).
+                    </p>
+                  </div>
 
-                return (
-                  <>
-                    <form onSubmit={handleSaveAiEngine}>
-                      {/* Fila 1: Proveedor LLM */}
-                      <SplitRow
-                        title="Proveedor LLM"
-                        description="Selecciona el motor de inteligencia artificial. Groq ofrece plan gratuito rápido; Ollama y LM Studio corren 100% en tu equipo."
-                      >
-                        <div className="space-y-3">
+                  <button
+                    type="button"
+                    disabled={testingAiConn}
+                    onClick={handleTestAiConnection}
+                    className="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-300 hover:text-[#EDEDEF] border border-white/[0.1] hover:border-white/[0.2] disabled:opacity-50 rounded-md transition-colors cursor-pointer shrink-0"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${testingAiConn ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+                    <span>{testingAiConn ? 'Probando...' : 'Probar conexión'}</span>
+                  </button>
+                </header>
+
+                {gov?.airGappedMode === true && (
+                  <div role="status" className="mb-4 rounded-md border border-emerald-400/25 bg-emerald-400/[0.06] px-3.5 py-2.5 text-xs text-emerald-300">
+                    <strong className="font-medium">Modo Soberano Local</strong> · Consultas externas deshabilitadas en OMEGA.
+                  </div>
+                )}
+
+                {(() => {
+                  const currentPreset = findAiPreset(aiProviderDraft);
+                  const savedHint =
+                    aiProviderDraft === 'groq'
+                      ? desktopAiConfig?.groqHint
+                      : aiProviderDraft === 'openai'
+                        ? desktopAiConfig?.openAiHint
+                        : aiProviderDraft === 'omniroute'
+                          ? desktopAiConfig?.omniRouteHint
+                          : desktopAiConfig?.customProvider === aiProviderDraft
+                            ? desktopAiConfig?.customHint
+                            : '';
+                  const docsTargetUrl =
+                    aiProviderDraft === 'omniroute' && desktopAiConfig?.omniRouteDashboardUrl
+                      ? desktopAiConfig.omniRouteDashboardUrl
+                      : currentPreset.docsUrl;
+                  const detectedModels = Array.isArray(aiProbeResult?.detected_models)
+                    ? aiProbeResult.detected_models
+                    : [];
+
+                  return (
+                    <>
+                      <form onSubmit={handleSaveAiEngine}>
+                        <SplitRow
+                          title="Proveedor LLM"
+                          description="Groq ofrece plan gratuito rápido; Ollama y LM Studio corren 100% en tu equipo."
+                        >
                           <div
-                            className="grid grid-cols-2 sm:grid-cols-4 gap-2.5"
+                            className="grid grid-cols-2 sm:grid-cols-4 gap-2"
                             role="group"
                             aria-label="Selector de proveedor de IA"
                           >
@@ -1550,387 +1394,403 @@ export function SettingsPanel({
                                   key={preset.id}
                                   type="button"
                                   onClick={() => handleSelectAiPreset(preset.id)}
-                                  className={`rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer ${
+                                  className={`p-2.5 rounded-md border text-left transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer ${
                                     selected
-                                      ? 'border-[#2F6FED] bg-[#2F6FED]/12 text-white'
-                                      : 'border-white/[0.08] bg-white/[0.02] text-[#D2D6E2] hover:border-white/[0.18] hover:bg-white/[0.04]'
+                                      ? 'bg-white/[0.05] border-white/30 text-[#EDEDEF]'
+                                      : 'border-white/[0.07] bg-white/[0.015] text-zinc-300 hover:border-white/[0.16] hover:text-[#EDEDEF]'
                                   }`}
                                 >
-                                  <div className="text-xs font-medium truncate">
-                                    {preset.label.replace(' (Por defecto)', '').replace(' (Local)', ' Local')}
+                                  <div className="text-[13px] font-medium truncate">
+                                    {preset.label.replace(' (Por defecto)', '').replace(' (Local)', '')}
                                   </div>
-                                  <div className={`font-tech mt-0.5 text-[10.5px] truncate ${selected ? 'text-[#8BB2FF]' : 'text-[#8E95A5]'}`}>
+                                  <div className="mt-0.5 text-[11px] text-zinc-500 truncate">
                                     {preset.badge}
                                   </div>
                                 </button>
                               );
                             })}
                           </div>
+                        </SplitRow>
 
-                          {/* Acordeón colapsable "¿Cómo obtener tu API Key?" */}
-                          <div className="rounded-xl border border-white/[0.07] bg-white/[0.02]">
-                            <button
-                              type="button"
-                              onClick={() => setShowAiGuide((v) => !v)}
-                              aria-expanded={showAiGuide}
-                              className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-medium text-[#D2D6E2] hover:text-white cursor-pointer"
-                            >
-                              <span>¿Cómo obtener tu API Key?</span>
-                              <span className="font-tech text-[11px] text-[#8E95A5]">
-                                {showAiGuide ? 'Ocultar' : 'Ver pasos'}
-                              </span>
-                            </button>
+                        <SplitRow
+                          title="Credenciales y Modelo"
+                          description="Ingresa tu API Key y elige el modelo de conversación."
+                        >
+                          <div className="space-y-4">
+                            {(currentPreset.baseUrlEditable || aiProviderDraft !== 'groq') && (
+                              <div>
+                                <label htmlFor="omega-ai-base-url" className="block text-xs font-medium text-zinc-300 mb-1.5">
+                                  Endpoint Base URL (<code className="font-mono text-zinc-400">/v1</code>)
+                                </label>
+                                <input
+                                  id="omega-ai-base-url"
+                                  type="text"
+                                  value={aiBaseUrlDraft}
+                                  readOnly={!currentPreset.baseUrlEditable}
+                                  onChange={(e) => setAiBaseUrlDraft(e.target.value)}
+                                  placeholder="https://tu-servidor.com/v1 o http://host.docker.internal:11434/v1"
+                                  className={`w-full h-9 px-3 rounded-md border border-white/[0.08] text-xs font-mono text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30 ${
+                                    currentPreset.baseUrlEditable ? 'bg-white/[0.02]' : 'bg-white/[0.01] text-zinc-500'
+                                  }`}
+                                />
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              <div>
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <label htmlFor="omega-ai-key" className="text-xs font-medium text-zinc-300">
+                                    API Key {!currentPreset.keyRequired ? '(opcional)' : ''}
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    {savedHint && (
+                                      <span className="font-mono text-[10.5px] text-emerald-400">
+                                        Guardada ({savedHint})
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowAiGuide((v) => !v)}
+                                      aria-expanded={showAiGuide}
+                                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                                    >
+                                      ¿Cómo obtener tu API Key?
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="relative flex items-center">
+                                  <input
+                                    id="omega-ai-key"
+                                    type={showAiKey ? 'text' : 'password'}
+                                    value={aiKeyDraft}
+                                    onChange={(e) => setAiKeyDraft(e.target.value)}
+                                    placeholder={
+                                      savedHint
+                                        ? 'Vacío para conservar la clave actual'
+                                        : currentPreset.keyPlaceholder
+                                    }
+                                    className="w-full h-9 pl-3 pr-9 rounded-md bg-white/[0.02] border border-white/[0.08] text-xs font-mono text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <button
+                                    type="button"
+                                    aria-label={showAiKey ? 'Ocultar clave' : 'Mostrar clave'}
+                                    onClick={() => setShowAiKey((v) => !v)}
+                                    className="absolute right-2.5 text-zinc-500 hover:text-zinc-200 cursor-pointer"
+                                  >
+                                    {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label htmlFor="omega-ai-model" className="block text-xs font-medium text-zinc-300 mb-1.5">
+                                  Model ID
+                                </label>
+                                <input
+                                  id="omega-ai-model"
+                                  type="text"
+                                  value={aiModelDraft}
+                                  onChange={(e) => setAiModelDraft(e.target.value)}
+                                  placeholder={currentPreset.defaultModel || 'ej. llama3.2'}
+                                  className="w-full h-9 px-3 rounded-md bg-white/[0.02] border border-white/[0.08] text-xs font-mono text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                />
+                              </div>
+                            </div>
+
                             {showAiGuide && (
-                              <div className="px-3.5 pb-3.5 pt-1 border-t border-white/[0.06] space-y-2">
+                              <div className="border-l border-white/[0.12] pl-3.5 py-1 space-y-2 text-xs text-[#7E8691]">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <span className="text-xs text-[#D2D6E2]">{currentPreset.summary}</span>
+                                  <span className="text-zinc-300">{currentPreset.summary}</span>
                                   {docsTargetUrl && (
                                     <button
                                       type="button"
                                       onClick={() => openExternalLink(docsTargetUrl)}
-                                      className="inline-flex items-center gap-1 rounded-lg border border-[#2F6FED]/45 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-2.5 py-1 text-[11px] font-medium text-white cursor-pointer shrink-0"
+                                      className="inline-flex items-center gap-1 text-xs text-zinc-300 hover:text-[#EDEDEF] underline decoration-white/20 underline-offset-4 cursor-pointer shrink-0"
                                     >
                                       <span>{currentPreset.docsLabel}</span>
-                                      <ExternalLink className="h-3 w-3 text-[#6EA0FF]" />
+                                      <ExternalLink className="h-3 w-3" />
                                     </button>
                                   )}
                                 </div>
-                                <ol className="space-y-1 text-xs text-[#8E95A5] list-decimal list-inside leading-relaxed">
+                                <ol className="space-y-1 list-decimal list-inside leading-relaxed">
                                   {currentPreset.steps.map((step, i) => (
                                     <li key={i}>{step}</li>
                                   ))}
                                 </ol>
                               </div>
                             )}
-                          </div>
-                        </div>
-                      </SplitRow>
 
-                      {/* Fila 2: Credenciales y Modelo */}
-                      <SplitRow
-                        title="Credenciales y Modelo"
-                        description="Ingresa tu API Key y elige el modelo. Puedes seleccionar uno de los chips sugeridos."
-                        className={!(isDesktopApp && authSession?.role === 'ADMIN') ? 'border-b-0' : ''}
-                      >
-                        <div className="space-y-3.5">
-                          {(currentPreset.baseUrlEditable || aiProviderDraft !== 'groq') && (
-                            <div>
-                              <label htmlFor="omega-ai-base-url" className="block text-xs font-medium text-[#D2D6E2] mb-1">
-                                Endpoint Base URL (`/v1`)
-                              </label>
-                              <input
-                                id="omega-ai-base-url"
-                                type="text"
-                                value={aiBaseUrlDraft}
-                                readOnly={!currentPreset.baseUrlEditable}
-                                onChange={(e) => setAiBaseUrlDraft(e.target.value)}
-                                placeholder="https://tu-servidor.com/v1 o http://host.docker.internal:11434/v1"
-                                className={`w-full h-9.5 px-3 rounded-lg border border-white/[0.1] text-xs font-tech text-white placeholder:text-[#8E95A5] focus:outline-none focus:border-[#2F6FED] ${
-                                  currentPreset.baseUrlEditable ? 'bg-white/[0.03]' : 'bg-white/[0.015] text-[#8E95A5]'
-                                }`}
-                              />
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <label htmlFor="omega-ai-key" className="text-xs font-medium text-[#D2D6E2]">
-                                  API Key {!currentPreset.keyRequired ? '(opcional)' : ''}
-                                </label>
-                                {savedHint && (
-                                  <span className="font-tech text-[10.5px] text-[#30D158]">
-                                    Guardada ({savedHint})
-                                  </span>
-                                )}
+                            {(currentPreset.suggestedModels.length > 0 || detectedModels.length > 0) && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[11px] text-zinc-500 mr-1">
+                                  {detectedModels.length > 0 ? 'Detectados:' : 'Sugeridos:'}
+                                </span>
+                                {(detectedModels.length > 0 ? detectedModels : currentPreset.suggestedModels)
+                                  .slice(0, 8)
+                                  .map((m) => (
+                                    <button
+                                      key={m}
+                                      type="button"
+                                      onClick={() => setAiModelDraft(m)}
+                                      className={`font-mono text-[11px] rounded px-2 py-1 transition-colors cursor-pointer ${
+                                        aiModelDraft === m
+                                          ? 'bg-white/[0.1] text-[#EDEDEF]'
+                                          : 'bg-white/[0.03] hover:bg-white/[0.07] text-zinc-400 hover:text-zinc-200'
+                                      }`}
+                                    >
+                                      {m}
+                                    </button>
+                                  ))}
                               </div>
-                              <div className="relative flex items-center">
-                                <input
-                                  id="omega-ai-key"
-                                  type={showAiKey ? 'text' : 'password'}
-                                  value={aiKeyDraft}
-                                  onChange={(e) => setAiKeyDraft(e.target.value)}
-                                  placeholder={
-                                    savedHint
-                                      ? 'Vacío para conservar la clave actual'
-                                      : currentPreset.keyPlaceholder
-                                  }
-                                  className="w-full h-9.5 pl-3 pr-9 rounded-lg bg-white/[0.03] border border-white/[0.1] text-xs font-tech text-white placeholder:text-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                                />
-                                <button
-                                  type="button"
-                                  aria-label={showAiKey ? 'Ocultar clave' : 'Mostrar clave'}
-                                  onClick={() => setShowAiKey((v) => !v)}
-                                  className="absolute right-2.5 text-[#8E95A5] hover:text-white cursor-pointer"
-                                >
-                                  {showAiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                </button>
-                              </div>
-                            </div>
-
-                            <div>
-                              <label htmlFor="omega-ai-model" className="block text-xs font-medium text-[#D2D6E2] mb-1">
-                                Model ID
-                              </label>
-                              <input
-                                id="omega-ai-model"
-                                type="text"
-                                value={aiModelDraft}
-                                onChange={(e) => setAiModelDraft(e.target.value)}
-                                placeholder={currentPreset.defaultModel || 'ej. llama3.2'}
-                                className="w-full h-9.5 px-3 rounded-lg bg-white/[0.03] border border-white/[0.1] text-xs font-tech text-white placeholder:text-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                              />
-                            </div>
-                          </div>
-
-                          {(currentPreset.suggestedModels.length > 0 || detectedModels.length > 0) && (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[11px] text-[#8E95A5] mr-1">
-                                {detectedModels.length > 0 ? 'Detectados:' : 'Sugeridos:'}
-                              </span>
-                              {(detectedModels.length > 0 ? detectedModels : currentPreset.suggestedModels).slice(0, 8).map((m) => (
-                                <button
-                                  key={m}
-                                  type="button"
-                                  onClick={() => setAiModelDraft(m)}
-                                  className={`font-tech rounded-full border px-2.5 py-0.5 text-[10.5px] transition-colors cursor-pointer ${
-                                    aiModelDraft === m
-                                      ? 'border-[#2F6FED] bg-[#2F6FED]/15 text-white'
-                                      : 'border-white/[0.08] bg-white/[0.02] text-[#8E95A5] hover:text-white'
-                                  }`}
-                                >
-                                  {m}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {aiProbeResult && (
-                            <div
-                              className={`rounded-lg border px-3 py-2 text-xs ${
-                                aiProbeResult.ok
-                                  ? 'border-[#30D158]/35 bg-[#30D158]/10 text-[#B8F2C7]'
-                                  : 'border-[#FF453A]/35 bg-[#FF453A]/10 text-[#FFDAD6]'
-                              }`}
-                            >
-                              {aiProbeResult.message}
-                            </div>
-                          )}
-
-                          {isDesktopApp ? (
-                            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                              <button
-                                type="submit"
-                                disabled={savingAiConfig}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] hover:brightness-110 disabled:opacity-55 px-4 py-2 text-xs font-medium text-white transition-all cursor-pointer"
-                              >
-                                <Sparkles className="h-3.5 w-3.5" />
-                                <span>{savingAiConfig ? 'Aplicando...' : 'Guardar y activar IA'}</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 space-y-2">
-                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#8E95A5]">
-                                <span>En modo web copia estas variables a tu <code className="font-tech text-white">omega/.env</code>:</span>
-                                <button
-                                  type="button"
-                                  onClick={handleCopyEnvSnippet}
-                                  className="inline-flex items-center gap-1 rounded-md border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1 text-[11px] text-white cursor-pointer"
-                                >
-                                  {copiedEnvSnippet ? <Check className="h-3 w-3 text-[#30D158]" /> : <Copy className="h-3 w-3" />}
-                                  <span>{copiedEnvSnippet ? 'Copiado' : 'Copiar .env'}</span>
-                                </button>
-                              </div>
-                              <pre className="font-tech text-[11px] text-[#8E95A5] overflow-x-auto whitespace-pre-wrap">
-                                {buildEnvSnippetText()}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      </SplitRow>
-                    </form>
-
-                    {/* Fila 3: Correo SMTP local opcional (colapsado bajo Opciones avanzadas) */}
-                    {isDesktopApp && authSession?.role === 'ADMIN' && (
-                      <SplitRow
-                        title="Opciones avanzadas"
-                        description="Correo SMTP local opcional para códigos de recuperación y 2FA."
-                        className="border-b-0"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowSmtpAdvanced((prev) => !prev)}
-                              aria-expanded={showSmtpAdvanced}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#141923]/75 px-3 py-1.5 text-xs font-medium text-[#F2F2F4] hover:border-white/[0.14] transition-colors cursor-pointer"
-                            >
-                              <span>Opciones avanzadas {showSmtpAdvanced ? '▴' : '▾'}</span>
-                            </button>
-                            {desktopAiConfig?.smtpConfigured && (
-                              <span className="font-tech rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-[10.5px] text-emerald-400">
-                                SMTP activo
-                              </span>
                             )}
-                          </div>
 
-                          {showSmtpAdvanced && (
-                            <form onSubmit={handleSaveDesktopSmtp} className="rounded-xl bg-[#141923]/75 border border-white/[0.05] p-3.5 space-y-3">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                <input
-                                  type="text"
-                                  value={smtpHostDraft}
-                                  onChange={(e) => setSmtpHostDraft(e.target.value)}
-                                  placeholder="Servidor (ej. smtp.gmail.com)"
-                                  className="h-9.5 rounded-lg border border-white/[0.07] bg-[#0F131B]/80 px-3 text-xs text-white placeholder-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                                />
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={65535}
-                                  value={smtpPortDraft}
-                                  onChange={(e) => setSmtpPortDraft(e.target.value)}
-                                  placeholder="Puerto (ej. 587)"
-                                  className="h-9.5 rounded-lg border border-white/[0.07] bg-[#0F131B]/80 px-3 text-xs text-white placeholder-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                                />
-                                <input
-                                  type="email"
-                                  value={smtpUserDraft}
-                                  onChange={(e) => setSmtpUserDraft(e.target.value)}
-                                  placeholder="Usuario / Correo SMTP"
-                                  className="h-9.5 rounded-lg border border-white/[0.07] bg-[#0F131B]/80 px-3 text-xs text-white placeholder-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                                />
-                                <input
-                                  type="password"
-                                  value={smtpPassDraft}
-                                  onChange={(e) => setSmtpPassDraft(e.target.value)}
-                                  placeholder={desktopAiConfig?.smtpConfigured ? 'Nueva App Password (opcional)' : 'App Password'}
-                                  className="h-9.5 rounded-lg border border-white/[0.07] bg-[#0F131B]/80 px-3 text-xs text-white placeholder-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                                />
+                            {aiProbeResult && (
+                              <div
+                                className={`rounded-md border px-3 py-2 text-xs ${
+                                  aiProbeResult.ok
+                                    ? 'border-emerald-400/30 bg-emerald-400/[0.06] text-emerald-300'
+                                    : 'border-[#E5484D]/35 bg-[#E5484D]/[0.08] text-[#FFB4AE]'
+                                }`}
+                              >
+                                {aiProbeResult.message}
                               </div>
-                              <div className="flex flex-wrap items-center justify-between gap-2.5">
-                                <input
-                                  type="email"
-                                  value={smtpFromDraft}
-                                  onChange={(e) => setSmtpFromDraft(e.target.value)}
-                                  placeholder="Remitente (opcional)"
-                                  className="h-9.5 flex-1 min-w-[200px] rounded-lg border border-white/[0.07] bg-[#0F131B]/80 px-3 text-xs text-white placeholder-[#8E95A5] focus:outline-none focus:border-[#2F6FED]"
-                                />
+                            )}
+
+                            {isDesktopApp ? (
+                              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                                 <button
                                   type="submit"
-                                  disabled={savingSmtpConfig}
-                                  className="h-9.5 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#0F131B] hover:border-[#2F6FED]/50 disabled:opacity-50 px-3.5 text-xs font-medium text-white transition-colors cursor-pointer"
+                                  disabled={savingAiConfig}
+                                  className="h-8 inline-flex items-center gap-1.5 rounded-md bg-[#EDEDEF] hover:bg-white disabled:opacity-50 px-3.5 text-xs font-medium text-[#09090B] transition-colors cursor-pointer"
                                 >
-                                  <span>{savingSmtpConfig ? 'Aplicando SMTP...' : 'Guardar SMTP local'}</span>
+                                  <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
+                                  <span>{savingAiConfig ? 'Aplicando...' : 'Guardar y activar IA'}</span>
                                 </button>
                               </div>
-                            </form>
-                          )}
-                        </div>
-                      </SplitRow>
-                    )}
-                  </>
-                );
-              })()}
-            </section>
+                            ) : (
+                              <details className="group rounded-lg border border-white/[0.08] bg-[#0C0C0F] overflow-hidden">
+                                <summary className="h-9 px-3 flex items-center justify-between gap-2 bg-white/[0.02] text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer list-none select-none">
+                                  <span className="font-mono text-[11.5px]">
+                                    Variables para <span className="text-zinc-200">omega/.env</span> (modo web)
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleCopyEnvSnippet();
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-[#EDEDEF] transition-colors cursor-pointer"
+                                  >
+                                    {copiedEnvSnippet ? (
+                                      <>
+                                        <Check className="h-3 w-3 text-emerald-400" strokeWidth={1.75} />
+                                        <span className="text-emerald-400">Copiado</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-3 w-3" strokeWidth={1.75} />
+                                        <span>Copiar .env</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </summary>
+                                <pre className="border-t border-white/[0.06] p-3.5 font-mono text-[11.5px] leading-relaxed text-zinc-300 overflow-x-auto whitespace-pre-wrap select-all">
+                                  {buildEnvSnippetText()}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                        </SplitRow>
+                      </form>
+
+                      {isDesktopApp && authSession?.role === 'ADMIN' && (
+                        <SplitRow
+                          title="Opciones avanzadas"
+                          description="Correo SMTP local opcional para códigos de recuperación y 2FA."
+                        >
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowSmtpAdvanced((prev) => !prev)}
+                                aria-expanded={showSmtpAdvanced}
+                                className="h-8 inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.02] px-3 text-xs font-medium text-zinc-300 hover:border-white/[0.16] hover:text-[#EDEDEF] transition-colors cursor-pointer"
+                              >
+                                <span>Configurar SMTP local {showSmtpAdvanced ? '▴' : '▾'}</span>
+                              </button>
+                              {desktopAiConfig?.smtpConfigured && (
+                                <span className="font-mono text-[11px] text-emerald-400">
+                                  • SMTP activo
+                                </span>
+                              )}
+                            </div>
+
+                            {showSmtpAdvanced && (
+                              <form onSubmit={handleSaveDesktopSmtp} className="rounded-md bg-white/[0.015] border border-white/[0.07] p-3.5 space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  <input
+                                    type="text"
+                                    value={smtpHostDraft}
+                                    onChange={(e) => setSmtpHostDraft(e.target.value)}
+                                    placeholder="Servidor (ej. smtp.gmail.com)"
+                                    className="h-9 rounded-md border border-white/[0.08] bg-[#09090B] px-3 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={65535}
+                                    value={smtpPortDraft}
+                                    onChange={(e) => setSmtpPortDraft(e.target.value)}
+                                    placeholder="Puerto (ej. 587)"
+                                    className="h-9 rounded-md border border-white/[0.08] bg-[#09090B] px-3 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <input
+                                    type="email"
+                                    value={smtpUserDraft}
+                                    onChange={(e) => setSmtpUserDraft(e.target.value)}
+                                    placeholder="Usuario / Correo SMTP"
+                                    className="h-9 rounded-md border border-white/[0.08] bg-[#09090B] px-3 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <input
+                                    type="password"
+                                    value={smtpPassDraft}
+                                    onChange={(e) => setSmtpPassDraft(e.target.value)}
+                                    placeholder={desktopAiConfig?.smtpConfigured ? 'Nueva App Password (opcional)' : 'App Password'}
+                                    className="h-9 rounded-md border border-white/[0.08] bg-[#09090B] px-3 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                </div>
+                                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                                  <input
+                                    type="email"
+                                    value={smtpFromDraft}
+                                    onChange={(e) => setSmtpFromDraft(e.target.value)}
+                                    placeholder="Remitente (opcional)"
+                                    className="h-9 flex-1 min-w-[200px] rounded-md border border-white/[0.08] bg-[#09090B] px-3 text-xs text-[#EDEDEF] placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={savingSmtpConfig}
+                                    className="h-9 inline-flex items-center gap-1.5 rounded-md bg-[#EDEDEF] hover:bg-white disabled:opacity-50 px-3.5 text-xs font-medium text-[#09090B] transition-colors cursor-pointer"
+                                  >
+                                    <span>{savingSmtpConfig ? 'Aplicando SMTP...' : 'Guardar SMTP local'}</span>
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+                          </div>
+                        </SplitRow>
+                      )}
+                    </>
+                  );
+                })()}
+              </section>
             )}
 
-            {/* Bloque 3 — Motor RAG (Split-Row Untitled UI) */}
-            {activeSection === 'rag' && (
-            <section ref={ragRef}>
-              <SplitRow
-                title="Alcance de evidencia (Top-K)"
-                description="Define cuántos fragmentos evalúa el motor híbrido antes de redactar cada respuesta."
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {TOPK_OPTIONS.map((opt) => {
-                    const Icon = opt.icon;
-                    const selected = topK === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => onChangeTopK?.(opt.value)}
-                        className={`relative rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
-                          selected
-                            ? 'bg-[#2F6FED]/12 border-[#2F6FED] text-white'
-                            : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <Icon className={`h-4 w-4 ${selected ? 'text-[#2F6FED]' : 'text-[#8E95A5]'}`} />
-                          <RadioDot selected={selected} />
-                        </div>
-                        <div className="font-tech text-xs font-medium text-white">
-                          {opt.label}
-                        </div>
-                        <div className="mt-0.5 text-[11px] text-[#8E95A5]">
-                          {opt.caption}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </SplitRow>
+            {/* 3. Motor RAG */}
+            {currentSection === 'rag' && (
+              <section ref={ragRef}>
+                <header className="pb-5">
+                  <h2 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                    Motor RAG
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-[#7E8691]">
+                    Recuperación híbrida RRF
+                  </p>
+                </header>
 
-              <SplitRow
-                title="Fuentes prioritarias"
-                description="Prioriza qué reportes de investigación pesan más en tus consultas."
-                className="border-b-0"
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {SOURCE_OPTIONS.map((opt) => {
-                    const Icon = opt.icon;
-                    const selected = sourceScope === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => onChangeSourceScope?.(opt.value)}
-                        className={`relative rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
-                          selected
-                            ? 'bg-[#2F6FED]/12 border-[#2F6FED] text-white'
-                            : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <Icon className={`h-4 w-4 ${selected ? 'text-[#2F6FED]' : 'text-[#8E95A5]'}`} />
-                          <RadioDot selected={selected} />
-                        </div>
-                        <div className="text-xs font-semibold text-white">
-                          {opt.title}
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-[#8E95A5] leading-snug line-clamp-2">
-                          {opt.description}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </SplitRow>
-            </section>
+                <SplitRow
+                  title="Alcance de evidencia (Top-K)"
+                  description="Define cuántos fragmentos evalúa el motor híbrido antes de redactar cada respuesta."
+                >
+                  <div
+                    role="radiogroup"
+                    aria-label="Alcance de evidencia Top-K"
+                    className="inline-grid grid-cols-4 w-full sm:w-auto bg-white/[0.02] p-1 rounded-lg border border-white/[0.08]"
+                  >
+                    {TOPK_OPTIONS.map((opt) => {
+                      const selected = topK === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => onChangeTopK?.(opt.value)}
+                          className={`px-4 py-2 rounded-md text-center transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] cursor-pointer ${
+                            selected
+                              ? 'bg-white/[0.08] text-[#EDEDEF]'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          <div className="font-mono text-[13px] font-medium tabular-nums">
+                            {opt.value}
+                          </div>
+                          <div className={`text-[11px] mt-0.5 ${selected ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                            {opt.label}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SplitRow>
+
+                <SplitRow
+                  title="Fuentes prioritarias"
+                  description="Prioriza qué reportes de investigación pesan más en tus consultas."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {SOURCE_OPTIONS.map((opt) => {
+                      const selected = sourceScope === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => onChangeSourceScope?.(opt.value)}
+                          className={`rounded-lg border p-3.5 text-left transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer ${
+                            selected
+                              ? 'border-white/30 bg-white/[0.04] text-[#EDEDEF]'
+                              : 'border-white/[0.07] bg-white/[0.015] text-zinc-300 hover:border-white/[0.16]'
+                          }`}
+                        >
+                          <div className="text-[13px] font-medium text-[#EDEDEF]">
+                            {opt.title}
+                          </div>
+                          <p className="mt-1 text-xs text-[#7E8691] leading-relaxed">
+                            {opt.description}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SplitRow>
+              </section>
             )}
 
-            {/* Bloque 4 — Permisos y ética (Split-Row Untitled UI) */}
-            {activeSection === 'permisos' && (
-            <section ref={permisosRef}>
-              <SplitRow
-                title="Controles de privacidad"
-                description="Reglas de manejo temporal en RAM, verificación pasiva y consentimiento explícito."
-                className="border-b-0"
-              >
-                <div className="divide-y divide-white/[0.07]">
-                  <div className="pb-4 flex items-center justify-between gap-4">
+            {/* 4. Permisos y ética */}
+            {currentSection === 'permisos' && (
+              <section ref={permisosRef}>
+                <header className="pb-5">
+                  <h2 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                    Permisos y ética
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-[#7E8691]">
+                    Garantías defensivas, enlaces pasivos y consentimiento explícito.
+                  </p>
+                </header>
+
+                <div className="border-t border-white/[0.06] divide-y divide-white/[0.06]">
+                  <div className="py-4 flex items-center justify-between gap-4">
                     <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white">
+                        <span className="text-[13.5px] font-medium text-[#EDEDEF]">
                           Procesamiento en memoria (RAM)
                         </span>
-                        <span className="rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-2 py-0.5 text-[10.5px] font-medium text-[#CFE0FF]">
+                        <span className="font-mono text-[10.5px] text-zinc-500">
                           Obligatorio
                         </span>
                       </div>
-                      <p className="text-xs text-[#8E95A5]">
+                      <p className="text-xs text-[#7E8691]">
                         Analiza respaldos en memoria sin escribir copias en disco.
                       </p>
                     </div>
@@ -1943,10 +1803,10 @@ export function SettingsPanel({
 
                   <div className="py-4 flex items-center justify-between gap-4">
                     <div className="space-y-0.5 min-w-0">
-                      <div className="text-sm font-medium text-white">
+                      <div className="text-[13.5px] font-medium text-[#EDEDEF]">
                         Inspección pasiva de enlaces
                       </div>
-                      <p className="text-xs text-[#8E95A5]">
+                      <p className="text-xs text-[#7E8691]">
                         Verifica URLs sin establecer conexión con el destino.
                       </p>
                     </div>
@@ -1959,10 +1819,10 @@ export function SettingsPanel({
 
                   <div className="py-4 flex items-center justify-between gap-4">
                     <div className="space-y-0.5 min-w-0">
-                      <div className="text-sm font-medium text-white">
+                      <div className="text-[13.5px] font-medium text-[#EDEDEF]">
                         Confirmación previa en auditorías de dominio
                       </div>
-                      <p className="text-xs text-[#8E95A5]">
+                      <p className="text-xs text-[#7E8691]">
                         Solicita autorización explícita antes de consultar un dominio o correo.
                       </p>
                     </div>
@@ -1973,193 +1833,207 @@ export function SettingsPanel({
                     />
                   </div>
 
-                  <div className="pt-4 flex items-center justify-between gap-4">
+                  <div className="py-4 flex items-center justify-between gap-4">
                     <div className="space-y-0.5 min-w-0">
-                      <div className="text-sm font-medium text-white">
+                      <div className="text-[13.5px] font-medium text-[#EDEDEF]">
                         Sin caché de credenciales en navegador
                       </div>
-                      <p className="text-xs text-[#8E95A5]">
+                      <p className="text-xs text-[#7E8691]">
                         OMEGA nunca persiste contraseñas ni conversaciones en localStorage.
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-[10.5px] font-medium text-emerald-400">
-                      Activo
+                    <span className="shrink-0 inline-flex items-center gap-1.5 font-mono text-[11px] text-emerald-400">
+                      <span className="h-[5px] w-[5px] rounded-full bg-emerald-400" />
+                      <span>Activo</span>
                     </span>
                   </div>
                 </div>
-              </SplitRow>
-            </section>
+              </section>
             )}
 
-            {/* Bloque 5 — Corpus indexado (Split-Row Untitled UI) */}
-            {activeSection === 'corpus' && (
-            <section ref={corpusRef}>
-              <SplitRow
-                title="Ingesta web CTI en RAM"
-                description="Extrae indicadores técnicos de una URL de investigación directamente en memoria."
-              >
-                <div className="space-y-2">
-                  <div className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-[10.5px] font-medium text-emerald-400">
-                    Solo en memoria
+            {/* 5. Corpus indexado */}
+            {currentSection === 'corpus' && (
+              <section ref={corpusRef}>
+                <header className="pb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
+                      Corpus indexado
+                    </h2>
+                    <p className="mt-0.5 font-mono text-[12px] text-[#7E8691]">
+                      {stats
+                        ? `${stats.reports} Reportes · ${stats.chunks} Fragmentos · ${Number(stats.iocs || 0).toLocaleString('en-US')} IOCs`
+                        : 'Documentos e informes CTI verificados e ingesta web en memoria.'}
+                    </p>
                   </div>
+                  {authSession && (
+                    <button
+                      type="button"
+                      disabled={discoveryBusy}
+                      onClick={async () => {
+                        setDiscoveryBusy(true);
+                        try {
+                          await scanCorpusDiscovery();
+                          const items = await fetchCorpusDiscovery('PENDING');
+                          setDiscoveryQueue(Array.isArray(items) ? items : []);
+                        } catch {
+                          // ignore
+                        } finally {
+                          setDiscoveryBusy(false);
+                        }
+                      }}
+                      className="h-8 inline-flex items-center gap-1.5 rounded-md border border-white/[0.1] hover:border-white/[0.2] bg-white/[0.02] hover:bg-white/[0.05] disabled:opacity-50 px-3 text-xs font-medium text-zinc-300 hover:text-[#EDEDEF] transition-colors cursor-pointer shrink-0"
+                    >
+                      <Globe className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+                      <span>Buscar en RSS</span>
+                    </button>
+                  )}
+                </header>
+
+                <SplitRow
+                  title="Ingesta web CTI en RAM"
+                  description="Extrae indicadores técnicos de una URL de investigación directamente en memoria."
+                >
                   <OmegaWebIntelCard
                     compact
                     title="Ingesta web CTI (RAM)"
                     subtitle="Extrae IPs, dominios y CVEs de una URL técnica en memoria."
                   />
-                </div>
-              </SplitRow>
+                </SplitRow>
 
-              <SplitRow
-                title="Cola de descubrimiento RSS/Atom"
-                description="Reportes nuevos de Citizen Lab, Amnesty Tech y Google TAG pendientes de aprobación."
-              >
-                <div className="space-y-3">
-                  {authSession ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={discoveryBusy}
-                        onClick={async () => {
-                          setDiscoveryBusy(true);
-                          try {
-                            const items = await fetchCorpusDiscovery('PENDING');
-                            setDiscoveryQueue(Array.isArray(items) ? items : []);
-                          } catch {} finally {
-                            setDiscoveryBusy(false);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-1.5 text-xs text-white hover:bg-white/[0.08] cursor-pointer disabled:opacity-50"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${discoveryBusy ? 'animate-spin' : ''}`} />
-                        <span>Cargar cola</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={discoveryBusy}
-                        onClick={async () => {
-                          setDiscoveryBusy(true);
-                          try {
-                            await scanCorpusDiscovery();
-                            const items = await fetchCorpusDiscovery('PENDING');
-                            setDiscoveryQueue(Array.isArray(items) ? items : []);
-                          } catch {} finally {
-                            setDiscoveryBusy(false);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-[#2F6FED]/25 cursor-pointer disabled:opacity-50"
-                      >
-                        <Globe className="h-3.5 w-3.5 text-[#6EA0FF]" />
-                        <span>Buscar en RSS</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#8E95A5]">Inicia sesión para gestionar la cola RSS.</p>
-                  )}
-
-                  {discoveryQueue.length > 0 ? (
-                    <div className="divide-y divide-white/[0.06] border-t border-white/[0.06] max-h-60 overflow-y-auto">
-                      {discoveryQueue.map((item) => (
-                        <div key={item.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-xs font-medium text-white truncate">{item.title}</div>
-                            <div className="text-[11px] text-[#8E95A5] truncate">
-                              {item.source_name} · {item.source_url}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              disabled={discoveryBusy}
-                              onClick={async () => {
-                                setDiscoveryBusy(true);
-                                try {
-                                  await approveCorpusCandidate(item.id);
-                                  setDiscoveryQueue((q) => q.filter((x) => x.id !== item.id));
-                                } catch {} finally {
-                                  setDiscoveryBusy(false);
-                                }
-                              }}
-                              className="rounded-md border border-[#30D158]/40 bg-[#30D158]/12 px-2.5 py-1 text-[11px] font-medium text-[#30D158] hover:bg-[#30D158]/22 cursor-pointer"
-                            >
-                              Aprobar e indexar
-                            </button>
-                            <button
-                              type="button"
-                              disabled={discoveryBusy}
-                              onClick={async () => {
-                                setDiscoveryBusy(true);
-                                try {
-                                  await rejectCorpusCandidate(item.id);
-                                  setDiscoveryQueue((q) => q.filter((x) => x.id !== item.id));
-                                } catch {} finally {
-                                  setDiscoveryBusy(false);
-                                }
-                              }}
-                              className="rounded-md border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#8E95A5] hover:text-[#FFB4AE] cursor-pointer"
-                            >
-                              Rechazar
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : authSession ? (
-                    <div className="rounded-xl border border-dashed border-white/[0.08] px-4 py-3 text-xs text-[#8E95A5]">
-                      Sin reportes pendientes en la cola. Usa «Buscar en RSS» para comprobar nuevas publicaciones.
-                    </div>
-                  ) : null}
-                </div>
-              </SplitRow>
-
-              <SplitRow
-                title="Documentos e informes indexados"
-                description="Catálogo verificado disponible para consultas con citas."
-                className="border-b-0"
-              >
-                <div className="divide-y divide-white/[0.06] max-h-64 overflow-y-auto border-t border-white/[0.06]">
-                  {sources.length > 0 ? (
-                    sources.map((rep, idx) => (
-                      <div
-                        key={`${rep.title}-${idx}`}
-                        className="py-3 px-2 rounded-lg hover:bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors"
-                      >
-                        <span className="text-[13px] text-white break-words sm:truncate">
-                          {rep.title}
-                        </span>
-
-                        <div className="flex items-center gap-2.5 shrink-0">
-                          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-[#D2D6E2]">
-                            {rep.organization}
-                          </span>
-                          <span className="font-tech text-[11px] text-[#8E95A5]">
-                            {formatDateTag(rep.ingested_at || rep.publication_date)}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-4 flex items-center justify-between gap-3 text-xs text-[#8E95A5]">
-                      <span>
-                        {authSession
-                          ? 'Sin fuentes indexadas en PostgreSQL.'
-                          : 'Inicia sesión para consultar las fuentes indexadas.'}
-                      </span>
-                      {!authSession && (
+                <SplitRow
+                  title="Cola de descubrimiento RSS/Atom"
+                  description="Reportes nuevos de Citizen Lab, Amnesty Tech y Google TAG pendientes de aprobación."
+                >
+                  <div className="space-y-3">
+                    {authSession ? (
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => onOpenAuth?.('Inicia sesión para consultar el corpus CTI.')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#2F6FED]/45 bg-[#2F6FED]/15 hover:bg-[#2F6FED]/25 px-2.5 py-1 text-xs text-white cursor-pointer"
+                          disabled={discoveryBusy}
+                          onClick={async () => {
+                            setDiscoveryBusy(true);
+                            try {
+                              const items = await fetchCorpusDiscovery('PENDING');
+                              setDiscoveryQueue(Array.isArray(items) ? items : []);
+                            } catch {
+                              // ignore
+                            } finally {
+                              setDiscoveryBusy(false);
+                            }
+                          }}
+                          className="h-8 inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16] px-3 text-xs text-zinc-300 hover:text-[#EDEDEF] cursor-pointer disabled:opacity-50"
                         >
-                          <RefreshCw className="h-3 w-3" />
-                          <span>Entrar</span>
+                          <RefreshCw className={`h-3.5 w-3.5 ${discoveryBusy ? 'animate-spin' : ''}`} />
+                          <span>Cargar cola</span>
                         </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </SplitRow>
-            </section>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[#7E8691]">Inicia sesión para gestionar la cola RSS.</p>
+                    )}
+
+                    {discoveryQueue.length > 0 ? (
+                      <div className="divide-y divide-white/[0.06] border-t border-white/[0.06] max-h-60 overflow-y-auto">
+                        {discoveryQueue.map((item) => (
+                          <div key={item.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium text-[#EDEDEF] truncate">{item.title}</div>
+                              <div className="text-[11px] text-[#7E8691] truncate">
+                                {item.source_name} · {item.source_url}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={discoveryBusy}
+                                onClick={async () => {
+                                  setDiscoveryBusy(true);
+                                  try {
+                                    await approveCorpusCandidate(item.id);
+                                    setDiscoveryQueue((q) => q.filter((x) => x.id !== item.id));
+                                  } catch {
+                                    // ignore
+                                  } finally {
+                                    setDiscoveryBusy(false);
+                                  }
+                                }}
+                                className="rounded-md bg-[#EDEDEF] hover:bg-white px-2.5 py-1 text-[11px] font-medium text-[#09090B] cursor-pointer"
+                              >
+                                Aprobar e indexar
+                              </button>
+                              <button
+                                type="button"
+                                disabled={discoveryBusy}
+                                onClick={async () => {
+                                  setDiscoveryBusy(true);
+                                  try {
+                                    await rejectCorpusCandidate(item.id);
+                                    setDiscoveryQueue((q) => q.filter((x) => x.id !== item.id));
+                                  } catch {
+                                    // ignore
+                                  } finally {
+                                    setDiscoveryBusy(false);
+                                  }
+                                }}
+                                className="rounded-md border border-white/[0.08] px-2.5 py-1 text-[11px] text-zinc-400 hover:text-[#E5484D] hover:border-[#E5484D]/30 cursor-pointer"
+                              >
+                                Rechazar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : authSession ? (
+                      <div className="rounded-md border border-dashed border-white/[0.08] px-4 py-3 text-xs text-[#7E8691]">
+                        Sin reportes pendientes en la cola. Usa «Buscar en RSS» para comprobar nuevas publicaciones.
+                      </div>
+                    ) : null}
+                  </div>
+                </SplitRow>
+
+                <SplitRow
+                  title="Documentos e informes indexados"
+                  description="Catálogo verificado disponible para consultas con citas."
+                >
+                  <div className="divide-y divide-white/[0.06] max-h-64 overflow-y-auto border-t border-white/[0.06]">
+                    {sources.length > 0 ? (
+                      sources.map((rep, idx) => (
+                        <div
+                          key={`${rep.title}-${idx}`}
+                          className="py-3 hover:bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors"
+                        >
+                          <span className="text-[13px] text-[#EDEDEF] break-words sm:truncate">
+                            {rep.title}
+                          </span>
+
+                          <div className="flex items-center gap-2.5 shrink-0 font-mono text-[11px] text-[#7E8691]">
+                            <span>{rep.organization}</span>
+                            <span className="text-zinc-600">·</span>
+                            <span>{formatDateTag(rep.ingested_at || rep.publication_date)}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-4 flex items-center justify-between gap-3 text-xs text-[#7E8691]">
+                        <span>
+                          {authSession
+                            ? 'Sin fuentes indexadas en PostgreSQL.'
+                            : 'Inicia sesión para consultar las fuentes indexadas.'}
+                        </span>
+                        {!authSession && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenAuth?.('Inicia sesión para consultar el corpus CTI.')}
+                            className="h-7 inline-flex items-center gap-1 rounded-md border border-white/[0.1] hover:border-white/[0.2] px-2.5 text-xs text-zinc-300 hover:text-[#EDEDEF] cursor-pointer"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            <span>Entrar</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </SplitRow>
+              </section>
             )}
           </div>
         </div>

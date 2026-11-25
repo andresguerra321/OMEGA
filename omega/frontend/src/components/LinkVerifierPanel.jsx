@@ -274,7 +274,7 @@ export function LinkVerifierPanel({
     return (
       <div
         ref={resultContainerRef}
-        className="animate-fade-up w-full max-w-[780px] mx-auto px-2 sm:px-4 pt-2 pb-12 space-y-5"
+        className="animate-fade-up w-full max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-2 sm:px-4 pt-2 pb-12 space-y-5"
       >
         {/* Barra superior */}
         <header className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
@@ -642,7 +642,7 @@ export function LinkVerifierPanel({
   // --- ESTADO 1: COMMAND BOX MODERNA DE 2 NIVELES ---
   return (
     <div className="relative animate-fade-up flex-1 flex flex-col items-center pt-14 sm:pt-16 pb-12 px-3 sm:px-6 overflow-hidden">
-      <div className="relative z-10 w-full max-w-2xl mt-[4vh]">
+      <div className="relative z-10 w-full max-w-3xl lg:max-w-4xl mt-[4vh]">
         {/* Selector limpio tipo píldora centrado encima del título */}
         <div className="mb-5 flex justify-center">
           <div className="inline-flex rounded-full border border-white/[0.07] bg-[#0F131B]/80 backdrop-blur-xl p-1">

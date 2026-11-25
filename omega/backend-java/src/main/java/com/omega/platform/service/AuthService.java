@@ -40,6 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountSeatService seats;
+
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
@@ -108,6 +111,7 @@ public class AuthService {
 
         TenantProfile selectedProfile = request.profile() != null ? request.profile() : TenantProfile.GENERAL;
         TenantEntity tenant = tenantRepository.save(new TenantEntity(uniqueSlug, orgName, selectedProfile));
+        tenant.setAccountType(hasOrganization ? "ORGANIZATION" : "INDIVIDUAL");
         Role assignedRole = hasOrganization ? Role.ADMIN : Role.ANALYST;
         UserEntity adminUser = userRepository.save(new UserEntity(
                 tenant.getId(),
@@ -115,6 +119,8 @@ public class AuthService {
                 passwordEncoder.encode(request.password()),
                 request.fullName().trim(),
                 assignedRole));
+        tenant.setOwnerUserId(adminUser.getId());
+        tenantRepository.save(tenant);
 
         expedienteRepository.save(new ExpedienteEntity(
                 tenant.getId(),
@@ -137,6 +143,7 @@ public class AuthService {
         TenantProfile selectedProfile = request.profile() != null ? request.profile() : TenantProfile.GENERAL;
         TenantEntity tenant = tenantRepository.save(
                 new TenantEntity(normalizedSlug, request.tenantName().trim(), selectedProfile));
+        tenant.setAccountType("ORGANIZATION");
         String normalizedEmail = request.adminEmail().trim().toLowerCase(Locale.ROOT);
         UserEntity adminUser = userRepository.save(new UserEntity(
                 tenant.getId(),
@@ -144,6 +151,8 @@ public class AuthService {
                 passwordEncoder.encode(request.adminPassword()),
                 request.adminFullName().trim(),
                 Role.ADMIN));
+        tenant.setOwnerUserId(adminUser.getId());
+        tenantRepository.save(tenant);
 
         return issueTokenResponse(adminUser, tenant.getSlug(), tenant.getProfile());
     }
@@ -312,6 +321,7 @@ public class AuthService {
     public UserSummaryResponse createUserInCurrentTenant(OmegaPrincipal adminPrincipal,
             CreateTenantUserRequest request) {
         UUID tenantId = adminPrincipal.tenantId();
+        if (seats != null) seats.requireAvailableSeat(tenantId);
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, normalizedEmail)) {
             throw new ConflictException("El correo ya se encuentra registrado en el tenant actual");
@@ -363,7 +373,10 @@ public class AuthService {
                 tenantSlug,
                 principal.email(),
                 principal.role(),
-                profile);
+                profile,
+                tenant != null ? tenant.getAccountType() : "UNCLASSIFIED",
+                tenant != null && ("INDIVIDUAL".equals(tenant.getAccountType())
+                        ? principal.userId().equals(tenant.getOwnerUserId()) : principal.role() == Role.ADMIN));
     }
 
     public void recordLogout(OmegaPrincipal principal) {
@@ -378,6 +391,7 @@ public class AuthService {
     }
 
     private AuthTokenResponse issueTokenResponse(UserEntity user, String tenantSlug, TenantProfile profile) {
+        TenantEntity account = tenantRepository.findByIdAndActiveTrue(user.getTenantId()).orElse(null);
         String token = jwtService.issueToken(
                 user.getId(),
                 user.getTenantId(),
@@ -396,6 +410,10 @@ public class AuthService {
                 null,
                 null,
                 null,
-                profile != null ? profile : TenantProfile.GENERAL);
+                null,
+                profile != null ? profile : TenantProfile.GENERAL,
+                account != null ? account.getAccountType() : "UNCLASSIFIED",
+                account != null && ("INDIVIDUAL".equals(account.getAccountType())
+                        ? user.getId().equals(account.getOwnerUserId()) : user.getRole() == Role.ADMIN));
     }
 }

@@ -80,6 +80,9 @@ public class DocumentIngestionService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private StorageKeyGenerator storageKeyGenerator;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
+
     public DocumentIngestionService(
             OmegaProperties properties,
             ExpedienteAuthorizationService authorizationService,
@@ -138,6 +141,8 @@ public class DocumentIngestionService {
         Path tempPdfPath = tempDir.resolve(UUID.randomUUID() + ".pdf");
         temporaryFiles.register(tempPdfPath);
         boolean handedOffToAsync = false;
+        UUID creditReservation = null;
+        boolean metered = credits != null && credits.enforced();
 
         try {
             String sha256Hash = streamValidateMagicBytesAndHash(file, tempPdfPath, maxBytes, allowExtraFormats);
@@ -162,6 +167,12 @@ public class DocumentIngestionService {
                 recordRejectedDocument(principal, expediente.getId(), sanitizedFilename, sha256Hash,
                         unsafeEx instanceof UnsafeDocumentException ? "UNSAFE_PDF" : "INVALID_FORMAT", tempPdfPath);
                 throw unsafeEx;
+            }
+
+            if (metered) {
+                creditReservation = credits.reserve(principal.tenantId(), principal.userId(),
+                        com.omega.platform.billing.CreditOperation.LEGAL_INDEX,
+                        com.omega.platform.billing.CreditOperation.pageCredits(inspection.totalPages(), true), null);
             }
 
             // Confirmar fila PROCESSING + auditoría antes de lanzar el hilo @Async
@@ -218,6 +229,7 @@ public class DocumentIngestionService {
             if (savedDoc == null) {
                 throw new IllegalStateException("No se pudo registrar el documento en PostgreSQL.");
             }
+            if (metered) credits.attachReference(principal.tenantId(), creditReservation, "document:" + savedDoc.getId());
 
             // Almacenamiento opcional S3-compatible (MinIO): solo si la retención está
             // explícitamente habilitada.
@@ -234,8 +246,12 @@ public class DocumentIngestionService {
                     long sanitizedSize = Files.size(tempPdfPath);
                     objectStoragePort.putObject(vaultBucket, objectKey, in, sanitizedSize, contentType);
                 } catch (IOException ex) {
+                    markIngestFailedBeforeAsync(principal.tenantId(), savedDoc.getId(), "STORAGE_READ_FAILED", tempPdfPath);
                     throw new com.omega.platform.storage.ObjectStorageException(
                             "Error leyendo el documento sanitizado para almacenamiento.", ex);
+                } catch (RuntimeException storageEx) {
+                    markIngestFailedBeforeAsync(principal.tenantId(), savedDoc.getId(), "STORAGE_UNAVAILABLE", tempPdfPath);
+                    throw storageEx;
                 }
                 uploadedBucket = vaultBucket;
                 uploadedObjectKey = objectKey;
@@ -299,9 +315,24 @@ public class DocumentIngestionService {
                 throw new IllegalStateException("Cola de ingestión asíncrona saturada; intente nuevamente.", ex);
             }
 
+            if (metered) {
+                final UUID reservation = creditReservation;
+                future.whenComplete((status, failure) -> {
+                    try {
+                        int charged = status == DocumentStatus.INDEXED && failure == null
+                                ? documentRepository.findByIdAndTenantId(savedDoc.getId(), principal.tenantId())
+                                    .map(doc -> com.omega.platform.billing.CreditOperation.pageCredits(doc.getTotalPages(), doc.isOcrApplied())).orElse(0) : 0;
+                        credits.settle(principal.tenantId(), reservation, charged);
+                    } catch (RuntimeException ex) {
+                        log.error("Liquidación documental pendiente: {}", reservation);
+                    }
+                });
+            }
+
             return new IngestAcceptedResult(toMetadataResponse(savedDoc), future);
         } finally {
             if (!handedOffToAsync) {
+                if (metered) credits.settle(principal.tenantId(), creditReservation, 0);
                 temporaryFiles.purge(tempPdfPath);
                 if (legalQuotaService != null) {
                     legalQuotaService.releaseUploadReservation(quotaReservation);
@@ -542,6 +573,24 @@ public class DocumentIngestionService {
         return tenantRepository.findByIdAndActiveTrue(tenantId)
                 .map(t -> t.getProfile() != null ? t.getProfile().name() : TenantProfile.GENERAL.name())
                 .orElse(TenantProfile.GENERAL.name());
+    }
+
+    private void markIngestFailedBeforeAsync(UUID tenantId, UUID documentId, String failureCode, Path tempPdfPath) {
+        Instant deletedAt = temporaryFiles.purge(tempPdfPath);
+        try {
+            transactionTemplate.executeWithoutResult(tx -> documentRepository
+                    .findByIdAndTenantId(documentId, tenantId)
+                    .ifPresent(doc -> {
+                        doc.setStatus(DocumentStatus.FAILED);
+                        doc.setFailureCode(failureCode);
+                        if (deletedAt != null) {
+                            doc.setTempDeletedAt(deletedAt);
+                        }
+                        documentRepository.saveAndFlush(doc);
+                    }));
+        } catch (Exception ex) {
+            log.warn("No se pudo marcar como FAILED el documento {} tras error previo a async", documentId);
+        }
     }
 
     public record IngestAcceptedResult(

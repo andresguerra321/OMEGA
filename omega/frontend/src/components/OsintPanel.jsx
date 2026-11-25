@@ -75,7 +75,6 @@ export function OsintPanel({
       if (initialAsset.value) {
         setAssetValue(String(initialAsset.value).trim());
       }
-      setConsentChecked(false);
     }, 0);
     return () => clearTimeout(timer);
   }, [initialJumpKey, initialAsset]);
@@ -165,7 +164,12 @@ export function OsintPanel({
 
   async function handleSubmitAudit(e) {
     e.preventDefault();
-    if (!consentChecked || isScanning) return;
+    if (isScanning) return;
+    if (!consentChecked) {
+      setShowConfigPopover(true);
+      setErrorMsg('Activa la confirmación de titularidad autorizada en «OSINT + HIBP» antes de auditar.');
+      return;
+    }
     const validation =
       assetType === 'institutional_email'
         ? validateEmail(assetValue)
@@ -240,7 +244,7 @@ export function OsintPanel({
     return (
       <div
         ref={reportContainerRef}
-        className="animate-fade-up w-full max-w-[700px] mx-auto pt-2 pb-12 space-y-6"
+        className="animate-fade-up w-full max-w-[1280px] 2xl:max-w-[1440px] mx-auto pt-2 pb-12 space-y-6"
       >
         {/* Cabecera */}
         <header className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.07]">
@@ -550,7 +554,7 @@ export function OsintPanel({
 
   return (
     <div className="relative animate-fade-up flex-1 flex flex-col items-center pt-14 sm:pt-16 pb-12 px-3 sm:px-6 overflow-hidden">
-      <div className="relative z-10 w-full max-w-2xl mt-[4vh]">
+      <div className="relative z-10 w-full max-w-3xl lg:max-w-4xl mt-[4vh]">
         {/* Selector limpio tipo píldora centrado encima del título */}
         <div className="mb-5 flex justify-center">
           <div className="inline-flex rounded-full border border-white/[0.07] bg-[#0F131B]/80 backdrop-blur-xl p-1">
@@ -672,7 +676,7 @@ export function OsintPanel({
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${consentChecked ? 'bg-[#30D158]' : 'bg-[#FF9F0A]'}`} />
                 <Search className="h-3.5 w-3.5 text-[#8E95A5]" />
-                <span>OSINT + HIBP</span>
+                <span>{consentChecked ? 'OSINT + HIBP' : 'OSINT + HIBP · Confirmar titularidad'}</span>
               </button>
 
               {showConfigPopover && (
@@ -709,8 +713,8 @@ export function OsintPanel({
 
             <button
               type="submit"
-              disabled={!assetValue.trim() || !consentChecked || isScanning}
-              title={!consentChecked ? 'Activa la confirmación de titularidad en «OSINT + HIBP»' : undefined}
+              disabled={!assetValue.trim() || isScanning}
+              title={!consentChecked ? 'Haz clic para confirmar titularidad en «OSINT + HIBP»' : undefined}
               className="h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-sm disabled:bg-white/[0.07] disabled:text-[#8E95A5] disabled:shadow-none px-4 text-xs font-semibold inline-flex items-center gap-1.5 active:scale-[0.97] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
             >
               {isScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}

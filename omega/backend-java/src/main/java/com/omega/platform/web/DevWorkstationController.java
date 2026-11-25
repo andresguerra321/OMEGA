@@ -23,6 +23,7 @@ public class DevWorkstationController {
     }
 
     @PostMapping("/audit")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.DEV_AUDIT)
     public WorkstationAuditResponse runAudit(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @RequestBody WorkstationAuditRequest request

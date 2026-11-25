@@ -53,7 +53,7 @@ export function validateEmail(raw) {
     CONSECUTIVE_SAME_LETTER_RE.test(localPart) ||
     HOST_CONSONANT_RUN_RE.test(localPart) ||
     INTERLEAVED_SMASH_RE.test(localPart) ||
-    (localSegments.length >= 3 && localSegments.some((seg) => /^\d+$/.test(seg))) ||
+    (localSegments.length >= 3 && localSegments.every((seg) => /^\d+$/.test(seg))) ||
     !validateDomain(domainPart).valid
   ) {
     return {
@@ -530,7 +530,7 @@ export function validateIocInput(raw) {
 /** Lista multilínea de indicadores (máx. N líneas): separa válidos e inválidos. */
 export function validateIocList(raw, { maxLines = 200 } = {}) {
   const lines = stripUnsafeChars(raw, 100000)
-    .split(/\r?\n/)
+    .split(/[\r\n,;\s]+/)
     .map((l) => l.trim())
     .filter(Boolean);
   if (lines.length === 0) {

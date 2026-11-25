@@ -18,14 +18,14 @@ const hooks = registerHooks({
   resolve(specifier, context, next) {
     if (context.parentURL === componentUrl.href) {
       if (specifier === '../lib/api') return { url: apiUrl, shortCircuit: true };
-      if (specifier === './DossierExportButtons' || specifier === './OmegaLogo' || specifier === './OmegaBrandMark' || specifier === './SaasFleetCard') return { url: stubUrl, shortCircuit: true };
+      if (specifier === './CommercialDocumentsPanel' || specifier === './DossierExportButtons' || specifier === './OmegaLogo' || specifier === './OmegaBrandMark' || specifier === './SaasFleetCard' || specifier === './BillingPanel') return { url: stubUrl, shortCircuit: true };
       if (specifier.startsWith('../lib/')) return { url: new URL(`${specifier}.js`, componentUrl).href, shortCircuit: true };
     }
     return next(specifier, context);
   },
   load(url, context, next) {
     if (url === componentUrl.href) return { format: 'module', source: code, shortCircuit: true };
-    if (url === stubUrl) return { format: 'module', source: 'export default () => null; export const OmegaLogo = () => null; export const OmegaBrandMark = () => null; export const SaasFleetCard = () => null;', shortCircuit: true };
+    if (url === stubUrl) return { format: 'module', source: 'export default () => null; export const OmegaLogo = () => null; export const OmegaBrandMark = () => null; export const SaasFleetCard = () => null; export const BillingPanel = () => null; export const CommercialDocumentsPanel = () => null;', shortCircuit: true };
     if (url === apiUrl) return { format: 'module', source: names.map(name =>
       `export const ${name} = (...args) => globalThis.__omegaRecoveryTestApi.${name}(...args);`).join('\n'), shortCircuit: true };
     return next(url, context);
@@ -62,6 +62,15 @@ async function input(suffix, value) {
     element.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
 }
+
+test('desktop login accurately describes memory-only sessions instead of promising thirty days', async () => {
+  dom.window.__TAURI_INTERNALS__ = { invoke: async () => ({}) };
+  try {
+    await act(async () => root.render(createElement(AuthAccessForm)));
+    assert.match(container.textContent, /mientras la app está abierta/);
+    assert.doesNotMatch(container.textContent, /30 días/);
+  } finally { delete dom.window.__TAURI_INTERNALS__; }
+});
 async function submit() {
   await act(async () => container.querySelector('form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
 }

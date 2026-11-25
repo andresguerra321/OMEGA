@@ -39,6 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class HybridRagQueryService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService creditService;
+
     public static final String LEGAL_ABSTENTION = "No hay fragmentos relevantes suficientes en este expediente para responder. No es asesoría legal.";
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -85,6 +88,7 @@ public class HybridRagQueryService {
     }
 
     @Transactional
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.AI_QUERY)
     public RagQueryResponse queryExpediente(
             OmegaPrincipal principal,
             UUID expedienteId,
@@ -93,7 +97,7 @@ public class HybridRagQueryService {
         authorizationService.requireReadAccess(principal, expedienteId);
         if (legalAi != null) legalAi.requireConsent(principal);
         if (legalQuotaService != null) legalQuotaService.checkQueryRate(principal);
-        if (commercialSaasService != null && principal != null) {
+        if (commercialSaasService != null && principal != null && creditService == null) {
             boolean sovereign = sovereignModePolicy != null && sovereignModePolicy.enabled();
             try {
                 commercialSaasService.consumeAiQuota(principal.tenantId(), principal.userId(), sovereign, false);

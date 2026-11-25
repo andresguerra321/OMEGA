@@ -31,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
             "/actuator/health",
             "/api/v1/auth/config",
+            "/api/v1/public/commercial",
             "/api/v1/auth/csrf",
             "/api/v1/auth/login",
             "/api/v1/auth/logout",
@@ -40,7 +41,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/v1/auth/password-reset/confirm",
             "/api/v1/auth/mfa/verify",
             "/api/v1/auth/mfa/resend-email",
-            "/api/v1/integrations/github/webhook"
+            "/api/v1/integrations/github/webhook",
+            "/api/v1/billing/webhooks/mercadopago"
     );
 
     private final JwtService jwtService;

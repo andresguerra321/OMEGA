@@ -1,0 +1,29 @@
+{
+  "config": {
+    "w": 1920,
+    "h": 1080,
+    "duration": 25,
+    "fps": 60
+  },
+  "framesSampled": 501,
+  "deterministicSeek": true,
+  "fontLoaded": true,
+  "singleHero": true,
+  "silent": true,
+  "framing": {
+    "outside": [],
+    "offCenter": []
+  },
+  "errors": [],
+  "reviewedTimes": [
+    1.5,
+    5.5,
+    8.5,
+    11.5,
+    14.5,
+    16.2,
+    18.8,
+    21,
+    24.5
+  ]
+}

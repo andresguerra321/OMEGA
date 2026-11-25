@@ -17,6 +17,6 @@ public class LegalDocumentAiController {
     public record Acceptance(@Pattern(regexp="[0-9a-f]{64}") String fingerprint) {}
     @GetMapping("/policy")
     public LegalDocumentAiService.Policy policy(@AuthenticationPrincipal OmegaPrincipal actor) { return service.policy(actor); }
-    @PostMapping("/consent") @ResponseStatus(HttpStatus.NO_CONTENT) @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/consent") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void accept(@AuthenticationPrincipal OmegaPrincipal actor,@Valid @RequestBody Acceptance request) { service.accept(actor,request.fingerprint()); }
 }

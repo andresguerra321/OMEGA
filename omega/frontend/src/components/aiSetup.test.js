@@ -106,13 +106,13 @@ test('existing configured installations enter normally but new accounts still co
   window.localStorage.setItem('omega_ai_setup_v2:fixture-user','complete');
   saved=true;await render();assert.ok(workspace());
   await render({forceSetup:true});assert.equal(workspace(),null);
-  await click('Configurar copiloto');await click('Comprobar configuraci');assert.equal(workspace(),null);
+  await click('Usar la IA disponible');assert.equal(workspace(),null);
   await click('Entrar a OMEGA');assert.ok(workspace());
 });
 test('reopening setup before confirmation cannot skip the last step and completion is per account',async()=>{
-  saved=true;await render();await click('Configurar copiloto');await click('Comprobar configuraci');
+  saved=true;await render();await click('Usar la IA disponible');
   await render({key:'reopened'});assert.equal(workspace(),null);
-  await click('Configurar copiloto');await click('Comprobar configuraci');await click('Entrar a OMEGA');
+  await click('Usar la IA disponible');await click('Entrar a OMEGA');
   await render({key:'completed'});assert.ok(workspace());
   await render({key:'other-account',accountId:'other-user'});assert.equal(workspace(),null);
 });
@@ -120,7 +120,7 @@ test('without 2FA neither an old completion marker nor a connected model can ope
   saved=true; api.fetchMfaStatus=async()=>({mfaEnabled:false,smtpConfigured:true});
   window.localStorage.setItem('omega_ai_setup_v2:fixture-user','complete');
   await render();assert.equal(workspace(),null);
-  await click('Configurar copiloto');await click('Comprobar configuraci');
+  await click('Usar la IA disponible');
   assert.equal(button('Entrar a OMEGA').disabled,true);assert.equal(workspace(),null);
 });
 

@@ -50,6 +50,8 @@ public class AuthController {
     private static final String PASSKEYS_ROADMAP_NOTE =
             "WebAuthn/FIDO2 Passkeys planificados en hoja de ruta para administradores de tenant y operadores de alto riesgo";
 
+    @Autowired(required=false)
+    private com.omega.platform.service.CommercialDocuments commercialDocuments;
     private final AuthService authService;
     private final OmegaProperties properties;
     private final SessionCookieHelper sessionCookieHelper;
@@ -158,7 +160,10 @@ public class AuthController {
         String ip = httpServletRequest != null ? httpServletRequest.getRemoteAddr() : "unknown";
         recoveryLimiter.assertScopedAllowed("auth-register-ip", ip, 20);
         recoveryLimiter.recordScopedFailure("auth-register-ip", ip, 20);
+        String commercialVersion=httpServletRequest==null?null:httpServletRequest.getHeader("X-Omega-Commercial-Version");
+        if(commercialDocuments!=null) commercialDocuments.requireRegistration(commercialVersion);
         AuthTokenResponse response = authService.registerAccount(request, bootstrapSecret);
+        if(commercialDocuments!=null) commercialDocuments.recordRegistration(response,commercialVersion);
         if (passwordResetService != null) {
             response = response.withRecoveryKey(passwordResetService.createRecoveryKey(response.userId(), request.password()).get("recoveryKey"));
         }
@@ -177,7 +182,10 @@ public class AuthController {
         String ip = httpServletRequest != null ? httpServletRequest.getRemoteAddr() : "unknown";
         recoveryLimiter.assertScopedAllowed("auth-tenant-register-ip", ip, 15);
         recoveryLimiter.recordScopedFailure("auth-tenant-register-ip", ip, 15);
+        String commercialVersion=httpServletRequest==null?null:httpServletRequest.getHeader("X-Omega-Commercial-Version");
+        if(commercialDocuments!=null) commercialDocuments.requireRegistration(commercialVersion);
         AuthTokenResponse response = authService.registerTenant(request, bootstrapSecret);
+        if(commercialDocuments!=null) commercialDocuments.recordRegistration(response,commercialVersion);
         if (passwordResetService != null) {
             response = response.withRecoveryKey(passwordResetService.createRecoveryKey(response.userId(), request.adminPassword()).get("recoveryKey"));
         }

@@ -37,6 +37,9 @@ public class DevPolicyService {
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.repository.TenantRepository tenantRepository;
+
     public DevPolicyService(
             DevPolicyRepository policyRepository,
             DevProjectRepository projectRepository,
@@ -336,8 +339,18 @@ public class DevPolicyService {
         return a;
     }
 
-    private static void requireAdmin(OmegaPrincipal principal) {
-        if (principal == null || principal.role() != Role.ADMIN) {
+    private void requireAdmin(OmegaPrincipal principal) {
+        if (principal == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo un administrador puede modificar las políticas.");
+        }
+        if (principal.role() == Role.ADMIN) {
+            return;
+        }
+        boolean isIndividualOwner = tenantRepository != null
+                && tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                        .map(t -> "INDIVIDUAL".equalsIgnoreCase(t.getAccountType()))
+                        .orElse(false);
+        if (!isIndividualOwner) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo un administrador puede modificar las políticas.");
         }
     }

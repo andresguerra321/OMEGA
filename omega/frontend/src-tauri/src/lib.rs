@@ -1,3 +1,4 @@
+mod billing_checkout;
 mod desktop_config;
 mod docker_bootstrap;
 mod env_loader;
@@ -238,6 +239,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            billing_checkout::open_billing_checkout,
             get_desktop_runtime_info,
             get_bootstrap_status,
             retry_self_hosted_bootstrap,

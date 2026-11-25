@@ -10,20 +10,12 @@ import com.omega.platform.repository.DevProjectRepository;
 import com.omega.platform.repository.DevScanRepository;
 import com.omega.platform.repository.DevSuppressionRepository;
 import com.omega.platform.security.OmegaPrincipal;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,7 +64,7 @@ public class DevReportService {
                 Map.of(
                         "format", "json",
                         "projectsIncluded", report.projectsCount(),
-                        "totalOpenFindings", report.triageCounts().getOrDefault("OPEN", 0)
+                        "totalOpenFindings", report.triageCounts().getOrDefault("NEW", 0)
                 )
         );
         return report;
@@ -109,15 +101,16 @@ public class DevReportService {
         }
 
         Map<String, Integer> severityCounts = new LinkedHashMap<>(Map.of(
-                "CRITICAL", 0, "HIGH", 0, "MEDIUM", 0, "LOW", 0
+                "CRITICAL", 0, "HIGH", 0, "MEDIUM", 0, "LOW", 0, "INFO", 0
         ));
         Map<String, Integer> triageCounts = new LinkedHashMap<>(Map.of(
-                "OPEN", 0, "IN_REVIEW", 0, "ACCEPTED", 0, "FALSE_POSITIVE", 0, "FIXED", 0
+                "NEW", 0, "CONFIRMED", 0, "ACCEPTED", 0, "FALSE_POSITIVE", 0, "RESOLVED", 0
         ));
 
         List<ProjectReportItemDto> projectItems = new ArrayList<>();
         List<FindingReportItemDto> sanitizedFindings = new ArrayList<>();
         List<SuppressionReportItemDto> activeSuppressionsOut = new ArrayList<>();
+        List<DevScanComparison.Comparison> comparisons = new ArrayList<>();
 
         double sumEffective = 0.0;
         int scoredProjects = 0;
@@ -134,18 +127,25 @@ public class DevReportService {
                 scoredProjects++;
                 List<DevFindingEntity> findings = findingRepository.findAllByTenantIdAndScanIdOrderByScorePointsDesc(
                         tenantId, latest.getId());
+                comparisons.add(DevScanComparison.compare(p.getId(),latest.getId(),prev==null?null:prev.getId(),findings,
+                        prev==null?List.of():findingRepository.findAllByTenantIdAndScanIdOrderByScorePointsDesc(tenantId,prev.getId())));
                 for (DevFindingEntity f : findings) {
                     severityCounts.computeIfPresent(f.getSeverity(), (k, v) -> v + 1);
                     triageCounts.computeIfPresent(f.getTriageStatus(), (k, v) -> v + 1);
-                    if (sanitizedFindings.size() < 200) {
+                    {
                         sanitizedFindings.add(new FindingReportItemDto(
                                 p.getName(),
                                 f.getRuleId(),
                                 f.getSeverity(),
-                                DevProjectService.sanitizeText(f.getTitle(), 200),
-                                DevProjectService.sanitizeText(f.getLocation(), 200),
+                                DevProjectService.sanitizeText(f.getTitle(), 255),
+                                DevProjectService.sanitizeText(f.getLocation(), 300),
                                 f.getTriageStatus(),
-                                f.getScorePoints()
+                                f.getScorePoints(),
+                                f.getId(), latest.getId(),
+                                DevProjectService.sanitizeText(f.getExplanation(), 1200),
+                                "Revisar la evidencia del detector y confirmar en el contexto del proyecto.",
+                                String.join(" ",DevRemediationGuide.forFinding(f.getRuleId(),f.getLocation()).steps()),
+                                DevRemediationGuide.forFinding(f.getRuleId(),f.getLocation()).verification()
                         ));
                     }
                 }
@@ -176,9 +176,12 @@ public class DevReportService {
                     delta,
                     latest != null ? latest.getFindingsCount() : 0,
                     latest != null ? latest.getDependenciesCount() : 0,
-                    latest != null ? latest.getPolicyStatus() : "PASS",
+                    latest != null ? latest.getPolicyStatus() : "NOT_EVALUATED",
                     pol.failOnSeverity(),
-                    pol.actionOnViolation()
+                    pol.actionOnViolation(),
+                    latest != null ? latest.getId() : null, latest != null ? latest.getCreatedAt() : null,
+                    latest != null ? latest.getCommitSha() : null, latest != null ? latest.getBranch() : null,
+                    latest != null ? latest.getRulesVersion() : null, latest != null ? latest.getLimitsJson() : "{}"
             ));
         }
 
@@ -194,117 +197,47 @@ public class DevReportService {
                 projectItems,
                 sanitizedFindings,
                 activeSuppressionsOut,
-                "Reporte ejecutivo OMEGA Zero-Retention: contiene únicamente metadatos saneados, sin fragmentos de código ni secretos."
+                "Informe automatizado con metadatos y textos saneados, sin archivos originales ni valores de secretos. No certifica ausencia de vulnerabilidades.",
+                comparisons
         );
     }
 
-    private byte[] renderPdf(ExecutiveReportDto report) {
-        try (PDDocument doc = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            PDPage page = new PDPage(PDRectangle.A4);
-            doc.addPage(page);
-            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDType1Font fontRegular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-
-            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
-                float y = 790f;
-                y = writeLine(cs, fontBold, 14, 48, y, "OMEGA DEVELOPER SECURITY - REPORTE EJECUTIVO Y TECNICO");
-                y = writeLine(cs, fontRegular, 9, 48, y - 4, "Alcance: " + report.scope() + " | Generado: " + report.generatedAt());
-                y = writeLine(cs, fontRegular, 9, 48, y - 2, "Proyectos evaluados: " + report.projectsCount()
-                        + " | Puntaje efectivo promedio: " + report.averageEffectiveScore() + "/100");
-
-                y -= 10;
-                y = writeLine(cs, fontBold, 11, 48, y, "1. Resumen de Hallazgos por Severidad y Triaje");
-                y = writeLine(cs, fontRegular, 9, 48, y, "Severidad -> CRITICAL: " + report.severityCounts().getOrDefault("CRITICAL", 0)
-                        + " | HIGH: " + report.severityCounts().getOrDefault("HIGH", 0)
-                        + " | MEDIUM: " + report.severityCounts().getOrDefault("MEDIUM", 0)
-                        + " | LOW: " + report.severityCounts().getOrDefault("LOW", 0));
-                y = writeLine(cs, fontRegular, 9, 48, y, "Triaje -> OPEN: " + report.triageCounts().getOrDefault("OPEN", 0)
-                        + " | IN_REVIEW: " + report.triageCounts().getOrDefault("IN_REVIEW", 0)
-                        + " | ACCEPTED: " + report.triageCounts().getOrDefault("ACCEPTED", 0)
-                        + " | FALSE_POSITIVE: " + report.triageCounts().getOrDefault("FALSE_POSITIVE", 0)
-                        + " | FIXED: " + report.triageCounts().getOrDefault("FIXED", 0));
-
-                y -= 10;
-                y = writeLine(cs, fontBold, 11, 48, y, "2. Estado de Proyectos y Politicas");
-                for (ProjectReportItemDto p : report.projects()) {
-                    if (y < 120) break;
-                    String line = String.format(
-                            "- %s (%s): Efectivo %.1f/100 (Bruto %.1f) | Hallazgos: %d | Deps: %d | Politica: %s (%s)",
-                            toAsciiSafe(p.name()), p.slug(), p.effectiveScore(), p.rawScore(),
-                            p.findingsCount(), p.dependenciesCount(), p.policyStatus(), p.failOnSeverity()
-                    );
-                    y = writeLine(cs, fontRegular, 9, 48, y, line);
-                }
-
-                y -= 10;
-                y = writeLine(cs, fontBold, 11, 48, y, "3. Hallazgos Prioritarios (Saneados - Zero Retention)");
-                if (report.findings().isEmpty()) {
-                    y = writeLine(cs, fontRegular, 9, 48, y, "- Sin hallazgos registrados en el ultimo escaneo.");
-                } else {
-                    for (int i = 0; i < Math.min(report.findings().size(), 15); i++) {
-                        if (y < 90) break;
-                        FindingReportItemDto f = report.findings().get(i);
-                        String line = String.format(
-                                "- [%s] %s (%s) en %s | Estado: %s",
-                                f.severity(), f.ruleId(), toAsciiSafe(f.projectName()),
-                                toAsciiSafe(f.location() == null ? "root" : f.location()), f.triageStatus()
-                        );
-                        y = writeLine(cs, fontRegular, 8, 48, y, line);
-                    }
-                }
-
-                y -= 10;
-                y = writeLine(cs, fontBold, 11, 48, y, "4. Riesgos Aceptados y Supresiones con Expiracion");
-                if (report.activeSuppressions().isEmpty()) {
-                    y = writeLine(cs, fontRegular, 9, 48, y, "- Sin supresiones activas.");
-                } else {
-                    for (int i = 0; i < Math.min(report.activeSuppressions().size(), 8); i++) {
-                        if (y < 60) break;
-                        SuppressionReportItemDto s = report.activeSuppressions().get(i);
-                        String line = String.format(
-                                "- %s | Regla %s | Expira: %s | Motivo: %s",
-                                toAsciiSafe(s.projectName()), s.ruleId(), s.expiresAt(), toAsciiSafe(s.reason())
-                        );
-                        y = writeLine(cs, fontRegular, 8, 48, y, line);
-                    }
-                }
-
-                writeLine(cs, fontRegular, 8, 48, 36, toAsciiSafe(report.zeroRetentionNotice()));
-            }
-            doc.save(out);
-            return out.toByteArray();
-        } catch (IOException ex) {
-            throw new IllegalStateException("No se pudo generar el reporte PDF de desarrollo", ex);
-        }
-    }
-
-    private static float writeLine(
-            PDPageContentStream cs,
-            PDType1Font font,
-            float fontSize,
-            float x,
-            float y,
-            String text
-    ) throws IOException {
-        String safe = toAsciiSafe(text);
-        if (safe.length() > 110) {
-            safe = safe.substring(0, 107) + "...";
-        }
-        cs.beginText();
-        cs.setFont(font, fontSize);
-        cs.newLineAtOffset(x, y);
-        cs.showText(safe);
-        cs.endText();
-        return y - (fontSize + 5f);
-    }
-
-    private static String toAsciiSafe(String input) {
-        if (input == null) return "";
-        return input
-                .replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
-                .replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
-                .replace('ñ', 'n').replace('Ñ', 'N')
-                .replaceAll("[^\\x20-\\x7E]", " ");
+    public static byte[] renderPdf(ExecutiveReportDto report) { return renderPdf(report,"Exportación directa"); }
+    public static byte[] renderPdf(ExecutiveReportDto report,String reportId) {
+        var sections = new ArrayList<ReportPdf.Section>();
+        sections.add(new ReportPdf.Section("1. Resumen ejecutivo", List.of(
+                "Proyectos incluidos: " + report.projectsCount() + ". Hallazgos registrados: " + report.findings().size()
+                        + ". Proyectos sin evaluación: " + report.projects().stream().filter(p -> p.scansCount() == 0).count() + ".",
+                "Severidad: " + report.severityCounts() + ". Triaje: " + report.triageCounts(),
+                "Atender primero los hallazgos críticos y altos abiertos. La severidad expresa prioridad; no acredita explotación confirmada.")));
+        sections.add(new ReportPdf.Section("2. Alcance, versiones y cobertura", report.projects().stream().map(p ->
+                p.name() + " · " + p.projectId() + "\nEvaluación: " + p.scanId() + " · Fecha: " + p.scannedAt()
+                + "\nCommit: " + p.commitSha() + " · Rama: " + p.branch() + " · Reglas: " + p.rulesVersion()
+                + "\nLímites registrados por el analizador: " + p.limitsJson()
+                + "\nDependencias: " + p.dependenciesCount() + " · Política: " + p.policyStatus()
+                + " · Puntaje efectivo: " + (p.scansCount() == 0 ? "No evaluado" : p.effectiveScore() + "/100")
+                + " · Cambio frente a la evaluación anterior: " + p.scoreDelta()).toList()));
+        var findings = new ArrayList<String>();
+        for (var f : report.findings()) findings.add("[" + f.severity() + "] " + f.title()
+                + "\nReferencia: " + f.findingId() + " · Evaluación: " + f.scanId()
+                + "\nProyecto: " + f.projectName() + " · Regla: " + f.ruleId() + " · Ubicación: " + f.location()
+                + "\nEstado: " + f.triageStatus() + "\nObservación registrada: " + f.explanation()
+                + "\nConfianza: " + f.confidence() + "\nAcciones:\n- " + String.join("\n- ",f.remediation().steps()) + "\nVerificación: " + f.verification());
+        if (findings.isEmpty()) findings.add("No hay hallazgos registrados en las evaluaciones incluidas. Revise los proyectos no evaluados y los límites de cobertura.");
+        sections.add(new ReportPdf.Section("3. Hallazgos, acciones y verificación", findings));
+        sections.add(new ReportPdf.Section("4. Riesgos aceptados y supresiones", report.activeSuppressions().isEmpty()
+                ? List.of("Sin supresiones activas.") : report.activeSuppressions().stream().map(s ->
+                s.projectName() + " · " + s.ruleId() + " · Expira: " + s.expiresAt() + " · Motivo: " + s.reason()).toList()));
+        sections.add(new ReportPdf.Section("Comparación con la evaluación anterior",report.comparisons().isEmpty()
+            ? List.of("Sin comparaciones disponibles.") : report.comparisons().stream().map(c ->
+                "Proyecto: " + c.projectId() + " · Actual: " + c.latestScanId() + " · Anterior: " + c.previousScanId()
+                + "\nNuevos: " + c.added() + " · Persistentes: " + c.persisting() + " · No detectados en la última: " + c.notSeen()
+                + "\n" + c.limitation()).toList()));
+        sections.add(new ReportPdf.Section("5. Método y limitaciones", List.of(report.zeroRetentionNotice(),
+                "Se utiliza la última evaluación persistida de cada proyecto. No se ejecuta un nuevo análisis al descargar.",
+                "La cobertura depende del analizador y de sus límites registrados. No equivale a pentest, revisión completa de código ni garantía de seguridad.",
+                "Las recomendaciones son orientaciones de revisión; compruebe su aplicabilidad antes de cambiar una dependencia o una configuración.")));
+        return ReportPdf.render("OMEGA · Informe de desarrollo", reportId + " · Formato omega-dev-v2 · " + report.generatedAt() + " · " + report.scope(), sections);
     }
 
     public record ProjectReportItemDto(
@@ -319,7 +252,8 @@ public class DevReportService {
             int dependenciesCount,
             String policyStatus,
             String failOnSeverity,
-            String actionOnViolation
+            String actionOnViolation,
+            UUID scanId, Instant scannedAt, String commitSha, String branch, String rulesVersion, String limitsJson
     ) {}
 
     public record FindingReportItemDto(
@@ -329,8 +263,16 @@ public class DevReportService {
             String title,
             String location,
             String triageStatus,
-            double scorePoints
-    ) {}
+            double scorePoints,
+            UUID findingId, UUID scanId, String explanation, String confidence, String recommendation, String verification,
+            DevRemediationGuide.Guide remediation
+    ) {
+        public FindingReportItemDto(String projectName,String ruleId,String severity,String title,String location,String triageStatus,double scorePoints,
+                UUID findingId,UUID scanId,String explanation,String confidence,String recommendation,String verification) {
+            this(projectName,ruleId,severity,title,location,triageStatus,scorePoints,findingId,scanId,explanation,confidence,recommendation,verification,
+                DevRemediationGuide.forFinding(ruleId,location));
+        }
+    }
 
     public record SuppressionReportItemDto(
             String projectName,
@@ -349,6 +291,12 @@ public class DevReportService {
             List<ProjectReportItemDto> projects,
             List<FindingReportItemDto> findings,
             List<SuppressionReportItemDto> activeSuppressions,
-            String zeroRetentionNotice
-    ) {}
+            String zeroRetentionNotice,
+            List<DevScanComparison.Comparison> comparisons
+    ) {
+        public ExecutiveReportDto(String scope,Instant generatedAt,int projectsCount,double averageEffectiveScore,Map<String,Integer> severityCounts,
+                Map<String,Integer> triageCounts,List<ProjectReportItemDto> projects,List<FindingReportItemDto> findings,List<SuppressionReportItemDto> activeSuppressions,String zeroRetentionNotice) {
+            this(scope,generatedAt,projectsCount,averageEffectiveScore,severityCounts,triageCounts,projects,findings,activeSuppressions,zeroRetentionNotice,List.of());
+        }
+    }
 }

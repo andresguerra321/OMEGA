@@ -40,6 +40,13 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
   const [preparing, setPreparing] = useState(true);
   const [setupFailed, setSetupFailed] = useState(false);
   const [setupAttempt, setSetupAttempt] = useState(0);
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return typeof sessionStorage !== 'undefined' && sessionStorage.getItem('omega_host_banner_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const revision = useRef(0);
 
   useEffect(() => {
@@ -94,6 +101,22 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
 
   const alerts = status?.alerts || [];
   const native = status?.scope === 'native-host';
+
+  function handleDismissBanner() {
+    setDismissed(true);
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('omega_host_banner_dismissed', '1');
+      }
+    } catch {
+      // sessionStorage unavailable
+    }
+  }
+
+  if (dismissed && !expanded && !native && alerts.length === 0) {
+    return null;
+  }
+
   const label = preparing ? 'Preparando la protección de tu computadora…' : sensorError ? 'Protección pendiente' : !status ? 'Comprobando vigilancia…'
     : !native ? 'Vigilancia del equipo no disponible'
       : status.active ? (status.dnsCoverage === 'cache-no-pid' ? 'Vigilancia activa' : 'Vigilancia activa · cobertura parcial') : status.enabled ? 'Vigilancia con cobertura incompleta' : 'Pausada';
@@ -105,14 +128,23 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
     BROWSER: (report?.findings || []).filter(f => f.category === 'BROWSER'),
     NETWORK: alerts,
   };
-  return <section aria-label="Protección de esta computadora" className={`relative z-40 shrink-0 border-b border-white/10 bg-[#101116] px-4 py-2 text-[#F2F2F4] ${desktop ? 'pr-36' : ''}`}>
+  return <section aria-label="Protección de esta computadora" className={`relative z-40 shrink-0 border-b border-white/10 bg-[#101116] px-4 py-2 text-[#F2F2F4] transition-all duration-150 ${desktop ? 'pr-36' : ''}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p role="status" className="text-sm"><span className={`mr-2 inline-block h-2 w-2 rounded-full ${status?.active && !sensorError ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />{label}
         {status?.hostname && <span className="ml-2 text-xs text-[#9A9AA2]">{status.hostname} · {status.indicatorCount} indicadores</span>}
       </p>
-      <div className="flex gap-2">
-        <button type="button" disabled={!native || busy || !status} onClick={toggle} className="rounded border border-white/20 px-3 py-1 text-xs disabled:opacity-40">{busy ? 'Aplicando…' : status?.enabled ? 'Pausar vigilancia' : 'Activar vigilancia'}</button>
-        {expanded && <button type="button" disabled={!native || auditing} onClick={audit} className="rounded bg-[#2F6FED] px-3 py-1 text-xs disabled:opacity-40">{auditing ? 'Revisando equipo…' : 'Revisar procesos y arranque'}</button>}
+      <div className="flex items-center gap-2">
+        {!expanded && !native && alerts.length === 0 && (
+          <button
+            type="button"
+            onClick={handleDismissBanner}
+            className="rounded-md bg-[#EDEDEF] hover:bg-white px-3 py-1 text-xs font-medium text-[#09090B] transition-all duration-150 active:scale-[0.98] cursor-pointer"
+          >
+            Aceptar
+          </button>
+        )}
+        <button type="button" disabled={!native || busy || !status} onClick={toggle} className="rounded-md border border-white/20 hover:border-white/35 px-3 py-1 text-xs transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">{busy ? 'Aplicando…' : status?.enabled ? 'Pausar vigilancia' : 'Activar vigilancia'}</button>
+        {expanded && <button type="button" disabled={!native || auditing} onClick={audit} className="rounded-md bg-[#EDEDEF] hover:bg-white text-[#09090B] font-medium px-3 py-1 text-xs transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">{auditing ? 'Revisando equipo…' : 'Revisar procesos y arranque'}</button>}
       </div>
     </div>
     {error && <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p>}
@@ -149,7 +181,7 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
 }
 
 export function HostProtectionPanel({ session, expanded = false, desktop = false, expedienteId = null }) {
-  // This sensor sees machine-wide data; only the owner tenant's administrator can inspect it.
-  if (session?.role !== 'ADMIN') return null;
+  // The backend also checks that this account owns the host sensor.
+  if (!session?.canManageAccount && session?.role !== 'ADMIN') return null;
   return <HostProtectionSession key={`${session.tenantId}:${session.email}`} expanded={expanded} desktop={desktop} expedienteId={expedienteId} />;
 }

@@ -71,6 +71,8 @@ class DevTriageApiIntegrationTest {
         return (val == null || val.isBlank()) ? fallback : val;
     }
 
+    @Autowired org.springframework.jdbc.core.JdbcTemplate billingJdbc;
+    @Autowired com.omega.platform.billing.CreditService billingCredits;
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private DevProjectService devProjectService;
@@ -172,6 +174,11 @@ class DevTriageApiIntegrationTest {
                         .content(payload))
                 .andExpect(status().isCreated())
                 .andReturn();
-        return objectMapper.readTree(res.getResponse().getContentAsString());
+        JsonNode account=objectMapper.readTree(res.getResponse().getContentAsString());
+        UUID fixtureTenant=UUID.fromString(account.path("tenantId").asText());
+        billingCredits.subscription(fixtureTenant);
+        // Isolated test fixture: developer features require a verified membership.
+        billingJdbc.update("UPDATE omega_rag.subscriptions SET plan_code='PRO',status='ACTIVE',paid_verified=true,current_period_start=now(),current_period_end=now()+interval '1 month' WHERE tenant_id=?",fixtureTenant);
+        return account;
     }
 }

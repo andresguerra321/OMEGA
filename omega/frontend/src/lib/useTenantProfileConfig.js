@@ -12,6 +12,27 @@ export const DEFAULT_PROFILE_CONFIG = Object.freeze({
   defaultView: 'inicio',
 });
 
+export function fallbackProfileConfig(profile) {
+  if (profile === 'DEVELOPER') return {
+    ...DEFAULT_PROFILE_CONFIG,
+    profile: 'DEVELOPER',
+    visibleModules: ['repo_scanner', 'inicio', 'equipo', 'exposicion', 'amenazas', 'preguntar', 'cuenta'],
+    moduleLabels: { inicio: 'Proyectos y hallazgos', amenazas: 'Cadena de suministro', equipo: 'Mi estación', repo_scanner: 'Proyectos' },
+    ragCorpusScope: 'dev_supply_chain_cti',
+    copilotTone: 'technical_appsec',
+    defaultView: 'repo_scanner',
+  };
+  if (profile === 'LEGAL') return {
+    ...DEFAULT_PROFILE_CONFIG,
+    profile: 'LEGAL',
+    visibleModules: ['expedientes', 'preguntar', 'seguridad_despacho', 'cuenta'],
+    ragCorpusScope: 'legal_expedientes',
+    copilotTone: 'forensic_legal',
+    defaultView: 'expedientes',
+  };
+  return DEFAULT_PROFILE_CONFIG;
+}
+
 /**
  * Filtra los elementos de navegación según `visibleModules` del perfil activo
  * y aplica las etiquetas declaradas en `moduleLabels` sin condicionales por perfil.
@@ -49,9 +70,11 @@ const NICHE_LABELS = Object.freeze({
  * Formatea la etiqueta visible de rol y nicho para evitar ambigüedad entre
  * administrador de organización y el perfil/nicho del espacio de trabajo.
  */
-export function resolveRoleNicheLabel(role, profile) {
+export function resolveRoleNicheLabel(role, profile, accountType) {
   const normalizedProfile = String(profile || 'GENERAL').trim().toUpperCase();
   const niche = NICHE_LABELS[normalizedProfile] || NICHE_LABELS.GENERAL;
+  if (accountType === 'INDIVIDUAL') return `Cuenta individual · ${niche}`;
+  if (accountType === 'UNCLASSIFIED') return `Cuenta · ${niche}`;
   if (role === 'ADMIN') return `Admin · ${niche}`;
   if (role === 'CLIENT') return `Cliente · ${niche}`;
   return niche;
@@ -61,17 +84,14 @@ export function useTenantProfileConfig(authSession) {
   const sessionProfile = ['GENERAL', 'DEVELOPER', 'LEGAL'].includes(String(authSession?.profile || '').toUpperCase())
     ? String(authSession.profile).toUpperCase()
     : 'GENERAL';
-  const [profileConfig, setProfileConfig] = useState(() => ({
-    ...DEFAULT_PROFILE_CONFIG,
-    profile: sessionProfile,
-  }));
+  const [profileConfig, setProfileConfig] = useState(() => fallbackProfileConfig(sessionProfile));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const isAuthenticated = Boolean(authSession && (authSession.accessToken || authSession.cookieBacked));
 
   const refresh = useCallback(async () => {
-    const fallbackConfig = { ...DEFAULT_PROFILE_CONFIG, profile: sessionProfile };
+    const fallbackConfig = fallbackProfileConfig(sessionProfile);
     if (!isAuthenticated) {
       setProfileConfig(DEFAULT_PROFILE_CONFIG);
       setError('');
@@ -114,6 +134,9 @@ export function useTenantProfileConfig(authSession) {
 
   useEffect(() => {
     void refresh();
+    const updated = () => { void refresh(); };
+    window.addEventListener('omega:billing-updated', updated);
+    return () => window.removeEventListener('omega:billing-updated', updated);
   }, [refresh, authSession?.tenantId, authSession?.userId, authSession?.profile]);
 
   const switchProfile = useCallback(async (nextProfile, confirmed = false) => {

@@ -33,6 +33,17 @@ public class TenantEntity {
     @Column(name = "profile", nullable = false, length = 20)
     private TenantProfile profile = TenantProfile.GENERAL;
 
+    @Column(name = "account_type", nullable = false, length = 20)
+    private String accountType = "UNCLASSIFIED";
+
+    @Column(name = "owner_user_id")
+    private UUID ownerUserId;
+
+    public String getAccountType() { return accountType; }
+    public void setAccountType(String accountType) { this.accountType = accountType; }
+    public UUID getOwnerUserId() { return ownerUserId; }
+    public void setOwnerUserId(UUID ownerUserId) { this.ownerUserId = ownerUserId; }
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

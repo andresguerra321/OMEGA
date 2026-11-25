@@ -148,6 +148,14 @@ export function DevReportsTab() {
           </div>
         )}
 
+        {report?.comparisons?.length > 0 && <div className="space-y-3 border-t border-white/[0.06] pt-4">
+          <h3 className="text-sm font-medium text-white/85">Cambios frente a la evaluación anterior</h3>
+          {report.comparisons.map(item => <div key={item.projectId} className="space-y-1 text-xs text-white/65">
+            <p>{reportProjects.find(project => project.projectId === item.projectId)?.name || 'Proyecto'} · {item.previousScanId ? `${item.added} nuevos · ${item.persisting} persistentes · ${item.notSeen} no detectados en la última` : 'Primera evaluación, sin comparación anterior'}</p>
+            <p className="text-white/45">{item.limitation}</p>
+          </div>)}
+        </div>}
+
         {loading ? (
           <p className="text-xs text-slate-400 py-6 text-center">
             Compilando métricas del reporte...
@@ -164,7 +172,7 @@ export function DevReportsTab() {
               <div className="rounded-xl bg-[#141923]/65 border border-white/[0.05] p-3.5">
                 <p className="text-[11px] text-slate-400">Puntaje efectivo promedio</p>
                 <p className="text-lg font-semibold text-slate-100 mt-1">
-                  {report?.averageEffectiveScore ?? 0}/100
+                  {reportProjects.some(project => project.scansCount > 0) ? `${report?.averageEffectiveScore ?? 0}/100` : 'No evaluado'}
                 </p>
               </div>
               <div className="rounded-xl bg-[#141923]/65 border border-white/[0.05] p-3.5">
@@ -183,14 +191,14 @@ export function DevReportsTab() {
 
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#141923]/55 border border-white/[0.05] px-4 py-3 text-xs text-slate-300">
               <span>
-                Triaje: <strong className="text-slate-100">{triageCounts.OPEN || 0}</strong> abiertos ·{' '}
-                <strong className="text-slate-100">{triageCounts.IN_REVIEW || 0}</strong> en revisión ·{' '}
+                Triaje: <strong className="text-slate-100">{triageCounts.NEW || 0}</strong> abiertos ·{' '}
+                <strong className="text-slate-100">{triageCounts.CONFIRMED || 0}</strong> en revisión ·{' '}
                 <strong className="text-amber-300">{triageCounts.ACCEPTED || 0}</strong> riesgos aceptados ·{' '}
-                <strong className="text-emerald-300">{triageCounts.FIXED || 0}</strong> corregidos
+                <strong className="text-emerald-300">{triageCounts.RESOLVED || 0}</strong> marcados como resueltos
               </span>
               <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
-                <span>Zero-Retention garantizado</span>
+                <span>Metadatos saneados</span>
               </span>
             </div>
 
@@ -209,7 +217,7 @@ export function DevReportsTab() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-slate-200">
-                        Efectivo: <strong>{proj.effectiveScore}</strong>/100 (Bruto: {proj.rawScore})
+                        Efectivo: <strong>{proj.scansCount ? proj.effectiveScore : "No evaluado"}</strong>{proj.scansCount ? `/100 (Bruto: ${proj.rawScore})` : ''}
                       </span>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
@@ -217,7 +225,9 @@ export function DevReportsTab() {
                             ? 'border border-rose-500/35 bg-rose-500/10 text-rose-300'
                             : proj.policyStatus === 'WARN'
                             ? 'border border-amber-400/35 bg-amber-400/10 text-amber-300'
-                            : 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
+                            : proj.policyStatus === 'PASS'
+                            ? 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
+                            : 'border border-white/[0.06] text-white/50'
                         }`}
                       >
                         Política: {proj.policyStatus}

@@ -5,10 +5,8 @@ import {
   fetchSaasSummary,
   revokeFleetDevice,
   sendDeviceHeartbeat,
-  updateSubscriptionPlan,
 } from '../lib/api';
 
-const PLAN_OPTIONS = ['PERSONAL', 'PRO', 'ENTERPRISE'];
 
 export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) {
   const [summary, setSummary] = useState(null);
@@ -17,7 +15,7 @@ export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) 
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
-  const isAdmin = String(authSession?.role || '').toUpperCase() === 'ADMIN';
+  const isAdmin = authSession?.canManageAccount || String(authSession?.role || '').toUpperCase() === 'ADMIN';
 
   const loadSummary = useCallback(async () => {
     if (!authSession) return;
@@ -74,21 +72,6 @@ export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) 
       await loadSummary();
     } catch (err) {
       setError(err?.message || 'No se pudo revocar el dispositivo.');
-    } finally {
-      setBusyAction('');
-    }
-  }
-
-  async function handlePlanChange(planCode) {
-    setBusyAction(planCode);
-    setNotice('');
-    setError('');
-    try {
-      await updateSubscriptionPlan(planCode);
-      setNotice(`Plan actualizado a ${planCode}.`);
-      await loadSummary();
-    } catch (err) {
-      setError(err?.message || 'No se pudo cambiar el plan.');
     } finally {
       setBusyAction('');
     }
@@ -194,7 +177,7 @@ export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) 
               <p className="mt-0.5 text-xs text-[#8E95A5]">
                 {sub ? (
                   <>
-                    Plan <strong className="text-white">{sub.planCode}</strong> · Estado{' '}
+                    Plan <strong className="text-white">{sub.planCode === 'FREE' || sub.planCode === 'PERSONAL' ? 'Gratis' : sub.planCode === 'PRO' ? 'Pro' : 'Enterprise'}</strong> · Estado{' '}
                     <span className="text-emerald-300">{sub.status}</span> · Límite {sub.activeDevices}/{sub.maxDevices} equipos
                   </>
                 ) : (
@@ -202,32 +185,14 @@ export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) 
                 )}
               </p>
             </div>
-            {isAdmin && sub && (
-              <div className="flex items-center gap-1.5">
-                {PLAN_OPTIONS.map((code) => (
-                  <button
-                    key={code}
-                    type="button"
-                    onClick={() => handlePlanChange(code)}
-                    disabled={busyAction === code || sub.planCode === code}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-                      sub.planCode === code
-                        ? 'bg-[#2F6FED] text-white'
-                        : 'border border-white/[0.08] bg-white/[0.03] text-[#B8BCC8] hover:bg-white/[0.08]'
-                    }`}
-                  >
-                    {code}
-                  </button>
-                ))}
-              </div>
-            )}
+
           </div>
 
           <div className="py-5 border-b border-white/[0.07] space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-sm font-medium text-white">
-                  Cuota IA Cloud {quota ? `(${quota.periodYm})` : ''}
+                  Cr?ditos compartidos {quota ? `(${quota.periodYm})` : ''}
                 </div>
                 <p className="mt-0.5 text-xs text-[#8E95A5]">
                   Consultas acumuladas en proveedores cloud durante el periodo actual.
@@ -278,7 +243,7 @@ export function SaasFleetCard({ authSession, mode = 'full', embedded = false }) 
               <div className="text-sm font-medium text-white">Equipos vinculados</div>
               <p className="mt-0.5 text-xs text-[#8E95A5]">
                 {sub
-                  ? `${sub.activeDevices} de ${sub.maxDevices} dispositivos permitidos en tu plan ${sub.planCode}.`
+                  ? `${sub.activeDevices} de ${sub.maxDevices} dispositivos permitidos en tu plan ${sub.planCode === 'FREE' || sub.planCode === 'PERSONAL' ? 'Gratis' : sub.planCode === 'PRO' ? 'Pro' : 'Enterprise'}.`
                   : 'Registra este equipo para habilitar el monitoreo y revocación remota.'}
               </p>
             </div>

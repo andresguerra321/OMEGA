@@ -7,9 +7,18 @@ import {
   getDesktopRuntimeConfig,
   getDesktopRuntimeInfo,
   isDesktopApp,
+  openBillingCheckout,
   getMobileDesktopBridge,
   saveDesktopRuntimeConfig,
 } from './desktopBridge.js';
+
+test('billing opens Mercado Pago through the restricted native command', async () => {
+  const calls = [];
+  const url = 'https://www.mercadopago.com.co/subscriptions/checkout?preapproval_id=123';
+  assert.equal(await openBillingCheckout(url, { __TAURI_INTERNALS__: { invoke: async (...args) => { calls.push(args); } } }), true);
+  assert.deepEqual(calls, [['open_billing_checkout', { url }]]);
+  assert.equal(await openBillingCheckout(url, {}), false);
+});
 
 test('mobile desktop bridge forwards native commands and preserves device and backup arguments', async () => {
   const calls = [];

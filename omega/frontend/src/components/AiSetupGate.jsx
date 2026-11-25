@@ -230,9 +230,10 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
               {step === 0 ? <>
                 <Sparkles className="mb-5 h-8 w-8 text-cobalt" aria-hidden="true" />
                 <h1 id="setup-title" ref={heading} tabIndex={-1} className="text-3xl font-semibold tracking-tight outline-none">Tu cuenta está lista.<br />Activemos tu copiloto.</h1>
-                <p className="mt-4 max-w-xl leading-relaxed text-ink-secondary">Conecta la IA para resumir hallazgos y protege tu cuenta con una app autenticadora o un código por correo.</p>
+                <p className="mt-4 max-w-xl leading-relaxed text-ink-secondary">{engine?.configured ? 'La IA ya está configurada en esta instalación. Comprueba su conexión y termina de proteger tu cuenta.' : 'Conecta la IA para resumir hallazgos y protege tu cuenta con una app autenticadora o un código por correo.'}</p>
                 <p className="mt-4 text-sm text-ink-secondary">La configuración es obligatoria antes de entrar a OMEGA.</p>
-                <button type="button" onClick={() => setStep(1)} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-cobalt px-5 py-3 font-semibold">Configurar copiloto <ArrowRight className="h-4 w-4" /></button>
+                <button type="button" disabled={busy} onClick={() => engine?.configured ? void checkSaved() : setStep(1)} className="mt-8 inline-flex items-center gap-2 rounded-lg bg-cobalt px-5 py-3 font-semibold disabled:opacity-50">{busy ? 'Comprobando…' : engine?.configured ? 'Usar la IA disponible' : 'Configurar copiloto'} <ArrowRight className="h-4 w-4" /></button>
+                {engine?.configured && <details className="mt-4 text-sm text-ink-secondary"><summary className="cursor-pointer rounded-lg py-2">Opciones avanzadas</summary><button type="button" className="rounded-lg border border-white/[0.07] px-3 py-2" onClick={() => setStep(1)}>Configurar otro proveedor</button></details>}
               </> : step === 1 ? <>
                 <KeyRound className="mb-5 h-8 w-8 text-cobalt" aria-hidden="true" />
                 <h1 id="setup-title" ref={heading} tabIndex={-1} className="text-3xl font-semibold outline-none">Conecta tu IA</h1>

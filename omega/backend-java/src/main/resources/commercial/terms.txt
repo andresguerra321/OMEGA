@@ -1,0 +1,28 @@
+Términos y condiciones de OMEGA
+
+1. Prestador y contacto
+OMEGA es prestado por {{name}}, persona natural en Colombia, NIT {{nit}}, con domicilio comercial en {{address}}. Atención y solicitudes: {{supportEmail}}. La versión vigente se identifica junto a este documento.
+
+2. Servicio y alcance
+OMEGA ofrece herramientas de análisis, organización de evidencia y generación de informes. General permite analizar información de exposición y protección; Desarrollador evalúa los proyectos y elementos compatibles con sus analizadores; Legal apoya la revisión documental. El resultado depende del alcance, las fuentes, los permisos y las limitaciones indicadas en cada evaluación. Los informes automatizados identifican las fuentes disponibles y el estado de revisión. No sustituyen la revisión de un profesional cuando resulte necesaria ni constituyen por sí mismos dictámenes periciales o garantías de ausencia de amenazas.
+
+3. Cuenta y uso autorizado
+El usuario debe suministrar información correcta, proteger sus credenciales y utilizar únicamente archivos, repositorios, dispositivos y datos para los que tenga autorización. El acceso a expedientes está sujeto a permisos. Una cuenta individual y una organización son modalidades de titularidad; General, Desarrollador y Legal son perfiles de uso distintos del rol de administración.
+
+4. Planes, precios y créditos
+La opción gratuita está reservada a General individual dentro de sus límites. Desarrollador, Legal y las organizaciones requieren membresía. Antes de contratar se muestran el precio total, moneda, período, créditos y límites aplicables. Cada operación informa su costo. Los créditos no representan dinero depositado ni un instrumento de pago. La vigencia y reposición se muestran en el plan. Exportar o volver a descargar un informe de resultados existentes no consume créditos adicionales; una nueva evaluación puede consumirlos. Las operaciones fallidas se liquidan conforme al trabajo efectivamente completado y a las reglas mostradas; las incidencias se pueden reclamar a soporte.
+
+5. Cobro y renovación
+Mercado Pago procesa el pago. La membresía se activa tras verificar el cobro aprobado. La contratación recurrente autoriza los cobros del período elegido hasta su cancelación. El usuario puede cancelar la renovación desde su cuenta; cancelar no implica por sí mismo una devolución y conserva el acceso del período ya pagado. Una devolución o reversión puede modificar el acceso y los créditos asociados al pago. Un comprobante de Mercado Pago o de OMEGA no sustituye la factura fiscal que corresponda. La facturación fiscal se gestiona por separado mediante un proceso manual del prestador; guardar datos en OMEGA no emite automáticamente una factura. El usuario puede comunicar incidencias o datos necesarios a {{supportEmail}}.
+
+6. Atención, cancelaciones y derechos del consumidor
+Las solicitudes, reclamaciones y peticiones sobre retracto, reversión de pago, cobros no autorizados o servicios defectuosos se reciben en {{supportEmail}}. Se resuelven conforme a las condiciones concretas y a la normativa colombiana aplicable. Estos términos no excluyen derechos irrenunciables ni establecen una prohibición general de devoluciones. Los cambios comerciales se informarán antes de aplicarse a futuras contrataciones o renovaciones cuando corresponda.
+
+7. Informes, confidencialidad y conservación
+El usuario conserva sus derechos sobre los datos aportados. Debe verificar que puede tratarlos y comunicarlos, especialmente si pertenecen a terceros. Los informes pueden contener información confidencial: su distribución es responsabilidad de quien tenga autorización para hacerlo. Las versiones guardadas conservan resultados y textos derivados; no deben confundirse con los archivos originales. La política de tratamiento explica su conservación y supresión. La disponibilidad de un informe está sujeta a la conservación del expediente y a sus permisos vigentes.
+
+8. Disponibilidad y responsabilidad
+Las incidencias, restricciones de proveedores externos y límites de análisis pueden afectar el servicio; se informan en los estados y resultados disponibles. OMEGA debe atender los incumplimientos que le sean atribuibles conforme a la ley. No se promete detección absoluta, exactitud jurídica automática ni disponibilidad ininterrumpida. Toda limitación se interpreta sin desconocer los derechos legales del usuario.
+
+9. Ley aplicable
+Se aplica la legislación colombiana, sin impedir el ejercicio de los derechos del consumidor ante las autoridades competentes.

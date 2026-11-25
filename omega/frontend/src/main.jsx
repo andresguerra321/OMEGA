@@ -20,6 +20,30 @@ import './index.css'
 import { MotionConfig } from 'framer-motion'
 import App from './App.jsx'
 
+// Auto-recuperación si se despliega una nueva compilación mientras la pestaña seguía abierta
+if (typeof window !== 'undefined') {
+  const recoverStaleChunk = () => {
+    try {
+      const last = Number(window.sessionStorage.getItem('omega_chunk_reload_ts') || 0)
+      if (Date.now() - last < 15000) return
+      window.sessionStorage.setItem('omega_chunk_reload_ts', String(Date.now()))
+    } catch {
+      // sessionStorage bloqueado
+    }
+    window.location.reload()
+  }
+  window.addEventListener('vite:preloadError', (event) => {
+    event?.preventDefault?.()
+    recoverStaleChunk()
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    const msg = String(event?.reason?.message || event?.reason || '')
+    if (msg.includes('Failed to fetch dynamically imported module') || msg.includes('Importing a module script failed')) {
+      recoverStaleChunk()
+    }
+  })
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <MotionConfig reducedMotion="user">

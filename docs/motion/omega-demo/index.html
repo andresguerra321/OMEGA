@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OMEGA · One take / Motion Studio</title>
+  <link rel="stylesheet" href="/scene.css">
+</head>
+<body>
+  <main id="preview" aria-label="Demo conceptual de OMEGA, 25 segundos, sin audio">
+    <div id="stage">
+      <div class="ambient"></div>
+      <div class="frame-label">OMEGA <span>/</span> INGENIERÍA FORENSE</div>
+      <div class="frame-meta">DEMOSTRACIÓN DE FLUJO <span>·</span> MODO SOBERANO LOCAL</div>
+      <div id="world">
+        <section id="entry" class="station" style="left:-560px;top:-325px">
+          <div class="eyebrow">01 / EXPOSICIÓN</div>
+          <h1>El riesgo entra contigo.</h1>
+          <p class="intro">Spyware comercial.<br>Analizarlo también puede exponer datos.</p>
+          <div class="ingress"><i data-lucide="file-warning"></i><div><b>Artefacto sospechoso</b><span>Respaldo móvil · análisis en RAM</span></div><span class="alert-label">IOC</span></div>
+          <div class="entry-note">El original no debe salir.</div>
+          <div class="footnote">RECORRIDO ILUSTRATIVO · SIN DATOS PERSONALES</div>
+        </section>
+        <section id="forensic" class="station desktop" style="left:990px;top:-325px">
+          <header><div class="wordmark">Ω <b>OMEGA</b></div><nav aria-label="Navegación de referencia"><span>Inicio</span><span class="active">Equipos</span><span>Amenazas</span><span>Asistente</span></nav><span class="mono">LOCAL</span></header>
+          <div class="eyebrow">02 / INGRESO Y TRIAJE</div>
+          <h2>Inspeccionar sin conservar.</h2>
+          <p>MVT / YARA <span class="separator">/</span> Sensores HMAC</p>
+          <img class="product-image" src="/assets/showcase.jpg" alt="Visual de marca del escritorio OMEGA">
+          <div class="scan-lane"><div id="scan-fill"></div></div>
+          <div class="forensic-readout"><span id="triage-state">Esperando artefacto</span><span>RAM / SHA-256</span></div>
+          <div class="desktop-bottom"><div><i data-lucide="laptop"></i> Equipo local</div><div><i data-lucide="smartphone"></i> Celulares USB</div><div><i data-lucide="shield-check"></i> Base forense STIX 2.1</div></div>
+        </section>
+        <section id="rag" class="station" style="left:990px;top:725px">
+          <div class="eyebrow">03 / CORRELACIÓN</div>
+          <h2>Una consulta. Tu perímetro.</h2>
+          <p>RAG híbrido <span class="separator">/</span> pgvector + tsvector</p>
+          <div class="tenant-heading"><i data-lucide="fingerprint"></i><span>tenant_id / espacio actual</span><span id="tenant-seal"><i data-lucide="lock-keyhole"></i> Aislado</span></div>
+          <div class="rag-row"><span>VECTORIAL</span><div class="rail"><div id="vector-fill"></div></div><span>HNSW</span></div>
+          <div class="rag-row"><span>LÉXICA</span><div class="rail"><div id="lexical-fill"></div></div><span>GIN</span></div>
+          <div class="rag-result"><i data-lucide="list-filter"></i><div><b id="rag-state">Correlación pendiente</b><span>Fusión RRF · citas y trazabilidad</span></div></div>
+          <div id="containment"><i data-lucide="shield-check"></i><span>Contención autorizada</span><small>Sensor nativo · rol administrador</small></div>
+          <div class="footnote">MODO LOCAL · ACCESO EXTERNO DESHABILITADO</div>
+        </section>
+        <section id="vault" class="station" style="left:-560px;top:725px">
+          <div class="eyebrow">04 / CUSTODIA</div>
+          <h2>El original se elimina.</h2>
+          <p>Permanece su referencia verificable.</p>
+          <div class="vault-body"><div class="vault-door"><i data-lucide="vault"></i><div id="vault-lock"><i data-lucide="lock-keyhole"></i></div></div><div class="vault-copy"><b>Bóveda soberana</b><span>SHA-256 / metadatos / tenant_id</span><div id="vault-result"><i data-lucide="check"></i> Referencia registrada</div></div></div>
+          <div class="policy"><div><b>Zero-Retention</b><span>Original purgado tras el análisis</span></div><div><b>MinIO local · opcional</b><span>Original solo con retención habilitada</span></div></div>
+          <div class="footnote">ESCENARIO SOBERANO · NO ES UNA EJECUCIÓN EN VIVO</div>
+        </section>
+        <div id="end-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5H9.2V16.2C7.4 14.9 6.3 12.9 6.3 10.6C6.3 7.3 8.85 4.8 12 4.8C15.15 4.8 17.7 7.3 17.7 10.6C17.7 12.9 16.6 14.9 14.8 16.2V18.5H19"/></svg><b>OMEGA</b><span>github.com/andresguerra321/OMEGA</span></div>
+        <div id="artifact" aria-label="Único artefacto del recorrido"><i data-lucide="file-warning"></i><span id="artifact-tag">IOC</span></div>
+      </div>
+      <div class="frame-bottom"><span>UN ARTEFACTO / UN RECORRIDO</span><span>01 — 04</span></div>
+    </div>
+  </main>
+  <aside id="transport" aria-label="Controles de vista previa">
+    <button id="play" type="button">Reproducir</button>
+    <input id="scrub" type="range" min="0" max="25" step="0.0166666667" value="0" aria-label="Tiempo en segundos">
+    <output id="time">00.00 / 25.00</output>
+    <span>1920 × 1080 · 60 fps · SIN AUDIO</span>
+  </aside>
+  <script type="module" src="/scene.js"></script>
+</body>
+</html>

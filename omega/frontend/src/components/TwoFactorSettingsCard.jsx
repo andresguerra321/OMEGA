@@ -292,15 +292,17 @@ export function TwoFactorSettingsCard({ authSession, required = false, onReadyCh
                 openSetupWizard('TOTP');
               }
             }}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer ${
+            className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${
               mfaEnabled && currentMethod !== 'EMAIL'
-                ? 'bg-[#2F6FED] border-[#6EA0FF]/60 shadow-[0_0_16px_rgba(47,111,237,0.45)]'
-                : 'bg-white/[0.08] border-white/[0.14] hover:bg-white/[0.14]'
+                ? 'bg-[#EDEDEF]'
+                : 'bg-white/[0.12] hover:bg-white/[0.18]'
             }`}
           >
             <span
-              className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                mfaEnabled && currentMethod !== 'EMAIL' ? 'translate-x-5.5' : 'translate-x-0.5'
+              className={`inline-block h-[18px] w-[18px] transform rounded-full shadow transition-transform duration-200 ${
+                mfaEnabled && currentMethod !== 'EMAIL'
+                  ? 'translate-x-[18px] bg-[#09090B]'
+                  : 'translate-x-0 bg-zinc-300'
               }`}
             />
           </button>
@@ -310,11 +312,11 @@ export function TwoFactorSettingsCard({ authSession, required = false, onReadyCh
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 space-y-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13.5px] font-medium text-[#F2F2F4]">
+              <span className="text-[13.5px] font-medium text-[#EDEDEF]">
                 Código por correo
               </span>
             </div>
-            <p className="text-xs text-[#8E95A5]">
+            <p className="text-xs text-[#7E8691]">
               Envía un código de 6 dígitos a tu correo configurado al iniciar sesión.
             </p>
           </div>
@@ -334,29 +336,21 @@ export function TwoFactorSettingsCard({ authSession, required = false, onReadyCh
                 openSetupWizard('EMAIL');
               }
             }}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer ${
+            className={`relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${
               mfaEnabled && currentMethod === 'EMAIL'
-                ? 'bg-[#2F6FED] border-[#6EA0FF]/60 shadow-[0_0_16px_rgba(47,111,237,0.45)]'
-                : 'bg-white/[0.08] border-white/[0.14] hover:bg-white/[0.14]'
+                ? 'bg-[#EDEDEF]'
+                : 'bg-white/[0.12] hover:bg-white/[0.18]'
             }`}
           >
             <span
-              className={`inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                mfaEnabled && currentMethod === 'EMAIL' ? 'translate-x-5.5' : 'translate-x-0.5'
+              className={`inline-block h-[18px] w-[18px] transform rounded-full shadow transition-transform duration-200 ${
+                mfaEnabled && currentMethod === 'EMAIL'
+                  ? 'translate-x-[18px] bg-[#09090B]'
+                  : 'translate-x-0 bg-zinc-300'
               }`}
             />
           </button>
         </div>
-
-        {mfaEnabled && !required && (
-          <button
-            type="button"
-            onClick={() => openSetupWizard(currentMethod === 'EMAIL' ? 'EMAIL' : 'TOTP')}
-            className="text-[11.5px] font-medium text-[#6EA0FF] hover:text-white transition-colors cursor-pointer"
-          >
-            Cambiar método 2FA →
-          </button>
-        )}
       </div>
 
       {required && errorMsg && !modalStep && <div role="alert" className="space-y-2 text-sm text-ink-primary">

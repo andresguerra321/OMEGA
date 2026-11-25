@@ -1,0 +1,25 @@
+Política de privacidad y tratamiento de datos personales de OMEGA
+
+1. Responsable
+{{name}}, persona natural en Colombia, NIT {{nit}}, domicilio comercial {{address}}, es responsable del tratamiento de los datos de cuentas y de la operación comercial de OMEGA. Canal para consultas y reclamos de privacidad: {{privacyEmail}}. Atención general: {{supportEmail}}.
+
+2. Datos y finalidades
+Se tratan datos de identificación y contacto, credenciales protegidas, preferencias de perfil, datos comerciales y de pagos, registros de seguridad y los documentos, textos derivados y resultados que el usuario aporte o genere. Se utilizan para crear y proteger cuentas, prestar las funciones solicitadas, procesar membresías, atender solicitudes, gestionar obligaciones contables y generar y conservar informes cuando el usuario lo solicita. No se requiere aportar contraseñas de Mercado Pago ni datos completos de tarjetas a OMEGA.
+
+3. Documentos de terceros y datos sensibles
+El usuario debe contar con una base válida para aportar documentos o datos de otras personas y limitar su contenido a lo necesario. Los documentos legales o técnicos pueden contener información sensible, reservada o de menores. No deben cargarse sin comprobar las autorizaciones y restricciones aplicables. La autorización para una cuenta no reemplaza el consentimiento específico que pueda requerirse para datos sensibles o de terceros.
+
+4. Proveedores y procesamiento con IA
+Mercado Pago procesa pagos conforme a sus propias condiciones. La infraestructura, el correo y los proveedores de IA que se utilicen pueden actuar como encargados o responsables según su servicio. El procesamiento documental con IA está sujeto a la configuración, permisos y consentimiento específico de esa función. Antes de publicar esta política, el responsable debe verificar y comunicar los proveedores efectivamente habilitados, los países de procesamiento, sus condiciones de conservación y los mecanismos aplicables a transmisiones o transferencias internacionales. No se afirma que todos los proveedores eliminen inmediatamente la información o excluyan su uso para entrenamiento sin verificar sus condiciones.
+
+5. Conservación y eliminación
+La eliminación de archivos originales en una modalidad sin conservación no elimina automáticamente metadatos, hashes, fragmentos indexados, eventos, informes guardados ni registros contables. Las evaluaciones compatibles conservan automáticamente observaciones saneadas para su historial; no conservan los archivos originales ni la captura completa del dispositivo. El usuario puede eliminar el detalle desde el historial con sus permisos actuales; esto elimina también los informes General asociados en la base operativa. Los informes se guardan para permitir descargas posteriores y las revisiones documentales incluyen cita, criterio, autor y fecha. La eliminación de un expediente elimina sus versiones de informes asociadas en la base operativa; los respaldos y las obligaciones legales pueden exigir procesos o períodos distintos. No existe actualmente una purga automática por antigüedad de evaluaciones o informes. Antes de publicar, el responsable debe completar los períodos y procedimientos realmente implantados para cada categoría, incluidos respaldos y datos fiscales. Las solicitudes de supresión se atienden verificando identidad, permisos y obligaciones de conservación aplicables.
+
+6. Derechos y atención
+El titular puede conocer, actualizar y rectificar sus datos, solicitar prueba de su autorización cuando proceda, conocer su uso, acceder a ellos y solicitar revocación o supresión en los casos permitidos. Puede ejercerlos mediante {{privacyEmail}}, identificando la solicitud y un medio de respuesta. Se aplican los procedimientos y términos de la Ley 1581 de 2012 y sus normas reglamentarias. También puede acudir ante la Superintendencia de Industria y Comercio cuando corresponda.
+
+7. Seguridad y comunicaciones
+Se aplican controles de autenticación, permisos y separación de cuentas. Los correos transaccionales comunican estados de cuenta, pagos e informes sin adjuntar documentos confidenciales. Los mensajes comerciales requieren una finalidad y autorización diferenciadas; aceptar los términos del servicio no equivale a consentir publicidad. Ningún sistema ofrece seguridad absoluta.
+
+8. Autorización y cambios
+La aplicación conserva la versión aceptada, la cuenta y la fecha de aceptación. La aceptación se solicita mediante una acción expresa; no se marca por defecto. Los cambios materiales de finalidad o que requieran nueva autorización se informan y gestionan antes de aplicarse. La versión y el estado de publicación se muestran junto a esta política.

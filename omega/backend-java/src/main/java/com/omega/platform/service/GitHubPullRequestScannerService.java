@@ -36,6 +36,9 @@ import org.springframework.web.client.RestClient;
  */
 @Service
 public class GitHubPullRequestScannerService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService creditService;
+
 
     private static final Logger log = LoggerFactory.getLogger(GitHubPullRequestScannerService.class);
     public static final String PR_COMMENT_MARKER = "<!-- omega-scan-pr -->";
@@ -371,6 +374,12 @@ public class GitHubPullRequestScannerService {
 
     @SuppressWarnings("unchecked")
     protected Map<String, Object> sendTarballToWorker(String tenantId, byte[] tarballBytes) {
+        if (creditService == null || !creditService.enforced()) return sendTarballToWorkerUnmetered(tenantId, tarballBytes);
+        return creditService.execute(java.util.UUID.fromString(tenantId), null, com.omega.platform.billing.CreditOperation.REPO_SCAN,
+                com.omega.platform.billing.CreditOperation.repositoryCredits(tarballBytes.length), () -> sendTarballToWorkerUnmetered(tenantId, tarballBytes));
+    }
+
+    protected Map<String, Object> sendTarballToWorkerUnmetered(String tenantId, byte[] tarballBytes) {
         if (forensicWorkerRestClient == null) {
             throw new IllegalStateException("forensicWorkerRestClient no disponible");
         }

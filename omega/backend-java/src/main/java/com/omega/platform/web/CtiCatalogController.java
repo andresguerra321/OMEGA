@@ -92,6 +92,7 @@ public class CtiCatalogController {
     }
 
     @PostMapping("/webloader-scan")
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.LINK_VERIFY)
     public WebIntelScanResponse scanWebIntel(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody WebIntelScanRequest request

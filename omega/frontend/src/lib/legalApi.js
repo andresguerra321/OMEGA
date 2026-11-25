@@ -27,6 +27,12 @@ export const legalApi = {
   revoke: (id, userId) => apiFetch(`${casePath(id)}/permissions/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
   activity: (id, options) => apiFetch(`${casePath(id)}/activity/page?${params(options)}`).then(page),
   timeline: (id, options = {}) => apiFetch(`${casePath(id)}/timeline?${params(options)}`),
+  observations: id => apiFetch(`${casePath(id)}/observations`).then(value => {
+    if (!Array.isArray(value?.items) || !Number.isFinite(value.total)) throw new Error('Respuesta de observaciones no válida');
+    return value;
+  }),
+  extractObservations: id => apiFetch(`${casePath(id)}/observations/extract`, { method: 'POST' }),
+  reviewObservation: (id, observationId, body) => apiFetch(`${casePath(id)}/observations/${encodeURIComponent(observationId)}`, { method: 'PATCH', body }),
   extractTimeline: id => apiFetch(`${casePath(id)}/timeline/extract`, { method: 'POST' }),
   reviewTimelineEvent: (id, eventId, body) => apiFetch(`${casePath(id)}/timeline/${encodeURIComponent(eventId)}`, { method: 'PATCH', body }),
   adminDocumentIssues: () => apiFetch('/legal/admin/documents/issues'),

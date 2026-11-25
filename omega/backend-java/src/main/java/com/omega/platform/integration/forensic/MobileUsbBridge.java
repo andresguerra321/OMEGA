@@ -17,6 +17,8 @@ import org.springframework.web.client.RestClientException;
  */
 @Service
 public class MobileUsbBridge {
+    @Autowired(required=false)
+    private com.omega.platform.service.AnalysisEvidenceService evidence;
 
     private final ForensicWorkerTransport transport;
     private final AuditLogService auditLogService;
@@ -103,5 +105,7 @@ public class MobileUsbBridge {
                 "MOBILE_USB",
                 modelHash,
                 meta);
+        if(evidence!=null) evidence.record(principal,null,"MOBILE_USB",res,
+            jobResponse.get("jobId")==null?null:jobResponse.get("jobId").toString());
     }
 }

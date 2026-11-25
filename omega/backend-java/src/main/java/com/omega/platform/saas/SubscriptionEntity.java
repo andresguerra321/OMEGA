@@ -38,6 +38,28 @@ public class SubscriptionEntity {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    @Column(name = "paid_verified", nullable = false)
+    private boolean paidVerified;
+    @Column(name = "billing_interval", nullable = false)
+    private String billingInterval = "MONTHLY";
+    @Column(name = "mp_preapproval_id")
+    private String mpPreapprovalId;
+    @Column(name = "source_payment_id")
+    private String sourcePaymentId;
+    @Column(name = "cancel_at_period_end", nullable = false)
+    private boolean cancelAtPeriodEnd;
+
+    public boolean isPaidVerified() { return paidVerified; }
+    public void setPaidVerified(boolean value) { paidVerified = value; }
+    public String getBillingInterval() { return billingInterval; }
+    public void setBillingInterval(String value) { billingInterval = value; }
+    public String getMpPreapprovalId() { return mpPreapprovalId; }
+    public void setMpPreapprovalId(String value) { mpPreapprovalId = value; }
+    public String getSourcePaymentId() { return sourcePaymentId; }
+    public void setSourcePaymentId(String value) { sourcePaymentId = value; }
+    public boolean isCancelAtPeriodEnd() { return cancelAtPeriodEnd; }
+    public void setCancelAtPeriodEnd(boolean value) { cancelAtPeriodEnd = value; }
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
 

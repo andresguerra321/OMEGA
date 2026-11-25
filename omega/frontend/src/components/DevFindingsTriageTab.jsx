@@ -25,7 +25,7 @@ const TRIAGE_LABELS = {
   CONFIRMED: 'Confirmado',
   FALSE_POSITIVE: 'Falso positivo',
   ACCEPTED: 'Aceptado',
-  RESOLVED: 'Resuelto',
+  RESOLVED: 'Marcado como resuelto',
 };
 
 function severityBadge(sev) {
@@ -41,6 +41,7 @@ export function DevFindingsTriageTab({ authSession }) {
   const [severity, setSeverity] = useState('');
   const [ruleId, setRuleId] = useState('');
   const [triageStatus, setTriageStatus] = useState('');
+  const [latestOnly, setLatestOnly] = useState(true);
 
   const [findings, setFindings] = useState([]);
   const [suppressions, setSuppressions] = useState([]);
@@ -61,7 +62,7 @@ export function DevFindingsTriageTab({ authSession }) {
     try {
       const [projs, fList] = await Promise.all([
         listDevProjects().catch(() => []),
-        listDevFindings({ projectId, severity, ruleId, triageStatus }),
+        listDevFindings({ projectId, severity, ruleId, triageStatus, latestOnly }),
       ]);
       setProjects(Array.isArray(projs) ? projs : []);
       setFindings(Array.isArray(fList) ? fList : []);
@@ -80,7 +81,7 @@ export function DevFindingsTriageTab({ authSession }) {
 
   useEffect(() => {
     void refresh();
-  }, [authSession?.tenantId, projectId, severity, triageStatus]);
+  }, [authSession?.tenantId, projectId, severity, triageStatus, ruleId, latestOnly]);
 
   async function toggleExpand(finding) {
     if (expandedId === finding.id) {
@@ -152,6 +153,10 @@ export function DevFindingsTriageTab({ authSession }) {
 
   return (
     <div className="space-y-5">
+      <details className="text-xs text-white/55"><summary className="cursor-pointer rounded-lg py-2">Opciones avanzadas</summary>
+        <button type="button" aria-pressed={!latestOnly} className="rounded-lg border border-white/[0.06] px-3 py-2" onClick={() => setLatestOnly(value => !value)}>{latestOnly ? 'Mostrar también evaluaciones anteriores' : 'Volver a la evaluación más reciente'}</button>
+        <p className="mt-2">{latestOnly ? 'Se muestran los hallazgos de la última evaluación de cada proyecto.' : 'El historial puede incluir hallazgos que ya no aparecen en la evaluación actual.'}</p>
+      </details>
       <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -308,6 +313,12 @@ export function DevFindingsTriageTab({ authSession }) {
 
                   {isOpen && (
                     <div className="rounded-xl bg-[#141923]/75 border border-white/[0.06] p-4 space-y-4 text-xs">
+                      {f.remediation && <div className="space-y-3">
+                        <p className="font-medium text-white/85">Corrección y verificación</p>
+                        <ol className="list-decimal space-y-2 pl-4 text-white/70">{f.remediation.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
+                        <p className="text-white/60">{f.remediation.verification}</p>
+                        <p className="text-[11px] text-white/40">{f.remediation.basis}</p>
+                      </div>}
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 font-mono">
                         <span>Detector: {f.detector}</span>
                         <span>Huella: {f.fingerprint?.slice(0, 16)}...</span>

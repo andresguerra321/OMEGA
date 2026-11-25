@@ -1,899 +1,380 @@
-import { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
+import { Component, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three/webgpu';
+import {
+  abs,
+  add,
+  atan,
+  clamp,
+  color,
+  cos,
+  dot,
+  exp,
+  float,
+  fract,
+  length,
+  mix,
+  mul,
+  pow,
+  sin,
+  smoothstep,
+  sub,
+  uniform,
+  uv,
+  vec2,
+} from 'three/tsl';
 import { SecurityCenterpieceFallback } from './SecurityCenterpieceFallback';
-import { formatCenterpieceStatus } from '../lib/centerpieceStatus';
 
-const SURFACE_COLORS = {
-  clean: {
-    rim: 0x2f6fed,
-    bevel: 0x22c55e,
-    bevelEmissive: 0x15803d,
-    core: 0x4ade80,
-    ring: 0x22c55e,
-    wire: 0x86efac,
-  },
-  alert: {
-    rim: 0x2f6fed,
-    bevel: 0xef4444,
-    bevelEmissive: 0x991b1b,
-    core: 0xf87171,
-    ring: 0xef4444,
-    wire: 0xfca5a5,
-  },
-  standby: {
-    rim: 0x2f6fed,
-    bevel: 0x2f6fed,
-    bevelEmissive: 0x1e3a8a,
-    core: 0x2f6fed,
-    ring: 0x2f6fed,
-    wire: 0xf2f2f4,
-  },
-};
+let hasCompletedInitialWarmup = false;
 
-const SURFACE_RING_ORIENTATION = {
-  windows: { tiltX: 0.14, tiltY: -0.2, secondaryZ: 0 },
-  usb: { tiltX: 0.36, tiltY: 0.24, secondaryZ: 0.28 },
-  link: { tiltX: -0.16, tiltY: 0.42, secondaryZ: -0.22 },
-  corpus: { tiltX: 0.48, tiltY: -0.12, secondaryZ: 0.16 },
-};
+class WebGLErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
-const LOGO_SCALE = 0.036;
-const mx = (x) => (x - 40) * LOGO_SCALE;
-const my = (y) => (40 - y) * LOGO_SCALE;
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
 
-function createShieldShape() {
-  const s = new THREE.Shape();
-  s.moveTo(mx(40), my(5.8));
-  s.bezierCurveTo(mx(45.8), my(9.6), mx(54.2), my(12.1), mx(65.5), my(13.6));
-  s.lineTo(mx(65.5), my(37.2));
-  s.bezierCurveTo(mx(65.5), my(53.8), mx(54.6), my(66.5), mx(40), my(73.6));
-  s.bezierCurveTo(mx(25.4), my(66.5), mx(14.5), my(53.8), mx(14.5), my(37.2));
-  s.lineTo(mx(14.5), my(13.6));
-  s.bezierCurveTo(mx(25.8), my(12.1), mx(34.2), my(9.6), mx(40), my(5.8));
-  return s;
-}
+  componentDidCatch() {
+    this.props.onError?.();
+  }
 
-function createInnerCavityPoints(zPos) {
-  const c = new THREE.Shape();
-  c.moveTo(mx(40), my(10.2));
-  c.bezierCurveTo(mx(45.2), my(13.3), mx(52.4), my(15.4), mx(61.5), my(16.8));
-  c.lineTo(mx(61.5), my(37));
-  c.bezierCurveTo(mx(61.5), my(51.3), mx(52.2), my(62.3), mx(40), my(68.4));
-  c.bezierCurveTo(mx(27.8), my(62.3), mx(18.5), my(51.3), mx(18.5), my(37));
-  c.lineTo(mx(18.5), my(16.8));
-  c.bezierCurveTo(mx(27.6), my(15.4), mx(34.8), my(13.3), mx(40), my(10.2));
-  return c.getPoints(96).map((p) => new THREE.Vector3(p.x, p.y, zPos));
-}
-
-function createOmegaGlyphShape() {
-  const g = new THREE.Shape();
-  g.moveTo(mx(34.2), my(54.2));
-  g.lineTo(mx(23.6), my(54.2));
-  g.lineTo(mx(23.6), my(47.2));
-  g.lineTo(mx(29.4), my(47.2));
-  g.bezierCurveTo(mx(26.1), my(43.9), mx(24.2), my(39.4), mx(24.2), my(34.3));
-  g.bezierCurveTo(mx(24.2), my(25.1), mx(31.1), my(18.2), mx(40), my(18.2));
-  g.bezierCurveTo(mx(48.9), my(18.2), mx(55.8), my(25.1), mx(55.8), my(34.3));
-  g.bezierCurveTo(mx(55.8), my(39.4), mx(53.9), my(43.9), mx(50.6), my(47.2));
-  g.lineTo(mx(56.4), my(47.2));
-  g.lineTo(mx(56.4), my(54.2));
-  g.lineTo(mx(45.8), my(54.2));
-  g.lineTo(mx(45.8), my(46.8));
-  g.bezierCurveTo(mx(48.7), my(44.1), mx(50.3), my(39.9), mx(50.3), my(34.7));
-  g.bezierCurveTo(mx(50.3), my(28), mx(45.8), my(23.2), mx(40), my(23.2));
-  g.bezierCurveTo(mx(34.2), my(23.2), mx(29.7), my(28), mx(29.7), my(34.7));
-  g.bezierCurveTo(mx(29.7), my(39.9), mx(31.3), my(44.1), mx(34.2), my(46.8));
-  g.lineTo(mx(34.2), my(54.2));
-  return g;
-}
-
-function attachScanDiscardShader(material, sharedUniforms, lagWorld = 0.28) {
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uScanOrigin = sharedUniforms.uScanOrigin;
-    shader.uniforms.uScanRadius = sharedUniforms.uScanRadius;
-    shader.uniforms.uScanEnabled = sharedUniforms.uScanEnabled;
-    shader.uniforms.uScanLag = { value: lagWorld };
-
-    shader.vertexShader = `varying vec3 vScanWorldPos;\n${shader.vertexShader}`.replace(
-      '#include <project_vertex>',
-      `#include <project_vertex>\n  vScanWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
-    );
-
-    shader.fragmentShader = `
-uniform vec3 uScanOrigin;
-uniform float uScanRadius;
-uniform float uScanEnabled;
-uniform float uScanLag;
-varying vec3 vScanWorldPos;
-${shader.fragmentShader}`.replace(
-      '#include <clipping_planes_fragment>',
-      `#include <clipping_planes_fragment>
-  if (uScanEnabled > 0.5) {
-    float scanWobble =
-      sin(vScanWorldPos.y * 5.0 + vScanWorldPos.x * 3.4) * 0.08 +
-      sin(vScanWorldPos.z * 6.4 + vScanWorldPos.y * 5.2) * 0.04;
-    if (distance(vScanWorldPos, uScanOrigin) > (uScanRadius - uScanLag + scanWobble)) {
-      discard;
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
     }
-  }`,
-    );
-  };
-  material.customProgramCacheKey = () => `omega-scan-${lagWorld}`;
+    return this.props.children;
+  }
 }
 
-function createWireCageMaterial(sharedUniforms, colorHex) {
-  return new THREE.ShaderMaterial({
-    uniforms: {
-      uScanOrigin: sharedUniforms.uScanOrigin,
-      uScanRadius: sharedUniforms.uScanRadius,
-      uWireOpacity: sharedUniforms.uWireOpacity,
-      uWireColor: { value: new THREE.Color(colorHex) },
-    },
-    vertexShader: `
-varying vec3 vScanWorldPos;
-void main() {
-  vec4 wp = modelMatrix * vec4(position, 1.0);
-  vScanWorldPos = wp.xyz;
-  gl_Position = projectionMatrix * viewMatrix * wp;
-}`,
-    fragmentShader: `
-uniform vec3 uScanOrigin;
-uniform float uScanRadius;
-uniform float uWireOpacity;
-uniform vec3 uWireColor;
-varying vec3 vScanWorldPos;
-void main() {
-  float d = distance(vScanWorldPos, uScanOrigin);
-  float rim = exp(-pow((d - uScanRadius) / 0.38, 2.0));
-  float ahead = smoothstep(uScanRadius + 1.8, uScanRadius + 0.1, d) * 0.28;
-  float trail = smoothstep(uScanRadius + 0.15, uScanRadius - 1.85, d) * 0.48;
-  float alpha = (rim * 1.4 + trail + ahead) * uWireOpacity;
-  if (alpha < 0.015) discard;
-  gl_FragColor = vec4(uWireColor, clamp(alpha, 0.0, 1.0));
-}`,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-}
-
-function buildOmegaCrestAssembly(palette, scanUniforms, disposables) {
-  const emblemPivot = new THREE.Group();
-  const cageGroup = new THREE.Group();
-
-  const reg = (item) => {
-    disposables.push(item);
-    return item;
-  };
-
-  // Materiales arquitectónicos Negro · Blanco · Azul Rey con shader de revelación wireframe
-  const obsidianShieldMat = reg(
-    new THREE.MeshStandardMaterial({
-      color: 0x0b1220,
-      metalness: 0.86,
-      roughness: 0.17,
-      emissive: 0x07122a,
-      emissiveIntensity: 0.38,
-    }),
-  );
-  attachScanDiscardShader(obsidianShieldMat, scanUniforms, 0.28);
-
-  const titaniumGlyphMat = reg(
-    new THREE.MeshStandardMaterial({
-      color: 0xf8fafc,
-      metalness: 0.64,
-      roughness: 0.18,
-      emissive: palette.core,
-      emissiveIntensity: 0.16,
-    }),
-  );
-  attachScanDiscardShader(titaniumGlyphMat, scanUniforms, 0.22);
-
-  // 1. Escudo OMEGA mecanizado en obsidiana (biseñado fino sin apariencia cartoon)
-  const shieldGeo = reg(
-    new THREE.ExtrudeGeometry(createShieldShape(), {
-      depth: 0.056,
-      bevelEnabled: true,
-      bevelThickness: 0.014,
-      bevelSize: 0.012,
-      bevelSegments: 4,
-      curveSegments: 28,
-    }),
-  );
-  shieldGeo.translate(0, 0, -0.028);
-  const shieldMesh = new THREE.Mesh(shieldGeo, obsidianShieldMat);
-  shieldMesh.castShadow = true;
-  emblemPivot.add(shieldMesh);
-
-  // Arista plateada ultrafina alrededor del bisel del escudo
-  const shieldEdgesGeo = reg(new THREE.EdgesGeometry(shieldGeo, 18));
-  const shieldRimMat = reg(
-    new THREE.LineBasicMaterial({
-      color: 0xe2e8f0,
-      transparent: true,
-      opacity: 0.44,
-    }),
-  );
-  emblemPivot.add(new THREE.LineSegments(shieldEdgesGeo, shieldRimMat));
-
-  // Cavidad óptica interior Azul Rey / verde / rojo en frente y reverso
-  const cavityLineMat = reg(
-    new THREE.LineBasicMaterial({
-      color: palette.bevel,
-      transparent: true,
-      opacity: 0.88,
-    }),
-  );
-  for (const zOff of [0.046, -0.046]) {
-    const cavGeo = reg(new THREE.BufferGeometry().setFromPoints(createInnerCavityPoints(zOff)));
-    emblemPivot.add(new THREE.LineLoop(cavGeo, cavityLineMat));
-  }
-
-  // 2. Monograma Ω esculpido en titanio blanco frontal y reverso simétrico para giro 360°
-  const omegaGeo = reg(
-    new THREE.ExtrudeGeometry(createOmegaGlyphShape(), {
-      depth: 0.022,
-      bevelEnabled: true,
-      bevelThickness: 0.007,
-      bevelSize: 0.006,
-      bevelSegments: 3,
-      curveSegments: 28,
-    }),
-  );
-  const omegaFront = new THREE.Mesh(omegaGeo, titaniumGlyphMat);
-  omegaFront.position.z = 0.038;
-  omegaFront.castShadow = true;
-  emblemPivot.add(omegaFront);
-
-  const omegaBack = new THREE.Mesh(omegaGeo, titaniumGlyphMat);
-  omegaBack.position.z = -0.038;
-  omegaBack.rotation.y = Math.PI;
-  emblemPivot.add(omegaBack);
-
-  // 3. Jaula temporal CAD wireframe (malla completa + contorno limpio) que conduce el barrido futurista
-  const wireMat = reg(createWireCageMaterial(scanUniforms, palette.wire));
-  const shieldWireGeo = reg(new THREE.WireframeGeometry(shieldGeo));
-  const shieldWire = new THREE.LineSegments(shieldWireGeo, wireMat);
-  shieldWire.scale.setScalar(1.003);
-  cageGroup.add(shieldWire);
-
-  const omegaEdgesGeo = reg(new THREE.EdgesGeometry(omegaGeo, 16));
-  const omegaWireFront = new THREE.LineSegments(omegaEdgesGeo, wireMat);
-  omegaWireFront.position.z = 0.04;
-  cageGroup.add(omegaWireFront);
-
-  emblemPivot.add(cageGroup);
-
-  // 4. Instrumentación circular futurista tipo cronómetro alrededor del emblema (proporcionada sin tapar <h1> ni <360°>)
-  const dialGroup = new THREE.Group();
-
-  // Dial radial de 60 marcas de calibración
-  const tickPositions = [];
-  const tickColors = [];
-  for (let i = 0; i < 60; i += 1) {
-    const ang = (i / 60) * Math.PI * 2;
-    const isMajor = i % 5 === 0;
-    const rIn = isMajor ? 1.37 : 1.42;
-    const rOut = 1.48;
-    tickPositions.push(Math.cos(ang) * rIn, Math.sin(ang) * rIn, -0.06);
-    tickPositions.push(Math.cos(ang) * rOut, Math.sin(ang) * rOut, -0.06);
-    const v = isMajor ? 0.62 : 0.22;
-    const b = isMajor ? 0.88 : 0.34;
-    tickColors.push(v, v + 0.05, b, v, v + 0.05, b);
-  }
-  const ticksGeo = reg(new THREE.BufferGeometry());
-  ticksGeo.setAttribute('position', new THREE.Float32BufferAttribute(tickPositions, 3));
-  ticksGeo.setAttribute('color', new THREE.Float32BufferAttribute(tickColors, 3));
-  const ticksMat = reg(
-    new THREE.LineBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.72,
-    }),
-  );
-  const ticksObj = new THREE.LineSegments(ticksGeo, ticksMat);
-  dialGroup.add(ticksObj);
-
-  // Arco de retícula en cuatro cuadrantes finos (contra-rotación sutil)
-  const bracketPositions = [];
-  const rBr = 1.24;
-  for (let q = 0; q < 4; q += 1) {
-    const startA = q * (Math.PI / 2) + 0.26;
-    const endA = (q + 1) * (Math.PI / 2) - 0.26;
-    const steps = 14;
-    for (let s = 0; s < steps; s += 1) {
-      const a0 = THREE.MathUtils.lerp(startA, endA, s / steps);
-      const a1 = THREE.MathUtils.lerp(startA, endA, (s + 1) / steps);
-      bracketPositions.push(Math.cos(a0) * rBr, Math.sin(a0) * rBr, -0.04);
-      bracketPositions.push(Math.cos(a1) * rBr, Math.sin(a1) * rBr, -0.04);
-    }
-  }
-  const bracketGeo = reg(new THREE.BufferGeometry());
-  bracketGeo.setAttribute('position', new THREE.Float32BufferAttribute(bracketPositions, 3));
-  const bracketMat = reg(
-    new THREE.LineBasicMaterial({
-      color: 0xcbd5e1,
-      transparent: true,
-      opacity: 0.38,
-    }),
-  );
-  const bracketObj = new THREE.LineSegments(bracketGeo, bracketMat);
-  dialGroup.add(bracketObj);
-
-  // Halo orbital fino Azul Rey reactivo al modo y superficie seleccionada
-  const gyroOrbitGroup = new THREE.Group();
-  gyroOrbitGroup.rotation.set(0.14, -0.2, 0);
-
-  const royalRingGeo = reg(new THREE.TorusGeometry(1.61, 0.0085, 16, 128));
-  const royalRingMat = reg(
-    new THREE.MeshStandardMaterial({
-      color: palette.bevel,
-      metalness: 0.25,
-      roughness: 0.2,
-      emissive: palette.bevelEmissive,
-      emissiveIntensity: 1.05,
-    }),
-  );
-  const royalRingMesh = new THREE.Mesh(royalRingGeo, royalRingMat);
-  gyroOrbitGroup.add(royalRingMesh);
-
-  // Nodo trazador micro-satélite desplazándose por el halo
-  const satNodeGeo = reg(new THREE.OctahedronGeometry(0.036, 0));
-  const satNodeMat = reg(
-    new THREE.MeshBasicMaterial({
-      color: 0xf8fafc,
-    }),
-  );
-  const satNode = new THREE.Mesh(satNodeGeo, satNodeMat);
-  satNode.position.set(1.61, 0, 0);
-  gyroOrbitGroup.add(satNode);
-
-  dialGroup.add(gyroOrbitGroup);
-
-  return {
-    emblemPivot,
-    cageGroup,
-    dialGroup,
-    ticksObj,
-    bracketObj,
-    gyroOrbitGroup,
-    satNode,
-    shieldRimMat,
-    cavityLineMat,
-    titaniumGlyphMat,
-    royalRingMat,
-    wireMat,
-  };
-}
-
-function buildPerspectiveFloorGrid(disposables) {
-  const halfExtent = 16.8;
-  const step = 1.4;
-  const subStep = 1.2;
-  const positions = [];
-  const colors = [];
-
-  const pushFadeColor = (x, z, isAccentAxis) => {
-    const radial = Math.hypot(x, z * 0.72);
-    const centerHole = THREE.MathUtils.smoothstep(radial, 1.6, 3.0);
-    const farFade = 1 - THREE.MathUtils.smoothstep(radial, 5.2, 14.5);
-    const intensity = centerHole * farFade;
-    const baseR = isAccentAxis ? 0.14 : 0.09;
-    const baseG = isAccentAxis ? 0.31 : 0.14;
-    const baseB = isAccentAxis ? 0.68 : 0.24;
-    colors.push(baseR * intensity, baseG * intensity, baseB * intensity);
-  };
-
-  for (let gx = -halfExtent; gx <= halfExtent + 0.001; gx += step) {
-    const isCenterAxis = Math.abs(gx) < 0.05;
-    for (let z = -18; z < 8; z += subStep) {
-      const z2 = Math.min(8, z + subStep);
-      positions.push(gx, -1.26, z, gx, -1.26, z2);
-      pushFadeColor(gx, z, isCenterAxis);
-      pushFadeColor(gx, z2, isCenterAxis);
-    }
-  }
-
-  for (let gz = -18; gz <= 8 + 0.001; gz += step) {
-    const isHorizonAxis = Math.abs(gz + 2.8) < 0.15;
-    for (let x = -halfExtent; x < halfExtent; x += subStep) {
-      const x2 = Math.min(halfExtent, x + subStep);
-      positions.push(x, -1.26, gz, x2, -1.26, gz);
-      pushFadeColor(x, gz, isHorizonAxis);
-      pushFadeColor(x2, gz, isHorizonAxis);
-    }
-  }
-
-  const gridGeo = new THREE.BufferGeometry();
-  gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  gridGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  const gridMat = new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.78,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  disposables.push(gridGeo, gridMat);
-  return new THREE.LineSegments(gridGeo, gridMat);
-}
-
-function buildAtmosphericMotes(disposables) {
-  const count = 88;
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
-
-  for (let i = 0; i < count; i += 1) {
-    const s1 = Math.sin(i * 12.9898) * 43758.5453;
-    const s2 = Math.sin(i * 78.233) * 19341.123;
-    const s3 = Math.sin(i * 39.425) * 65123.771;
-    const r1 = s1 - Math.floor(s1);
-    const r2 = s2 - Math.floor(s2);
-    const r3 = s3 - Math.floor(s3);
-
-    let x = (r1 - 0.5) * 17;
-    if (Math.abs(x) < 2.2) x += x >= 0 ? 2.4 : -2.4;
-    const y = -0.8 + r2 * 4.2;
-    const z = -11.5 + r3 * 12.5;
-
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
-
-    const royal = i % 3 === 0;
-    colors[i * 3] = royal ? 0.24 : 0.78;
-    colors[i * 3 + 1] = royal ? 0.51 : 0.85;
-    colors[i * 3 + 2] = royal ? 0.96 : 0.94;
-  }
-
-  const moteGeo = new THREE.BufferGeometry();
-  moteGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  moteGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const moteMat = new THREE.PointsMaterial({
-    size: 0.04,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.42,
-    depthWrite: false,
-  });
-  disposables.push(moteGeo, moteMat);
-  return new THREE.Points(moteGeo, moteMat);
-}
-
-export function SecurityCenterpiece3D({
-  surfaceId = 'windows',
-  healthy = false,
+/**
+ * Quad full-bleed único (WebGPU + TSL, 1 draw call, 60–120 FPS):
+ * - Renderiza el eclipse cinematográfico monumental de OMEGA sobre negro absoluto (#040508).
+ * - El arco inferior iluminado cruza directamente detrás de las 3 cards del dock para dar
+ *   refracción real al glassmorphism.
+ * - Micro-dithering (0.008) para cero banding, parallax suave (±18px) y respuesta a coreState.
+ * - Warm-up Gate: ejecuta compileAsync + 2 frames reales antes de disparar onWarmupComplete.
+ */
+function EclipseShaderQuad({
+  coreState = 'idle',
   alert = false,
-  spinNonce = 0,
+  reducedMotion = false,
+  pointerRef,
+  logoWrapperRef,
+  onWarmupComplete,
 }) {
-  const hostRef = useRef(null);
-  const canvasRef = useRef(null);
-  const spinTargetRef = useRef(0);
-  const scanResetNonceRef = useRef(spinNonce);
-  const lastSpinNonceRef = useRef(spinNonce);
-  const stateRef = useRef({ surfaceId, healthy, alert });
-  const [webglUnavailable, setWebglUnavailable] = useState(false);
+  const { gl, scene, camera, size } = useThree();
+  const compiledRef = useRef(false);
+  const framesAfterCompileRef = useRef(0);
+  const signaledRef = useRef(false);
 
-  useEffect(() => {
-    stateRef.current = { surfaceId, healthy, alert };
-  }, [surfaceId, healthy, alert]);
+  const phaseRef = useRef(0.85);
+  const speedRef = useRef(0.18);
+  const parallaxRef = useRef({ x: 0, y: 0 });
 
-  useEffect(() => {
-    if (spinNonce !== lastSpinNonceRef.current) {
-      lastSpinNonceRef.current = spinNonce;
-      spinTargetRef.current += Math.PI * 2;
-      scanResetNonceRef.current = spinNonce;
-    }
-  }, [spinNonce]);
+  const uPhase = useMemo(() => uniform(0.85), []);
+  const uAspect = useMemo(() => uniform(16 / 9), []);
+  const uParallax = useMemo(() => uniform(new THREE.Vector2(0, 0)), []);
+  const uBoost = useMemo(() => uniform(1.0), []);
+  const uAlert = useMemo(() => uniform(0.0), []);
 
-  useEffect(() => {
-    const host = hostRef.current;
-    const canvas = canvasRef.current;
-    if (!host || !canvas) return undefined;
+  const geometry = useMemo(() => new THREE.PlaneGeometry(2, 2), []);
 
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
-      queueMicrotask(() => setWebglUnavailable(true));
-      return undefined;
-    }
-
-    const handleContextLost = (event) => {
-      event.preventDefault();
-      setWebglUnavailable(true);
-    };
-    canvas.addEventListener('webglcontextlost', handleContextLost, false);
-
-    let renderer;
-    try {
-      renderer = new THREE.WebGLRenderer({
-        canvas,
-        antialias: true,
-        alpha: true,
-        powerPreference: 'default',
-      });
-    } catch {
-      canvas.removeEventListener('webglcontextlost', handleContextLost, false);
-      queueMicrotask(() => setWebglUnavailable(true));
-      return undefined;
-    }
-
-    renderer.setClearColor(0x000000, 0);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
-    camera.position.set(0, 1.18, 10.2);
-
-    const initialPalette = stateRef.current.alert
-      ? SURFACE_COLORS.alert
-      : stateRef.current.healthy
-        ? SURFACE_COLORS.clean
-        : SURFACE_COLORS.standby;
-
-    const scanUniforms = {
-      uScanOrigin: { value: new THREE.Vector3(-1.35, -1.1, 0.55) },
-      uScanRadius: { value: 0.9 },
-      uScanEnabled: { value: 1 },
-      uWireOpacity: { value: 0 },
-    };
-
-    const disposables = [];
-    const stageGroup = new THREE.Group();
-    const crestCenterGroup = new THREE.Group();
-    crestCenterGroup.position.set(0, 0.08, 0);
-
-    const {
-      emblemPivot,
-      cageGroup,
-      dialGroup,
-      ticksObj,
-      bracketObj,
-      gyroOrbitGroup,
-      satNode,
-      shieldRimMat,
-      cavityLineMat,
-      titaniumGlyphMat,
-      royalRingMat,
-      wireMat,
-    } = buildOmegaCrestAssembly(initialPalette, scanUniforms, disposables);
-
-    emblemPivot.rotation.y = -0.14;
-    crestCenterGroup.add(dialGroup);
-    crestCenterGroup.add(emblemPivot);
-    stageGroup.add(crestCenterGroup);
-
-    const perspectiveGrid = buildPerspectiveFloorGrid(disposables);
-    stageGroup.add(perspectiveGrid);
-
-    const motes = buildAtmosphericMotes(disposables);
-    stageGroup.add(motes);
-
-    // Anillos de pedestal + cruz de calibración sobre el piso en perspectiva
-    const floorRingGeo = new THREE.RingGeometry(1.76, 1.8, 96);
-    const floorRingMat = new THREE.MeshBasicMaterial({
-      color: initialPalette.ring,
-      transparent: true,
-      opacity: 0.24,
-      side: THREE.DoubleSide,
+  const material = useMemo(() => {
+    const mat = new THREE.MeshBasicNodeMaterial({
+      depthTest: false,
+      depthWrite: false,
     });
-    const innerFloorGeo = new THREE.RingGeometry(1.24, 1.26, 96);
-    const innerFloorMat = new THREE.MeshBasicMaterial({
-      color: 0x94a3b8,
-      transparent: true,
-      opacity: 0.18,
-      side: THREE.DoubleSide,
-    });
-    const crossGeo = new THREE.BufferGeometry().setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(
-        [
-          -2.1, -1.245, 0, -1.68, -1.245, 0,
-          1.68, -1.245, 0, 2.1, -1.245, 0,
-          0, -1.245, -2.1, 0, -1.245, -1.68,
-          0, -1.245, 1.68, 0, -1.245, 2.1,
-        ],
-        3,
-      ),
+
+    const st = uv();
+    // Centro ligeramente ajustado (y: 0.51) para respirar lejos del dock superior y abrazar la Ω
+    const centered = sub(st, vec2(0.5, 0.51));
+    const parallaxed = sub(centered, uParallax);
+    const p = vec2(mul(parallaxed.x, uAspect), parallaxed.y);
+
+    const r = length(p);
+    const angle = atan(p.y, p.x);
+
+    // Radio reducido ~17% (0.335 vs 0.405) para equilibrar la proporción con la Ω y liberar el borde superior
+    const eclipseRadius = float(0.335);
+    const signedDist = sub(r, eclipseRadius);
+    const absDist = abs(signedDist);
+
+    // Interior negro absoluto (#040508) con filo externo nítido
+    const outsideMask = smoothstep(float(-0.0045), float(0.004), signedDist);
+    // Corte perimetral suave para asegurar negro puro #040508 en las esquinas y el header superior
+    const viewportFalloff = smoothstep(float(0.62), float(0.35), r);
+
+    // Decaimiento exponencial cerrado: filo nítido + atmósfera muy contenida (~65% menos bloom)
+    const razorEdge = mul(outsideMask, exp(mul(absDist, float(-68.0))));
+    const sharpRim = mul(outsideMask, exp(mul(absDist, float(-18.0))));
+    const tightAtmo = mul(mul(outsideMask, exp(mul(absDist, float(-4.5)))), float(0.28));
+
+    // Máscara angular direccional (efecto media luna: ~35% activo, ~65% en sombra con filo tenue ~0.08)
+    const directionalArc = pow(mul(add(cos(sub(angle, uPhase)), float(1.0)), float(0.5)), float(2.5));
+    const directionalTight = pow(mul(add(cos(sub(angle, uPhase)), float(1.0)), float(0.5)), float(4.2));
+
+    // Lado en sombra: filo ultra tenue (0.08) que insinúa la curvatura sin iluminar el fondo
+    const rimWeight = add(float(0.08), mul(directionalArc, float(0.7)));
+    const atmoWeight = mul(directionalArc, float(0.42));
+
+    // Paleta sobria del Login: azul rey #2563EB -> #60A5FA sin quemarse a blanco puro (pico clamp <= 0.78)
+    const cVoid = color('#040508');
+    const cRoyal = mix(color('#2563EB'), color('#B91C1C'), mul(uAlert, float(0.75)));
+    const cIce = mix(color('#60A5FA'), color('#F87171'), mul(uAlert, float(0.7)));
+
+    const atmoStrength = clamp(
+      mul(mul(mul(tightAtmo, atmoWeight), viewportFalloff), uBoost),
+      float(0.0),
+      float(0.32),
     );
-    const crossMat = new THREE.LineBasicMaterial({
-      color: 0x94a3b8,
-      transparent: true,
-      opacity: 0.3,
-    });
-    disposables.push(floorRingGeo, floorRingMat, innerFloorGeo, innerFloorMat, crossGeo, crossMat);
+    const rimStrength = clamp(
+      mul(mul(mul(sharpRim, rimWeight), viewportFalloff), mul(uBoost, float(0.58))),
+      float(0.0),
+      float(0.52),
+    );
+    const flareStrength = clamp(
+      mul(mul(razorEdge, add(float(0.06), mul(directionalTight, float(0.72)))), uBoost),
+      float(0.0),
+      float(0.78),
+    );
 
-    const floorRing = new THREE.Mesh(floorRingGeo, floorRingMat);
-    floorRing.position.set(0, -1.24, 0);
-    floorRing.rotation.x = -Math.PI / 2;
-    stageGroup.add(floorRing);
+    const ringColor = mix(cRoyal, cIce, clamp(mul(directionalTight, float(0.85)), float(0.0), float(0.78)));
+    const lightSum = add(
+      mul(cRoyal, add(atmoStrength, rimStrength)),
+      mul(ringColor, flareStrength),
+    );
 
-    const innerFloor = new THREE.Mesh(innerFloorGeo, innerFloorMat);
-    innerFloor.position.set(0, -1.24, 0);
-    innerFloor.rotation.x = -Math.PI / 2;
-    stageGroup.add(innerFloor);
+    // Micro-dithering (0.008) en el fragment shader para cero banding en el degradado oscuro
+    const noiseSeed = dot(st, vec2(12.9898, 78.233));
+    const dither = mul(sub(fract(mul(sin(noiseSeed), float(43758.5453))), float(0.5)), float(0.008));
 
-    stageGroup.add(new THREE.LineSegments(crossGeo, crossMat));
+    const composed = add(cVoid, lightSum);
+    mat.colorNode = add(composed, vec2(dither, dither).x);
+    return mat;
+  }, [uAlert, uAspect, uBoost, uParallax, uPhase]);
 
-    const shadowPlaneGeo = new THREE.PlaneGeometry(8, 8);
-    const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.36 });
-    disposables.push(shadowPlaneGeo, shadowPlaneMat);
-    const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
-    shadowPlane.position.set(0, -1.25, 0);
-    shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.receiveShadow = true;
-    stageGroup.add(shadowPlane);
+  useEffect(() => {
+    if (!gl || !scene || !camera) return undefined;
+    let disposed = false;
 
-    scene.add(stageGroup);
-
-    // Iluminación de estudio limpia para resaltar biseles del escudo y titanio Ω
-    const hemi = new THREE.HemisphereLight(0xe2e8f0, 0x050a14, 0.95);
-    scene.add(hemi);
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.9);
-    keyLight.position.set(2.6, 4.6, 5.4);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024);
-    keyLight.shadow.camera.near = 1;
-    keyLight.shadow.camera.far = 16;
-    scene.add(keyLight);
-
-    const royalRim = new THREE.DirectionalLight(initialPalette.rim, 2.6);
-    royalRim.position.set(-4.4, 1.9, -2.6);
-    scene.add(royalRim);
-
-    const fillFront = new THREE.DirectionalLight(0xf2f2f4, 1.15);
-    fillFront.position.set(0.4, 0.3, 4.8);
-    scene.add(fillFront);
-
-    const reduceMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
-    let viewport = { width: 1, height: 1, left: 0, top: 0 };
-    const pointerTarget = { x: 0, y: 0 };
-    const smoothPointer = { x: 0, y: 0 };
-    let dragActive = false;
-    let dragStartX = 0;
-    let dragRotationOffset = 0;
-    let spinCurrent = 0;
-
-    const resize = () => {
-      const rect = host.getBoundingClientRect();
-      viewport = {
-        width: Math.max(1, rect.width),
-        height: Math.max(1, rect.height),
-        left: rect.left,
-        top: rect.top,
-      };
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-      renderer.setSize(viewport.width, viewport.height, false);
-      camera.aspect = viewport.width / viewport.height;
-      camera.position.z = viewport.width < 640 ? 14.2 : viewport.width < 1100 ? 11.2 : 10.2;
-      camera.updateProjectionMatrix();
-    };
-
-    const ro = new ResizeObserver(resize);
-    ro.observe(host);
-    resize();
-
-    const onPointerMove = (ev) => {
-      if (dragActive) {
-        const dx = ev.clientX - dragStartX;
-        dragStartX = ev.clientX;
-        dragRotationOffset += dx * 0.0085;
-        return;
+    async function runWarmup() {
+      try {
+        if (typeof gl.compileAsync === 'function') {
+          await gl.compileAsync(scene, camera);
+        }
+      } catch {
+        // Continuar si compileAsync no está disponible
       }
-      if (ev.pointerType === 'touch') return;
-      pointerTarget.x = ((ev.clientX - viewport.left) / viewport.width) * 2 - 1;
-      pointerTarget.y = ((ev.clientY - viewport.top) / viewport.height) * 2 - 1;
-    };
-
-    const onPointerDown = (ev) => {
-      if (ev.pointerType === 'touch') return;
-      if (
-        ev.target instanceof Element &&
-        ev.target.closest('button, a, input, select, form, header, footer, [role="listbox"]')
-      ) {
-        return;
+      if (!disposed) {
+        compiledRef.current = true;
       }
-      dragActive = true;
-      dragStartX = ev.clientX;
-    };
-
-    const onPointerUp = () => {
-      dragActive = false;
-    };
-
-    const onPointerLeave = () => {
-      dragActive = false;
-      pointerTarget.x = 0;
-      pointerTarget.y = 0;
-    };
-
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    window.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointerup', onPointerUp);
-    document.addEventListener('mouseleave', onPointerLeave);
-
-    let rafId = 0;
-    let lastTs = performance.now();
-    const startTs = lastTs;
-    let scanStartTs = startTs;
-    let appliedScanNonce = scanResetNonceRef.current;
-    const SCAN_DURATION = 1.25;
-    const SCAN_MAX_RADIUS = 4.6;
-
-    const targetBevelColor = new THREE.Color(initialPalette.bevel);
-    const targetEmissiveColor = new THREE.Color(initialPalette.bevelEmissive);
-    const targetCoreColor = new THREE.Color(initialPalette.core);
-    const targetRingColor = new THREE.Color(initialPalette.ring);
-    const targetWireColor = new THREE.Color(initialPalette.wire);
-
-    const smoothstep = (edge0, edge1, x) => {
-      const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-      return t * t * (3 - 2 * t);
-    };
-
-    const renderFrame = (now) => {
-      const rawDt = (now - lastTs) / 1000;
-      const dt = Math.min(Math.max(rawDt, 0.001), 1 / 30);
-      lastTs = now;
-      const elapsed = (now - startTs) / 1000;
-
-      const { surfaceId: curSurface, healthy: curHealthy, alert: curAlert } = stateRef.current;
-      const curPalette = curAlert
-        ? SURFACE_COLORS.alert
-        : curHealthy
-          ? SURFACE_COLORS.clean
-          : SURFACE_COLORS.standby;
-      targetBevelColor.setHex(curPalette.bevel);
-      targetEmissiveColor.setHex(curPalette.bevelEmissive);
-      targetCoreColor.setHex(curPalette.core);
-      targetRingColor.setHex(curPalette.ring);
-      targetWireColor.setHex(curPalette.wire);
-
-      const colorLerp = Math.min(1, dt * 6);
-      cavityLineMat.color.lerp(targetBevelColor, colorLerp);
-      royalRingMat.color.lerp(targetBevelColor, colorLerp);
-      royalRingMat.emissive.lerp(targetEmissiveColor, colorLerp);
-      titaniumGlyphMat.emissive.lerp(targetCoreColor, colorLerp);
-      floorRingMat.color.lerp(targetRingColor, colorLerp);
-      wireMat.uniforms.uWireColor.value.lerp(targetWireColor, colorLerp);
-
-      const targetOrient = SURFACE_RING_ORIENTATION[curSurface] || SURFACE_RING_ORIENTATION.windows;
-      gyroOrbitGroup.rotation.x += (targetOrient.tiltX - gyroOrbitGroup.rotation.x) * Math.min(1, dt * 4);
-      gyroOrbitGroup.rotation.y += (targetOrient.tiltY - gyroOrbitGroup.rotation.y) * Math.min(1, dt * 4);
-
-      if (appliedScanNonce !== scanResetNonceRef.current) {
-        appliedScanNonce = scanResetNonceRef.current;
-        scanStartTs = now;
-      }
-
-      const lookY = viewport.width < 640 ? -0.12 : -0.06;
-
-      if (reduceMotion) {
-        scanUniforms.uScanEnabled.value = 0;
-        cageGroup.visible = false;
-        shieldRimMat.opacity = 0.44;
-        cavityLineMat.opacity = 0.88;
-        camera.position.x = -0.2;
-        camera.position.y = 1.18;
-        camera.lookAt(-0.08, lookY, 0);
-        emblemPivot.rotation.y = -0.14 + dragRotationOffset + spinTargetRef.current;
-        renderer.render(scene, camera);
-        return;
-      }
-
-      // Barrido futurista con wireframe completo sincronizado (sin cortes huecos en el borde)
-      const scanElapsed = (now - scanStartTs) / 1000;
-      const e = Math.min(1, scanElapsed / SCAN_DURATION);
-      if (e < 1) {
-        const eased = 0.28 + 0.72 * (1 - Math.pow(1 - e, 1.35));
-        scanUniforms.uScanEnabled.value = 1;
-        scanUniforms.uScanRadius.value = eased * SCAN_MAX_RADIUS;
-        scanUniforms.uWireOpacity.value = Math.min(1, e / 0.08 + 0.35) * (1 - smoothstep(0.68, 1, e));
-        const rimReveal = smoothstep(0.45, 0.98, e);
-        shieldRimMat.opacity = 0.44 * rimReveal;
-        cavityLineMat.opacity = 0.88 * rimReveal;
-        cageGroup.visible = true;
-      } else {
-        scanUniforms.uScanEnabled.value = 0;
-        scanUniforms.uWireOpacity.value = 0;
-        shieldRimMat.opacity = 0.44;
-        cavityLineMat.opacity = 0.88;
-        cageGroup.visible = false;
-      }
-
-      const alpha = 1 - Math.pow(1 - 0.055, dt * 60);
-      smoothPointer.x += (pointerTarget.x - smoothPointer.x) * alpha;
-      smoothPointer.y += (pointerTarget.y - smoothPointer.y) * alpha;
-      spinCurrent += (spinTargetRef.current - spinCurrent) * 0.09;
-
-      // Paralaje suave de cámara y escudo OMEGA
-      camera.position.x = -smoothPointer.x * 0.48;
-      camera.position.y = 1.18 + smoothPointer.y * 0.2;
-      camera.lookAt(camera.position.x * 0.3, lookY + (camera.position.y - 1.18) * 0.32, 0);
-
-      emblemPivot.rotation.y =
-        -0.14 + Math.sin(elapsed * 0.42) * 0.14 + smoothPointer.x * 0.18 + dragRotationOffset + spinCurrent;
-      emblemPivot.rotation.x = smoothPointer.y * 0.05;
-      crestCenterGroup.position.y = 0.08 + Math.sin(elapsed * 1.15) * 0.038;
-
-      // Anillos de calibración tipo cronómetro de precisión
-      ticksObj.rotation.z = elapsed * 0.055;
-      bracketObj.rotation.z = -elapsed * 0.095;
-      gyroOrbitGroup.rotation.z += dt * 0.28;
-      const satAngle = elapsed * 0.65;
-      satNode.position.set(Math.cos(satAngle) * 1.61, Math.sin(satAngle) * 1.61, 0);
-
-      // Deriva continua del piso reticulado y micro-partículas
-      perspectiveGrid.position.z = (elapsed * 0.2) % 1.4;
-      motes.rotation.y = elapsed * 0.014;
-
-      renderer.render(scene, camera);
-      if (!document.hidden) {
-        rafId = requestAnimationFrame(renderFrame);
-      }
-    };
-
-    const onVisibility = () => {
-      cancelAnimationFrame(rafId);
-      if (!document.hidden && !reduceMotion) {
-        lastTs = performance.now();
-        rafId = requestAnimationFrame(renderFrame);
-      }
-    };
-
-    renderFrame(performance.now());
-    if (!reduceMotion && !document.hidden) {
-      rafId = requestAnimationFrame(renderFrame);
     }
-    document.addEventListener('visibilitychange', onVisibility);
 
+    void runWarmup();
     return () => {
-      cancelAnimationFrame(rafId);
-      ro.disconnect();
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointerup', onPointerUp);
-      document.removeEventListener('mouseleave', onPointerLeave);
-      document.removeEventListener('visibilitychange', onVisibility);
-      canvas.removeEventListener('webglcontextlost', handleContextLost, false);
-      disposables.forEach((item) => item?.dispose?.());
-      renderer.dispose();
+      disposed = true;
     };
-  }, []);
+  }, [gl, scene, camera]);
 
-  const { statusText } = formatCenterpieceStatus(surfaceId, healthy, alert);
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
 
-  if (webglUnavailable) {
-    return (
-      <SecurityCenterpieceFallback
-        surfaceId={surfaceId}
-        healthy={healthy}
-        alert={alert}
-      />
-    );
-  }
+  useFrame((_, delta) => {
+    if (!signaledRef.current && compiledRef.current) {
+      framesAfterCompileRef.current += 1;
+      if (framesAfterCompileRef.current >= 2) {
+        signaledRef.current = true;
+        onWarmupComplete?.();
+      }
+    }
+
+    const dt = Math.min(delta, 0.05);
+    const smooth = 1 - Math.exp(-5.0 * dt);
+
+    const w = Math.max(size.width, 1);
+    const h = Math.max(size.height, 1);
+    uAspect.value = w / h;
+
+    // Velocidad y luminosidad sobrias conectadas a coreState ('idle' | 'focus' | 'scanning')
+    const targetSpeed = reducedMotion
+      ? 0
+      : coreState === 'scanning'
+        ? 0.36
+        : coreState === 'focus'
+          ? 0.26
+          : 0.18;
+    const targetBoost =
+      coreState === 'scanning' ? 1.18 : coreState === 'focus' ? 1.12 : 1.0;
+
+    speedRef.current = THREE.MathUtils.lerp(speedRef.current, targetSpeed, smooth);
+    if (!reducedMotion) {
+      phaseRef.current = (phaseRef.current + dt * speedRef.current) % (Math.PI * 2);
+    }
+
+    uPhase.value = phaseRef.current;
+    uBoost.value = THREE.MathUtils.lerp(uBoost.value, targetBoost, smooth);
+    uAlert.value = THREE.MathUtils.lerp(uAlert.value, alert ? 1.0 : 0.0, smooth);
+
+    // Parallax contenido (±18px en pantalla con damping suave)
+    const maxPx = reducedMotion ? 0 : 18;
+    const targetPxX = THREE.MathUtils.clamp(pointerRef.current.x, -1, 1) * maxPx;
+    const targetPxY = THREE.MathUtils.clamp(pointerRef.current.y, -1, 1) * maxPx;
+
+    parallaxRef.current.x = THREE.MathUtils.lerp(parallaxRef.current.x, targetPxX, smooth);
+    parallaxRef.current.y = THREE.MathUtils.lerp(parallaxRef.current.y, targetPxY, smooth);
+
+    uParallax.value.set(parallaxRef.current.x / w, parallaxRef.current.y / h);
+
+    // Sincronizar sutilmente el logo Ω SVG central con el parallax sin causar re-renders de React
+    if (logoWrapperRef?.current) {
+      const lx = parallaxRef.current.x * 0.55;
+      const ly = -parallaxRef.current.y * 0.55;
+      logoWrapperRef.current.style.transform = `translate3d(${lx.toFixed(2)}px, ${ly.toFixed(2)}px, 0)`;
+    }
+  });
+
+  return <mesh geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+/**
+ * Logo Ω vectorial limpio y arquitectónico centrado en el vacío negro del eclipse:
+ * - Degradado vertical refinado (#F8FAFC -> #94A3B8) a opacidad 0.92 con fino borde especular
+ *   y sombra difusa sutil para integrarse en el vacío negro sin parecer extrusión 3D gruesa.
+ */
+function CentralOmegaMark({ alert = false, coreState = 'idle', wrapperRef }) {
+  const uid = useId().replace(/:/g, '');
+  const fillGradId = `omegaCenterFill-${uid}`;
+  const strokeGradId = `omegaCenterStroke-${uid}`;
+  const isActive = coreState === 'focus' || coreState === 'scanning';
 
   return (
     <div
-      ref={hostRef}
-      role="region"
-      aria-label={statusText}
-      className="relative w-full h-full touch-pan-y cursor-grab active:cursor-grabbing select-none"
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-[1] flex items-center justify-center"
+      style={{ paddingBottom: '2vh' }}
     >
-      <span className="sr-only" role="status" aria-live="polite">
-        {statusText}
-      </span>
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className="block w-full h-full touch-pan-y"
-      />
+      <div
+        ref={wrapperRef}
+        className="relative flex items-center justify-center will-change-transform"
+      >
+        <svg
+          viewBox="0 0 80 80"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={`h-[144px] w-[144px] sm:h-[160px] sm:w-[160px] lg:h-[172px] lg:w-[172px] transition-opacity duration-500 drop-shadow-[0_14px_34px_rgba(4,5,8,0.95)] ${
+            isActive ? 'opacity-90' : 'opacity-80'
+          }`}
+        >
+          <defs>
+            <linearGradient id={fillGradId} x1="40" y1="16" x2="40" y2="58" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor={alert ? '#FCA5A5' : '#E2E8F0'} stopOpacity="0.72" />
+              <stop offset="55%" stopColor={alert ? '#EF4444' : '#94A3B8'} stopOpacity="0.62" />
+              <stop offset="100%" stopColor={alert ? '#7F1D1D' : '#475569'} stopOpacity="0.52" />
+            </linearGradient>
+            <linearGradient id={strokeGradId} x1="20" y1="18" x2="60" y2="56" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#E2E8F0" stopOpacity="0.34" />
+              <stop offset="50%" stopColor={alert ? '#F87171' : '#60A5FA'} stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#1E293B" stopOpacity="0.25" />
+            </linearGradient>
+          </defs>
+
+          {/* Silueta arquitectónica limpia y estilizada de Ω (proporción clásica, cero volumen inflado) */}
+          <path
+            d="M33.2 55.6H22.2V49.8H29.4C25.5 46.1 23.2 40.9 23.2 35C23.2 25.1 30.6 17.6 40 17.6C49.4 17.6 56.8 25.1 56.8 35C56.8 40.9 54.5 46.1 50.6 49.8H57.8V55.6H46.8V49.2C50 46.2 51.9 41.3 51.9 35.4C51.9 27.9 46.8 22.4 40 22.4C33.2 22.4 28.1 27.9 28.1 35.4C28.1 41.3 30 46.2 33.2 49.2V55.6Z"
+            fill={`url(#${fillGradId})`}
+            stroke={`url(#${strokeGradId})`}
+            strokeWidth="0.9"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+export function SecurityCenterpiece3D({
+  coreState = 'idle',
+  surfaceId = 'repo',
+  healthy = false,
+  alert = false,
+  reducedMotion = false,
+  onSceneReady,
+}) {
+  const pointerRef = useRef({ x: 0, y: 0 });
+  const logoWrapperRef = useRef(null);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [isReturnVisit] = useState(() => hasCompletedInitialWarmup);
+
+  useEffect(() => {
+    if (reducedMotion) return undefined;
+    const onPointerMove = (e) => {
+      if (window.innerWidth <= 0 || window.innerHeight <= 0) return;
+      pointerRef.current.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointerRef.current.y = -((e.clientY / window.innerHeight) * 2 - 1);
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onPointerMove);
+  }, [reducedMotion]);
+
+  const handleWarmupComplete = useCallback(() => {
+    hasCompletedInitialWarmup = true;
+    setSceneReady(true);
+    onSceneReady?.();
+  }, [onSceneReady]);
+
+  const fallback = (
+    <SecurityCenterpieceFallback surfaceId={surfaceId} healthy={healthy} alert={alert} />
+  );
+
+  return (
+    <div
+      aria-hidden="true"
+      className="fixed inset-0 z-0 bg-[#040508] pointer-events-none select-none overflow-hidden"
+    >
+      {/* Canvas + Logo Ω en crossfade suave (450ms ease-out) tras compileAsync + 2 frames reales */}
+      <div
+        className={`absolute inset-0 transition-opacity ease-out ${
+          isReturnVisit ? 'duration-[250ms]' : 'duration-[450ms]'
+        } ${sceneReady ? 'opacity-100' : 'opacity-0'}`}
+      >
+        <WebGLErrorBoundary fallback={fallback} onError={handleWarmupComplete}>
+          <Canvas
+            orthographic
+            dpr={[1, 1.5]}
+            camera={{ left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 10, position: [0, 0, 1] }}
+            gl={async (props) => {
+              const renderer = new THREE.WebGPURenderer({
+                canvas: props.canvas,
+                antialias: true,
+                powerPreference: 'high-performance',
+                alpha: false,
+              });
+              await renderer.init();
+              renderer.toneMapping = THREE.AgXToneMapping;
+              renderer.toneMappingExposure = 1.0;
+              return renderer;
+            }}
+          >
+            <EclipseShaderQuad
+              coreState={coreState}
+              alert={alert}
+              reducedMotion={reducedMotion}
+              pointerRef={pointerRef}
+              logoWrapperRef={logoWrapperRef}
+              onWarmupComplete={handleWarmupComplete}
+            />
+          </Canvas>
+        </WebGLErrorBoundary>
+
+        <CentralOmegaMark alert={alert} coreState={coreState} wrapperRef={logoWrapperRef} />
+      </div>
     </div>
   );
 }

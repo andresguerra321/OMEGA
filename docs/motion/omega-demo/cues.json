@@ -1,0 +1,12 @@
+[
+  { "t": 3.5, "type": "movement", "desc": "Cámara y artefacto hacia el escritorio", "dur": 2 },
+  { "t": 5.5, "type": "click", "desc": "Contacto con el carril de triaje" },
+  { "t": 8.3, "type": "hover_or_small_ui", "desc": "Triaje completado" },
+  { "t": 9.5, "type": "movement", "desc": "Descenso al perímetro RAG", "dur": 2 },
+  { "t": 12.2, "type": "hover_or_small_ui", "desc": "Sello de aislamiento por tenant" },
+  { "t": 14.5, "type": "success", "desc": "Correlación con citas" },
+  { "t": 16, "type": "click", "desc": "Contención autorizada" },
+  { "t": 16.25, "type": "movement", "desc": "Traslado a la bóveda soberana", "dur": 2 },
+  { "t": 19, "type": "success", "desc": "El artefacto se transforma en referencia SHA-256" },
+  { "t": 21.5, "type": "reveal", "desc": "Apertura continua del recorrido", "dur": 2 }
+]

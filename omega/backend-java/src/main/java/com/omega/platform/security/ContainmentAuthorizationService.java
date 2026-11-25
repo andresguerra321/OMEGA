@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ContainmentAuthorizationService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountAccessService accountAccess;
     private final UserRepository users;
     private final PasswordEncoder passwords;
     private final TwoFactorService twoFactor;
@@ -28,7 +30,8 @@ public class ContainmentAuthorizationService {
         String key = "containment-auth:" + principal.userId();
         limiter.assertAllowed(key, principal.email());
         UserEntity user = users.findByIdAndTenantId(principal.userId(), principal.tenantId())
-                .filter(u -> u.isActive() && u.getRole() == Role.ADMIN)
+                .filter(u -> u.isActive() && (u.getRole() == Role.ADMIN || accountAccess != null
+                        && accountAccess.canManage(u.getTenantId(),u.getId(),u.getRole())))
                 .orElseThrow(() -> new AccessDeniedException("Administrador activo requerido"));
         if (password == null || !passwords.matches(password, user.getPasswordHash())) {
             limiter.recordFailure(key, principal.email());

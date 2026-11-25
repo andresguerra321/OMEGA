@@ -33,6 +33,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class MvtTriageBridge {
 
+    @Autowired(required=false)
+    private com.omega.platform.service.AnalysisEvidenceService evidence;
     private final ForensicWorkerTransport transport;
     private final ArchiveSecurityValidator archiveSecurityValidator;
     private final ExpedienteAuthorizationService authorizationService;
@@ -84,13 +86,14 @@ public class MvtTriageBridge {
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_TRIAGE",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"TRIAGE_FILES",response);
         return response;
     }
 
     @Transactional
     public LinkVerifyResponse verifyLink(OmegaPrincipal principal, UUID expedienteId, String rawUrl, boolean activeProbe) {
         if (expedienteId != null) {
-            authorizationService.requireReadAccess(principal, expedienteId);
+            authorizationService.requireWriteAccess(principal, expedienteId);
         }
 
         LinkVerifyResponse rawResponse = transport.postJsonToWorker(
@@ -115,6 +118,7 @@ public class MvtTriageBridge {
                 "LINK",
                 response.host(),
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"LINK_VERIFY",response);
         return response;
     }
 
@@ -124,7 +128,7 @@ public class MvtTriageBridge {
             UUID expedienteId,
             List<MultipartFile> files) {
         if (expedienteId != null) {
-            authorizationService.requireReadAccess(principal, expedienteId);
+            authorizationService.requireWriteAccess(principal, expedienteId);
         }
         archiveSecurityValidator.validateUploads(files);
 
@@ -149,6 +153,7 @@ public class MvtTriageBridge {
                 expedienteId != null ? "EXPEDIENTE" : "YARA_SCAN",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"YARA_SCAN",response);
         return response;
     }
 
@@ -167,7 +172,7 @@ public class MvtTriageBridge {
             UUID expedienteId,
             MultipartFile file) {
         if (expedienteId != null) {
-            authorizationService.requireReadAccess(principal, expedienteId);
+            authorizationService.requireWriteAccess(principal, expedienteId);
         }
         archiveSecurityValidator.validateUploads(List.of(file));
 
@@ -190,6 +195,7 @@ public class MvtTriageBridge {
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_IOC",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"IOC_FILE",response);
         return response;
     }
 
@@ -199,7 +205,7 @@ public class MvtTriageBridge {
             UUID expedienteId,
             String indicatorsText) {
         if (expedienteId != null) {
-            authorizationService.requireReadAccess(principal, expedienteId);
+            authorizationService.requireWriteAccess(principal, expedienteId);
         }
 
         Map<String, Object> response = transport.postJsonToWorkerMap(
@@ -219,6 +225,7 @@ public class MvtTriageBridge {
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_IOC",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"IOC_TEXT",response);
         return response;
     }
 
@@ -249,6 +256,7 @@ public class MvtTriageBridge {
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_TRIAGE",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"DEVICE_LIVE",response);
         return response;
     }
 
@@ -279,6 +287,7 @@ public class MvtTriageBridge {
                 expedienteId != null ? "EXPEDIENTE" : "FORENSIC_TRIAGE",
                 expedienteId != null ? expedienteId.toString() : "ram-ephemeral",
                 meta);
+        if(evidence!=null) evidence.record(principal,expedienteId,"PC_LIVE",response);
         return response;
     }
 

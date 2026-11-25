@@ -58,6 +58,9 @@ import org.springframework.web.util.HtmlUtils;
  */
 @Service
 public class PilotOpsService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.AccountSeatService seats;
+
 
     private static final Logger log = LoggerFactory.getLogger(PilotOpsService.class);
     public static final String INVITE_TOKEN_PREFIX = "omega_inv_";
@@ -387,6 +390,7 @@ public class PilotOpsService {
             Role targetRole
     ) {
         requireAdmin(admin);
+        if (seats != null) seats.requireAvailableSeat(admin.tenantId());
         String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase(Locale.ROOT);
         if (!EMAIL_PATTERN.matcher(email).matches() || email.length() > 255) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ingresa un correo electrónico válido.");
@@ -585,6 +589,7 @@ public class PilotOpsService {
             throw new ConflictException("Ya existe un usuario con este correo en la organización.");
         }
 
+        if (seats != null) seats.requireAvailableSeat(tenantId);
         UserEntity createdUser = userRepository.saveAndFlush(new UserEntity(
                 tenantId,
                 email,
@@ -643,23 +648,23 @@ public class PilotOpsService {
         }
         try {
             MimeMessage msg = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(msg, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(smtpFrom.trim());
+            MimeMessageHelper helper = new MimeMessageHelper(msg, true, StandardCharsets.UTF_8.name());
+            helper.setFrom(smtpFrom.trim(), "OMEGA Security");
             helper.setTo(email);
             helper.setSubject("Invitación al espacio " + tenantName + " en OMEGA");
-            String safeTenant = HtmlUtils.htmlEscape(tenantName);
-            String safeRole = HtmlUtils.htmlEscape(role);
-            String safeToken = HtmlUtils.htmlEscape(rawToken);
-            helper.setText(
-                    "<div style=\"font-family:sans-serif;background:#0A0A0C;color:#F2F2F4;padding:24px;border-radius:12px;\">"
-                            + "<h2 style=\"margin-top:0;color:#F2F2F4;\">Te invitaron a " + safeTenant + " en OMEGA</h2>"
-                            + "<p style=\"color:#9A9AA2;\">Rol asignado: <strong>" + safeRole + "</strong> (válido por 72 horas).</p>"
-                            + "<p style=\"color:#9A9AA2;\">Para activar tu cuenta sin compartir contraseñas, abre OMEGA → <em>Unirme con código de invitación</em> y pega este código:</p>"
-                            + "<pre style=\"background:#141923;padding:12px;border-radius:8px;color:#2F6FED;font-weight:bold;\">"
-                            + safeToken + "</pre>"
-                            + "</div>",
-                    true
-            );
+            String plainText = "Te invitaron al espacio " + tenantName + " en OMEGA.\n"
+                    + "Rol asignado: " + role + " (válido por 72 horas).\n"
+                    + "Código de invitación: " + rawToken + "\n";
+            String html = OmegaEmailTemplate.Spec.builder("Invitación a " + tenantName)
+                    .preheader("Te invitaron al espacio " + tenantName + " en OMEGA con rol " + role + ".")
+                    .addParagraph("Para activar tu cuenta sin compartir contraseñas, abre OMEGA, elige \"Unirme con código de invitación\" y pega el código siguiente.")
+                    .addMetadata("Espacio", tenantName)
+                    .addMetadata("Rol asignado", role)
+                    .addMetadata("Vigencia", "72 horas")
+                    .verificationCode(rawToken, "Código de invitación")
+                    .recipientEmail(email)
+                    .render();
+            helper.setText(plainText, html);
             mailSender.send(msg);
             return true;
         } catch (Exception ex) {
@@ -822,11 +827,16 @@ public class PilotOpsService {
         }
         boolean retentionEnabled = storageProperties != null && storageProperties.isRetentionEnabled();
 
-        List<Map<String, Object>> plans = List.of(
-                buildPlanSpec("PERSONAL", "Personal / Piloto Individual", 30, 1),
-                buildPlanSpec("PRO", "Pro / Equipos y Despachos", 300, 5),
-                buildPlanSpec("ENTERPRISE", "Enterprise / Soberano On-Premise", 3000, 25)
-        );
+        List<Map<String, Object>> plans = dbUp ? jdbc.queryForList("""
+                SELECT plan_code AS "planCode",name AS label,credits AS "monthlyCredits",
+                       max_devices AS "maxDevices",max_users AS "maxUsers",price,currency
+                FROM omega_rag.billing_plans WHERE interval='MONTHLY' AND active ORDER BY price
+                """) : List.of();
+        for(Map<String,Object> plan:plans) {
+            String code=plan.get("planCode").toString();
+            var limits=legalQuotaProperties!=null ? legalQuotaProperties.forPlan(code) : null;
+            plan.put("maxDocumentsPerCase","FREE".equals(code)?0:limits!=null?limits.getMaxDocumentsPerCase():25);
+        }
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", dbUp ? "UP" : "DEGRADED");
@@ -837,19 +847,6 @@ public class PilotOpsService {
         out.put("checkedAt", Instant.now().toString());
         out.put("plans", plans);
         return out;
-    }
-
-    private Map<String, Object> buildPlanSpec(String code, String label, int monthlyRepoScans, int maxDevices) {
-        var legalLimits = legalQuotaProperties != null ? legalQuotaProperties.forPlan(code) : null;
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("planCode", code);
-        m.put("label", label);
-        m.put("monthlyRepoScans", monthlyRepoScans);
-        m.put("maxDevices", maxDevices);
-        m.put("maxDocumentsPerCase", legalLimits != null ? legalLimits.getMaxDocumentsPerCase() : 25);
-        m.put("maxTotalBytesPerCase", legalLimits != null ? legalLimits.getMaxTotalBytesPerCase() : 104_857_600L);
-        m.put("monthlyLegalQueries", legalLimits != null ? legalLimits.getMonthlyQueries() : 200);
-        return m;
     }
 
     private String resolvePlanCode(UUID tenantId) {

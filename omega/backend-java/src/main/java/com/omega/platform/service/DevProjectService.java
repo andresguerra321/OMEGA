@@ -268,6 +268,14 @@ public class DevProjectService {
                 ? (List<Map<String, Object>>) list : List.of();
         List<Map<String, Object>> rawDeps = mutableResponse.get("dependencies") instanceof List<?> list
                 ? (List<Map<String, Object>>) list : List.of();
+        List<Map<String,Object>> breakdown = mutableResponse.get("score_breakdown") instanceof List<?> list
+                ? list.stream().filter(Map.class::isInstance).map(item -> (Map<String,Object>)item).toList() : List.of();
+        rawFindings=rawFindings.stream().filter(java.util.Objects::nonNull).map(finding -> {
+            var normalized=new LinkedHashMap<>(finding);
+            normalized.put("score",findingPoints(finding,breakdown));
+            return (Map<String,Object>)normalized;
+        }).toList();
+        mutableResponse.put("findings",rawFindings);
 
         Instant now = Instant.now();
         List<DevSuppressionEntity> activeSuppressions = suppressionRepository
@@ -513,6 +521,13 @@ public class DevProjectService {
         } catch (Exception ex) {
             return fallback;
         }
+    }
+    static double findingPoints(Map<String,Object> finding,List<Map<String,Object>> breakdown) {
+        Object value=finding.containsKey("score")?finding.get("score"):finding.get("score_points");
+        if(value==null) value=breakdown.stream().filter(item -> java.util.Objects.equals(item.get("rule_id"),finding.get("rule_id"))
+            && java.util.Objects.equals(item.get("location"),finding.get("location"))).map(item -> item.get("points")).filter(java.util.Objects::nonNull).findFirst().orElse(null);
+        double points=toDouble(value,0);
+        return Double.isFinite(points)?Math.max(0,Math.min(100,points)):0;
     }
 
     public static String sha256Hex(String input) {

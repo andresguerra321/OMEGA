@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { resolveRoleNicheLabel, resolveVisibleNavItems } from '../lib/useTenantProfileConfig.js';
+import { fallbackProfileConfig, resolveRoleNicheLabel, resolveVisibleNavItems } from '../lib/useTenantProfileConfig.js';
+
+test('fallbacks preserve developer and legal workspaces when profile configuration is unavailable', () => {
+  const config = JSON.parse(readFileSync(new URL('../../../backend-java/src/main/resources/profile-configs.json', import.meta.url), 'utf8'));
+  for (const profile of ['GENERAL', 'DEVELOPER', 'LEGAL']) {
+    const fallback = fallbackProfileConfig(profile);
+    assert.equal(fallback.profile, profile);
+    assert.deepEqual(fallback.visibleModules, config.profiles[profile].visibleModules);
+    assert.equal(fallback.ragCorpusScope, config.profiles[profile].ragCorpusScope);
+    assert.equal(fallback.defaultView, config.profiles[profile].defaultView);
+  }
+});
 
 const BASE_NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio' },

@@ -120,7 +120,7 @@ function ContextBox({ context, onUpdateContext, onClearContext, lastRewrittenQue
   return (
     <div
       data-testid="omega-context-box"
-      className="mx-auto max-w-[780px] mb-2 flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px]"
+      className="mx-auto max-w-4xl xl:max-w-5xl mb-2 flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px]"
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[#9A9AA2]">Contexto activo:</span>
@@ -721,7 +721,7 @@ export function ChatWorkspace({
 
             <div className="flex-1 min-h-[10px] max-h-[56px]" />
 
-            <div className="relative z-10 w-full max-w-[680px] flex flex-col items-center">
+            <div className="relative z-10 w-full max-w-3xl lg:max-w-4xl flex flex-col items-center">
               {/* Emblema Óptico OMEGA Core Orb + Saludo */}
               <div className="animate-kowalski-in flex flex-col items-center text-center mb-5">
                 <div className="mb-3.5">
@@ -881,7 +881,7 @@ export function ChatWorkspace({
             <div className="flex-1 min-h-[10px] max-h-[56px]" />
 
             {(hasHistory || usePrivateDocs) && (
-              <footer className="relative z-10 w-full max-w-[680px] pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#9A9AA2]">
+              <footer className="relative z-10 w-full max-w-3xl lg:max-w-4xl pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#9A9AA2]">
                 <span className="text-[#8A8E99]">
                     {usePrivateDocs ? (privateOnly ? 'Consulta confidencial del expediente' : 'Procesamiento privado solo en memoria') : ''}
                 </span>
@@ -904,7 +904,7 @@ export function ChatWorkspace({
           <>
             {usePrivateDocs && authSession && (
               <div className="shrink-0 px-3.5 sm:px-6 pt-2.5">
-                <div className="mx-auto max-w-[780px] flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-[#2F6FED]/35 bg-[rgba(28,36,56,0.45)] px-3.5 py-2 text-[11.5px]">
+                <div className="mx-auto max-w-4xl xl:max-w-5xl flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-[#2F6FED]/35 bg-[rgba(28,36,56,0.45)] px-3.5 py-2 text-[11.5px]">
                   <span className="flex items-center gap-2 text-[#F2F2F4]">
                     <FileText className="h-3.5 w-3.5 text-[#30D158]" />
                     <span>
@@ -924,7 +924,7 @@ export function ChatWorkspace({
               </div>
             )}
             <main ref={threadScrollRef} className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-6">
-              <div className="mx-auto max-w-[780px] space-y-6 sm:space-y-7">
+              <div className="mx-auto max-w-4xl xl:max-w-5xl space-y-6 sm:space-y-7">
                 {messages.map((msg, idx) =>
                   msg.role === 'user' ? (
                     <motion.div key={idx} variants={messageVariants} initial="initial" animate="animate" className="flex justify-end">
@@ -1015,7 +1015,7 @@ export function ChatWorkspace({
                   e.preventDefault();
                   submitQuery();
                 }}
-                className="omega-capsule mx-auto max-w-[780px] rounded-[15px] p-3"
+                className="omega-capsule mx-auto max-w-4xl xl:max-w-5xl rounded-[15px] p-3"
               >
                 <div className="flex items-end gap-2.5">
                   <textarea

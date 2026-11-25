@@ -132,8 +132,16 @@ public final class AuthDtos {
             String mfaMethod,
             String maskedEmail,
             String recoveryKey,
-            TenantProfile profile
+            TenantProfile profile,
+            String accountType,
+            boolean canManageAccount
     ) {
+        public AuthTokenResponse(String accessToken, String tokenType, long expiresInSeconds, UUID userId,
+                UUID tenantId, String tenantSlug, String email, Role role, boolean mfaRequired,
+                String mfaChallengeToken, String mfaMethod, String maskedEmail, String recoveryKey, TenantProfile profile) {
+            this(accessToken, tokenType, expiresInSeconds, userId, tenantId, tenantSlug, email, role, mfaRequired,
+                    mfaChallengeToken, mfaMethod, maskedEmail, recoveryKey, profile, "UNCLASSIFIED", role == Role.ADMIN);
+        }
         public AuthTokenResponse(String accessToken, String tokenType, long expiresInSeconds, UUID userId,
                 UUID tenantId, String tenantSlug, String email, Role role, boolean mfaRequired,
                 String mfaChallengeToken, String mfaMethod, String maskedEmail) {
@@ -151,7 +159,7 @@ public final class AuthDtos {
 
         public AuthTokenResponse withRecoveryKey(String key) {
             return new AuthTokenResponse(accessToken, tokenType, expiresInSeconds, userId, tenantId,
-                    tenantSlug, email, role, mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, key, profile);
+                    tenantSlug, email, role, mfaRequired, mfaChallengeToken, mfaMethod, maskedEmail, key, profile, accountType, canManageAccount);
         }
 
         public AuthTokenResponse(
@@ -226,8 +234,13 @@ public final class AuthDtos {
             String tenantSlug,
             String email,
             Role role,
-            TenantProfile profile
+            TenantProfile profile,
+            String accountType,
+            boolean canManageAccount
     ) {
+        public PrincipalMeResponse(UUID userId, UUID tenantId, String tenantSlug, String email, Role role, TenantProfile profile) {
+            this(userId, tenantId, tenantSlug, email, role, profile, "UNCLASSIFIED", role == Role.ADMIN);
+        }
         public PrincipalMeResponse(UUID userId, UUID tenantId, String email, Role role) {
             this(userId, tenantId, null, email, role, TenantProfile.GENERAL);
         }

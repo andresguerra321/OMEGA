@@ -45,6 +45,9 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class MultimodalThreatQueryService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService creditService;
+
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.omega.platform.service.LegalDocumentAiService legalAi;
 
@@ -96,6 +99,7 @@ public class MultimodalThreatQueryService {
         this.auditLogService = auditLogService;
     }
 
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.AI_IMAGE)
     public MultimodalThreatResponse analyzePrivateExpediente(
             OmegaPrincipal principal,
             UUID expedienteId,
@@ -107,6 +111,7 @@ public class MultimodalThreatQueryService {
         return executePipeline(principal, expedienteId, imageBytes, question);
     }
 
+    @com.omega.platform.billing.Metered(com.omega.platform.billing.CreditOperation.AI_IMAGE)
     public MultimodalThreatResponse analyzePublicTriage(
             OmegaPrincipal principal,
             byte[] imageBytes,
@@ -122,7 +127,7 @@ public class MultimodalThreatQueryService {
             byte[] imageBytes,
             String rawQuestion
     ) {
-        if (commercialSaasService != null && principal != null) {
+        if (commercialSaasService != null && principal != null && creditService == null) {
             boolean sovereign = sovereignModePolicy != null && sovereignModePolicy.enabled();
             try {
                 commercialSaasService.consumeAiQuota(principal.tenantId(), principal.userId(), sovereign, true);

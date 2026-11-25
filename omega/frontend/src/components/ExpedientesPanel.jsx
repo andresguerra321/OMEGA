@@ -10,12 +10,13 @@ import { LegalAccessPreview, LegalActivityPreview } from './LegalCasePreviewTabs
 import { LegalCaseAssistantTab } from './LegalCaseAssistantTab';
 import { LegalDocumentsPanel } from './LegalDocumentsPanel';
 import { LegalTimelineTab } from './LegalTimelineTab';
+import { LegalObservationsTab } from './LegalObservationsTab';
 import { LegalAdminIssuesPanel } from './LegalAdminIssuesPanel';
 import { LegalFirmSearchPanel } from './LegalFirmSearchPanel';
 import { LegalOnboardingGuide } from './LegalOnboardingGuide';
 import DossierExportButtons from './DossierExportButtons';
 
-const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['access', 'Acceso'], ['activity', 'Actividad']];
+const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['observations', 'Pasajes y revisión'], ['access', 'Acceso'], ['activity', 'Actividad']];
 
 function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUserId, role, policyAccepted }) {
   const [tab, setTab] = useState('documents');
@@ -66,7 +67,7 @@ function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUse
       <p className="text-sm text-white/60">{CASE_STATES[value.status]} · {CASE_CLASSES[value.classification]}{value.reference ? ` · ${value.reference}` : ''}</p>
       {value.description && <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{value.description}</p>}
       <div className="pt-1">
-        <DossierExportButtons expedienteId={value.id} />
+        <DossierExportButtons expedienteId={value.id} profile="LEGAL" />
       </div>
     </header>
     <div className="rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-5 backdrop-blur-md">
@@ -75,6 +76,7 @@ function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUse
         {tab === 'documents' && <LegalDocumentsPanel key={value.id} value={value} role={role} policyAccepted={policyAccepted} />}
         {tab === 'assistant' && <LegalCaseAssistantTab key={value.id} value={value} policyAccepted={policyAccepted} />}
         {tab === 'timeline' && <LegalTimelineTab key={value.id} value={value} role={role} policyAccepted={policyAccepted} />}
+        {tab === 'observations' && <LegalObservationsTab key={value.id} value={value} policyAccepted={policyAccepted} />}
         {tab === 'access' && <LegalAccessPreview key={value.id} value={value} />}
         {tab === 'activity' && <LegalActivityPreview key={value.id} value={value} currentUserId={currentUserId} />}
       </section>
@@ -116,7 +118,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
     }
   }
   return <section aria-labelledby="expedientes-title" className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
-    <div inert={editor ? true : undefined} className="mx-auto max-w-5xl space-y-6">
+    <div inert={editor ? true : undefined} className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1600px] space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2"><h1 id="expedientes-title" className="flex items-center gap-2 text-xl font-semibold text-white"><FolderOpen aria-hidden="true" size={16} strokeWidth={1.75} />Expedientes</h1><p className="text-sm text-white/60">Tus casos, documentos y acceso del despacho.</p></div>
         {!selected && canCreate && <button type="button" onClick={() => setEditor({ value: null })} className={`${policyAccepted ? LEGAL_PRIMARY : LEGAL_SECONDARY} inline-flex items-center gap-2`}><Plus size={14} strokeWidth={1.75} />Nuevo expediente</button>}

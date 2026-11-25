@@ -63,7 +63,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokens)
-                        .ignoringRequestMatchers("/api/v1/integrations/github/webhook")
+                        .ignoringRequestMatchers("/api/v1/integrations/github/webhook", "/api/v1/billing/webhooks/mercadopago")
                         .ignoringRequestMatchers(request -> {
                             String bearer = JwtAuthenticationFilter.extractBearerToken(request);
                             return (bearer != null && !bearer.isEmpty())
@@ -85,7 +85,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config", "/api/v1/auth/csrf",
-                                "/api/v1/public/status")
+                                "/api/v1/public/status", "/api/v1/public/commercial")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout",
                                 "/api/v1/auth/register", "/api/v1/auth/tenants/register",
@@ -93,7 +93,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
                                 "/api/v1/auth/mfa/verify", "/api/v1/auth/mfa/resend-email")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/integrations/github/webhook").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/integrations/github/webhook", "/api/v1/billing/webhooks/mercadopago").permitAll()
                         .requestMatchers("/api/v1/repo/scan", "/api/v1/repo/scan-url", "/api/v1/repo/scan/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_ANALYST", "ROLE_CLIENT", "SCOPE_REPO_SCAN")
                         .requestMatchers("/api/v1/**").hasAnyRole("ADMIN", "ANALYST", "CLIENT")
@@ -109,9 +109,9 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(corsAllowedOrigins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Omega-Bootstrap-Secret",
-                "X-XSRF-TOKEN", "X-Omega-Auth-Mode"));
+                "X-XSRF-TOKEN", "X-Omega-Auth-Mode", "X-Omega-Credit-Limit", "X-Omega-Commercial-Version"));
         config.setExposedHeaders(List.of("Retry-After"));
         boolean hasWildcardOrigin = corsAllowedOrigins.contains("*");
         config.setAllowCredentials(!hasWildcardOrigin);

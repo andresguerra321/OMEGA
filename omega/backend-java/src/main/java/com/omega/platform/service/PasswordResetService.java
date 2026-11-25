@@ -238,72 +238,24 @@ public class PasswordResetService {
         helper.setTo(user.getEmail());
         helper.setSubject("OMEGA — Código de recuperación de contraseña");
 
-        ClassPathResource bannerResource = new ClassPathResource("mail/omega-banner.jpg");
-        boolean hasBanner = bannerResource.exists();
-        String safeName = HtmlUtils.htmlEscape(user.getFullName() == null ? "Analista" : user.getFullName());
-        String bannerBlock = hasBanner
-                ? "<tr><td style=\"padding:0;line-height:0;\"><a href=\"#omega\" style=\"display:block;text-decoration:none;border:0;outline:none;cursor:default;\"><img src=\"cid:omegaBanner\" alt=\"OMEGA\" width=\"560\" border=\"0\" style=\"display:block;width:100%;max-width:560px;height:auto;border:0;border-top-left-radius:16px;border-top-right-radius:16px;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;\" /></a></td></tr>"
-                : "";
+        String greetingName = user.getFullName() == null || user.getFullName().isBlank()
+                ? "Analista"
+                : user.getFullName().trim().split("\\s+")[0];
 
-        String plainText = "Hola " + user.getFullName() + ",\n\n"
+        String plainText = "Hola " + greetingName + ",\n\n"
                 + "Recibimos una solicitud para restablecer tu contraseña en OMEGA.\n"
                 + "Tu código de verificación (válido por 15 minutos) es: " + code + "\n\n"
                 + "Si no solicitaste este cambio, ignora este mensaje.\n";
 
-        String html = """
-                <!DOCTYPE html>
-                <html lang="es">
-                <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-                <body style="margin:0;padding:0;background-color:#0A0A0C;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#F2F2F4;">
-                  <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="background-color:#0A0A0C;padding:32px 16px;">
-                    <tr>
-                      <td align="center">
-                        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%%;max-width:560px;background-color:#141418;border:1px solid rgba(255,255,255,0.10);border-radius:16px;overflow:hidden;">
-                          %s
-                          <tr>
-                            <td style="padding:32px 32px 28px 32px;">
-                              <div style="display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid rgba(47,111,237,0.45);background-color:rgba(47,111,237,0.14);color:#8BB2FF;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">
-                                Recuperación de Acceso · Zero-Trust
-                              </div>
-                              <h1 style="margin:16px 0 8px 0;font-size:22px;line-height:1.3;font-weight:600;color:#F2F2F4;">
-                                Restablecer contraseña
-                              </h1>
-                              <p style="margin:0 0 22px 0;font-size:14px;line-height:1.6;color:#C2C7D6;">
-                                Hola <strong style="color:#F2F2F4;">%s</strong>, recibimos una solicitud para cambiar la contraseña de tu cuenta en <strong style="color:#F2F2F4;">OMEGA</strong>. Usa el siguiente código de verificación dentro de los próximos <strong style="color:#F2F2F4;">15 minutos</strong>:
-                              </p>
-                              <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="margin:0 0 22px 0;">
-                                <tr>
-                                  <td align="center" style="padding:18px 12px;background-color:#0A0A0C;border:1px solid rgba(47,111,237,0.35);border-radius:14px;">
-                                    <table role="presentation" cellspacing="0" cellpadding="0">
-                                      <tr>
-                                        %s
-                                      </tr>
-                                    </table>
-                                  </td>
-                                </tr>
-                              </table>
-                              <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9A9AA2;">
-                                Si no solicitaste este restablecimiento, puedes ignorar este correo de forma segura; tu contraseña actual seguirá intacta.
-                              </p>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style="padding:16px 32px;background-color:#0E0E12;border-top:1px solid rgba(255,255,255,0.06);font-size:11.5px;color:#7C7D87;">
-                              OMEGA · Plataforma Defensiva de Cyber Threat Intelligence &amp; Forensics
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </body>
-                </html>
-                """.formatted(bannerBlock, safeName, buildOtpCellsHtml(code));
+        String html = OmegaEmailTemplate.Spec.builder("Restablecer contraseña")
+                .preheader("Tu código de recuperación de OMEGA es " + code + " (válido por 15 minutos).")
+                .addParagraph("Hola " + greetingName + ", recibimos una solicitud para restablecer la contraseña de tu cuenta en OMEGA.")
+                .verificationCode(code, "Válido por 15 minutos · Uso único")
+                .addParagraph("Si no solicitaste este cambio, puedes ignorar este correo de forma segura; tu contraseña actual seguirá intacta.")
+                .recipientEmail(user.getEmail())
+                .render();
 
         helper.setText(plainText, html);
-        if (hasBanner) {
-            helper.addInline("omegaBanner", bannerResource, "image/jpeg");
-        }
         mailSender.send(mimeMessage);
     }
 

@@ -65,16 +65,26 @@ public class DevTriageService {
             String ruleId,
             String triageStatus
     ) {
+        return listFindings(principal,projectId,severity,ruleId,triageStatus,true);
+    }
+    @Transactional(readOnly = true)
+    public List<FindingViewDto> listFindings(OmegaPrincipal principal,UUID projectId,String severity,String ruleId,String triageStatus,boolean latestOnly) {
         UUID tenantId = principal.tenantId();
         List<DevFindingEntity> base = projectId != null
                 ? findingRepository.findAllByTenantIdAndProjectIdOrderByCreatedAtDesc(tenantId, projectId)
                 : findingRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId);
+        Set<UUID> latestScans = new java.util.HashSet<>();
+        if(latestOnly) for(UUID id:base.stream().map(DevFindingEntity::getProjectId).distinct().toList()) {
+            var scans=scanRepository.findAllByTenantIdAndProjectIdOrderByCreatedAtDesc(tenantId,id);
+            if(!scans.isEmpty()) latestScans.add(scans.getFirst().getId());
+        }
 
         String sevFilter = severity == null ? "" : severity.trim().toUpperCase(Locale.ROOT);
         String ruleFilter = ruleId == null ? "" : ruleId.trim().toUpperCase(Locale.ROOT);
         String statusFilter = triageStatus == null ? "" : triageStatus.trim().toUpperCase(Locale.ROOT);
 
         return base.stream()
+                .filter(f -> !latestOnly || latestScans.contains(f.getScanId()))
                 .filter(f -> sevFilter.isEmpty() || f.getSeverity().equalsIgnoreCase(sevFilter))
                 .filter(f -> ruleFilter.isEmpty() || f.getRuleId().toUpperCase(Locale.ROOT).contains(ruleFilter))
                 .filter(f -> statusFilter.isEmpty() || f.getTriageStatus().equalsIgnoreCase(statusFilter))
@@ -266,7 +276,7 @@ public class DevTriageService {
                 f.getId(), f.getProjectId(), f.getScanId(), f.getFingerprint(),
                 f.getRuleId(), f.getDetector(), f.getSeverity(), f.getTitle(),
                 f.getLocation(), f.getExplanation(), f.getScorePoints(),
-                f.getTriageStatus(), f.getTriageUpdatedAt(), f.getCreatedAt()
+                f.getTriageStatus(), f.getTriageUpdatedAt(), f.getCreatedAt(),DevRemediationGuide.forFinding(f.getRuleId(),f.getLocation())
         );
     }
 
@@ -292,7 +302,8 @@ public class DevTriageService {
             double scorePoints,
             String triageStatus,
             Instant triageUpdatedAt,
-            Instant createdAt
+            Instant createdAt,
+            DevRemediationGuide.Guide remediation
     ) {}
 
     public record CommentViewDto(

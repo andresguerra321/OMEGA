@@ -1,3 +1,5 @@
+import { confirmCreditSpend } from './creditConfirmation.js';
+
 const LEGACY_CLIENT_STORAGE_KEYS = [
   'omega_auth_session_v1',
   'omega_sandbox_creds_v1',
@@ -173,6 +175,8 @@ export function saveAuthSession(tokenResponse) {
     email: tokenResponse.email,
     role: tokenResponse.role,
     profile: tokenResponse.profile || 'GENERAL',
+    accountType: tokenResponse.accountType || 'UNCLASSIFIED',
+    canManageAccount: Boolean(tokenResponse.canManageAccount),
   };
   inMemoryAuthSession = session;
   scrubLegacyDiskStorage();
@@ -194,6 +198,8 @@ export function restoreCookieAuthSession(principalMe) {
     email: principalMe.email,
     role: principalMe.role,
     profile: principalMe.profile || existing?.profile || 'GENERAL',
+    accountType: principalMe.accountType || existing?.accountType || 'UNCLASSIFIED',
+    canManageAccount: Boolean(principalMe.canManageAccount),
   };
   inMemoryAuthSession = session;
   emitAuthChanged(session);
@@ -256,9 +262,10 @@ function buildFriendlyError(status, payload, fallbackMessage) {
   return detail || payload?.title || fallbackMessage || `Error HTTP ${status}`;
 }
 
-export async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json' } = {}) {
+export async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json', creditLimit } = {}) {
   const url = rawUrl ? path : `${API_V1}${path}`;
   const reqHeaders = new Headers(headers);
+  if (creditLimit !== undefined) reqHeaders.set('X-Omega-Credit-Limit', String(creditLimit));
   const session = getAuthSession();
   const bearerOnly = isTauriDesktopContext()
     || (typeof window !== 'undefined' && window.location?.protocol === 'file:');
@@ -315,6 +322,13 @@ export async function apiFetch(path, { method = 'GET', body, headers = {}, skipA
   }
 
   if (!response.ok) {
+    const quote = response.status === 409 && String(parsed?.detail || parsed?.message || '').match(/OMEGA_CREDIT_QUOTE:(\d+):([A-Z_]+)/);
+    if (quote && creditLimit === undefined) {
+      const accepted = await confirmCreditSpend(Number(quote[1]), quote[2]);
+      if (!accepted) throw Object.assign(new Error('Operación cancelada. No se consumieron créditos.'), { cancelled: true });
+      return apiFetch(path, { method, body, headers, skipAuth, rawUrl, responseType, creditLimit: Number(quote[1]) });
+    }
+    if (response.status === 402 && typeof window !== 'undefined') window.dispatchEvent(new Event('omega:billing-required'));
     if (response.status === 401 && !skipAuth && session && inMemoryAuthSession === session) {
       clearAuthSession();
       emitAuthRequired(path);
@@ -535,8 +549,10 @@ export async function registerAccount({
   organizationAdminConfirmed,
   bootstrapSecret,
   profile,
+  commercialVersion,
 }) {
   const headers = {};
+  if (commercialVersion) headers['X-Omega-Commercial-Version'] = commercialVersion;
   if (bootstrapSecret && String(bootstrapSecret).trim()) {
     headers['X-Omega-Bootstrap-Secret'] = String(bootstrapSecret).trim();
   }
@@ -647,12 +663,13 @@ export async function deleteDevProject(projectId) {
   });
 }
 
-export async function listDevFindings({ projectId = '', severity = '', ruleId = '', triageStatus = '' } = {}) {
+export async function listDevFindings({ projectId = '', severity = '', ruleId = '', triageStatus = '', latestOnly = true } = {}) {
   const params = new URLSearchParams();
   if (projectId) params.set('projectId', projectId);
   if (severity) params.set('severity', severity);
   if (ruleId) params.set('ruleId', ruleId);
   if (triageStatus) params.set('triageStatus', triageStatus);
+  if (!latestOnly) params.set('latestOnly', 'false');
   const qs = params.toString();
   return apiFetch(`/dev/findings${qs ? `?${qs}` : ''}`);
 }
@@ -964,8 +981,10 @@ export async function listExpedientes() {
 export async function ensurePersonalWorkspace() {
   const list = await listExpedientes();
   const existing = Array.isArray(list) ? list : [];
-  if (existing.length > 0) {
-    return existing[0];
+  const actorId = getAuthSession()?.userId;
+  const personal = existing.find(item => item.ownerUserId === actorId && item.title === 'Espacio personal');
+  if (personal) {
+    return personal;
   }
   try {
     return await createExpediente({
@@ -1408,3 +1427,11 @@ export async function fetchPublicSystemStatus() {
   return apiFetch('/public/status');
 }
 
+
+export const fetchBillingPlans = () => apiFetch('/billing/plans');
+export const fetchBillingSummary = () => apiFetch('/billing/summary');
+export const fetchBillingHistory = () => apiFetch('/billing/history');
+export const refreshBilling = () => apiFetch('/billing/refresh', { method: 'POST' });
+export const createBillingCheckout = (body) => apiFetch('/billing/subscribe', { method: 'POST', body });
+export const cancelBillingSubscription = () => apiFetch('/billing/cancel', { method: 'POST' });
+export const classifyAccountType = (accountType) => apiFetch('/account/type', { method: 'POST', body: { accountType } });

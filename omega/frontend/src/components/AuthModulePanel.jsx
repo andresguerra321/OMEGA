@@ -1,5 +1,7 @@
+import { CommercialDocumentsPanel } from './CommercialDocumentsPanel';
 import DossierExportButtons from './DossierExportButtons';
 import { SaasFleetCard } from './SaasFleetCard';
+import { BillingPanel } from './BillingPanel';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -40,6 +42,7 @@ import {
   validateAuthRegisterForm,
 } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
+import { isDesktopApp } from '../lib/desktopBridge';
 import { OmegaBrandMark } from './OmegaBrandMark';
 
 function shortHash(value) {
@@ -83,6 +86,7 @@ export function AuthAccessForm({
   });
   const [loading, setLoading] = useState(false);
   const [registeredAccount, setRegisteredAccount] = useState(null);
+  const [commercialVersion, setCommercialVersion] = useState(null);
   const [shakeTick, setShakeTick] = useState(0);
   const guard = useSingleFlight();
   const [errorState, setErrorState] = useState({ tab, message: '' });
@@ -127,7 +131,8 @@ export function AuthAccessForm({
   const [mfaCode, setMfaCode] = useState('');
   const [mfaBackupMode, setMfaBackupMode] = useState(false);
   const [mfaStatusMsg, setMfaStatusMsg] = useState('');
-  const [rememberSession, setRememberSession] = useState(true);
+  const desktopSession = isDesktopApp();
+  const [rememberSession, setRememberSession] = useState(() => !isDesktopApp());
   const mfaOtpRefs = useRef([]);
 
   useEffect(() => {
@@ -240,7 +245,7 @@ export function AuthAccessForm({
     setErrorState({ tab: 'register', message: '' });
     setFieldErrorState({ tab: 'register', errors: {} });
     try {
-      const session = await registerAccount(validation.sanitized);
+      const session = await registerAccount({ ...validation.sanitized, commercialVersion });
       const recoveryKey = session.recoveryKey;
       if (!recoveryKey) throw new Error('El servidor debe actualizarse para completar el registro con recuperación local.');
       setRegForm((p) => ({ ...p, password: '' }));
@@ -1084,7 +1089,7 @@ export function AuthAccessForm({
             )}
           </div>
 
-          <div className="pt-1 flex items-center justify-between gap-3">
+          {!desktopSession && <div className="pt-1 flex items-center justify-between gap-3">
             <button
               type="button"
               role="switch"
@@ -1105,7 +1110,8 @@ export function AuthAccessForm({
               </span>
               <span>Recordar sesión en este equipo (30 días)</span>
             </button>
-          </div>
+          </div>}
+          {desktopSession && <p className="text-xs text-white/50">La sesión se mantiene mientras la app está abierta. Al cerrarla o recargarla tendrás que iniciar sesión de nuevo.</p>}
 
           <div className="pt-0.5 flex flex-wrap items-center justify-between gap-2">
             <button
@@ -1404,8 +1410,8 @@ export function AuthAccessForm({
             <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Perfil del espacio de trabajo">
               {[
                 { id: 'GENERAL', label: 'General', hint: 'Forense, CTI y análisis integral' },
-                { id: 'DEVELOPER', label: 'Developer', hint: 'Repositorios y dependencias' },
-                { id: 'LEGAL', label: 'Legal', hint: 'Expedientes y trazabilidad' },
+                { id: 'DEVELOPER', label: 'Desarrollador', hint: 'Requiere Pro o Enterprise' },
+                { id: 'LEGAL', label: 'Legal', hint: 'Requiere Pro o Enterprise' },
               ].map((opt) => {
                 const active = regForm.profile === opt.id;
                 return (
@@ -1560,6 +1566,7 @@ export function AuthAccessForm({
           </button>
         </form>
       )}
+      <CommercialDocumentsPanel compact registration={tab === 'register'} onRegistrationConsent={setCommercialVersion} />
     </div>
   );
 }
@@ -1620,7 +1627,7 @@ export function AuthModulePanel({
   const WORKSPACE_TABS = [
     { id: 'perfil', label: 'Perfil y Sesión', icon: User },
     { id: 'biblioteca', label: 'Biblioteca PDF', icon: FileText },
-    { id: 'cuota', label: 'Plan y Cuota IA', icon: Cpu },
+    { id: 'cuota', label: 'Mi plan y créditos', icon: Cpu },
     { id: 'flota', label: 'Flota y Alertas', icon: Laptop },
   ];
   const activeWorkspaceTabMeta =
@@ -1819,7 +1826,7 @@ export function AuthModulePanel({
                               Sesión activa
                             </span>
                             <span className="font-tech rounded-full border border-[#2F6FED]/45 bg-[#2F6FED]/15 px-2 py-0.5 text-[10.5px] text-[#F2F2F4]">
-                              {authSession.role || 'ANALYST'}
+                              {authSession.accountType === 'INDIVIDUAL' ? 'Cuenta individual' : authSession.accountType === 'ORGANIZATION' && authSession.role === 'ADMIN' ? 'Administrador de organización' : 'Cuenta'}
                             </span>
                             {authSession.tenantSlug && (
                               <span className="font-tech text-[11px] text-[#8E95A5]">
@@ -1972,7 +1979,7 @@ export function AuthModulePanel({
                           Descarga el informe en PDF o exporta la evidencia estructurada en JSON.
                         </p>
                       </div>
-                      <DossierExportButtons expedienteId={activeExpedienteId} />
+                      <DossierExportButtons expedienteId={activeExpedienteId} profile={authSession?.profile || 'GENERAL'} />
                     </div>
 
                     {/* Bloque 3: Listado de documentos */}
@@ -2041,7 +2048,7 @@ export function AuthModulePanel({
                 )}
 
                 {workspaceTab === 'cuota' && (
-                  <SaasFleetCard authSession={authSession} mode="quota" embedded />
+                  <BillingPanel key={authSession?.tenantId} authSession={authSession} />
                 )}
 
                 {workspaceTab === 'flota' && (

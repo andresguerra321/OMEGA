@@ -29,6 +29,8 @@ import org.springframework.web.client.RestClientException;
  */
 @Service
 public class HostSensorBridge {
+    @Autowired(required=false)
+    private com.omega.platform.service.AnalysisEvidenceService evidence;
 
     private final ForensicWorkerTransport transport;
     private final AuditLogService auditLogService;
@@ -198,6 +200,7 @@ public class HostSensorBridge {
                             "findingCount", response.findings().size(),
                             "complete", response.complete(),
                             "scope", response.scope()));
+            if(evidence!=null) evidence.record(principal,null,"HOST_PERSISTENCE",response);
             return response;
         } catch (RestClientException ex) {
             throw ForensicWorkerTransport.translateWorkerException(ex, "auditoría de persistencia", false);
