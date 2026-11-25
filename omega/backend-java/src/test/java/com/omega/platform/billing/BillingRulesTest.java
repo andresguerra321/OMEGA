@@ -18,15 +18,47 @@ class BillingRulesTest {
         assertThat(BillingService.checkoutFailure("Unknown error with secret-key"))
                 .doesNotContain("secret-key");
     }
-    @Test void signatureBindsIdRequestAndTimestamp() throws Exception {
-        Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec("secret".getBytes(StandardCharsets.UTF_8),"HmacSHA256"));
-        String digest=HexFormat.of().formatHex(mac.doFinal("id:abc;request-id:request;ts:1700000000;".getBytes(StandardCharsets.UTF_8)));
-        String signature="ts=1700000000,v1="+digest;
-        assertThat(MercadoPagoSignature.valid("secret",signature,"request","ABC")).isTrue();
-        assertThat(MercadoPagoSignature.valid("secret",signature,"request","other")).isFalse();
-        assertThat(MercadoPagoSignature.valid("secret",signature,"other","ABC")).isFalse();
-        assertThat(MercadoPagoSignature.valid("secret",signature+",ts=1700000000","request","ABC")).isFalse();
-        assertThat(MercadoPagoSignature.valid("",signature,"request","ABC")).isFalse();
+    @Test void signatureBindsIdRequestAndTimestampFreshness() throws Exception {
+        long nowSec = 1700000000L;
+        java.time.Instant now = java.time.Instant.ofEpochSecond(nowSec);
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec("secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        String digest = HexFormat.of().formatHex(mac.doFinal(("id:abc;request-id:request;ts:" + nowSec + ";").getBytes(StandardCharsets.UTF_8)));
+        String signature = "ts=" + nowSec + ",v1=" + digest;
+        assertThat(MercadoPagoSignature.valid("secret", signature, "request", "ABC", now, 300)).isTrue();
+        assertThat(MercadoPagoSignature.valid("secret", signature, "request", "ABC", now.plusSeconds(301), 300)).isFalse();
+        assertThat(MercadoPagoSignature.valid("secret", signature, "request", "ABC", now.minusSeconds(301), 300)).isFalse();
+        assertThat(MercadoPagoSignature.valid("secret", signature, "request", "other", now, 300)).isFalse();
+        assertThat(MercadoPagoSignature.valid("secret", signature, "other", "ABC", now, 300)).isFalse();
+        assertThat(MercadoPagoSignature.valid("secret", signature + ",ts=" + nowSec, "request", "ABC", now, 300)).isFalse();
+        assertThat(MercadoPagoSignature.valid("", signature, "request", "ABC", now, 300)).isFalse();
+
+        long nowMs = nowSec * 1000L;
+        String digestMs = HexFormat.of().formatHex(mac.doFinal(("id:abc;request-id:request;ts:" + nowMs + ";").getBytes(StandardCharsets.UTF_8)));
+        assertThat(MercadoPagoSignature.valid("secret", "ts=" + nowMs + ",v1=" + digestMs, "request", "ABC", now, 300)).isTrue();
+    }
+
+    @Test void gracePeriodPreservesAccessOnlyOnUnintentionalRenewalExpiry() {
+        var end = java.time.OffsetDateTime.parse("2026-11-20T00:00:00Z");
+        java.util.Map<String, Object> sub = java.util.Map.of(
+                "paid_verified", true,
+                "plan_code", "PRO",
+                "current_period_end", end,
+                "cancel_at_period_end", false
+        );
+        assertThat(CreditService.effectivePlan(sub, end.plusDays(3), 5)).isEqualTo("PRO");
+        assertThat(CreditService.inGracePeriod(sub, end.plusDays(3), 5)).isTrue();
+        assertThat(CreditService.effectivePlan(sub, end.plusDays(6), 5)).isEqualTo("FREE");
+        assertThat(CreditService.inGracePeriod(sub, end.plusDays(6), 5)).isFalse();
+
+        java.util.Map<String, Object> cancelled = java.util.Map.of(
+                "paid_verified", true,
+                "plan_code", "PRO",
+                "current_period_end", end,
+                "cancel_at_period_end", true
+        );
+        assertThat(CreditService.effectivePlan(cancelled, end.plusDays(1), 5)).isEqualTo("FREE");
+        assertThat(CreditService.inGracePeriod(cancelled, end.plusDays(1), 5)).isFalse();
     }
     @Test void pageBlocksAndArchiveSizesHaveBoundaries() {
         assertThat(CreditOperation.pageCredits(24,false)).isEqualTo(3);

@@ -40,7 +40,7 @@ Recarga: 200 créditos por COP 29.900, mediante un pago único. Caduca doce mese
 | Indexar documento que requirió OCR | 3 por cada bloque iniciado de 10 páginas |
 | Reindexar texto ya conservado | 1 por cada bloque iniciado de 10 páginas |
 
-Las tarifas son una configuración comercial inicial; no son una medición del costo de los proveedores. Medir consumo y tiempos antes de abrir ventas. Los tamaños admitidos por los motores y sus validaciones siguen siendo obligatorios. Los análisis de archivos admiten como máximo 20 archivos y 25 MiB de entrada agregada; los repositorios conservan además las defensas contra archivos comprimidos peligrosos del motor existente. La indexación admite hasta 1.000 páginas por operación y mantiene los límites de tamaño existentes.
+Las tarifas son una configuración comercial inicial; no son una medición del costo de los proveedores. Cada operación medida registra telemetría estructurada (`billing.credit_usage operation=... credits=... durationMs=... uploadBytes=... outcome=...`) en los logs del backend Java para medir latencia, tamaño de entrada y consumo real por crédito antes de abrir ventas en modo `live`. Los tamaños admitidos por los motores y sus validaciones siguen siendo obligatorios. Los análisis de archivos admiten como máximo 20 archivos y 25 MiB de entrada agregada; los repositorios conservan además las defensas contra archivos comprimidos peligrosos del motor existente. La indexación admite hasta 1.000 páginas por operación y mantiene los límites de tamaño existentes.
 
 Las funciones propuestas en la conversación que todavía no tienen un endpoint propio —por ejemplo, generar correcciones con IA o comparar documentos con IA— no se simulan ni se cobran. La cronología heurística existente, consultar resultados, buscar en el catálogo local, administrar proyectos y exportar datos existentes no consumen créditos.
 
@@ -89,9 +89,13 @@ POST https://backend-de-pruebas.example.com/api/v1/billing/webhooks/mercadopago
 
 La aplicación Tauri abre el checkout en el navegador externo mediante un comando nativo que permite exclusivamente URLs HTTPS de Mercado Pago. Esta modificación requiere recompilar el cliente de escritorio; actualizar solo los archivos web de un binario antiguo no añade el comando.
 
-Activar los tópicos `payment`, `subscription_preapproval` y `subscription_authorized_payment`. Se valida la firma de Mercado Pago usando los headers `x-signature`, `x-request-id` y el parámetro `data.id`. La notificación entra a una cola persistente y recibe 202; el backend consulta el recurso auténtico en la API y procesa el resultado. El cuerpo recibido no activa planes. La conciliación automática se ejecuta cada cinco minutos; el botón de actualización de Mi plan también consulta a Mercado Pago.
+Activar los tópicos `payment`, `subscription_preapproval` y `subscription_authorized_payment`. Se valida la firma HMAC-SHA256 de Mercado Pago usando los headers `x-signature`, `x-request-id`, el parámetro `data.id` y la frescura del timestamp `ts` (ventana por defecto de `300s`, configurable vía `OMEGA_MP_WEBHOOK_MAX_AGE_SECONDS`, para rechazar repeticiones antiguas con HTTP `401`). La notificación entra a una cola persistente y recibe 202; el backend consulta el recurso auténtico en la API y procesa el resultado. El cuerpo recibido no activa planes. La conciliación automática se ejecuta cada cinco minutos; el botón de actualización de Mi plan también consulta a Mercado Pago.
 
-Una suscripción `authorized` no activa el plan: hace falta un pago aprobado de su factura recurrente. Un pago pendiente o rechazado no concede un período ni créditos nuevos. La aplicación vuelve a Gratis cuando termina el período confirmado; esta versión no concede una gracia adicional sin pago.
+Una suscripción `authorized` no activa el plan: hace falta un pago aprobado de su factura recurrente. Un pago pendiente o rechazado no concede un período ni créditos nuevos. Si un cobro de renovación falla o queda pendiente al vencer el período (sin cancelación voluntaria ni reembolso), la cuenta conserva acceso durante un **período de gracia configurable de 5 días** (`OMEGA_BILLING_GRACE_DAYS`, rango `0..14`) sin emitir nuevos créditos mensuales hasta confirmar el pago; si el usuario cancela explícitamente su renovación, conserva el acceso hasta el final del período ya pagado y luego vuelve a Gratis.
+
+### Despliegue central HTTPS vs. instalación de escritorio
+
+La pasarela de facturación y la recepción de webhooks de Mercado Pago operan **exclusivamente en un backend central con HTTPS público** (`OMEGA_PUBLIC_BASE_URL`). Las instalaciones de escritorio locales (Tauri/Docker en la máquina del usuario) no reciben webhooks de Mercado Pago; para operar membresías y cobros reales deben apuntar al backend central HTTPS.
 
 ## Cómo probar sin cobrar dinero real
 
@@ -108,7 +112,7 @@ Una suscripción `authorized` no activa el plan: hace falta un pago aprobado de 
 9. Probar una operación de costo mayor: cancelar la confirmación debe conservar el saldo; aceptarla debe consumir lo indicado; una caída del motor debe devolver la reserva. Un repositorio pequeño debe costar 10 tanto por URL como por archivo.
 10. Probar una recarga, cancelar renovación, reembolsar y verificar aislamiento entre dos cuentas. La cancelación debe detener cobros futuros y conservar el acceso hasta la fecha pagada; el reembolso debe retirar el beneficio correspondiente.
 
-La prueba de ida y vuelta con Mercado Pago sigue requiriendo credenciales de tu cuenta y un backend HTTPS. Las pruebas automatizadas del repositorio utilizan PostgreSQL aislado y dobles del proveedor; no crean cobros remotos.
+La prueba de punta a punta en Sandbox ya fue ejecutada contra Mercado Pago mediante túnel HTTPS público (`cloudflared`) con cuentas oficiales de vendedor y comprador de prueba (evidencia en `docs/qa/2026-11-24-manual/README.md`: aprobación de Pro + 500 créditos, consumo real de créditos, y cancelación de renovación conservando el período pagado). Las pruebas automatizadas del repositorio utilizan PostgreSQL aislado y dobles del proveedor; no crean cobros remotos.
 
 Fuentes oficiales: [cuentas de prueba](https://www.mercadopago.com.co/developers/es/docs/your-integrations/test/accounts), [suscripción con pago pendiente](https://www.mercadopago.com.co/developers/es/docs/subscriptions/integration-configuration/subscription-no-associated-plan/pending-payments), [webhooks](https://www.mercadopago.com.co/developers/es/docs/subscriptions/additional-content/your-integrations/notifications/webhooks), [referencia de Suscripciones](https://www.mercadopago.com.co/developers/es/reference/online-payments/subscriptions/overview).
 

@@ -8,6 +8,8 @@ import com.omega.platform.security.OmegaPrincipal;
 import java.lang.reflect.Method;
 import java.util.*;
 import org.aopalliance.intercept.MethodInterceptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.aop.Advisor;
 import org.springframework.aop.support.DefaultPointcutAdvisor;
 import org.springframework.aop.support.StaticMethodMatcherPointcut;
@@ -23,6 +25,8 @@ import org.springframework.http.HttpStatus;
 
 @Configuration
 public class CreditMeteringConfiguration {
+    private static final Logger log = LoggerFactory.getLogger(CreditMeteringConfiguration.class);
+
     @Bean
     @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
     public static Advisor creditMeteringAdvisor(
@@ -67,13 +71,24 @@ public class CreditMeteringConfiguration {
             }
             if(uploadBytes>25L*1024*1024 || uploadFiles>20) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Esta operación admite hasta 20 archivos y 25 MB en total.");
             UUID reservation=credits.reserve(tenant,actor,operation,amount,null);
+            long startedNanos=System.nanoTime();
             Object result;
             try { result=call.proceed(); }
-            catch(Throwable ex) { credits.settle(tenant,reservation,0);throw ex; }
+            catch(Throwable ex) {
+                long durationMs=(System.nanoTime()-startedNanos)/1_000_000L;
+                log.info("billing.credit_usage operation={} credits=0 reserved={} durationMs={} uploadBytes={} uploadFiles={} outcome=EXCEPTION",
+                        operation.name(), amount, durationMs, uploadBytes, uploadFiles);
+                credits.settle(tenant,reservation,0);
+                throw ex;
+            }
             JsonNode node=mapper.valueToTree(result);
             String status=node.path("status").asText("").toUpperCase(Locale.ROOT);
             boolean failed=result==null || status.contains("ERROR") || status.contains("FAIL") || status.contains("UNAVAILABLE") || status.endsWith("_EMPTY");
-            credits.settle(tenant,reservation,failed?0:amount);
+            int settled=failed?0:amount;
+            credits.settle(tenant,reservation,settled);
+            long durationMs=(System.nanoTime()-startedNanos)/1_000_000L;
+            log.info("billing.credit_usage operation={} credits={} reserved={} durationMs={} uploadBytes={} uploadFiles={} outcome={}",
+                    operation.name(), settled, amount, durationMs, uploadBytes, uploadFiles, failed ? "RELEASED" : "CONSUMED");
             return result;
         };
         var advisor=new DefaultPointcutAdvisor(pointcut,interceptor);
