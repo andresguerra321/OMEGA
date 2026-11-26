@@ -59,12 +59,21 @@ public class ExpedienteService {
 
     @Transactional
     public ExpedienteSummaryResponse createExpediente(OmegaPrincipal principal, CreateExpedienteRequest request) {
-        ExpedienteEntity created = expedienteRepository.save(new ExpedienteEntity(
+        ExpedienteEntity entity = new ExpedienteEntity(
                 principal.tenantId(),
                 principal.userId(),
                 request.title().trim(),
                 request.classification() == null ? ClassificationLevel.CONFIDENTIAL : request.classification()
-        ));
+        );
+        LegalCaseService.applyCaseSheet(
+                entity,
+                request.clientName(),
+                request.counterpartyName(),
+                request.courtName(),
+                request.processType(),
+                request.caseStage()
+        );
+        ExpedienteEntity created = expedienteRepository.save(entity);
         auditLogService.record(principal.tenantId(), principal.userId(), "EXPEDIENTE_CREATED", "EXPEDIENTE",
                 created.getId().toString(), Map.of("classification", created.getClassification().name()));
         return toSummary(created);
@@ -94,7 +103,12 @@ public class ExpedienteService {
                 expediente.getTitle(),
                 expediente.getClassification(),
                 expediente.getCreatedAt(),
-                documents
+                documents,
+                expediente.getClientName(),
+                expediente.getCounterpartyName(),
+                expediente.getCourtName(),
+                expediente.getProcessType(),
+                expediente.getCaseStage()
         );
     }
 
@@ -191,7 +205,12 @@ public class ExpedienteService {
                 entity.getOwnerUserId(),
                 entity.getTitle(),
                 entity.getClassification(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getClientName(),
+                entity.getCounterpartyName(),
+                entity.getCourtName(),
+                entity.getProcessType(),
+                entity.getCaseStage()
         );
     }
 

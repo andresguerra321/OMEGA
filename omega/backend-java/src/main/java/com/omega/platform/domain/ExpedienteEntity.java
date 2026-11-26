@@ -46,6 +46,17 @@ public class ExpedienteEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @Column(name = "client_name", length = 200)
+    private String clientName;
+    @Column(name = "counterparty_name", length = 200)
+    private String counterpartyName;
+    @Column(name = "court_name", length = 200)
+    private String courtName;
+    @Column(name = "process_type", length = 20)
+    private String processType;
+    @Column(name = "case_stage", length = 60)
+    private String caseStage;
+
     public String getDescription() { return description; }
     public void setDescription(String value) { description = value; }
     public String getCaseReference() { return caseReference; }
@@ -53,6 +64,16 @@ public class ExpedienteEntity {
     public ExpedienteStatus getStatus() { return status; }
     public void setStatus(ExpedienteStatus value) { status = value; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public String getClientName() { return clientName; }
+    public void setClientName(String value) { clientName = value; }
+    public String getCounterpartyName() { return counterpartyName; }
+    public void setCounterpartyName(String value) { counterpartyName = value; }
+    public String getCourtName() { return courtName; }
+    public void setCourtName(String value) { courtName = value; }
+    public String getProcessType() { return processType; }
+    public void setProcessType(String value) { processType = value; }
+    public String getCaseStage() { return caseStage; }
+    public void setCaseStage(String value) { caseStage = value; }
     @jakarta.persistence.PreUpdate
     void markUpdated() { updatedAt = Instant.now(); }
 
