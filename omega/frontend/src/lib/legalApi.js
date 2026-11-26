@@ -37,4 +37,28 @@ export const legalApi = {
   reviewTimelineEvent: (id, eventId, body) => apiFetch(`${casePath(id)}/timeline/${encodeURIComponent(eventId)}`, { method: 'PATCH', body }),
   adminDocumentIssues: () => apiFetch('/legal/admin/documents/issues'),
   firmSearch: (options = {}) => apiFetch(`/expedientes/search?${params(options)}`).then(page),
+  conflicts: ({ name, excludeCaseId } = {}) => apiFetch(`/legal/conflicts?${params({ name, excludeCaseId })}`),
 };
+
+export async function queryCasePartyConflicts({ clientName, counterpartyName }, excludeCaseId) {
+  const candidates = [
+    ['Cliente', (clientName || '').trim()],
+    ['Contraparte', (counterpartyName || '').trim()],
+  ].filter(([, text]) => text.length >= 4);
+  if (candidates.length === 0) return [];
+  const checks = await Promise.all(candidates.map(async ([fieldLabel, query]) => {
+    try {
+      const response = await legalApi.conflicts({ name: query, excludeCaseId });
+      if (!response || !(response.totalMatches > 0)) return null;
+      return {
+        fieldLabel,
+        totalMatches: response.totalMatches,
+        restrictedMatches: response.restrictedMatches || 0,
+        matches: Array.isArray(response.matches) ? response.matches : [],
+      };
+    } catch {
+      return null;
+    }
+  }));
+  return checks.filter(Boolean);
+}

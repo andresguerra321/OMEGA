@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
 import { FolderOpen, Plus, ArrowLeft } from 'lucide-react';
-import { legalApi } from '../lib/legalApi.js';
+import { legalApi, queryCasePartyConflicts } from '../lib/legalApi.js';
 import { useLegalData } from '../lib/useLegalData.js';
 import { LegalDocumentAiPanel } from './LegalDocumentAiPanel';
-import { LegalCaseEditor } from './LegalCaseEditor';
-import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY } from '../lib/legalPresentation.js';
+import { LegalCaseEditor, LegalConflictBanner } from './LegalCaseEditor';
+import { CASE_CLASSES, CASE_STATES, LEGAL_INPUT, LEGAL_PRIMARY, LEGAL_SECONDARY, PROCESS_TYPES } from '../lib/legalPresentation.js';
 import { LegalLoadState, LegalPagination } from './LegalWorkspacePrimitives';
 import { LegalAccessPreview, LegalActivityPreview } from './LegalCasePreviewTabs';
 import { LegalCaseAssistantTab } from './LegalCaseAssistantTab';
@@ -18,7 +18,28 @@ import DossierExportButtons from './DossierExportButtons';
 
 const TABS = [['documents', 'Documentos'], ['assistant', 'Asistente'], ['timeline', 'Cronología'], ['observations', 'Pasajes y revisión'], ['access', 'Acceso'], ['activity', 'Actividad']];
 
-function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUserId, role, policyAccepted }) {
+function CaseSheetSummary({ value }) {
+  const entries = [
+    ['Cliente', value.clientName],
+    ['Contraparte', value.counterpartyName],
+    ['Despacho o juzgado', value.courtName],
+    ['Tipo de proceso', value.processType ? (PROCESS_TYPES[value.processType] || value.processType) : null],
+    ['Etapa procesal', value.caseStage],
+  ].filter(([, text]) => text);
+  if (entries.length === 0) return null;
+  return (
+    <dl aria-label="Ficha del caso" className="grid gap-x-6 gap-y-2 border-t border-white/[0.06] pt-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+      {entries.map(([label, text]) => (
+        <div key={label} className="min-w-0 space-y-0.5">
+          <dt className="text-white/50">{label}</dt>
+          <dd className="break-words text-white/85">{text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUserId, role, policyAccepted, conflictGroups, onDismissConflict }) {
   const [tab, setTab] = useState('documents');
   const [confirmDeleteCase, setConfirmDeleteCase] = useState(false);
   const [deletingCase, setDeletingCase] = useState(false);
@@ -66,6 +87,8 @@ function CaseDetail({ id, onBack, onEdit, onDeleted, onOpenAssistant, currentUse
       <h2 className="break-words text-xl font-semibold text-white">{value.title}</h2>
       <p className="text-sm text-white/60">{CASE_STATES[value.status]} · {CASE_CLASSES[value.classification]}{value.reference ? ` · ${value.reference}` : ''}</p>
       {value.description && <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{value.description}</p>}
+      <CaseSheetSummary value={value} />
+      <LegalConflictBanner groups={conflictGroups} onDismiss={onDismissConflict} />
       <div className="pt-1">
         <DossierExportButtons expedienteId={value.id} profile="LEGAL" />
       </div>
@@ -90,6 +113,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
   const [selected, setSelected] = useState('');
   const [detailRevision, setDetailRevision] = useState(0);
   const [editor, setEditor] = useState(null);
+  const [savedConflict, setSavedConflict] = useState({ caseId: '', groups: [] });
   const [policyAccepted, setPolicyAccepted] = useState(false);
   const [creatingDemo, setCreatingDemo] = useState(false);
   const load = useCallback(() => legalApi.cases({ ...filters, page, size: 20 }), [filters, page]);
@@ -98,6 +122,8 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
   const change = event => { setFilters(previous => ({ ...previous, [event.target.name]: event.target.value })); setPage(0); };
   async function save(draft) {
     const saved = editor.value ? await legalApi.update(editor.value.id, draft) : await legalApi.create(draft);
+    const groups = await queryCasePartyConflicts(draft, saved.id);
+    setSavedConflict({ caseId: saved.id, groups });
     setSelected(saved.id); setDetailRevision(value => value + 1); setEditor(null); request.reload();
   }
   async function createDemoCase() {
@@ -127,7 +153,7 @@ export function ExpedientesPanel({ authSession, onOpenAssistant }) {
       <LegalOnboardingGuide policyAccepted={policyAccepted} />
       <LegalDocumentAiPanel onPolicyChange={setPolicyAccepted} />
       <LegalAdminIssuesPanel role={authSession?.role} />
-      {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onDeleted={() => { setSelected(''); request.reload(); }} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} /> : <>
+      {selected ? <CaseDetail key={`${selected}:${detailRevision}`} id={selected} onBack={() => setSelected('')} onEdit={value => setEditor({ value })} onDeleted={() => { setSelected(''); setSavedConflict({ caseId: '', groups: [] }); request.reload(); }} onOpenAssistant={onOpenAssistant} currentUserId={authSession?.userId} role={authSession?.role} policyAccepted={policyAccepted} conflictGroups={savedConflict.caseId === selected ? savedConflict.groups : []} onDismissConflict={() => setSavedConflict({ caseId: '', groups: [] })} /> : <>
         <LegalFirmSearchPanel onOpenCase={caseId => setSelected(caseId)} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1 text-xs text-white/60">Buscar<input name="search" value={filters.search} onChange={change} maxLength={120} placeholder="Título o referencia" className={LEGAL_INPUT} /></label>
