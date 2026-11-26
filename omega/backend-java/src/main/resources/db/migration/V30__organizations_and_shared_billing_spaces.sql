@@ -1,5 +1,38 @@
 -- Organizations, multi-workspace memberships and shared billing account resolution (Phase 1); additive and compatible with standalone accounts.
 -- Reverse (organization/membership metadata loss; back up first):
+-- DO $$
+-- BEGIN
+--     IF EXISTS (
+--         SELECT 1 FROM omega_rag.workspace_memberships wm
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = wm.tenant_id AND u.id = wm.user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.expedientes e
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = e.tenant_id AND u.id = e.owner_user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.expediente_permissions ep
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = ep.tenant_id AND u.id = ep.user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.documents d
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = d.tenant_id AND u.id = d.uploaded_by)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.osint_monitored_assets oma
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = oma.tenant_id AND u.id = oma.user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.devices dv
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = dv.tenant_id AND u.id = dv.user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.ai_usage_quotas aq
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = aq.tenant_id AND u.id = aq.user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.api_tokens atok
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = atok.tenant_id AND u.id = atok.created_by_user_id)
+--     ) OR EXISTS (
+--         SELECT 1 FROM omega_rag.legal_document_ai_consents lc
+--          WHERE NOT EXISTS (SELECT 1 FROM omega_rag.users u WHERE u.tenant_id = lc.tenant_id AND u.id = lc.accepted_by)
+--     ) THEN
+--         RAISE EXCEPTION 'Reversa V30 abortada: existen membresías o dueños/actores cruzados entre tenants sin fila en omega_rag.users(tenant_id, id). Depura o reasigna antes de revertir.';
+--     END IF;
+-- END $$;
 -- DROP TRIGGER IF EXISTS trg_tenants_protect_billing_payer ON omega_rag.tenants;
 -- DROP FUNCTION IF EXISTS omega_rag.protect_billing_payer_tenant();
 -- DROP TRIGGER IF EXISTS trg_organizations_validate_payer ON omega_rag.organizations;
@@ -60,11 +93,19 @@ ALTER TABLE omega_rag.tenants
         REFERENCES omega_rag.organizations(id, billing_tenant_id)
         DEFERRABLE INITIALLY IMMEDIATE;
 
--- Snapshot strictly at V30 migration time which pre-existing tenants already had a subscription or payments.
+-- Snapshot strictly at V30 migration time which pre-existing tenants already had an approved payment or a non-FREE / paid_verified subscription.
 UPDATE omega_rag.tenants t
    SET pre_v30_billing_history = TRUE
- WHERE EXISTS (SELECT 1 FROM omega_rag.subscriptions s WHERE s.tenant_id = t.id)
-    OR EXISTS (SELECT 1 FROM omega_rag.billing_payments p WHERE p.tenant_id = t.id);
+ WHERE EXISTS (
+           SELECT 1 FROM omega_rag.billing_payments p
+            WHERE p.tenant_id = t.id
+              AND (p.status = 'approved' OR p.approved_at IS NOT NULL)
+       )
+    OR EXISTS (
+           SELECT 1 FROM omega_rag.subscriptions s
+            WHERE s.tenant_id = t.id
+              AND (s.paid_verified = TRUE OR s.plan_code <> 'FREE')
+       );
 
 CREATE INDEX idx_tenants_organization_id
     ON omega_rag.tenants(organization_id)
@@ -217,10 +258,18 @@ BEGIN
         END IF;
 
         IF NOT payer_pre_v30_billing OR NOT (
-            EXISTS (SELECT 1 FROM omega_rag.subscriptions s WHERE s.tenant_id = NEW.billing_tenant_id)
-            OR EXISTS (SELECT 1 FROM omega_rag.billing_payments p WHERE p.tenant_id = NEW.billing_tenant_id)
+            EXISTS (
+                SELECT 1 FROM omega_rag.billing_payments p
+                 WHERE p.tenant_id = NEW.billing_tenant_id
+                   AND (p.status = 'approved' OR p.approved_at IS NOT NULL)
+            )
+            OR EXISTS (
+                SELECT 1 FROM omega_rag.subscriptions s
+                 WHERE s.tenant_id = NEW.billing_tenant_id
+                   AND (s.paid_verified = TRUE OR s.plan_code <> 'FREE')
+            )
         ) THEN
-            RAISE EXCEPTION 'legacy_legal_payer requiere que el espacio ya tuviera suscripción o pagos anteriores a V30';
+            RAISE EXCEPTION 'legacy_legal_payer requiere pago aprobado o suscripción pagada (no FREE) anteriores a V30';
         END IF;
     END IF;
 

@@ -654,13 +654,18 @@ class BillingAccountResolverIntegrationTest {
             UUID unbilledLegalOwnerId = UUID.randomUUID();
             UUID unbilledLegalCaseId = UUID.randomUUID();
 
+            UUID freeOnlyLegalTenantId = UUID.randomUUID();
+            UUID freeOnlyLegalOwnerId = UUID.randomUUID();
+            UUID freeOnlyLegalCaseId = UUID.randomUUID();
+
             // Sembrar datos reales en esquema V29: varios tenants, usuarios, expedientes con dueño y suscripciones/pagos
             migJdbc.update("""
                     INSERT INTO omega_rag.tenants (id, slug, name, active, profile, account_type)
                     VALUES (?, 'v29-general', 'Empresa V29', TRUE, 'GENERAL', 'ORGANIZATION'),
                            (?, 'v29-legal-paid', 'Bufete Pagador V29', TRUE, 'LEGAL', 'INDIVIDUAL'),
-                           (?, 'v29-legal-unpaid', 'Bufete Sin Pagos V29', TRUE, 'LEGAL', 'INDIVIDUAL')
-                    """, orgTenantId, billedLegalTenantId, unbilledLegalTenantId);
+                           (?, 'v29-legal-unpaid', 'Bufete Sin Pagos V29', TRUE, 'LEGAL', 'INDIVIDUAL'),
+                           (?, 'v29-legal-free-only', 'Bufete Solo Free V29', TRUE, 'LEGAL', 'INDIVIDUAL')
+                    """, orgTenantId, billedLegalTenantId, unbilledLegalTenantId, freeOnlyLegalTenantId);
 
             String hash = passwordEncoder.encode("OmegaMigration!2026");
             migJdbc.update("""
@@ -668,46 +673,56 @@ class BillingAccountResolverIntegrationTest {
                     VALUES (?, ?, 'admin@v29.invalid', ?, 'Admin V29', 'ADMIN', TRUE),
                            (?, ?, 'analyst@v29.invalid', ?, 'Analista V29', 'ANALYST', TRUE),
                            (?, ?, 'socio@paidlegal.invalid', ?, 'Socio Legal Pagador', 'ANALYST', TRUE),
-                           (?, ?, 'abogado@unpaidlegal.invalid', ?, 'Abogado Sin Pago', 'ANALYST', TRUE)
+                           (?, ?, 'abogado@unpaidlegal.invalid', ?, 'Abogado Sin Pago', 'ANALYST', TRUE),
+                           (?, ?, 'abogado@freelegal.invalid', ?, 'Abogado Solo Free', 'ANALYST', TRUE)
                     """, orgAdminId, orgTenantId, hash,
                     orgAnalystId, orgTenantId, hash,
                     billedLegalOwnerId, billedLegalTenantId, hash,
-                    unbilledLegalOwnerId, unbilledLegalTenantId, hash);
+                    unbilledLegalOwnerId, unbilledLegalTenantId, hash,
+                    freeOnlyLegalOwnerId, freeOnlyLegalTenantId, hash);
 
             migJdbc.update("UPDATE omega_rag.tenants SET owner_user_id = ? WHERE id = ?", orgAdminId, orgTenantId);
             migJdbc.update("UPDATE omega_rag.tenants SET owner_user_id = ? WHERE id = ?", billedLegalOwnerId, billedLegalTenantId);
             migJdbc.update("UPDATE omega_rag.tenants SET owner_user_id = ? WHERE id = ?", unbilledLegalOwnerId, unbilledLegalTenantId);
+            migJdbc.update("UPDATE omega_rag.tenants SET owner_user_id = ? WHERE id = ?", freeOnlyLegalOwnerId, freeOnlyLegalTenantId);
 
             migJdbc.update("""
                     INSERT INTO omega_rag.expedientes (id, tenant_id, owner_user_id, title, classification)
                     VALUES (?, ?, ?, 'Caso Corporativo V29', 'INTERNAL'),
                            (?, ?, ?, 'Litigio Pre-V30 Pagado', 'CONFIDENTIAL'),
-                           (?, ?, ?, 'Litigio Pre-V30 Sin Suscripción', 'CONFIDENTIAL')
+                           (?, ?, ?, 'Litigio Pre-V30 Sin Suscripción', 'CONFIDENTIAL'),
+                           (?, ?, ?, 'Litigio Pre-V30 Solo Free', 'CONFIDENTIAL')
                     """, orgCaseId, orgTenantId, orgAdminId,
                     billedLegalCaseId, billedLegalTenantId, billedLegalOwnerId,
-                    unbilledLegalCaseId, unbilledLegalTenantId, unbilledLegalOwnerId);
+                    unbilledLegalCaseId, unbilledLegalTenantId, unbilledLegalOwnerId,
+                    freeOnlyLegalCaseId, freeOnlyLegalTenantId, freeOnlyLegalOwnerId);
 
             migJdbc.update("""
                     INSERT INTO omega_rag.expediente_permissions (id, tenant_id, expediente_id, user_id, permission)
                     VALUES (?, ?, ?, ?, 'READ')
                     """, UUID.randomUUID(), orgTenantId, orgCaseId, orgAnalystId);
 
-            // Suscripciones activas anteriores a V30 solo para orgTenantId y billedLegalTenantId (NO para unbilledLegalTenantId)
+            // Suscripciones previas a V30: ENTERPRISE/PRO verificadas + una fila FREE (paid_verified=FALSE) y un pago rechazado en freeOnlyLegalTenantId
             migJdbc.update("""
                     INSERT INTO omega_rag.subscriptions (id, tenant_id, plan_code, status, paid_verified, billing_interval, max_devices, monthly_ai_quota, current_period_start, current_period_end)
                     VALUES (?, ?, 'ENTERPRISE', 'ACTIVE', TRUE, 'MONTHLY', 25, 3000, NOW(), NOW() + INTERVAL '30 days'),
-                           (?, ?, 'PRO', 'ACTIVE', TRUE, 'MONTHLY', 5, 500, NOW(), NOW() + INTERVAL '30 days')
-                    """, UUID.randomUUID(), orgTenantId, UUID.randomUUID(), billedLegalTenantId);
+                           (?, ?, 'PRO', 'ACTIVE', TRUE, 'MONTHLY', 5, 500, NOW(), NOW() + INTERVAL '30 days'),
+                           (?, ?, 'FREE', 'ACTIVE', FALSE, 'MONTHLY', 1, 30, NOW(), NOW() + INTERVAL '30 days')
+                    """, UUID.randomUUID(), orgTenantId, UUID.randomUUID(), billedLegalTenantId, UUID.randomUUID(), freeOnlyLegalTenantId);
 
             UUID preV30CheckoutId = UUID.randomUUID();
+            UUID rejectedFreeCheckoutId = UUID.randomUUID();
             migJdbc.update("""
                     INSERT INTO omega_rag.billing_checkouts (id, tenant_id, actor_user_id, kind, plan_code, interval, amount, credits, status)
-                    VALUES (?, ?, ?, 'SUBSCRIPTION', 'PRO', 'MONTHLY', 59900, 500, 'ACTIVE')
-                    """, preV30CheckoutId, billedLegalTenantId, billedLegalOwnerId);
+                    VALUES (?, ?, ?, 'SUBSCRIPTION', 'PRO', 'MONTHLY', 59900, 500, 'ACTIVE'),
+                           (?, ?, ?, 'SUBSCRIPTION', 'PRO', 'MONTHLY', 59900, 500, 'FAILED')
+                    """, preV30CheckoutId, billedLegalTenantId, billedLegalOwnerId,
+                    rejectedFreeCheckoutId, freeOnlyLegalTenantId, freeOnlyLegalOwnerId);
             migJdbc.update("""
                     INSERT INTO omega_rag.billing_payments (mp_payment_id, checkout_id, tenant_id, amount, currency, status, approved_at, applied)
-                    VALUES ('mp-pre-v30-001', ?, ?, 59900, 'COP', 'approved', NOW(), TRUE)
-                    """, preV30CheckoutId, billedLegalTenantId);
+                    VALUES ('mp-pre-v30-001', ?, ?, 59900, 'COP', 'approved', NOW(), TRUE),
+                           ('mp-pre-v30-rejected', ?, ?, 59900, 'COP', 'rejected', NULL, FALSE)
+                    """, preV30CheckoutId, billedLegalTenantId, rejectedFreeCheckoutId, freeOnlyLegalTenantId);
 
             // 2. Ejecutar migración V30 sobre los datos reales V29
             Flyway.configure()
@@ -716,19 +731,22 @@ class BillingAccountResolverIntegrationTest {
                     .load()
                     .migrate();
 
-            // Verificar backfill de las 4 membresías raíz, expedientes y suscripciones intactas
+            // Verificar backfill de las 5 membresías raíz, expedientes y suscripciones intactas
             assertThat(migJdbc.queryForObject("SELECT count(*) FROM omega_rag.workspace_memberships WHERE active = TRUE", Integer.class))
-                    .isEqualTo(4);
+                    .isEqualTo(5);
             assertThat(migJdbc.queryForObject("SELECT count(*) FROM omega_rag.expedientes", Integer.class))
-                    .isEqualTo(3);
+                    .isEqualTo(4);
             assertThat(migJdbc.queryForObject(
                     "SELECT pre_v30_billing_history FROM omega_rag.tenants WHERE id = ?", Boolean.class, billedLegalTenantId))
                     .isTrue();
             assertThat(migJdbc.queryForObject(
                     "SELECT pre_v30_billing_history FROM omega_rag.tenants WHERE id = ?", Boolean.class, unbilledLegalTenantId))
                     .isFalse();
+            assertThat(migJdbc.queryForObject(
+                    "SELECT pre_v30_billing_history FROM omega_rag.tenants WHERE id = ?", Boolean.class, freeOnlyLegalTenantId))
+                    .isFalse();
 
-            // Punto 4a: el tenant LEGAL que YA tenía suscripción/pagos antes de V30 SÍ puede usar legacy_legal_payer=TRUE
+            // Punto 4a: el tenant LEGAL que YA tenía suscripción pagada / pago aprobado antes de V30 SÍ puede usar legacy_legal_payer=TRUE
             UUID inheritedOrgId = UUID.randomUUID();
             migJdbc.update("""
                     INSERT INTO omega_rag.organizations (id, name, slug, billing_tenant_id, owner_user_id, legacy_legal_payer)
@@ -740,7 +758,15 @@ class BillingAccountResolverIntegrationTest {
                      WHERE id = ?
                     """, inheritedOrgId, billedLegalTenantId, billedLegalTenantId);
 
-            // Punto 4b: el tenant LEGAL que NO tenía suscripción ni pagos antes de V30 es RECHAZADO
+            // Punto 4b: un tenant LEGAL que solo tenía fila FREE (y/o pago rechazado) antes de V30 DEBE SER RECHAZADO como legacy_legal_payer
+            assertThatThrownBy(() -> migJdbc.update("""
+                    INSERT INTO omega_rag.organizations (id, name, slug, billing_tenant_id, owner_user_id, legacy_legal_payer)
+                    VALUES (?, 'Bufete Solo Free', 'bufete-solo-free', ?, ?, TRUE)
+                    """, UUID.randomUUID(), freeOnlyLegalTenantId, freeOnlyLegalOwnerId))
+                    .isInstanceOf(UncategorizedSQLException.class)
+                    .hasMessageContaining("legacy_legal_payer");
+
+            // Punto 4c: el tenant LEGAL que NO tenía suscripción ni pagos antes de V30 es RECHAZADO
             // incluso si adquiere una suscripción después de V30.
             migJdbc.update("""
                     INSERT INTO omega_rag.subscriptions (id, tenant_id, plan_code, status, paid_verified, billing_interval, max_devices, monthly_ai_quota, current_period_start, current_period_end)
@@ -755,8 +781,7 @@ class BillingAccountResolverIntegrationTest {
         });
     }
 
-    @Test
-    void v30DocumentedReverseSqlRollsBackCleanlyToV29Schema() throws Exception {
+    private static String extractDocumentedV30ReverseSql() throws Exception {
         Path v30Path = Path.of("src/main/resources/db/migration/V30__organizations_and_shared_billing_spaces.sql");
         List<String> lines = Files.readAllLines(v30Path, StandardCharsets.UTF_8);
         StringBuilder reverseBuilder = new StringBuilder();
@@ -774,7 +799,70 @@ class BillingAccountResolverIntegrationTest {
                 reverseBuilder.append(sqlLine).append('\n');
             }
         }
-        String reverseSql = reverseBuilder.toString().trim();
+        return reverseBuilder.toString().trim();
+    }
+
+    @Test
+    void v30DocumentedReverseSqlAbortsClearlyWhenCrossTenantMembershipsOrOwnersExist() throws Exception {
+        String reverseSql = extractDocumentedV30ReverseSql();
+        assertThat(reverseSql).contains("Reversa V30 abortada");
+
+        withIsolatedDatabase((migJdbc, migDs) -> {
+            Flyway.configure().dataSource(migDs).locations("classpath:db/migration").load().migrate();
+
+            UUID rootTenantId = UUID.randomUUID();
+            UUID childTenantId = UUID.randomUUID();
+            UUID rootUserId = UUID.randomUUID();
+            UUID orgId = UUID.randomUUID();
+
+            migJdbc.update("""
+                    INSERT INTO omega_rag.tenants (id, slug, name, active, profile, account_type)
+                    VALUES (?, 'abort-root', 'Abort Root', TRUE, 'GENERAL', 'ORGANIZATION')
+                    """, rootTenantId);
+            migJdbc.update("""
+                    INSERT INTO omega_rag.users (id, tenant_id, email, password_hash, full_name, role, active)
+                    VALUES (?, ?, 'abort@v30.invalid', ?, 'Admin Abort', 'ADMIN', TRUE)
+                    """, rootUserId, rootTenantId, passwordEncoder.encode("OmegaAbort!2026"));
+            migJdbc.update("""
+                    INSERT INTO omega_rag.organizations (id, name, slug, billing_tenant_id, owner_user_id, legacy_legal_payer)
+                    VALUES (?, 'Org Abort', 'org-abort', ?, ?, FALSE)
+                    """, orgId, rootTenantId, rootUserId);
+            migJdbc.update("UPDATE omega_rag.tenants SET organization_id = ?, billing_tenant_id = ? WHERE id = ?",
+                    orgId, rootTenantId, rootTenantId);
+            migJdbc.update("""
+                    INSERT INTO omega_rag.tenants (id, slug, name, active, profile, account_type, organization_id, billing_tenant_id)
+                    VALUES (?, 'abort-child', 'Abort Child', TRUE, 'LEGAL', 'ORGANIZATION', ?, ?)
+                    """, childTenantId, orgId, rootTenantId);
+
+            // Membresía y expediente con dueño cruzado (rootUserId vive en rootTenantId, pero es miembro/dueño en childTenantId)
+            migJdbc.update("""
+                    INSERT INTO omega_rag.workspace_memberships (tenant_id, user_id, role, active)
+                    VALUES (?, ?, 'ADMIN', TRUE)
+                    """, childTenantId, rootUserId);
+            migJdbc.update("""
+                    INSERT INTO omega_rag.expedientes (id, tenant_id, owner_user_id, title, classification)
+                    VALUES (?, ?, ?, 'Expediente Cruzado', 'CONFIDENTIAL')
+                    """, UUID.randomUUID(), childTenantId, rootUserId);
+
+            assertThatThrownBy(() -> {
+                try (Connection conn = migDs.getConnection();
+                     Statement stmt = conn.createStatement()) {
+                    stmt.execute(reverseSql);
+                }
+            }).hasMessageContaining("Reversa V30 abortada");
+
+            // El aborto ocurre en el preflight antes de borrar ninguna tabla de V30
+            assertThat(migJdbc.queryForObject("""
+                    SELECT count(*) FROM information_schema.tables
+                     WHERE table_schema = 'omega_rag'
+                       AND table_name IN ('organizations', 'organization_members', 'workspace_memberships')
+                    """, Integer.class)).isEqualTo(3);
+        });
+    }
+
+    @Test
+    void v30DocumentedReverseSqlRollsBackCleanlyToV29Schema() throws Exception {
+        String reverseSql = extractDocumentedV30ReverseSql();
         assertThat(reverseSql).contains("DROP TABLE IF EXISTS omega_rag.organizations");
 
         withIsolatedDatabase((migJdbc, migDs) -> {

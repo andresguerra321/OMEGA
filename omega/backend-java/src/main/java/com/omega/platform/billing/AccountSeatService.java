@@ -83,6 +83,14 @@ public class AccountSeatService {
         }
     }
 
+    /**
+     * Registra o actualiza una membresía en {@code omega_rag.workspace_memberships} validando únicamente
+     * disponibilidad de puesto ({@code max_users}) bajo bloqueo transaccional del {@code billing_tenant_id}.
+     *
+     * <p><strong>CONTRATO DE SEGURIDAD (NO AUTORIZA):</strong> Este método NO valida permisos del actor invocador
+     * ni reglas de custodia de espacios {@code LEGAL}. Solo debe invocarse desde controladores o servicios de
+     * aplicación que hayan verificado explícitamente la autorización del actor antes de delegar aquí.
+     */
     @Transactional
     public void assignWorkspaceMembership(UUID workspaceTenant, UUID userId, Role role, UUID grantedByUserId) {
         Role targetRole = role != null ? role : Role.ANALYST;
