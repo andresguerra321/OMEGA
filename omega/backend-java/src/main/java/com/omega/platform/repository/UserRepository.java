@@ -45,19 +45,6 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     List<UserEntity> findAllByTenantIdOrderByCreatedAtAsc(UUID tenantId);
 
     @Query("""
-            SELECT u FROM UserEntity u
-            JOIN TenantEntity t ON t.id = u.tenantId
-            WHERE u.id = :userId
-              AND u.tenantId = :tenantId
-              AND u.active = true
-              AND t.active = true
-            """)
-    Optional<UserEntity> findActiveUserInActiveTenant(
-            @Param("userId") UUID userId,
-            @Param("tenantId") UUID tenantId
-    );
-
-    @Query("""
             SELECT u.id AS userId,
                    wm.tenantId AS tenantId,
                    u.email AS email,
