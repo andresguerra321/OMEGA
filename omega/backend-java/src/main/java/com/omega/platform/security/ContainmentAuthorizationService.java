@@ -29,9 +29,11 @@ public class ContainmentAuthorizationService {
     private UserEntity passwordCheck(OmegaPrincipal principal, String password) {
         String key = "containment-auth:" + principal.userId();
         limiter.assertAllowed(key, principal.email());
-        UserEntity user = users.findByIdAndTenantId(principal.userId(), principal.tenantId())
-                .filter(u -> u.isActive() && (u.getRole() == Role.ADMIN || accountAccess != null
-                        && accountAccess.canManage(u.getTenantId(),u.getId(),u.getRole())))
+        Role effectiveRole = users.findActiveWorkspaceRole(principal.userId(), principal.tenantId())
+                .orElseThrow(() -> new AccessDeniedException("Administrador activo requerido"));
+        UserEntity user = users.findById(principal.userId())
+                .filter(u -> u.isActive() && (effectiveRole == Role.ADMIN || accountAccess != null
+                        && accountAccess.canManage(principal.tenantId(), u.getId(), effectiveRole)))
                 .orElseThrow(() -> new AccessDeniedException("Administrador activo requerido"));
         if (password == null || !passwords.matches(password, user.getPasswordHash())) {
             limiter.recordFailure(key, principal.email());

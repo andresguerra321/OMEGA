@@ -48,13 +48,14 @@ class CsrfSecurityTest {
         when(jwt.parseAndValidate("valid-jwt")).thenReturn(
                 new JwtService.ParsedJwtClaims(userId, tenantId, "user@example.org", Role.ADMIN));
         when(jwt.parseAndValidate("invalid-jwt")).thenThrow(new JwtException("invalid"));
-        UserEntity user = org.mockito.Mockito.mock(UserEntity.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getTenantId()).thenReturn(tenantId);
-        when(user.getEmail()).thenReturn("user@example.org");
-        when(user.getRole()).thenReturn(Role.ADMIN);
-        when(user.isActive()).thenReturn(true);
-        when(users.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
+        UserRepository.AuthenticatedWorkspaceMember member =
+                org.mockito.Mockito.mock(UserRepository.AuthenticatedWorkspaceMember.class);
+        when(member.getUserId()).thenReturn(userId);
+        when(member.getTenantId()).thenReturn(tenantId);
+        when(member.getEmail()).thenReturn("user@example.org");
+        when(member.getRole()).thenReturn(Role.ADMIN);
+        when(member.isActive()).thenReturn(true);
+        when(users.findActiveWorkspaceMember(userId, tenantId)).thenReturn(Optional.of(member));
     }
 
     @RestController

@@ -32,16 +32,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = ProfileConfigController.class)
 @Import({
-        SecurityConfig.class,
-        JwtAuthenticationFilter.class,
-        SessionCookieHelper.class,
-        JsonSecurityHandlers.class,
+
         TenantProfileConfigService.class
 })
 class TenantProfileMigrationAndEndpointTest {
 
-    @Autowired
-    private MockMvc mvc;
+    private void m
 
     @MockBean
     private TenantRepository tenantRepository;
@@ -62,15 +58,15 @@ class TenantProfileMigrationAndEndpointTest {
         UUID userId = UUID.randomUUID();
         JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
                 userId, tenantId, role.name().toLowerCase() + "@omega.test", role);
-        UserEntity user = mock(UserEntity.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getTenantId()).thenReturn(tenantId);
-        when(user.isActive()).thenReturn(true);
-        when(user.getRole()).thenReturn(role);
-        when(user.getEmail()).thenReturn(claims.email());
+        UserRepository.AuthenticatedWorkspaceMember member = mock(UserRepository.AuthenticatedWorkspaceMember.class);
+        when(member.getUserId()).thenReturn(userId);
+        when(member.getTenantId()).thenReturn(tenantId);
+        when(member.isActive()).thenReturn(true);
+        when(member.getRole()).thenReturn(role);
+        when(member.getEmail()).thenReturn(claims.email());
 
         when(jwtService.parseAndValidate(token)).thenReturn(claims);
-        when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
+        when(userRepository.findActiveWorkspaceMember(userId, tenantId)).thenReturn(Optional.of(member));
         when(tenantRepository.findByIdAndActiveTrue(tenantId))
                 .thenReturn(Optional.of(new TenantEntity("org-" + profile.name().toLowerCase(), "Org", profile)));
     }

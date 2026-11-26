@@ -22,20 +22,30 @@ public class BillingJobReconciler {
                        r.actor_user_id,
                        r.reference,
                        u.email,
-                       COALESCE(wm.role, u.role) AS effective_role
+                       u.active AS user_active,
+                       t.active AS tenant_active,
+                       wm.role AS membership_role,
+                       wm.active AS membership_active
                   FROM omega_rag.credit_reservations r
-                  JOIN omega_rag.users u ON u.id = r.actor_user_id
+                  LEFT JOIN omega_rag.users u ON u.id = r.actor_user_id
+                  LEFT JOIN omega_rag.tenants t ON t.id = COALESCE(r.workspace_tenant_id, r.tenant_id)
                   LEFT JOIN omega_rag.workspace_memberships wm
                          ON wm.tenant_id = COALESCE(r.workspace_tenant_id, r.tenant_id)
-                        AND wm.user_id = u.id
-                        AND wm.active = TRUE
+                        AND wm.user_id = r.actor_user_id
                  WHERE r.status = 'RESERVED' AND r.reference LIKE 'mobile:%'
                  LIMIT 100
                 """)) {
             UUID workspaceTenant=(UUID)row.get("workspace_id"),user=(UUID)row.get("actor_user_id");
+            if (!Boolean.TRUE.equals(row.get("user_active"))
+                    || !Boolean.TRUE.equals(row.get("tenant_active"))
+                    || !Boolean.TRUE.equals(row.get("membership_active"))
+                    || row.get("membership_role") == null) {
+                credits.settle((UUID)row.get("tenant_id"), (UUID)row.get("id"), 0);
+                continue;
+            }
             String job=row.get("reference").toString().substring(7);
             try {
-                Role role=Role.valueOf(row.get("effective_role").toString());
+                Role role=Role.valueOf(row.get("membership_role").toString());
                 TenantContext.set(new TenantScope(workspaceTenant,user,role));
                 var result=bridge.getMobileUsbAuditJob(new OmegaPrincipal(user,workspaceTenant,row.get("email").toString(),role,true),job);
                 credits.settleMobile(workspaceTenant,job,String.valueOf(result.getOrDefault("status","")));

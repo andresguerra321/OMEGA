@@ -84,7 +84,7 @@ public class AccountSeatService {
     }
 
     /**
-     * Registra o actualiza una membresía en {@code omega_rag.workspace_memberships} validando únicamente
+     * Registra o actualiza una membresía activa en {@code omega_rag.workspace_memberships} validando únicamente
      * disponibilidad de puesto ({@code max_users}) bajo bloqueo transaccional del {@code billing_tenant_id}.
      *
      * <p><strong>CONTRATO DE SEGURIDAD (NO AUTORIZA):</strong> Este método NO valida permisos del actor invocador
@@ -93,8 +93,45 @@ public class AccountSeatService {
      */
     @Transactional
     public void assignWorkspaceMembership(UUID workspaceTenant, UUID userId, Role role, UUID grantedByUserId) {
+        updateWorkspaceMembershipState(workspaceTenant, userId, role, true, grantedByUserId);
+    }
+
+    /**
+     * Actualiza el rol y/o estado activo de una membresía en {@code omega_rag.workspace_memberships}.
+     * Si la membresía queda activa con rol {@code ADMIN} o {@code ANALYST}, verifica disponibilidad de puesto
+     * mediante {@link #requireAvailableSeat(UUID, UUID, Role)} (permitiendo al titular único de una cuenta
+     * {@code INDIVIDUAL} ajustar su propio rol sin agregar miembros externos).
+     *
+     * <p><strong>CONTRATO DE SEGURIDAD (NO AUTORIZA):</strong> Este método NO valida permisos del actor invocador.
+     * Solo debe invocarse desde métodos que hayan verificado explícitamente la autorización previa.
+     */
+    @Transactional
+    public void updateWorkspaceMembershipState(
+            UUID workspaceTenant,
+            UUID userId,
+            Role role,
+            boolean active,
+            UUID grantedByUserId
+    ) {
         Role targetRole = role != null ? role : Role.ANALYST;
-        requireAvailableSeat(workspaceTenant, userId, targetRole);
+        if (!active) {
+            int updated = jdbc.update("""
+                    UPDATE omega_rag.workspace_memberships
+                       SET active = FALSE,
+                           role = ?,
+                           updated_at = NOW()
+                     WHERE tenant_id = ? AND user_id = ?
+                    """, targetRole.name(), workspaceTenant, userId);
+            if (updated == 0) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Membresía de espacio no encontrada.");
+            }
+            return;
+        }
+
+        if (!isSoleIndividualOwnerSelfUpdate(workspaceTenant, userId)) {
+            requireAvailableSeat(workspaceTenant, userId, targetRole);
+        }
+
         jdbc.update("""
                 INSERT INTO omega_rag.workspace_memberships (tenant_id, user_id, role, active, granted_by_user_id, created_at, updated_at)
                 VALUES (?, ?, ?, TRUE, ?, NOW(), NOW())
@@ -109,6 +146,35 @@ public class AccountSeatService {
                 targetRole.name(),
                 grantedByUserId
         );
+    }
+
+    private boolean isSoleIndividualOwnerSelfUpdate(UUID workspaceTenant, UUID userId) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT account_type, owner_user_id, organization_id
+                  FROM omega_rag.tenants
+                 WHERE id = ? AND active = TRUE
+                """, workspaceTenant);
+        if (rows.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> row = rows.getFirst();
+        if (row.get("organization_id") != null) {
+            return false;
+        }
+        String accountType = String.valueOf(row.get("account_type"));
+        UUID ownerId = (UUID) row.get("owner_user_id");
+        if ("INDIVIDUAL".equals(accountType)) {
+            return userId != null && userId.equals(ownerId);
+        }
+        if ("UNCLASSIFIED".equals(accountType)) {
+            Long totalMembers = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM omega_rag.workspace_memberships WHERE tenant_id = ?",
+                    Long.class,
+                    workspaceTenant
+            );
+            return totalMembers != null && totalMembers == 1L && (ownerId == null || userId.equals(ownerId));
+        }
+        return false;
     }
 
     public long countActiveOccupiedSeats(UUID workspaceTenant) {

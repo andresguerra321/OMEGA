@@ -21,7 +21,9 @@ class WorkspaceMembershipAuthorizationArchitectureTest {
 
     private static final Path MAIN_JAVA = Path.of("src/main/java");
     private static final Pattern EXPLICIT_AUTH_GUARD = Pattern.compile(
-            "@PreAuthorize\\s*\\(|\\b(requireAdmin|requireManager|requireBillingManager|requireOrgAdmin|requireWorkspaceAdmin|verifyWorkspaceAdmin|authorizeWorkspaceMembership)\\s*\\(");
+            "@PreAuthorize\\s*\\(|\\b(requireAdmin|requireManager|requireBillingManager|requireOrgAdmin|requireWorkspaceAdmin|requireAccountOwnerOrAdmin|verifyWorkspaceAdmin|authorizeWorkspaceMembership)\\s*\\(");
+    private static final Pattern MEMBERSHIP_MUTATION_CALL = Pattern.compile(
+            "\\.(assignWorkspaceMembership|updateWorkspaceMembershipState)\\s*\\(");
     private static final Pattern PHYSICAL_DELETE_MEMBERSHIP = Pattern.compile(
             "(?i)DELETE\\s+FROM\\s+(omega_rag\\.)?workspace_memberships");
 
@@ -105,9 +107,9 @@ class WorkspaceMembershipAuthorizationArchitectureTest {
 
     static List<String> findUnguardedCallsInSource(String fileName, String source) {
         List<String> violations = new ArrayList<>();
-        String targetCall = ".assignWorkspaceMembership(";
-        int idx = source.indexOf(targetCall);
-        while (idx >= 0) {
+        var matcher = MEMBERSHIP_MUTATION_CALL.matcher(source);
+        while (matcher.find()) {
+            int idx = matcher.start();
             // Busca el encabezado del método contenedor hacia atrás y verifica que exista guardia explícita antes de la llamada
             int methodStart = Math.max(0, source.lastIndexOf("public ", idx));
             int protectedStart = source.lastIndexOf("protected ", idx);
@@ -116,9 +118,8 @@ class WorkspaceMembershipAuthorizationArchitectureTest {
             int annotationWindowStart = Math.max(0, blockStart - 220);
             String prefixBeforeCall = source.substring(annotationWindowStart, idx);
             if (!EXPLICIT_AUTH_GUARD.matcher(prefixBeforeCall).find()) {
-                violations.add(fileName + "@" + idx + ": llamada a assignWorkspaceMembership sin guardia de autorización previa");
+                violations.add(fileName + "@" + idx + ": llamada a mutación de workspace_memberships sin guardia de autorización previa");
             }
-            idx = source.indexOf(targetCall, idx + targetCall.length());
         }
         return violations;
     }

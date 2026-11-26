@@ -1,6 +1,5 @@
 package com.omega.platform.security;
 
-import com.omega.platform.domain.UserEntity;
 import com.omega.platform.repository.UserRepository;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -90,12 +89,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             JwtService.ParsedJwtClaims claims = jwtService.parseAndValidate(token);
-            Optional<UserEntity> activeUser = userRepository.findActiveUserInActiveTenant(
-                    claims.userId(),
-                    claims.tenantId()
-            );
+            Optional<UserRepository.AuthenticatedWorkspaceMember> activeMember =
+                    userRepository.findActiveWorkspaceMember(
+                            claims.userId(),
+                            claims.tenantId()
+                    );
 
-            if (activeUser.isEmpty()) {
+            if (activeMember.isEmpty()) {
                 SecurityContextHolder.clearContext();
                 if (isPublicAuthPath) {
                     filterChain.doFilter(request, response);
@@ -109,13 +109,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            UserEntity user = activeUser.get();
+            UserRepository.AuthenticatedWorkspaceMember member = activeMember.get();
             OmegaPrincipal principal = new OmegaPrincipal(
-                    user.getId(),
-                    user.getTenantId(),
-                    user.getEmail(),
-                    user.getRole(),
-                    user.isActive()
+                    member.getUserId(),
+                    member.getTenantId(),
+                    member.getEmail(),
+                    member.getRole(),
+                    member.isActive()
             );
 
             UsernamePasswordAuthenticationToken authentication =

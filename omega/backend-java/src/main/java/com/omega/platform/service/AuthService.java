@@ -113,7 +113,7 @@ public class AuthService {
         TenantEntity tenant = tenantRepository.save(new TenantEntity(uniqueSlug, orgName, selectedProfile));
         tenant.setAccountType(hasOrganization ? "ORGANIZATION" : "INDIVIDUAL");
         Role assignedRole = hasOrganization ? Role.ADMIN : Role.ANALYST;
-        UserEntity adminUser = userRepository.save(new UserEntity(
+        UserEntity adminUser = userRepository.saveAndFlush(new UserEntity(
                 tenant.getId(),
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
@@ -128,7 +128,9 @@ public class AuthService {
                 "Espacio personal",
                 ClassificationLevel.CONFIDENTIAL));
 
-        return issueTokenResponse(adminUser, tenant.getSlug(), tenant.getProfile());
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(adminUser.getId(), tenant.getId())
+                .orElse(assignedRole);
+        return issueTokenResponse(adminUser, tenant, effectiveRole);
     }
 
     @Transactional
@@ -145,7 +147,7 @@ public class AuthService {
                 new TenantEntity(normalizedSlug, request.tenantName().trim(), selectedProfile));
         tenant.setAccountType("ORGANIZATION");
         String normalizedEmail = request.adminEmail().trim().toLowerCase(Locale.ROOT);
-        UserEntity adminUser = userRepository.save(new UserEntity(
+        UserEntity adminUser = userRepository.saveAndFlush(new UserEntity(
                 tenant.getId(),
                 normalizedEmail,
                 passwordEncoder.encode(request.adminPassword()),
@@ -154,7 +156,9 @@ public class AuthService {
         tenant.setOwnerUserId(adminUser.getId());
         tenantRepository.save(tenant);
 
-        return issueTokenResponse(adminUser, tenant.getSlug(), tenant.getProfile());
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(adminUser.getId(), tenant.getId())
+                .orElse(Role.ADMIN);
+        return issueTokenResponse(adminUser, tenant, effectiveRole);
     }
 
     @Transactional
@@ -214,19 +218,21 @@ public class AuthService {
             TenantEntity tenant = tenantRepository.findBySlugAndActiveTrue(rawSlug)
                     .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
-            UserEntity user = userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), normalizedEmail)
-                    .filter(UserEntity::isActive)
+            UserEntity user = userRepository.findActiveMemberUserByTenantIdAndEmailIgnoreCase(tenant.getId(), normalizedEmail)
                     .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
             if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
                 throw new BadCredentialsException("Credenciales inválidas");
             }
 
-            return finishLoginOrMfaChallenge(user, tenant, trustedDeviceToken);
+            Role effectiveRole = userRepository.findActiveWorkspaceRole(user.getId(), tenant.getId())
+                    .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+            return finishLoginOrMfaChallenge(user, tenant, effectiveRole, trustedDeviceToken);
         }
 
         List<UserEntity> matches = userRepository.findAllActiveByEmailIgnoreCase(normalizedEmail).stream()
                 .filter(u -> passwordEncoder.matches(rawPassword, u.getPasswordHash()))
+                .filter(u -> userRepository.findActiveWorkspaceRole(u.getId(), u.getTenantId()).isPresent())
                 .toList();
 
         if (matches.isEmpty()) {
@@ -240,13 +246,16 @@ public class AuthService {
         UserEntity user = matches.get(0);
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(user.getId(), tenant.getId())
+                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
-        return finishLoginOrMfaChallenge(user, tenant, trustedDeviceToken);
+        return finishLoginOrMfaChallenge(user, tenant, effectiveRole, trustedDeviceToken);
     }
 
     private AuthTokenResponse finishLoginOrMfaChallenge(
             UserEntity user,
             TenantEntity tenant,
+            Role effectiveRole,
             String trustedDeviceToken) {
         boolean trustedDevice = trustedDeviceToken != null
                 && jwtService.isTrustedDeviceTokenValid(trustedDeviceToken, user.getId());
@@ -254,16 +263,16 @@ public class AuthService {
             TwoFactorService.LoginChallengeResult challenge = twoFactorService.createLoginChallenge(user);
             return AuthTokenResponse.mfaChallenge(
                     user.getId(),
-                    user.getTenantId(),
+                    tenant.getId(),
                     tenant.getSlug(),
                     user.getEmail(),
-                    user.getRole(),
+                    effectiveRole,
                     challenge.challengeToken(),
                     challenge.method(),
                     challenge.maskedEmail(),
                     tenant.getProfile());
         }
-        return issueTokenResponse(user, tenant.getSlug(), tenant.getProfile());
+        return issueTokenResponse(user, tenant, effectiveRole);
     }
 
     public String issueTrustedDeviceToken(UUID userId, long ttlSeconds) {
@@ -278,7 +287,9 @@ public class AuthService {
         UserEntity user = twoFactorService.verifyLoginChallenge(challengeToken, code);
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
                 .orElseThrow(() -> new BadCredentialsException("Organización no disponible"));
-        return issueTokenResponse(user, tenant.getSlug(), tenant.getProfile());
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(user.getId(), tenant.getId())
+                .orElseThrow(() -> new BadCredentialsException("Organización no disponible"));
+        return issueTokenResponse(user, tenant, effectiveRole);
     }
 
     private static String maskEmail(String normalizedEmail) {
@@ -327,19 +338,21 @@ public class AuthService {
             throw new ConflictException("El correo ya se encuentra registrado en el tenant actual");
         }
 
-        UserEntity saved = userRepository.save(new UserEntity(
+        UserEntity saved = userRepository.saveAndFlush(new UserEntity(
                 tenantId,
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
                 request.fullName().trim(),
                 request.role()));
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(saved.getId(), tenantId)
+                .orElse(request.role());
 
         return new UserSummaryResponse(
                 saved.getId(),
                 saved.getTenantId(),
                 saved.getEmail(),
                 saved.getFullName(),
-                saved.getRole(),
+                effectiveRole,
                 saved.isActive(),
                 saved.getCreatedAt());
     }
@@ -390,30 +403,31 @@ public class AuthService {
                 maskEmail(principal.email().trim().toLowerCase(Locale.ROOT)));
     }
 
-    private AuthTokenResponse issueTokenResponse(UserEntity user, String tenantSlug, TenantProfile profile) {
-        TenantEntity account = tenantRepository.findByIdAndActiveTrue(user.getTenantId()).orElse(null);
+    private AuthTokenResponse issueTokenResponse(UserEntity user, TenantEntity account, Role effectiveRole) {
+        UUID workspaceTenantId = account.getId();
+        TenantProfile profile = account.getProfile() != null ? account.getProfile() : TenantProfile.GENERAL;
         String token = jwtService.issueToken(
                 user.getId(),
-                user.getTenantId(),
+                workspaceTenantId,
                 user.getEmail(),
-                user.getRole());
+                effectiveRole);
         return new AuthTokenResponse(
                 token,
                 "Bearer",
                 jwtService.getExpirationSeconds(),
                 user.getId(),
-                user.getTenantId(),
-                tenantSlug,
+                workspaceTenantId,
+                account.getSlug(),
                 user.getEmail(),
-                user.getRole(),
+                effectiveRole,
                 false,
                 null,
                 null,
                 null,
                 null,
-                profile != null ? profile : TenantProfile.GENERAL,
-                account != null ? account.getAccountType() : "UNCLASSIFIED",
-                account != null && ("INDIVIDUAL".equals(account.getAccountType())
-                        ? user.getId().equals(account.getOwnerUserId()) : user.getRole() == Role.ADMIN));
+                profile,
+                account.getAccountType(),
+                "INDIVIDUAL".equals(account.getAccountType())
+                        ? user.getId().equals(account.getOwnerUserId()) : effectiveRole == Role.ADMIN);
     }
 }

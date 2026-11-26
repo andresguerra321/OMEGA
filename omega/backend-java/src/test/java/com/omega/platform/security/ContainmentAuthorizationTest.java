@@ -20,8 +20,9 @@ class ContainmentAuthorizationTest {
         var limiter = new LoginRateLimiter();
         var principal = new OmegaPrincipal(UUID.randomUUID(), UUID.randomUUID(), "admin@example.org", Role.ADMIN, true);
         UserEntity user = mock(UserEntity.class);
-        when(users.findByIdAndTenantId(principal.userId(), principal.tenantId())).thenReturn(Optional.of(user));
-        when(user.isActive()).thenReturn(true); when(user.getRole()).thenReturn(Role.ADMIN);
+        when(users.findActiveWorkspaceRole(principal.userId(), principal.tenantId())).thenReturn(Optional.of(Role.ADMIN));
+        when(users.findById(principal.userId())).thenReturn(Optional.of(user));
+        when(user.isActive()).thenReturn(true);
         when(user.getId()).thenReturn(principal.userId()); when(user.getPasswordHash()).thenReturn("stored");
         when(user.isMfaEnabled()).thenReturn(true); when(passwords.matches("password", "stored")).thenReturn(true);
         var guard = new ContainmentAuthorizationService(users, passwords, twoFactor, limiter);

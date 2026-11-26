@@ -143,15 +143,15 @@ class GitHubWebhookSecurityTest {
         UUID userId = UUID.randomUUID();
         JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
                 userId, tenantId, "analyst@omega.test", Role.ANALYST);
-        UserEntity user = mock(UserEntity.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getTenantId()).thenReturn(tenantId);
-        when(user.isActive()).thenReturn(true);
-        when(user.getRole()).thenReturn(Role.ANALYST);
-        when(user.getEmail()).thenReturn(claims.email());
+        UserRepository.AuthenticatedWorkspaceMember member = mock(UserRepository.AuthenticatedWorkspaceMember.class);
+        when(member.getUserId()).thenReturn(userId);
+        when(member.getTenantId()).thenReturn(tenantId);
+        when(member.isActive()).thenReturn(true);
+        when(member.getRole()).thenReturn(Role.ANALYST);
+        when(member.getEmail()).thenReturn(claims.email());
 
         when(jwtService.parseAndValidate("tok-analyst")).thenReturn(claims);
-        when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
+        when(userRepository.findActiveWorkspaceMember(userId, tenantId)).thenReturn(Optional.of(member));
         when(tenantRepository.findByIdAndActiveTrue(tenantId))
                 .thenReturn(Optional.of(new TenantEntity("dev-org", "Dev Org", TenantProfile.DEVELOPER)));
 

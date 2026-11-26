@@ -66,16 +66,16 @@ class TenantProfileChangeAuthTest {
     private TenantEntity mockAuth(String token, UUID tenantId, UUID userId, Role role, TenantProfile profile) {
         JwtService.ParsedJwtClaims claims = new JwtService.ParsedJwtClaims(
                 userId, tenantId, role.name().toLowerCase() + "@omega.test", role);
-        UserEntity user = mock(UserEntity.class);
-        when(user.getId()).thenReturn(userId);
-        when(user.getTenantId()).thenReturn(tenantId);
-        when(user.isActive()).thenReturn(true);
-        when(user.getRole()).thenReturn(role);
-        when(user.getEmail()).thenReturn(claims.email());
+        UserRepository.AuthenticatedWorkspaceMember member = mock(UserRepository.AuthenticatedWorkspaceMember.class);
+        when(member.getUserId()).thenReturn(userId);
+        when(member.getTenantId()).thenReturn(tenantId);
+        when(member.isActive()).thenReturn(true);
+        when(member.getRole()).thenReturn(role);
+        when(member.getEmail()).thenReturn(claims.email());
 
         TenantEntity tenant = new TenantEntity("org-" + profile.name().toLowerCase(), "Org", profile);
         when(jwtService.parseAndValidate(token)).thenReturn(claims);
-        when(userRepository.findActiveUserInActiveTenant(userId, tenantId)).thenReturn(Optional.of(user));
+        when(userRepository.findActiveWorkspaceMember(userId, tenantId)).thenReturn(Optional.of(member));
         when(tenantRepository.findByIdAndActiveTrue(tenantId)).thenReturn(Optional.of(tenant));
         when(tenantRepository.findActiveForUpdate(tenantId)).thenReturn(Optional.of(tenant));
         when(tenantRepository.save(any(TenantEntity.class))).thenAnswer(inv -> inv.getArgument(0));

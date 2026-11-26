@@ -603,11 +603,14 @@ public class PilotOpsService {
                 invitationId
         );
 
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(createdUser.getId(), tenantId)
+                .orElse(role);
+
         String jwt = jwtService.issueToken(
                 createdUser.getId(),
                 createdUser.getTenantId(),
                 createdUser.getEmail(),
-                createdUser.getRole()
+                effectiveRole
         );
         AuthTokenResponse response = new AuthTokenResponse(
                 jwt,
@@ -617,7 +620,7 @@ public class PilotOpsService {
                 createdUser.getTenantId(),
                 tenant.getSlug(),
                 createdUser.getEmail(),
-                createdUser.getRole()
+                effectiveRole
         );
         if (passwordResetService != null) {
             String recKey = passwordResetService.createRecoveryKey(createdUser.getId(), rawPassword).get("recoveryKey");
