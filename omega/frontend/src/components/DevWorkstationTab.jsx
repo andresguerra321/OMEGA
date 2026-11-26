@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -88,7 +88,10 @@ export function DevWorkstationTab({
 }) {
   const folderInputRef = useRef(null);
 
-  const [stationTab, setStationTab] = useState('posture');
+  const [stationTab, setStationTab] = useState(deviceNavKey ? 'devices' : 'posture');
+  useEffect(() => {
+    if (deviceNavKey) setStationTab('devices');
+  }, [deviceNavKey]);
   const [osPlatform, setOsPlatform] = useState(() =>
     typeof navigator !== 'undefined' && /mac|linux/i.test(navigator.platform || '') ? 'unix' : 'windows',
   );
@@ -248,8 +251,8 @@ export function DevWorkstationTab({
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.06]">
         <nav aria-label="Modos de Mi estación" className="flex items-center gap-6">
           {[
-            { id: 'posture', label: 'Entorno y Proyectos Locales', icon: Laptop },
-            { id: 'devices', label: 'Dispositivos, Móviles e IOCs', icon: Smartphone },
+            { id: 'posture', label: 'Entorno y proyectos', icon: Laptop },
+            { id: 'devices', label: 'Analizar equipos', icon: Smartphone },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = stationTab === tab.id;
@@ -257,6 +260,7 @@ export function DevWorkstationTab({
               <button
                 key={tab.id}
                 type="button"
+                aria-pressed={active}
                 onClick={() => setStationTab(tab.id)}
                 className={`inline-flex items-center gap-2 pb-3 -mb-px border-b-[1.5px] text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   active
@@ -272,8 +276,7 @@ export function DevWorkstationTab({
         </nav>
 
         <span className="inline-flex items-center gap-1.5 pb-2.5 font-mono text-[11px] text-[#7E8691]">
-          <span className="h-[6px] w-[6px] rounded-full bg-emerald-500 motion-safe:animate-pulse" />
-          <span>{desktopRuntime ? 'OMEGA Desktop · Sensor nativo' : 'Modo Web · Zero-Retention en RAM'}</span>
+          <span>{desktopRuntime ? 'OMEGA Desktop' : 'Modo navegador'}</span>
         </span>
       </div>
 

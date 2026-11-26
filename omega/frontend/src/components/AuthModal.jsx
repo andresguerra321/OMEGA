@@ -5,6 +5,7 @@ import { AuthAccessForm } from './AuthModulePanel';
 import { OmegaBrandMark } from './OmegaBrandMark';
 import { PilotTrustAndSupportDialog } from './PilotOpsPanel';
 import { backdropVariants, popVariants } from '../lib/motion';
+import { isDesktopApp } from '../lib/desktopBridge';
 
 export function AuthModal({
   isOpen,
@@ -54,10 +55,11 @@ export function AuthModal({
         <div className="p-5 space-y-4">
           <AuthAccessForm
             compact
+            allowGoogle={isDesktopApp()}
             defaultTab="login"
             reasonMessage={reasonMessage}
-            onAuthenticated={(session) => {
-              onAuthenticated?.(session);
+            onAuthenticated={(session, meta) => {
+              onAuthenticated?.(session, meta);
               onClose?.();
             }}
           />

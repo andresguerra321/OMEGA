@@ -75,6 +75,8 @@ OMEGA_BILLING_RETURN_URL=https://app-de-pruebas.example.com
 
 `OMEGA_MP_MODE` admite `disabled`, `test` y `live`. Cuando se activa exige credenciales y URLs HTTPS. Antes de crear un checkout se consulta el vendedor y se verifica que sea una cuenta de prueba en modo `test`. Al verificar un pago también se comprueban vendedor, entorno, monto y moneda. No se debe inferir el entorno solamente por el prefijo del token.
 
+Para probar suscripciones con distintos usuarios de OMEGA, cada titular o administrador conserva su cuenta de OMEGA y usa un comprador de prueba de Mercado Pago. El campo se muestra junto al botón de suscripción. `OMEGA_MP_TEST_PAYER_EMAIL` permite elegir un comprador predeterminado para este entorno. Si se omite, el campo es obligatorio en modo `test`. Usa un comprador de prueba colombiano diferente del vendedor. En modo `live` se usa el correo de la cuenta de OMEGA.
+
 En el flujo de Suscripciones con cuentas de prueba se observó un pago aprobado con `live_mode=true`. Por eso el modo `test` exige verificar mediante `/users/me` que el vendedor configurado tiene la etiqueta `test_user`, además de comprobar su `collector_id`. El modo `live` exige vendedor real y `live_mode=true`. Un vendedor real nunca se acepta como vendedor de pruebas.
 
 La búsqueda de facturas de suscripciones rechaza los límites explícitos probados (`limit=100` y `limit=20`). Se usa el tamaño predeterminado del proveedor y el desplazamiento `offset`, hasta el máximo de historial consultado por OMEGA. Los errores del servicio externo responden 502 y no deben convertirse en un cierre de sesión 401.
@@ -104,7 +106,7 @@ La pasarela de facturación y la recepción de webhooks de Mercado Pago operan *
 3. Configurar las variables anteriores con `test`. Usar un backend de pruebas con HTTPS público: Mercado Pago no puede llamar a un `localhost` ni a la aplicación de escritorio.
 4. Configurar el webhook y su secreto en el panel de Mercado Pago.
 5. Registrar una cuenta individual con perfil Desarrollador. Debe aparecer como individual y conservar su perfil Desarrollador. En modo de pagos de prueba, sus acciones profesionales requieren un pago; el enlace Cuenta → Mi plan y créditos está disponible en todos los perfiles.
-6. Abrir **Cuenta → Mi plan y créditos**, seleccionar Pro mensual y, en Opciones de suscripción, indicar el correo del comprador de prueba cuando corresponda. Continuar en el checkout de Mercado Pago.
+6. Abrir **Cuenta → Mi plan y créditos**, seleccionar Pro mensual e indicar el comprador de prueba junto al botón de suscripción. Continuar en Mercado Pago con la sesión del comprador de prueba.
 
    Si el panel solo muestra User ID y usuario, iniciar sesión con la compradora en una ventana invitada de Mercado Pago y copiar el correo interno visible en su perfil. La consulta pública `/users/{id}` no necesariamente devuelve ese correo. No inventarlo a partir del User ID ni compartir contraseñas con el asistente.
 7. Usar las tarjetas oficiales de prueba y los datos de simulación vigentes de Mercado Pago. Probar aprobación, rechazo y pendiente. Actualizar el estado en OMEGA; solo la aprobación debe dar Pro y 500 créditos mensuales, además de la bienvenida que conserve la cuenta.

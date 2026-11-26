@@ -80,6 +80,45 @@ class GitHubAppIntegrationTest {
     }
 
     @Test
+    void browserLinkUsesTheInstallationAccountReturnedByGitHubAndConsumesState() {
+        var installations = mock(GitHubAppInstallationRepository.class);
+        var states = mock(GitHubOAuthStateRepository.class);
+        var gitHub = mock(GitHubApiClient.class);
+        var service = new GitHubAppIntegrationService(installations, states,
+                mock(GitHubWebhookDeliveryRepository.class), gitHub, mock(AuditLogService.class), new ObjectMapper(), "test");
+        UUID tenant = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        Instant now = Instant.now();
+        var state = new GitHubOAuthStateEntity("browser-state", tenant, user, now.plusSeconds(60), now);
+        when(states.findByStateTokenAndTenantIdAndUserId("browser-state", tenant, user)).thenReturn(Optional.of(state));
+        when(gitHub.userInstallationAccount("test-token", 123L)).thenReturn(Optional.of("demo-org"));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.verifyPendingLink(UUID.randomUUID(), user, "browser-state"));
+        assertEquals("demo-org", service.completeBrowserLink(tenant, user, "browser-state", 123L, "test-token").accountLogin());
+        assertThrows(AccessDeniedException.class, () -> service.verifyPendingLink(tenant, user, "browser-state"));
+    }
+
+    @Test
+    void browserAuthorizationBindsPkceToStateAndInstallation() {
+        var oauth = new GitHubBrowserOAuth("omega-demo", "client-id", "client-secret",
+                "https://demo.example.org", "123", "configured-key", "configured-webhook");
+        oauth.requireConfigured();
+        assertEquals("https://github.com/apps/omega-demo/installations/new?state=some-state",
+                oauth.installationUrl("some-state").toString());
+
+        var first = org.springframework.web.util.UriComponentsBuilder.fromUri(oauth.authorizationUrl("some-state", 123))
+                .build().getQueryParams();
+        var second = org.springframework.web.util.UriComponentsBuilder.fromUri(oauth.authorizationUrl("some-state", 456))
+                .build().getQueryParams();
+        assertEquals("S256", first.getFirst("code_challenge_method"));
+        assertEquals("some-state", first.getFirst("state"));
+        assertEquals(43, first.getFirst("code_challenge").length());
+        assertNotEquals(first.getFirst("code_challenge"), second.getFirst("code_challenge"));
+        assertFalse(first.containsKey("client_secret"));
+    }
+
+    @Test
     void processesInstallationAndRepositoryLifecycleWebhooks() {
         GitHubAppInstallationRepository installRepo = mock(GitHubAppInstallationRepository.class);
         GitHubOAuthStateRepository stateRepo = mock(GitHubOAuthStateRepository.class);

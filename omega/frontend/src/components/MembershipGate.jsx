@@ -3,6 +3,7 @@ import { AlertCircle, LogOut, RefreshCw } from 'lucide-react';
 import { fetchBillingSummary, updateTenantProfile } from '../lib/api.js';
 import { BillingPanel } from './BillingPanel.jsx';
 import { OmegaBrandMark } from './OmegaBrandMark';
+import { GoogleAccountLink } from './GoogleAccountLink';
 
 export function MembershipGate({ authSession, onLogout, onProfileChanged, children }) {
   const [account, setAccount] = useState(null);
@@ -116,6 +117,8 @@ export function MembershipGate({ authSession, onLogout, onProfileChanged, childr
             <span>{error}</span>
           </p>
         )}
+
+        {current && <div className="mb-4"><GoogleAccountLink /></div>}
 
         {current ? (
           <BillingPanel

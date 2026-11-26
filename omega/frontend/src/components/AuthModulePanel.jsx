@@ -43,6 +43,8 @@ import {
 } from '../lib/validators';
 import { useSingleFlight } from '../lib/useSingleFlight';
 import { isDesktopApp } from '../lib/desktopBridge';
+import { finishGoogleAuth, googleAuthConfig, pendingGoogleAction, startGoogleAuth } from '../lib/googleAuth';
+import { WORKSPACE_PROFILES } from '../lib/useTenantProfileConfig';
 import { OmegaBrandMark } from './OmegaBrandMark';
 
 function shortHash(value) {
@@ -63,6 +65,7 @@ export function AuthAccessForm({
   reasonMessage = '',
   compact = false,
   minimalChrome = false,
+  allowGoogle = true,
 }) {
   const uid = useId().replace(/:/g, '');
   const [internalTab, setInternalTab] = useState(
@@ -132,8 +135,91 @@ export function AuthAccessForm({
   const [mfaBackupMode, setMfaBackupMode] = useState(false);
   const [mfaStatusMsg, setMfaStatusMsg] = useState('');
   const desktopSession = isDesktopApp();
+  const [googleConfig, setGoogleConfig] = useState(null);
+  const googleHandled = useRef(false);
+  const googleAttempt = useRef(null);
   const [rememberSession, setRememberSession] = useState(() => !isDesktopApp());
   const mfaOtpRefs = useRef([]);
+
+  useEffect(() => {
+    if (!allowGoogle) return;
+    let active = true;
+    googleAuthConfig().then(config => { if (active) setGoogleConfig(config); }).catch(() => {});
+    return () => { active = false; };
+  }, [allowGoogle]);
+
+  useEffect(() => () => googleAttempt.current?.abort(), []);
+
+  function completeLogin(session) {
+    if (!session?.mfaRequired) {
+      onAuthenticated?.(session, { isNewAccount: false });
+      return;
+    }
+    setMfaChallenge({
+      challengeToken: session.mfaChallengeToken,
+      method: session.mfaMethod,
+      maskedEmail: session.maskedEmail,
+      email: session.email,
+    });
+    setMfaCode('');
+    setMfaBackupMode(false);
+    setMfaStatusMsg(session.mfaMethod === 'EMAIL'
+      ? `Enviamos un código de 6 dígitos a ${session.maskedEmail}.`
+      : 'Ingresa el código de 6 dígitos de tu aplicación autenticadora.');
+    selectTab('mfa');
+  }
+
+  useEffect(() => {
+    if (desktopSession || !allowGoogle || googleHandled.current) return;
+    const action = pendingGoogleAction();
+    if (action !== 'LOGIN' && action !== 'REGISTER') return;
+    googleHandled.current = true;
+    setLoading(true);
+    finishGoogleAuth().then(applyGoogleResult)
+      .catch(error => setErrorState({ tab, message: error.message })).finally(() => setLoading(false));
+  }, [desktopSession, allowGoogle]);
+
+  function applyGoogleResult({ session, action }) {
+    if (!session) throw new Error('OMEGA no pudo iniciar la sesión con Google.');
+    if (action === 'REGISTER') {
+      if (!session.recoveryKey) throw new Error('No se pudo generar la clave de recuperación.');
+      setRegisteredAccount({ session, recoveryKey: session.recoveryKey });
+    } else {
+      completeLogin(session.mfaRequired ? session : saveAuthSession(session));
+    }
+  }
+
+  async function continueWithGoogle(action) {
+    setErrorState({ tab, message: '' });
+    const attempt = desktopSession ? new AbortController() : null;
+    googleAttempt.current = attempt;
+    setLoading(true);
+    try {
+      let result;
+      if (action === 'REGISTER') {
+        const organization = regForm.accountType === 'organization';
+        if (!regForm.fullName.trim() || (organization && (!regForm.organizationName.trim() || !regForm.organizationAdminConfirmed))) {
+          throw new Error('Completa el nombre y, si corresponde, confirma los datos de la organización.');
+        }
+        result = await startGoogleAuth(action, { registration: {
+          fullName: regForm.fullName.trim(), profile: regForm.profile,
+          organizationName: organization ? regForm.organizationName.trim() : null,
+          organizationAdminConfirmed: organization && regForm.organizationAdminConfirmed,
+        } }, commercialVersion, attempt?.signal);
+      } else {
+        result = await startGoogleAuth(action, undefined, undefined, attempt?.signal);
+      }
+      if (attempt && !attempt.signal.aborted) applyGoogleResult(result);
+    } catch (error) {
+      if (!attempt?.signal.aborted) setErrorState({ tab, message: error.message || String(error) });
+      setLoading(false);
+    } finally {
+      if (attempt) {
+        googleAttempt.current = null;
+        setLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -196,24 +282,7 @@ export function AuthAccessForm({
         tenantSlug: showOrgSlug ? validation.sanitized.tenantSlug : '',
         rememberMe: rememberSession,
       });
-      if (session?.mfaRequired) {
-        setMfaChallenge({
-          challengeToken: session.mfaChallengeToken,
-          method: session.mfaMethod,
-          maskedEmail: session.maskedEmail,
-          email: session.email,
-        });
-        setMfaCode('');
-        setMfaBackupMode(false);
-        setMfaStatusMsg(
-          session.mfaMethod === 'EMAIL'
-            ? `Enviamos un código de 6 dígitos a ${session.maskedEmail}.`
-            : 'Ingresa el código de 6 dígitos de tu aplicación autenticadora.'
-        );
-        selectTab('mfa');
-        return;
-      }
-      onAuthenticated?.(session, { isNewAccount: false });
+      completeLogin(session);
     } catch (err) {
       const serverFields = err?.problem?.fieldErrors;
       if (serverFields && typeof serverFields === 'object') {
@@ -1404,15 +1473,11 @@ export function AuthAccessForm({
           )}
 
           <div>
-            <span className={`block text-[11.5px] font-medium mb-1.5 ${labelTone}`}>
-              Perfil del espacio de trabajo
+            <span id={`${uid}-reg-profile`} className={`block text-[12px] font-medium mb-1.5 ${labelTone}`}>
+              ¿Para qué vas a usar OMEGA?
             </span>
-            <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Perfil del espacio de trabajo">
-              {[
-                { id: 'GENERAL', label: 'General', hint: 'Forense, CTI y análisis integral' },
-                { id: 'DEVELOPER', label: 'Desarrollador', hint: 'Requiere Pro o Enterprise' },
-                { id: 'LEGAL', label: 'Legal', hint: 'Requiere Pro o Enterprise' },
-              ].map((opt) => {
+            <div className="grid grid-cols-1 gap-1.5 min-[420px]:grid-cols-3" role="radiogroup" aria-labelledby={`${uid}-reg-profile`}>
+              {WORKSPACE_PROFILES.map((opt) => {
                 const active = regForm.profile === opt.id;
                 return (
                   <button
@@ -1428,9 +1493,8 @@ export function AuthAccessForm({
                     }`}
                   >
                     <div className="text-[12px] font-medium leading-tight">{opt.label}</div>
-                    <div className="mt-0.5 text-[10px] leading-snug text-[#8E95A5] line-clamp-2">
-                      {opt.hint}
-                    </div>
+                    <div className="mt-1 text-[11px] leading-snug text-zinc-300">{opt.description}</div>
+                    {opt.plan && <div className="mt-1 text-[11px] leading-snug text-zinc-400">Requiere {opt.plan}</div>}
                   </button>
                 );
               })}
@@ -1565,6 +1629,28 @@ export function AuthAccessForm({
             )}
           </button>
         </form>
+      )}
+      {allowGoogle && (!desktopSession || googleConfig?.desktopEnabled) && ((tab === 'login' && googleConfig?.enabled) || (tab === 'register' && googleConfig?.registrationEnabled)) && (
+        <div className="mt-5 flex flex-col items-center gap-3">
+          <div className="flex w-full items-center gap-3 text-[11px] text-white/60">
+            <span aria-hidden="true" className="h-px flex-1 bg-white/[0.08]" />
+            <span>O continúa con</span>
+            <span aria-hidden="true" className="h-px flex-1 bg-white/[0.08]" />
+          </div>
+          <button type="button" disabled={loading}
+            aria-label={tab === 'register' ? 'Registrarme con Google' : 'Continuar con Google'}
+            onClick={() => void guard(() => continueWithGoogle(tab === 'register' ? 'REGISTER' : 'LOGIN'))}
+            className="grid size-11 shrink-0 place-items-center rounded-full hover:brightness-125 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#2F6FED] disabled:opacity-50">
+            <img src="/google-signin-round.svg" width="44" height="44" alt="" className="size-11" />
+          </button>
+          {googleAttempt.current && (
+            <div className="space-y-1 text-center text-sm text-zinc-300">
+              <p role="status">Completa el acceso en tu navegador y vuelve a OMEGA.</p>
+              <button type="button" className="underline underline-offset-4" onClick={() => googleAttempt.current?.abort()}>Cancelar acceso con Google</button>
+            </div>
+          )}
+          {tab === 'register' && <p className="text-center text-xs text-white/60">Completa el nombre, el tipo de cuenta, el perfil y los términos. Google aporta el correo.</p>}
+        </div>
       )}
       <CommercialDocumentsPanel compact registration={tab === 'register'} onRegistrationConsent={setCommercialVersion} />
     </div>

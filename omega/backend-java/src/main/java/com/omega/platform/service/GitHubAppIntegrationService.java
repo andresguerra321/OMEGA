@@ -94,6 +94,22 @@ public class GitHubAppIntegrationService {
             String userAccessToken,
             String accountLogin
     ) {
+        return completeLink(tenantId, userId, stateToken, installationId, userAccessToken, accountLogin, false);
+    }
+
+    @Transactional
+    public InstallationView completeBrowserLink(
+            UUID tenantId, UUID userId, String stateToken, long installationId, String userAccessToken
+    ) {
+        return completeLink(tenantId, userId, stateToken, installationId, userAccessToken, null, true);
+    }
+
+    @Transactional
+    public void verifyPendingLink(UUID tenantId, UUID userId, String stateToken) {
+        pendingLink(tenantId, userId, stateToken);
+    }
+
+    private GitHubOAuthStateEntity pendingLink(UUID tenantId, UUID userId, String stateToken) {
         if (stateToken == null || stateToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El parámetro state es obligatorio");
         }
@@ -101,14 +117,24 @@ public class GitHubAppIntegrationService {
                 .findByStateTokenAndTenantIdAndUserId(stateToken.trim(), tenantId, userId)
                 .orElseThrow(() -> new AccessDeniedException("State inválido o no pertenece a tu sesión/tenant"));
 
-        Instant now = Instant.now();
-        if (state.getUsedAt() != null || !state.getExpiresAt().isAfter(now)) {
+        if (state.getUsedAt() != null || !state.getExpiresAt().isAfter(Instant.now())) {
             throw new AccessDeniedException("El state ya fue utilizado o expiró");
         }
+        return state;
+    }
+
+    private InstallationView completeLink(UUID tenantId, UUID userId, String stateToken, long installationId,
+                                          String userAccessToken, String accountLogin, boolean browserLink) {
+        GitHubOAuthStateEntity state = pendingLink(tenantId, userId, stateToken);
+        Instant now = Instant.now();
         state.setUsedAt(now);
         stateRepository.save(state);
 
-        if (!gitHubApiClient.userHasInstallationAccess(userAccessToken, installationId)) {
+        String verifiedAccount = browserLink
+                ? gitHubApiClient.userInstallationAccount(userAccessToken, installationId)
+                        .orElseThrow(() -> new AccessDeniedException("Tu cuenta de GitHub no tiene acceso a esta instalación."))
+                : accountLogin;
+        if (!browserLink && !gitHubApiClient.userHasInstallationAccess(userAccessToken, installationId)) {
             throw new AccessDeniedException("El usuario autenticado no tiene acceso a esta instalación de GitHub App");
         }
 
@@ -121,13 +147,13 @@ public class GitHubAppIntegrationService {
 
         GitHubAppInstallationEntity entity = installationRepository.findByTenantId(tenantId)
                 .orElseGet(() -> new GitHubAppInstallationEntity(
-                        UUID.randomUUID(), tenantId, installationId, accountLogin, "[]", userId, now));
+                        UUID.randomUUID(), tenantId, installationId, verifiedAccount, "[]", userId, now));
         if (entity.getInstallationId() != installationId) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "El tenant ya tiene otra instalación vinculada; desvincúlala primero");
         }
-        entity.setAccountLogin(accountLogin);
+        entity.setAccountLogin(verifiedAccount);
         entity.setSuspendedAt(null);
         entity.setUpdatedAt(now);
         installationRepository.save(entity);

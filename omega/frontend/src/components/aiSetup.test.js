@@ -102,18 +102,19 @@ test('failed configuration apply never opens workspace',async()=>{
   assert.equal(workspace(),null);assert.equal(container.querySelector('input').value,'');
   assert.match(container.textContent,/no pudo aplicar/);
 });
-test('existing configured installations enter normally but new accounts still complete setup',async()=>{
-  window.localStorage.setItem('omega_ai_setup_v2:fixture-user','complete');
+test('configured accounts enter from a fresh client while registrations still complete setup',async()=>{
   saved=true;await render();assert.ok(workspace());
   await render({forceSetup:true});assert.equal(workspace(),null);
   await click('Usar la IA disponible');assert.equal(workspace(),null);
   await click('Entrar a OMEGA');assert.ok(workspace());
 });
 test('reopening setup before confirmation cannot skip the last step and completion is per account',async()=>{
-  saved=true;await render();await click('Usar la IA disponible');
+  saved=true;await render({forceSetup:true});await click('Usar la IA disponible');
+  assert.equal(window.localStorage.getItem('omega_ai_setup_v2:fixture-user'),'pending');
   await render({key:'reopened'});assert.equal(workspace(),null);
   await click('Usar la IA disponible');await click('Entrar a OMEGA');
   await render({key:'completed'});assert.ok(workspace());
+  window.localStorage.setItem('omega_ai_setup_v2:other-user','pending');
   await render({key:'other-account',accountId:'other-user'});assert.equal(workspace(),null);
 });
 test('without 2FA neither an old completion marker nor a connected model can open workspace',async()=>{

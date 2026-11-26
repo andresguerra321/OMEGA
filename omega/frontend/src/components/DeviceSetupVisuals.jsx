@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  AlertTriangle,
   Cable,
   Check,
   Laptop,
@@ -143,16 +142,13 @@ export function AndroidStepVisual({ step, brand = 'generic' }) {
 
             <div className="rounded-xl border border-amber-400/25 bg-amber-400/5 px-3 py-2 flex items-center justify-between gap-2">
               <span className="text-xs text-[#9A9AA2]">Solo carga</span>
-              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-amber-400">
-                <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
-                Evitar
-              </span>
             </div>
           </div>
         </div>
 
         <p className="text-[11px] text-slate-400 text-center">
-          Selecciona Transferencia de archivos para que el cable transmita datos.
+          Transferencia de archivos sirve para comprobar que Windows reconoce la conexión por cable.
+          Luego autoriza la depuración USB para que OMEGA pueda analizar el teléfono.
         </p>
       </div>
     );

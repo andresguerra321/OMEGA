@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omega.platform.domain.TenantEntity;
 import com.omega.platform.domain.TenantProfile;
 import com.omega.platform.domain.UserEntity;
@@ -30,7 +29,10 @@ import com.omega.platform.security.SessionCookieHelper;
 import com.omega.platform.service.AuditLogService;
 import com.omega.platform.service.GitHubApiClient;
 import com.omega.platform.service.GitHubAppIntegrationService;
+import com.omega.platform.service.GitHubBrowserOAuth;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,8 +53,7 @@ import org.springframework.test.web.servlet.MockMvc;
         JwtAuthenticationFilter.class,
         SessionCookieHelper.class,
         JsonSecurityHandlers.class,
-        GitHubAppIntegrationService.class,
-        ObjectMapper.class
+        GitHubAppIntegrationService.class
 })
 @TestPropertySource(properties = "OMEGA_GITHUB_WEBHOOK_SECRET=test-webhook-secret-123")
 class GitHubWebhookSecurityTest {
@@ -71,6 +72,9 @@ class GitHubWebhookSecurityTest {
 
     @MockBean
     private GitHubApiClient gitHubApiClient;
+
+    @MockBean
+    private GitHubBrowserOAuth browserOAuth;
 
     @MockBean
     private AuditLogService auditLogService;
@@ -157,6 +161,54 @@ class GitHubWebhookSecurityTest {
 
         mvc.perform(post("/api/v1/integrations/github/state")
                         .header("Authorization", "Bearer tok-analyst"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void browserCompletionRequiresStateFromTheAuthenticatedWorkspace() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var claims = new JwtService.ParsedJwtClaims(userId, tenantId, "admin@omega.test", Role.ADMIN);
+        var member = mock(UserRepository.AuthenticatedWorkspaceMember.class);
+        when(member.getUserId()).thenReturn(userId);
+        when(member.getTenantId()).thenReturn(tenantId);
+        when(member.isActive()).thenReturn(true);
+        when(member.getRole()).thenReturn(Role.ADMIN);
+        when(member.getEmail()).thenReturn(claims.email());
+        when(jwtService.parseAndValidate("tok-admin")).thenReturn(claims);
+        when(userRepository.findActiveWorkspaceMember(userId, tenantId)).thenReturn(Optional.of(member));
+        when(tenantRepository.findByIdAndActiveTrue(tenantId))
+                .thenReturn(Optional.of(new TenantEntity("dev-org", "Dev Org", TenantProfile.DEVELOPER)));
+        String endpoint = "/api/v1/integrations/github/connect";
+        var request = """
+                {"state":"browser-state","installationId":123,"code":"github-code"}
+                """;
+
+        mvc.perform(post(endpoint + "/complete").header("Authorization", "Bearer tok-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isForbidden());
+        verify(browserOAuth, never()).exchangeCode(anyString(), org.mockito.ArgumentMatchers.anyLong(), anyString());
+
+        Instant now = Instant.now();
+        var state = new com.omega.platform.domain.GitHubOAuthStateEntity("browser-state", tenantId, userId,
+                now.plusSeconds(60), now);
+        when(stateRepository.findByStateTokenAndTenantIdAndUserId("browser-state", tenantId, userId))
+                .thenReturn(Optional.of(state));
+        when(browserOAuth.authorizationUrl("browser-state", 123))
+                .thenReturn(URI.create("https://github.com/login/oauth/authorize?state=browser-state"));
+        when(browserOAuth.exchangeCode("browser-state", 123, "github-code")).thenReturn("provider-token");
+        when(gitHubApiClient.userInstallationAccount("provider-token", 123)).thenReturn(Optional.of("demo-org"));
+
+        mvc.perform(post(endpoint + "/authorize").header("Authorization", "Bearer tok-admin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"state\":\"browser-state\",\"installationId\":123}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.url").value("https://github.com/login/oauth/authorize?state=browser-state"));
+        mvc.perform(post(endpoint + "/complete").header("Authorization", "Bearer tok-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accountLogin").value("demo-org"))
+                .andExpect(jsonPath("$.token").doesNotExist());
+        mvc.perform(post(endpoint + "/complete").header("Authorization", "Bearer tok-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isForbidden());
     }
 }

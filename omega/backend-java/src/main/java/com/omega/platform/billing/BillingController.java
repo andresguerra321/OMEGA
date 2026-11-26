@@ -31,7 +31,9 @@ public class BillingController {
     }
     @GetMapping("/plans")
     public Map<String,Object> plans() {
-        return Map.of("plans",billing.plans(),"mode",mp.mode,"enforced",credits.enforced(),"operations",Arrays.stream(CreditOperation.values()).map(op -> Map.of("code",op.name(),"label",op.label,"credits",op.credits,"paidOnly",op.paidOnly,"scope",op.scope)).toList());
+        return Map.of("plans",billing.plans(),"mode",mp.mode,"enforced",credits.enforced(),
+                "needsTestPayerEmail",mp.needsTestPayerEmail(),
+                "operations",Arrays.stream(CreditOperation.values()).map(op -> Map.of("code",op.name(),"label",op.label,"credits",op.credits,"paidOnly",op.paidOnly,"scope",op.scope)).toList());
     }
     @GetMapping("/summary")
     public Map<String,Object> summary(@AuthenticationPrincipal OmegaPrincipal actor) {

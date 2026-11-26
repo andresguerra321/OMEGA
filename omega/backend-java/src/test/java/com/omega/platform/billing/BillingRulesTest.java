@@ -8,6 +8,21 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class BillingRulesTest {
+    @Test void sandboxSubscriptionUsesADedicatedTestBuyerAndLiveUsesTheAccount() {
+        var sandbox = new MercadoPagoClient("test", "token", "123", "secret", "https://backend.invalid", "https://app.invalid");
+        assertThat(sandbox.needsTestPayerEmail()).isTrue();
+        assertThatThrownBy(() -> sandbox.subscriptionPayerEmail("owner@example.org", null))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class).hasMessageContaining("400");
+        assertThat(sandbox.subscriptionPayerEmail("owner@example.org", " test@testuser.com ")).isEqualTo("test@testuser.com");
+
+        org.springframework.test.util.ReflectionTestUtils.setField(sandbox, "defaultTestPayerEmail", "default@testuser.com");
+        assertThat(sandbox.needsTestPayerEmail()).isFalse();
+        assertThat(sandbox.subscriptionPayerEmail("another@example.org", " ")).isEqualTo("default@testuser.com");
+
+        var live = new MercadoPagoClient("live", "token", "123", "secret", "https://backend.invalid", "https://app.invalid");
+        assertThat(live.subscriptionPayerEmail("owner@example.org", null)).isEqualTo("owner@example.org");
+    }
+
     @Test void checkoutErrorsExplainKnownFailuresWithoutEchoingProviderData() {
         assertThat(BillingService.checkoutFailure("Both payer and collector must be real or test users"))
                 .contains("cuenta compradora de prueba");

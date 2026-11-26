@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Cable,
-  Check,
   ChevronDown,
   Clock,
   Copy,
@@ -48,6 +47,8 @@ import {
 
 import { DEFAULT_OS_SCOPE_NOTICE, buildForensicMarkdownReport, isInspectableNetworkIndicator, normalizeManualResult, normalizeParallelResult } from '../lib/mvtNormalizers';
 
+const PRIMARY_DEVICE_ACTION = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-4 disabled:opacity-50';
+
 export function MvtVerifierPanel({
   onAskInChat,
   onVerifyLink,
@@ -57,9 +58,10 @@ export function MvtVerifierPanel({
   onAuditUpdate,
 }) {
   const fileInputRef = useRef(null);
-  const offlineDropzoneRef = useRef(null);
   const lastPreloadedRef = useRef(null);
   const resultContainerRef = useRef(null);
+  const usbChecks = useRef({ android: 0, ios: 0 });
+  const manualUsbCheck = useRef(false);
 
   const [deviceTab, setDeviceTab] = useState(initialTab || 'android');
   const [inputMode, setInputMode] = useState('upload');
@@ -71,17 +73,20 @@ export function MvtVerifierPanel({
   const [customAdbPath, setCustomAdbPath] = useState('');
   const [selectedSerial, setSelectedSerial] = useState('');
   const [usbDevice, setUsbDevice] = useState(null);
+  const [androidUsbSearch, setAndroidUsbSearch] = useState(null);
   const [iosStatus, setIosStatus] = useState(null);
   const [refreshingUsb, setRefreshingUsb] = useState(false);
   const [scanningUsb, setScanningUsb] = useState(false);
   const [scanningIos, setScanningIos] = useState(false);
   const [installingAdb, setInstallingAdb] = useState(false);
+  const [installingIos, setInstallingIos] = useState(false);
+  const [iosNeedsPython, setIosNeedsPython] = useState(false);
   const [scanningPc, setScanningPc] = useState(false);
   const [encryptedBackupPrompt, setEncryptedBackupPrompt] = useState(null);
   const [backupPassword, setBackupPassword] = useState('');
   const [unlockingBackup, setUnlockingBackup] = useState(false);
   const [backupUnlockError, setBackupUnlockError] = useState('');
-  const [showAndroidGuide, setShowAndroidGuide] = useState(() => Boolean(getMobileDesktopBridge()));
+  const [showConnectionGuide, setShowConnectionGuide] = useState(false);
   const [expandedGuideStep, setExpandedGuideStep] = useState(null);
   const [androidBrand, setAndroidBrand] = useState('generic');
   const [showAdvancedCmds, setShowAdvancedCmds] = useState(false);
@@ -105,23 +110,38 @@ export function MvtVerifierPanel({
   useScrollReveal(resultContainerRef, [result?.sourceLabel, result?.verdictCode]);
 
   const fetchUsbStatuses = useCallback(async (adbPath = '', ios = false, showLoading = false) => {
-    if (!desktopBridge) return;
-    if (showLoading) setRefreshingUsb(true);
+    if (!desktopBridge || manualUsbCheck.current) return;
+    const platform = ios ? 'ios' : 'android';
+    const revision = ++usbChecks.current[platform];
+    if (showLoading) {
+      manualUsbCheck.current = true;
+      setRefreshingUsb(true);
+      setErrorMsg('');
+      if (!ios) setAndroidUsbSearch(null);
+    }
     try {
       if (ios) {
-        setIosStatus(await desktopBridge.checkIosStatus());
+        const status = await desktopBridge.checkIosStatus();
+        if (usbChecks.current[platform] === revision) setIosStatus(status);
       } else {
-        const status = await desktopBridge.checkAdbStatus(adbPath);
+        const status = await desktopBridge.checkAdbStatus(adbPath, showLoading);
+        if (usbChecks.current[platform] !== revision) return;
         setUsbDevice(status);
+        if (showLoading) setAndroidUsbSearch(status);
+        else if (status.status_code !== 'NO_DEVICE') setAndroidUsbSearch(null);
         setSelectedSerial((previous) => status.devices?.some((d) => d.serial === previous && d.state === 'device')
           ? previous : status.serial || '');
       }
     } catch (err) {
+      if (usbChecks.current[platform] !== revision) return;
       if (ios) setIosStatus(null);
       else setUsbDevice(null);
       if (showLoading) setErrorMsg(err?.message || String(err));
     } finally {
-      if (showLoading) setRefreshingUsb(false);
+      if (showLoading) {
+        manualUsbCheck.current = false;
+        setRefreshingUsb(false);
+      }
     }
   }, [desktopBridge]);
 
@@ -140,7 +160,7 @@ export function MvtVerifierPanel({
   }, []);
 
   useEffect(() => {
-    if (!hasDesktopBridge || deviceTab === 'pc') return undefined;
+    if (!hasDesktopBridge || deviceTab === 'pc' || (deviceTab === 'ios' && installingIos)) return undefined;
     let cancelled = false;
 
     const tick = () => {
@@ -155,7 +175,7 @@ export function MvtVerifierPanel({
       clearTimeout(initTimer);
       clearInterval(timer);
     };
-  }, [customAdbPath, deviceTab, fetchUsbStatuses, hasDesktopBridge]);
+  }, [customAdbPath, deviceTab, fetchUsbStatuses, hasDesktopBridge, installingIos]);
 
   const applyLiveDeviceResult = useCallback(
     (liveRes, fallbackLabel, notifyParent = true) => {
@@ -225,12 +245,13 @@ export function MvtVerifierPanel({
   }
 
   async function handleLiveUsbScan() {
-    if (!desktopBridge || scanningUsb || isAnalyzing) return;
+    const serial = selectedSerial || usbDevice?.serial;
+    if (!desktopBridge || !usbDevice?.connected || !serial || scanningUsb || isAnalyzing) return;
     await guard(async () => {
       setScanningUsb(true);
       setErrorMsg('');
       try {
-        const snapshot = await desktopBridge.collectDeviceSnapshot(customAdbPath, selectedSerial || usbDevice?.serial);
+        const snapshot = await desktopBridge.collectDeviceSnapshot(customAdbPath, serial);
         applyLiveDeviceResult(await analyzeLiveDeviceSnapshot(snapshot), 'Android');
       } catch (err) {
         setErrorMsg(err?.message || String(err));
@@ -241,7 +262,7 @@ export function MvtVerifierPanel({
   }
 
   async function handleLiveIosScan() {
-    if (!desktopBridge || scanningIos || isAnalyzing) return;
+    if (!desktopBridge || !iosStatus?.connected || scanningIos || isAnalyzing) return;
     await guard(async () => {
       setScanningIos(true);
       setErrorMsg('');
@@ -272,6 +293,32 @@ export function MvtVerifierPanel({
         setInstallingAdb(false);
       }
     });
+  }
+
+  async function handleInstallIosConnector() {
+    if (!desktopBridge || installingIos) return;
+    await guard(async () => {
+      setInstallingIos(true);
+      setIosNeedsPython(false);
+      setErrorMsg('');
+      try {
+        const installation = await desktopBridge.installIosConnector();
+        if (!installation?.ok) {
+          setIosNeedsPython(installation?.code === 'PYTHON_REQUIRED');
+          throw new Error(installation?.error || 'No se pudo instalar el conector para iPhone.');
+        }
+        await fetchUsbStatuses('', true, true);
+      } catch (err) {
+        setErrorMsg(err?.message || String(err));
+      } finally {
+        setInstallingIos(false);
+      }
+    });
+  }
+
+  async function openIosDownload(prerequisite) {
+    try { await desktopBridge?.openIosPrerequisite(prerequisite); }
+    catch (err) { setErrorMsg(err?.message || String(err)); }
   }
 
   async function handlePcLiveAudit() {
@@ -1145,14 +1192,11 @@ export function MvtVerifierPanel({
   const installAdbCmd = isMac
     ? 'brew install android-platform-tools'
     : 'winget install Google.PlatformTools';
-  const installIosCmd = isMac
-    ? 'pip3 install pymobiledevice3'
-    : 'pip install pymobiledevice3';
 
   const isAndroidMissingConnector =
     hasDesktopBridge && deviceTab === 'android' && usbDevice?.status_code === 'ADB_NOT_FOUND';
   const isIosMissingConnector =
-    hasDesktopBridge && deviceTab === 'ios' && iosStatus && !iosStatus.tools_available;
+    hasDesktopBridge && deviceTab === 'ios' && iosStatus?.status_code === 'TOOLS_MISSING';
 
   const isReady =
     (deviceTab === 'android' && hasDesktopBridge && Boolean(usbDevice?.connected)) ||
@@ -1163,19 +1207,21 @@ export function MvtVerifierPanel({
     if (deviceTab === 'pc') {
       return hasPcTelemetryBridge ? 'Auditoría de solo lectura lista' : 'Disponible en OMEGA Desktop';
     }
-    if (!hasDesktopBridge) {
-      return deviceTab === 'ios' ? 'Sube un respaldo o archivo abajo' : 'USB disponible en OMEGA Desktop';
-    }
+    if (!hasDesktopBridge) return 'Modo navegador';
+    if (refreshingUsb) return 'Buscando por USB…';
     if (deviceTab === 'android') {
       if (usbDevice?.connected) return `Conectado · ${usbDevice.model || 'Android'}`;
       if (usbDevice?.status_code === 'UNAUTHORIZED') return 'Toca «Permitir» en tu teléfono';
       if (usbDevice?.status_code === 'ADB_NOT_FOUND') return 'Falta conector USB en PC';
-      return 'Esperando cable USB';
+      if (usbDevice?.status_code === 'OFFLINE') return 'Conexión interrumpida';
+      if (usbDevice?.status_code === 'ADB_ERROR') return 'El conector USB no respondió';
+      if (androidUsbSearch?.windows_file_transfer) return 'Windows detectó el equipo. Depuración pendiente.';
+      return usbDevice ? 'ADB no detecta un Android' : 'Comprobando conexión USB';
     }
     if (iosStatus?.connected) return `Conectado · ${iosStatus.device?.name || 'iPhone'}`;
     if (iosStatus?.status_code === 'UNPAIRED') return 'Toca «Confiar» en tu iPhone';
-    if (iosStatus?.tools_available) return 'Esperando cable USB';
-    return 'Listo para analizar respaldo o carpeta';
+    if (isIosMissingConnector) return 'Falta el conector para iPhone';
+    return iosStatus ? 'Sin iPhone detectado' : 'Comprobando conexión USB';
   })();
 
   const ANDROID_BRAND_HINTS = {
@@ -1196,13 +1242,13 @@ export function MvtVerifierPanel({
           {
             num: 2,
             title: 'Paso 2 — Conecta el cable a la PC',
-            text: 'Usa un cable USB que pase datos (el original del cargador funciona) y conéctalo directo al computador.',
+            text: 'Conecta un cable que admita transferencia de datos directamente a la computadora.',
             icon: Cable,
           },
           {
             num: 3,
             title: 'Paso 3 — Autoriza en tu pantalla',
-            text: "Desbloquea el celular; te saldrá un aviso de seguridad. Marca 'Permitir siempre' y toca Aceptar.",
+            text: 'Desbloquea el teléfono y pulsa Permitir en el aviso de depuración USB.',
             icon: ShieldCheck,
           },
         ]
@@ -1228,24 +1274,20 @@ export function MvtVerifierPanel({
         ];
 
   return (
-    <div className="animate-fade-up flex-1 flex flex-col justify-center py-4 px-3 sm:px-6">
+    <div className="animate-fade-up flex-1 flex flex-col">
       <div className="w-full max-w-[1280px] 2xl:max-w-[1440px] mx-auto space-y-6">
         {/* A. Header Compacto + Barra de Estado del Motor */}
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.025em] text-[#F2F2F4]">
-              Verificar integridad del dispositivo
+              Analiza tus equipos
             </h1>
             <p className="mt-1 text-[13.5px] text-[#9A9AA2]">
-              Audita PC, Android o iPhone en RAM sin guardar archivos personales.
-              {' '}Las observaciones saneadas de las evaluaciones nuevas quedan disponibles en Cuenta → Informes, dentro de «Análisis personales».
+              Elige un equipo para revisarlo en vivo o analiza un archivo que ya tengas.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 font-tech text-[11px] text-[#9A9AA2]">
-              Zero-Retention · RAM Only
-            </span>
             <button
               type="button"
               disabled={syncingStix}
@@ -1254,7 +1296,7 @@ export function MvtVerifierPanel({
               className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.07] px-3 py-1 text-[11.5px] font-medium text-[#D2D6E2] hover:text-white disabled:opacity-50 transition-colors cursor-pointer"
             >
               <RefreshCw className={`h-3 w-3 ${syncingStix ? 'animate-spin text-[#10B981]' : 'text-[#9A9AA2]'}`} />
-              <span>{stixSyncNote || (syncingStix ? 'Actualizando...' : 'Feeds STIX 2.1')}</span>
+              <span>{stixSyncNote || (syncingStix ? 'Actualizando…' : 'Actualizar indicadores')}</span>
             </button>
           </div>
         </header>
@@ -1263,7 +1305,7 @@ export function MvtVerifierPanel({
         <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.45)] p-6 space-y-5">
           {/* 1. Selector de Objetivo + Estado activo */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex rounded-xl bg-[#090B0E] border border-white/[0.06] p-1">
+            <div role="group" aria-label="Equipo que quieres analizar" className="flex flex-wrap rounded-lg bg-[#141923]/75 border border-white/[0.06] p-1">
               {[
                 { id: 'android', label: 'Android' },
                 { id: 'ios', label: 'iPhone / iPad' },
@@ -1274,11 +1316,19 @@ export function MvtVerifierPanel({
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setDeviceTab(tab.id)}
-                    className={`rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors cursor-pointer ${
+                    aria-pressed={active}
+                    disabled={refreshingUsb || scanningUsb || scanningIos || scanningPc || installingAdb || installingIos}
+                    onClick={() => {
+                      if (active) return;
+                      setDeviceTab(tab.id);
+                      setErrorMsg('');
+                      setExpandedGuideStep(null);
+                      setShowConnectionGuide(false);
+                    }}
+                    className={`min-h-10 rounded-lg border-b-2 px-3.5 text-sm font-medium transition-colors cursor-pointer disabled:opacity-60 ${
                       active
-                        ? 'bg-[#171B23] text-white'
-                        : 'text-[#8E95A5] hover:text-white'
+                        ? 'border-[#2F6FED] bg-white/[0.06] text-white'
+                        : 'border-transparent text-zinc-400 hover:text-white'
                     }`}
                   >
                     {tab.label}
@@ -1288,27 +1338,15 @@ export function MvtVerifierPanel({
             </div>
 
             <div className="flex items-center gap-2.5">
-              <div className="inline-flex items-center gap-2 text-[12.5px] text-[#D2D6E2]">
+              <div role="status" className="inline-flex items-center gap-2 text-sm text-zinc-200">
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    isReady ? 'bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-[#64748B]'
+                    isReady ? 'bg-emerald-400' : 'bg-zinc-500'
                   }`}
                 />
                 <span>{statusText}</span>
               </div>
 
-              {hasDesktopBridge && deviceTab !== 'pc' && (
-                <button
-                  type="button"
-                  disabled={refreshingUsb}
-                  onClick={() => fetchUsbStatuses(customAdbPath, deviceTab === 'ios', true)}
-                  title="Volver a buscar teléfono conectado"
-                  aria-label="Volver a buscar teléfono conectado"
-                  className="h-8 w-8 rounded-lg bg-[#171B23] hover:bg-white/[0.08] flex items-center justify-center text-[#9A9AA2] hover:text-white disabled:opacity-50 transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsb ? 'animate-spin text-[#10B981]' : ''}`} />
-                </button>
-              )}
             </div>
           </div>
 
@@ -1319,7 +1357,7 @@ export function MvtVerifierPanel({
                 <span className="text-[12.5px] text-[#E5E7EB]">
                   {isAndroidMissingConnector
                     ? 'Falta conector USB en PC para analizar Android por cable.'
-                    : 'Falta conector directo para iPhone por cable USB.'}
+                    : 'Instala el conector de iPhone para analizarlo por cable.'}
                 </span>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -1328,7 +1366,7 @@ export function MvtVerifierPanel({
                       type="button"
                       disabled={installingAdb || scanningUsb || isAnalyzing}
                       onClick={handleInstallPortableAdb}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:brightness-110 px-3 py-1.5 text-[12px] font-semibold text-[#06130E] disabled:opacity-50 cursor-pointer"
+                      className={PRIMARY_DEVICE_ACTION}
                     >
                       {installingAdb ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       <span>{installingAdb ? 'Instalando conector...' : 'Instalar conector USB'}</span>
@@ -1336,26 +1374,27 @@ export function MvtVerifierPanel({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => handleCopyCommand('ios', installIosCmd)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:brightness-110 px-3 py-1.5 text-[12px] font-semibold text-[#06130E] cursor-pointer"
+                      disabled={installingIos || scanningIos || isAnalyzing || refreshingUsb}
+                      onClick={handleInstallIosConnector}
+                      className={PRIMARY_DEVICE_ACTION}
                     >
-                      {copiedHintKey === 'ios' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                      <span>{copiedHintKey === 'ios' ? 'Comando copiado' : 'Instalar conector USB'}</span>
+                      {installingIos ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Download size={16} strokeWidth={1.75} aria-hidden="true" />}
+                      <span>{installingIos ? 'Instalando conector…' : 'Instalar conector para iPhone'}</span>
                     </button>
                   )}
 
-                  <button
+                  {isAndroidMissingConnector && <button
                     type="button"
                     onClick={() => setShowAdvancedCmds((v) => !v)}
                     className="inline-flex items-center gap-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] px-2.5 py-1.5 text-[11.5px] text-[#9A9AA2] hover:text-white cursor-pointer"
                   >
                     <span>Configuración avanzada</span>
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvancedCmds ? 'rotate-180' : ''}`} />
-                  </button>
+                  </button>}
                 </div>
               </div>
 
-              {showAdvancedCmds && (
+              {isAndroidMissingConnector && showAdvancedCmds && (
                 <div className="pt-2.5 border-t border-white/[0.06] flex flex-wrap items-center gap-2 text-[11.5px]">
                   {deviceTab === 'android' && (
                     <>
@@ -1385,177 +1424,147 @@ export function MvtVerifierPanel({
                   )}
                   <button
                     type="button"
-                    onClick={() => handleCopyCommand(deviceTab, deviceTab === 'ios' ? installIosCmd : installAdbCmd)}
+                    onClick={() => handleCopyCommand('android', installAdbCmd)}
                     className="font-tech inline-flex items-center gap-1.5 rounded-lg bg-[#090B0E] hover:bg-white/[0.06] px-2.5 py-1 text-[#9A9AA2] hover:text-white cursor-pointer"
                   >
                     <Copy className="h-3 w-3" />
-                    <span>{deviceTab === 'ios' ? installIosCmd : installAdbCmd}</span>
+                    <span>{copiedHintKey === 'android' ? 'Comando copiado' : installAdbCmd}</span>
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* 3. Área de Acción Principal + Stepper Minimalista */}
-          <div className="rounded-xl bg-[#141923]/70 border border-white/[0.05] p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              {deviceTab === 'android' && hasDesktopBridge && usbDevice?.connected ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[14px] font-medium text-white">
-                      {usbDevice.model || 'Teléfono Android'}
-                    </span>
-                    <span className="font-tech text-[11.5px] text-[#9A9AA2]">
-                      {selectedSerial || usbDevice.serial}
-                    </span>
-                    {usbDevice.devices?.length > 1 && (
-                      <select
-                        value={selectedSerial}
-                        onChange={(e) => setSelectedSerial(e.target.value)}
-                        className="font-tech rounded-md border border-white/[0.1] bg-[#090B0E] px-2 py-0.5 text-[11px] text-white"
-                      >
-                        {usbDevice.devices
-                          .filter((d) => d.state === 'device')
-                          .map((d) => (
-                            <option key={d.serial} value={d.serial}>
-                              {d.model} ({d.serial})
-                            </option>
+          {hasDesktopBridge && deviceTab === 'ios' && (
+            <>
+              {installingIos && <p role="status" className="text-sm text-zinc-300">Descargando y preparando el conector. Esto puede tardar unos minutos.</p>}
+              {iosNeedsPython && <button type="button" onClick={() => openIosDownload('python')} className="text-sm text-white underline underline-offset-4">Obtener Python</button>}
+              {iosStatus?.apple_driver_present === false && !iosStatus.connected && (
+                <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                  Para conectar el iPhone por USB, Windows también necesita el controlador de Apple.
+                  <button type="button" onClick={() => openIosDownload('apple')} className="text-white underline underline-offset-4">Descargar desde Apple</button>
+                </p>
+              )}
+            </>
+          )}
+
+          <div className="border-t border-white/[0.06] py-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0 grow space-y-2">
+                <h2 className="text-lg font-semibold text-white">
+                  {deviceTab === 'pc' ? 'Analiza esta computadora' : deviceTab === 'android' ? 'Analiza tu Android' : 'Analiza tu iPhone o iPad'}
+                </h2>
+                {deviceTab === 'pc' ? (
+                  <p className="text-sm text-zinc-300">
+                    {hasPcTelemetryBridge
+                      ? 'Revisa procesos, elementos de arranque y conexiones activas.'
+                      : 'La revisión en vivo requiere OMEGA Desktop. Puedes analizar un archivo desde el navegador.'}
+                  </p>
+                ) : !hasDesktopBridge ? (
+                  <p className="text-sm text-zinc-300">
+                    El análisis por USB requiere OMEGA Desktop. Aquí puedes analizar archivos o respaldos compatibles.
+                  </p>
+                ) : deviceTab === 'android' && usbDevice?.connected ? (
+                  <div className="text-sm text-zinc-300">
+                    {usbDevice.devices?.filter(device => device.state === 'device').length > 1 ? (
+                      <label className="flex flex-wrap items-center gap-2">
+                        Teléfono para analizar
+                        <select value={selectedSerial} onChange={event => setSelectedSerial(event.target.value)}
+                          className="min-h-10 rounded-lg border border-white/[0.07] bg-[#141923] px-3 text-white">
+                          {usbDevice.devices.filter(device => device.state === 'device').map(device => (
+                            <option key={device.serial} value={device.serial}>{device.model || 'Android'} ({device.serial})</option>
                           ))}
-                      </select>
-                    )}
+                        </select>
+                      </label>
+                    ) : <p>El teléfono está autorizado. Ya puedes iniciar el análisis.</p>}
                   </div>
-                  <p className="text-[12.5px] text-[#9A9AA2]">
-                    Análisis pasivo en memoria RAM sin modificar ni copiar datos personales.
-                  </p>
-                </>
-              ) : deviceTab === 'ios' && hasDesktopBridge && iosStatus?.connected ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[14px] font-medium text-white">
-                      {iosStatus.device?.name || 'iPhone / iPad'}
-                    </span>
-                    <span className="font-tech text-[11.5px] text-[#9A9AA2]">
-                      {iosStatus.device?.model} · iOS {iosStatus.device?.ios_version || 'N/D'}
-                    </span>
-                  </div>
-                  <p className="text-[12.5px] text-[#9A9AA2]">
-                    Inspección de telemetría en RAM sin tocar fotos ni mensajes.
-                  </p>
-                </>
-              ) : deviceTab === 'pc' ? (
-                <>
-                  <div className="text-[14px] font-medium text-white">
-                    Auditoría en vivo de esta computadora
-                  </div>
-                  <p className="text-[12.5px] text-[#9A9AA2]">
-                    Revisa procesos sin firma, persistencia WMI y conexiones activas en solo lectura (~2s).
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-[14px] font-medium text-white">
-                    {deviceTab === 'android' ? 'Conecta tu Android por USB' : 'Conecta tu iPhone o elige un respaldo'}
-                  </div>
-                  <p className="text-[12.5px] text-[#9A9AA2]">
-                    {hasDesktopBridge
-                      ? (deviceTab === 'android'
-                          ? usbDevice?.reason || 'Conecta un cable de datos y pulsa Detectar por USB.'
-                          : iosStatus?.reason || 'Conecta el iPhone o selecciona una carpeta de respaldo.')
-                      : 'El análisis por USB requiere OMEGA Desktop. En web puedes subir un archivo o respaldo abajo.'}
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {!hasDesktopBridge && deviceTab !== 'pc' && (
-                <button
-                  type="button"
-                  onClick={() => offlineDropzoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] px-3.5 py-2 text-[12.5px] font-medium text-[#F2F2F4] transition-colors cursor-pointer"
-                >
-                  <Upload className="h-3.5 w-3.5 text-[#10B981]" />
-                  <span>Subir archivo abajo</span>
-                </button>
-              )}
-
-              {deviceTab === 'android' && hasDesktopBridge && (
-                usbDevice?.connected ? (
-                  <button
-                    type="button"
-                    disabled={scanningUsb || isAnalyzing}
-                    onClick={handleLiveUsbScan}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
-                  >
-                    {scanningUsb && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>{scanningUsb ? 'Revisando teléfono...' : 'Iniciar revisión segura'}</span>
-                  </button>
+                ) : deviceTab === 'ios' && iosStatus?.connected ? (
+                  <p className="text-sm text-zinc-300">Tu {iosStatus.device?.name || 'iPhone o iPad'} está listo para analizar.</p>
                 ) : (
-                  <button
-                    type="button"
-                    disabled={refreshingUsb || scanningUsb}
-                    onClick={() => fetchUsbStatuses(customAdbPath, false, true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
-                  >
-                    {refreshingUsb && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>Detectar por USB</span>
-                  </button>
-                )
-              )}
+                  <p className="max-w-prose text-sm text-zinc-300">
+                    {deviceTab === 'android'
+                      ? usbDevice?.status_code === 'UNAUTHORIZED'
+                        ? 'Desbloquea el teléfono y pulsa Permitir en el aviso de depuración USB.'
+                        : usbDevice?.status_code === 'OFFLINE'
+                          ? 'Desconecta y vuelve a conectar el cable con el teléfono desbloqueado.'
+                          : androidUsbSearch?.windows_file_transfer
+                            ? `En la última búsqueda, Windows reconoció ${androidUsbSearch.windows_device_name || 'un equipo'} para transferir archivos. Con el teléfono desbloqueado, apaga y vuelve a encender Depuración USB y conecta el cable de nuevo. Si aparece el aviso, pulsa Permitir.`
+                            : usbDevice?.status_code === 'ADB_ERROR'
+                            ? 'Vuelve a buscar el teléfono. Si persiste, reconecta el cable y reinicia OMEGA Desktop.'
+                            : 'Activa la depuración USB, conecta el teléfono con un cable de datos y autoriza la computadora.'
+                      : iosStatus?.status_code === 'UNPAIRED'
+                        ? 'Desbloquea el iPhone y pulsa Confiar en el aviso.'
+                        : 'Conecta el iPhone con un cable de datos. Si aparece un aviso, pulsa Confiar.'}
+                  </p>
+                )}
+              </div>
 
-              {deviceTab === 'ios' && hasDesktopBridge && (
-                iosStatus?.connected ? (
-                  <button
-                    type="button"
-                    disabled={scanningIos || isAnalyzing}
-                    onClick={handleLiveIosScan}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
-                  >
-                    {scanningIos && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>{scanningIos ? 'Revisando iPhone...' : 'Iniciar revisión de iPhone'}</span>
+              <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+                {!hasDesktopBridge && (
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing} className={PRIMARY_DEVICE_ACTION}>
+                    <Upload size={16} strokeWidth={1.75} aria-hidden="true" /> Elegir archivo o respaldo
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={scanningIos || isAnalyzing}
-                    onClick={handlePickIosBackupDir}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
-                  >
-                    {scanningIos ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
-                    <span>Elegir carpeta de respaldo iPhone</span>
+                )}
+                {deviceTab === 'android' && hasDesktopBridge && !isAndroidMissingConnector && (
+                  <button type="button" disabled={refreshingUsb || scanningUsb || isAnalyzing}
+                    onClick={usbDevice?.connected ? handleLiveUsbScan : () => fetchUsbStatuses(customAdbPath, false, true)}
+                    className={PRIMARY_DEVICE_ACTION}>
+                    {scanningUsb || refreshingUsb
+                      ? <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                      : <Smartphone size={16} strokeWidth={1.75} aria-hidden="true" />}
+                    {scanningUsb ? 'Analizando teléfono…' : refreshingUsb ? 'Buscando teléfono…' : usbDevice?.connected ? 'Analizar teléfono' : 'Buscar teléfono por USB'}
                   </button>
-                )
-              )}
-
-              {deviceTab === 'pc' && hasPcTelemetryBridge && (
-                <button
-                  type="button"
-                  disabled={scanningPc || isAnalyzing}
-                  onClick={handlePcLiveAudit}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#10B981] hover:brightness-110 disabled:opacity-50 px-4 py-2.5 text-[13px] font-semibold text-[#06130E] transition-all cursor-pointer"
-                >
-                  {scanningPc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Laptop className="h-4 w-4" />}
-                  <span>{scanningPc ? 'Analizando PC...' : 'Analizar esta PC'}</span>
-                </button>
-              )}
+                )}
+                {deviceTab === 'ios' && hasDesktopBridge && (
+                  <>
+                    {!isIosMissingConnector && <button type="button" disabled={refreshingUsb || scanningIos || isAnalyzing || installingIos}
+                      onClick={iosStatus?.connected ? handleLiveIosScan : () => fetchUsbStatuses('', true, true)}
+                      className={PRIMARY_DEVICE_ACTION}>
+                      {scanningIos || refreshingUsb
+                        ? <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                        : <Smartphone size={16} strokeWidth={1.75} aria-hidden="true" />}
+                      {scanningIos ? 'Analizando iPhone…' : refreshingUsb ? 'Buscando iPhone…' : iosStatus?.connected ? 'Analizar iPhone' : 'Buscar iPhone por USB'}
+                    </button>}
+                      <button type="button" disabled={scanningIos || isAnalyzing || installingIos} onClick={handlePickIosBackupDir}
+                        className="min-h-11 rounded-lg px-2 text-sm text-zinc-300 underline decoration-white/30 underline-offset-4 hover:text-white disabled:opacity-50">
+                        Elegir carpeta de respaldo
+                      </button>
+                  </>
+                )}
+                {deviceTab === 'pc' && hasPcTelemetryBridge && (
+                  <button type="button" disabled={scanningPc || isAnalyzing} onClick={handlePcLiveAudit} className={PRIMARY_DEVICE_ACTION}>
+                    {scanningPc
+                      ? <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                      : <Laptop size={16} strokeWidth={1.75} aria-hidden="true" />}
+                    {scanningPc ? 'Analizando computadora…' : 'Analizar esta PC'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
+          {errorMsg && <PanelErrorBanner message={errorMsg} onDismiss={() => setErrorMsg('')} />}
+          {(scanningPc || scanningUsb || scanningIos) && (
+            <PanelSkeleton label={scanningPc ? 'Revisando esta computadora…' : 'Leyendo datos del dispositivo…'} lines={2} />
+          )}
+
+
+
           {/* Stepper horizontal minimalista para Android / iPhone */}
-          {deviceTab !== 'pc' && !(hasDesktopBridge && ((deviceTab === 'android' && usbDevice?.connected) || (deviceTab === 'ios' && iosStatus?.connected))) && (
+          {hasDesktopBridge && deviceTab !== 'pc' && !isReady && (
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between text-[11.5px] text-[#8E95A5]">
-                <span>Pasos rápidos de conexión</span>
+              <div className="border-t border-white/[0.06] pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowAndroidGuide((v) => !v)}
-                  className="hover:text-white transition-colors cursor-pointer"
+                  aria-expanded={showConnectionGuide}
+                  onClick={() => setShowConnectionGuide((v) => !v)}
+                  className="inline-flex min-h-10 items-center gap-2 text-sm text-zinc-300 hover:text-white"
                 >
-                  {showAndroidGuide ? 'Ocultar guía' : 'Mostrar guía'}
+                  Ayuda para conectar por USB <ChevronDown size={15} strokeWidth={1.75} aria-hidden="true" />
                 </button>
               </div>
 
-              {showAndroidGuide && (
+              {showConnectionGuide && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {stepperItems.map((item) => {
@@ -1564,11 +1573,7 @@ export function MvtVerifierPanel({
                       return (
                         <div
                           key={item.num}
-                          className={`rounded-xl border p-3.5 flex flex-col justify-between gap-2.5 transition-colors ${
-                            isExpanded
-                              ? 'border-blue-500/40 bg-blue-500/[0.03]'
-                              : 'border-transparent bg-white/[0.02]'
-                          }`}
+                          className="flex flex-col justify-between gap-2 border-l border-white/[0.07] pl-3"
                         >
                           <div className="space-y-1.5">
                             <div className="flex items-center gap-2 text-[12.5px] font-medium text-[#F2F2F4]">
@@ -1585,7 +1590,7 @@ export function MvtVerifierPanel({
                             onClick={() => setExpandedGuideStep(isExpanded ? null : item.num)}
                             className="self-start text-[11px] font-medium text-[#6EA0FF] hover:text-white transition-colors cursor-pointer"
                           >
-                            {isExpanded ? 'Ocultar pantalla ▴' : 'Ver pantalla de ejemplo ▾'}
+                            {isExpanded ? 'Ocultar ejemplo' : 'Ver ejemplo'}
                           </button>
                         </div>
                       );
@@ -1731,7 +1736,6 @@ export function MvtVerifierPanel({
 
         {/* C. Módulo Inferior: Análisis Offline (Dropzone Unificada + Input Inline) */}
         <section
-          ref={offlineDropzoneRef}
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragging(true);
@@ -1809,23 +1813,9 @@ export function MvtVerifierPanel({
             </button>
           </form>
 
-          {errorMsg && (
-            <PanelErrorBanner
-              message={errorMsg}
-              onDismiss={() => setErrorMsg('')}
-              className="mt-4"
-            />
-          )}
-
-          {(isAnalyzing || scanningPc || scanningUsb || scanningIos) && (
+          {isAnalyzing && (
             <PanelSkeleton
-              label={
-                scanningPc
-                  ? 'Auditando procesos, WMI y sockets en RAM...'
-                  : scanningUsb || scanningIos
-                    ? 'Leyendo telemetría USB en RAM...'
-                    : 'Analizando artefactos forenses en RAM...'
-              }
+              label="Analizando archivos o indicadores…"
               lines={2}
               className="mt-4"
             />

@@ -20,6 +20,8 @@ public class MercadoPagoClient {
     public final String webhookSecret;
     public final String publicBaseUrl;
     public final String returnUrl;
+    @Value("${OMEGA_MP_TEST_PAYER_EMAIL:}")
+    private String defaultTestPayerEmail = "";
 
     public MercadoPagoClient(@Value("${OMEGA_MP_MODE:disabled}") String mode,
             @Value("${OMEGA_MP_ACCESS_TOKEN:}") String token,
@@ -46,6 +48,21 @@ public class MercadoPagoClient {
             throw new IllegalStateException("Las URLs públicas de facturación deben usar HTTPS");
     }
     public boolean enabled() { return !"disabled".equals(mode); }
+
+    public boolean needsTestPayerEmail() {
+        return "test".equals(mode) && defaultTestPayerEmail.isBlank();
+    }
+
+    String subscriptionPayerEmail(String accountEmail, String requestedEmail) {
+        if (!"test".equals(mode)) return requestedEmail == null || requestedEmail.isBlank() ? accountEmail : requestedEmail.strip();
+        String result = requestedEmail == null || requestedEmail.isBlank()
+                ? defaultTestPayerEmail.strip() : requestedEmail.strip();
+        if (result.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Indica el correo de una cuenta compradora de prueba de Mercado Pago.");
+        }
+        return result;
+    }
     public void validateSeller() {
         JsonNode user = get("/users/me");
         boolean testUser = false;

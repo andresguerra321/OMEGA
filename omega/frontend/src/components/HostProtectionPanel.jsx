@@ -118,7 +118,7 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
   }
 
   const label = preparing ? 'Preparando la protección de tu computadora…' : sensorError ? 'Protección pendiente' : !status ? 'Comprobando vigilancia…'
-    : !native ? 'Vigilancia del equipo no disponible'
+    : !native ? desktop ? 'Sensor local sin conexión' : 'Vigilancia local en OMEGA Desktop'
       : status.active ? (status.dnsCoverage === 'cache-no-pid' ? 'Vigilancia activa' : 'Vigilancia activa · cobertura parcial') : status.enabled ? 'Vigilancia con cobertura incompleta' : 'Pausada';
   const grouped = {
     PROCESS: (report?.processFindings || []).map(finding => ({ ...finding,
@@ -151,7 +151,7 @@ function HostProtectionSession({ expanded, desktop, expedienteId }) {
     {preparing && <p className="mt-1 text-xs text-[#B7B7C0]">Comprobando la conexión con el sensor de esta computadora.</p>}
     {sensorError && <p role="alert" className="mt-2 text-sm text-amber-300">{sensorError}</p>}
     {setupFailed && <button type="button" onClick={() => { setSensorError(''); setSetupAttempt(value => value + 1); }} className="mt-2 rounded border border-white/20 px-3 py-1 text-xs">Reintentar preparación</button>}
-    {status && !native && <p className="mt-1 text-xs text-[#B7B7C0]">{status.notice || 'El servicio está aislado en un contenedor y no observa esta computadora. Conecta un sensor nativo para activar la vigilancia del equipo.'}</p>}
+    {status && !native && <p className="mt-1 text-xs text-zinc-300">{desktop ? status.notice || 'No se pudo conectar con el sensor de esta computadora.' : 'Abre la aplicación de escritorio para vigilar esta computadora.'}</p>}
     {alerts.length > 0 && <div role="alert" className="mt-2 rounded border border-red-400/40 bg-red-500/10 p-2 text-sm">
       {alerts.at(-1).userFriendlyTitle}. {alerts.length} alerta(s) conservadas en esta sesión del sensor. La alerta no bloquea tráfico por sí sola; consulta las acciones aplicadas en el historial.
     </div>}

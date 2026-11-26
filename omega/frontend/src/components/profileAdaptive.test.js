@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { fallbackProfileConfig, resolveRoleNicheLabel, resolveVisibleNavItems } from '../lib/useTenantProfileConfig.js';
+import { fallbackProfileConfig, resolveProfileLabel, resolveVisibleNavItems } from '../lib/useTenantProfileConfig.js';
 
 test('fallbacks preserve developer and legal workspaces when profile configuration is unavailable', () => {
   const config = JSON.parse(readFileSync(new URL('../../../backend-java/src/main/resources/profile-configs.json', import.meta.url), 'utf8'));
@@ -129,16 +129,9 @@ test('Hub Proyectos (RepoScannerPanel) consolida todas las pestañas comerciales
   }
 });
 
-test('resolveRoleNicheLabel combina rol de organización y nicho sin confundir ADMIN con PERFIL GENERAL', () => {
-  assert.equal(resolveRoleNicheLabel('ADMIN', 'DEVELOPER'), 'Admin · Desarrollador');
-  assert.equal(resolveRoleNicheLabel('ADMIN', 'LEGAL'), 'Admin · Legal');
-  assert.equal(resolveRoleNicheLabel('ADMIN', 'GENERAL'), 'Admin · General');
-  assert.equal(resolveRoleNicheLabel('ANALYST', 'DEVELOPER'), 'Desarrollador');
-  assert.equal(resolveRoleNicheLabel('ANALYST', 'LEGAL'), 'Legal');
-  assert.equal(resolveRoleNicheLabel('CLIENT', 'GENERAL'), 'Cliente · General');
-
-  const accountSrc = readFileSync(new URL('./AccountSettingsPanel.jsx', import.meta.url), 'utf8');
-  assert.ok(accountSrc.includes('authSession?.profile'));
-  assert.ok(accountSrc.includes('Perfil ${nicheText}'));
-  assert.equal(accountSrc.includes('Sesión activa'), false);
+test('resolveProfileLabel presenta el perfil del espacio en español', () => {
+  assert.equal(resolveProfileLabel('DEVELOPER'), 'Desarrollador');
+  assert.equal(resolveProfileLabel('LEGAL'), 'Legal');
+  assert.equal(resolveProfileLabel('GENERAL'), 'General');
+  assert.equal(resolveProfileLabel(), 'General');
 });

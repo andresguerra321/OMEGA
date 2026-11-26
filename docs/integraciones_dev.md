@@ -53,6 +53,9 @@ python omega/cli/omega_cli.py scan . --preview
 
 ### Requisitos de despliegue
 - **Requiere modo `CLOUD_MANAGED`** (URL pública HTTPS para recibir webhooks de GitHub). **No aplica a `SELF_HOSTED`** local sin exposición pública.
+- Para el botón **Conectar GitHub** en la web, configura `OMEGA_GITHUB_PUBLIC_ORIGIN` con el origen HTTPS del frontend, `OMEGA_GITHUB_APP_SLUG`, `OMEGA_GITHUB_APP_CLIENT_ID` y `OMEGA_GITHUB_APP_CLIENT_SECRET`.
+- En GitHub, registra `<origen>/github/setup` como **Setup URL** y `<origen>/github/callback` como **Callback URL**. Deja desactivado **Request user authorization (OAuth) during installation** para usar la URL de instalación y la autorización de OMEGA. Configura el webhook en `<origen>/api/v1/integrations/github/webhook`.
+- Abre OMEGA en ese mismo origen antes de conectar. El retorno usa la sesión web existente para validar el usuario y el espacio. En el cliente de escritorio sigue disponible la vinculación manual.
 
 ### Permisos congelados de la GitHub App
 Antes de instalar la App en repositorios reales, los permisos deben quedar fijados exclusivamente a:
@@ -74,6 +77,6 @@ Antes de instalar la App en repositorios reales, los permisos deben quedar fijad
 - `omega.github.collaborators-only` es `true` por defecto (seguro para repositorios públicos).
 - **Prueba manual pendiente en vivo (GitHub App real):**
   1. Configurar `OMEGA_GITHUB_APP_ID`, `OMEGA_GITHUB_APP_PRIVATE_KEY`, `OMEGA_GITHUB_WEBHOOK_SECRET` y `OMEGA_GITHUB_APP_BOT_LOGIN` en un entorno `CLOUD_MANAGED` con HTTPS público.
-  2. Instalar la GitHub App en un repositorio privado de pruebas y vincularla como `ADMIN` vía `/api/v1/integrations/github/state` + `/link`.
+  2. Entrar al espacio Desarrollador como `ADMIN` o titular individual. En **GitHub, CLI y Tokens → Conectar GitHub**, instalar la app en un repositorio privado de prueba y autorizar el regreso a OMEGA. Confirmar que aparece la instalación.
   3. Abrir un PR que modifique `package.json`, verificar el comentario único `<!-- omega-scan-pr -->`, hacer un push adicional y confirmar que el comentario se actualiza en el mismo hilo.
   4. Desinstalar la App en GitHub y confirmar que el webhook `installation` (`deleted`) desvincula la instalación en OMEGA.

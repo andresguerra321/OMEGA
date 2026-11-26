@@ -98,7 +98,7 @@ test('container scope disables host surveillance and persistence audit', async (
   await render(HostProtectionPanel, { session: { role: 'ADMIN', tenantId: 'owner' }, expanded: true });
   assert.equal(button('Pausar vigilancia').disabled, true);
   assert.equal(button('Revisar procesos').disabled, true);
-  assert.match(container.textContent, /no observa esta computadora/);
+  assert.match(container.textContent, /Abre la aplicación de escritorio para vigilar esta computadora/);
 });
 
 test('an unavailable sensor is displayed without claiming preparation or protection succeeded', async () => {

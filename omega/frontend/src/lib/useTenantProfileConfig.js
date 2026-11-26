@@ -60,24 +60,15 @@ export function resolveVisibleNavItems(navItems, profileConfig) {
     });
 }
 
-const NICHE_LABELS = Object.freeze({
-  GENERAL: 'General',
-  DEVELOPER: 'Desarrollador',
-  LEGAL: 'Legal',
-});
+export const WORKSPACE_PROFILES = Object.freeze([
+  { id: 'GENERAL', label: 'General', description: 'Revisa enlaces y amenazas' },
+  { id: 'DEVELOPER', label: 'Desarrollador', description: 'Analiza repositorios', plan: 'Pro o Enterprise' },
+  { id: 'LEGAL', label: 'Legal', description: 'Gestiona expedientes y documentos', plan: 'Pro o Enterprise' },
+]);
 
-/**
- * Formatea la etiqueta visible de rol y nicho para evitar ambigüedad entre
- * administrador de organización y el perfil/nicho del espacio de trabajo.
- */
-export function resolveRoleNicheLabel(role, profile, accountType) {
-  const normalizedProfile = String(profile || 'GENERAL').trim().toUpperCase();
-  const niche = NICHE_LABELS[normalizedProfile] || NICHE_LABELS.GENERAL;
-  if (accountType === 'INDIVIDUAL') return `Cuenta individual · ${niche}`;
-  if (accountType === 'UNCLASSIFIED') return `Cuenta · ${niche}`;
-  if (role === 'ADMIN') return `Admin · ${niche}`;
-  if (role === 'CLIENT') return `Cliente · ${niche}`;
-  return niche;
+export function resolveProfileLabel(profile) {
+  const id = String(profile || '').trim().toUpperCase();
+  return WORKSPACE_PROFILES.find(option => option.id === id)?.label || WORKSPACE_PROFILES[0].label;
 }
 
 export function useTenantProfileConfig(authSession) {

@@ -17,6 +17,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +33,7 @@ public interface GitHubApiClient {
     Set<String> ALLOWED_TARBALL_HOSTS = Set.of("api.github.com", "codeload.github.com");
 
     boolean userHasInstallationAccess(String userAccessToken, long installationId);
+    Optional<String> userInstallationAccount(String userAccessToken, long installationId);
 
     String createInstallationAccessToken(long installationId);
 
@@ -77,23 +79,42 @@ public interface GitHubApiClient {
         @Override
         @SuppressWarnings("unchecked")
         public boolean userHasInstallationAccess(String userAccessToken, long installationId) {
+            return userInstallation(userAccessToken, installationId).isPresent();
+        }
+
+        @Override
+        public Optional<String> userInstallationAccount(String userAccessToken, long installationId) {
+            return userInstallation(userAccessToken, installationId)
+                    .map(installation -> installation.get("account"))
+                    .filter(Map.class::isInstance)
+                    .map(account -> ((Map<?, ?>) account).get("login"))
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .filter(login -> !login.isBlank());
+        }
+
+        private Optional<Map<?, ?>> userInstallation(String userAccessToken, long installationId) {
             if (userAccessToken == null || userAccessToken.isBlank()) {
-                return false;
+                return Optional.empty();
             }
-            Map<String, Object> body = restClient.get()
-                    .uri("/user/installations?per_page=100")
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + userAccessToken.trim())
-                    .retrieve()
-                    .body(Map.class);
-            if (body == null || !(body.get("installations") instanceof List<?> installations)) {
-                return false;
-            }
-            for (Object item : installations) {
-                if (item instanceof Map<?, ?> map && map.get("id") instanceof Number num && num.longValue() == installationId) {
-                    return true;
+            for (int page = 1; ; page++) {
+                Map<?, ?> body = restClient.get()
+                        .uri("/user/installations?per_page=100&page={page}", page)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + userAccessToken.trim())
+                        .retrieve()
+                        .body(Map.class);
+                if (body == null || !(body.get("installations") instanceof List<?> installations)) {
+                    return Optional.empty();
+                }
+                for (Object item : installations) {
+                    if (item instanceof Map<?, ?> map && map.get("id") instanceof Number num && num.longValue() == installationId) {
+                        return Optional.of(map);
+                    }
+                }
+                if (installations.size() < 100 || (body.get("total_count") instanceof Number total && page * 100L >= total.longValue())) {
+                    return Optional.empty();
                 }
             }
-            return false;
         }
 
         @Override

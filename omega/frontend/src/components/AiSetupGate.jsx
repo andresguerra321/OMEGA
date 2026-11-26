@@ -62,7 +62,7 @@ const STEPS = ['Tu cuenta', 'Conecta la IA', 'Protege tu cuenta'];
 
 export function AiSetupGate({ enabled, accountId, authSession, forceSetup = false, onComplete, onLogout, children }) {
   const completionKey = accountId ? `omega_ai_setup_v2:${accountId}` : null;
-  const completed = useRef(null);
+  const setupPending = useRef(false);
   const [phase, setPhase] = useState('checking');
   const [step, setStep] = useState(0);
   const [engine, setEngine] = useState(null);
@@ -91,9 +91,11 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
 
   useEffect(() => {
     if (!enabled) return undefined;
-    if (completed.current === null) {
-      try { completed.current = Boolean(completionKey && window.localStorage.getItem(completionKey) === 'complete'); }
-      catch { completed.current = false; }
+    if (forceSetup) {
+      setupPending.current = true;
+      try { if (completionKey) window.localStorage.setItem(completionKey, 'pending'); } catch { /* Track the pending setup in this session. */ }
+    } else if (completionKey) {
+      try { setupPending.current = window.localStorage.getItem(completionKey) === 'pending'; } catch { /* Keep the current session state. */ }
     }
     let cancelled = false;
     Promise.all([fetchSystemGovernance(), fetchMfaStatus()]).then(([result, mfa]) => {
@@ -101,7 +103,7 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
       const active = result?.ai_engine;
       if (!active) throw new Error('No se pudo comprobar la configuración de IA.');
       setEngine(active);
-      setPhase(active.configured && mfa?.mfaEnabled && completed.current && !forceSetup ? 'ready' : 'setup');
+      setPhase(active.configured && mfa?.mfaEnabled && !setupPending.current ? 'ready' : 'setup');
       setError('');
     }).catch(() => {
       if (!cancelled) { setPhase('error'); setError('No pudimos comprobar la configuración. Revisa la conexión e intenta de nuevo.'); }
@@ -204,7 +206,7 @@ export function AiSetupGate({ enabled, accountId, authSession, forceSetup = fals
     try {
       const status = await fetchMfaStatus();
       if (!status?.mfaEnabled) throw new Error('Activa la verificación en dos pasos para continuar.');
-      completed.current = true;
+      setupPending.current = false;
       try { if (completionKey) window.localStorage.setItem(completionKey, 'complete'); } catch { /* Complete this session if storage is unavailable. */ }
       setPhase('ready'); onComplete?.();
     } catch (err) { setError(err?.message || 'No se pudo comprobar la protección de tu cuenta.'); }

@@ -30,6 +30,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
             "/actuator/health",
             "/api/v1/auth/config",
+            "/api/v1/auth/google/config",
+            "/api/v1/auth/google/start",
+            "/api/v1/auth/google/finish",
+            "/api/v1/auth/google/desktop/start",
+            "/api/v1/auth/google/desktop/relay",
+            "/api/v1/auth/google/desktop/finish",
             "/api/v1/public/commercial",
             "/api/v1/auth/csrf",
             "/api/v1/auth/login",

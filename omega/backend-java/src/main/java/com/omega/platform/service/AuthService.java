@@ -103,6 +103,24 @@ public class AuthService {
     @Transactional
     public AuthTokenResponse registerAccount(RegisterAccountRequest request, String bootstrapHeader) {
         verifyTenantRegistrationAllowed(bootstrapHeader);
+        return createAccount(request);
+    }
+
+    public boolean googleRegistrationAllowed() {
+        String bootstrapSecret = properties.security().bootstrapSecret();
+        return properties.security().allowTenantSelfRegistration()
+                && (bootstrapSecret == null || bootstrapSecret.isBlank());
+    }
+
+    @Transactional
+    public AuthTokenResponse registerGoogleAccount(RegisterAccountRequest request) {
+        if (!googleRegistrationAllowed()) {
+            throw new AccessDeniedException("El registro con Google no está habilitado en este servidor.");
+        }
+        return createAccount(request);
+    }
+
+    private AuthTokenResponse createAccount(RegisterAccountRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsAnyByEmailIgnoreCase(normalizedEmail)) {
             throw new ConflictException("Ya existe una cuenta registrada con este correo electrónico");
@@ -143,6 +161,25 @@ public class AuthService {
         Role effectiveRole = userRepository.findActiveWorkspaceRole(adminUser.getId(), tenant.getId())
                 .orElse(assignedRole);
         return issueTokenResponse(adminUser, tenant, effectiveRole);
+    }
+
+    @Transactional
+    public AuthTokenResponse loginWithGoogle(UUID userId) {
+        UserEntity user = userRepository.findById(userId).filter(UserEntity::isActive)
+                .orElseThrow(() -> new BadCredentialsException("La cuenta de OMEGA no está disponible."));
+        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
+                .orElseThrow(() -> new BadCredentialsException("La cuenta de OMEGA no está disponible."));
+        Role effectiveRole = userRepository.findActiveWorkspaceRole(userId, tenant.getId())
+                .orElseThrow(() -> new BadCredentialsException("La cuenta de OMEGA no está disponible."));
+        return finishLoginOrMfaChallenge(user, tenant, effectiveRole, null);
+    }
+
+    public void verifyPasswordForGoogleLink(OmegaPrincipal actor, String password) {
+        UserEntity user = userRepository.findById(actor.userId()).filter(UserEntity::isActive)
+                .orElseThrow(() -> new BadCredentialsException("La cuenta de OMEGA no está disponible."));
+        if (password == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BadCredentialsException("La contraseña de OMEGA es incorrecta.");
+        }
     }
 
     @Transactional

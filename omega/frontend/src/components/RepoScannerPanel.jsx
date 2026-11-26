@@ -15,13 +15,17 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import {
+  authorizeGitHubConnection,
+  completeGitHubConnection,
   createGitHubLinkState,
   getGitHubIntegrationStatus,
   linkGitHubInstallation,
   scanRepositoryArchive,
   scanRepositoryUrl,
+  startGitHubConnection,
   unlinkGitHubInstallation,
 } from '../lib/api';
+import { isDesktopApp } from '../lib/desktopBridge';
 import { ApiTokensCard } from './ApiTokensCard';
 import { DevProjectsTab } from './DevProjectsTab';
 import { DevFindingsTriageTab } from './DevFindingsTriageTab';
@@ -47,6 +51,8 @@ function severityBadge(severity) {
   }
   return 'border-white/[0.12] bg-white/[0.04] text-[#9A9AA2]';
 }
+
+const GITHUB_CONNECTION_KEY = 'omega.github.connection';
 
 export function RepoScannerPanel({ authSession }) {
   const inputId = useId();
@@ -74,12 +80,56 @@ export function RepoScannerPanel({ authSession }) {
   const [ghAccountLogin, setGhAccountLogin] = useState('');
   const [ghBusy, setGhBusy] = useState(false);
   const [ghError, setGhError] = useState('');
+  const githubReturnHandled = useRef(false);
 
   const canScan = authSession?.role === 'ADMIN' || authSession?.role === 'ANALYST';
   const isAdmin =
     authSession?.role === 'ADMIN' ||
-    Boolean(authSession?.canManageAccount) ||
-    authSession?.accountType === 'INDIVIDUAL';
+    (authSession?.role === 'ANALYST' && authSession?.accountType === 'INDIVIDUAL' && authSession.canManageAccount);
+
+  async function connectGitHub() {
+    setGhBusy(true);
+    setGhError('');
+    try {
+      const { state, url } = await startGitHubConnection();
+      sessionStorage.setItem(GITHUB_CONNECTION_KEY, JSON.stringify({ state }));
+      window.location.assign(url);
+    } catch (err) {
+      setGhError(err?.message || 'No se pudo iniciar la conexión con GitHub.');
+      setGhBusy(false);
+    }
+  }
+
+  async function finishGitHubReturn(path, params) {
+    setGhBusy(true);
+    setGhError('');
+    try {
+      const pending = JSON.parse(sessionStorage.getItem(GITHUB_CONNECTION_KEY) || '{}');
+      const state = params.get('state');
+      if (!pending.state || state !== pending.state || params.has('error')) {
+        throw new Error('La autorización de GitHub se canceló o venció. Inténtalo nuevamente.');
+      }
+      if (path === '/github/setup') {
+        const installationId = Number(params.get('installation_id'));
+        if (!Number.isSafeInteger(installationId) || installationId < 1) {
+          throw new Error('GitHub aún no confirmó la instalación. Revisa si está pendiente de aprobación.');
+        }
+        const { url } = await authorizeGitHubConnection(state, installationId);
+        sessionStorage.setItem(GITHUB_CONNECTION_KEY, JSON.stringify({ state, installationId }));
+        window.location.assign(url);
+        return;
+      }
+      const code = params.get('code');
+      if (!code || !pending.installationId) throw new Error('GitHub no completó la autorización.');
+      setGhStatus(await completeGitHubConnection(state, pending.installationId, code));
+      sessionStorage.removeItem(GITHUB_CONNECTION_KEY);
+    } catch (err) {
+      sessionStorage.removeItem(GITHUB_CONNECTION_KEY);
+      setGhError(err?.message || 'No se pudo terminar la conexión con GitHub.');
+    } finally {
+      setGhBusy(false);
+    }
+  }
 
   async function refreshGitHubStatus() {
     if (!isAdmin) return;
@@ -96,10 +146,17 @@ export function RepoScannerPanel({ authSession }) {
   }
 
   useEffect(() => {
-    if (isAdmin) {
+    if (!isAdmin || githubReturnHandled.current) return;
+    const { pathname, search } = window.location;
+    if (pathname === '/github/setup' || pathname === '/github/callback') {
+      githubReturnHandled.current = true;
+      setDevTab('github_ci');
+      window.history.replaceState(window.history.state, '', '/');
+      void finishGitHubReturn(pathname, new URLSearchParams(search));
+    } else {
       void refreshGitHubStatus();
     }
-  }, [isAdmin]);
+  }, [isAdmin, authSession?.tenantId]);
 
   async function runFileScan(fileToScan) {
     if (!fileToScan || !canScan) return;
@@ -222,7 +279,7 @@ export function RepoScannerPanel({ authSession }) {
                       <GitHubIcon className="h-4 w-4" />
                     </span>
                     <div>
-                      <h2 className="text-sm font-semibold text-slate-100">Integración GitHub App (Solo lectura)</h2>
+                      <h2 className="text-sm font-semibold text-slate-100">GitHub App</h2>
                       <p className="text-[11px] text-slate-400">
                         Vincula tu organización o cuenta para inspeccionar repositorios privados y Pull Requests sin clonar ni ejecutar código.
                       </p>
@@ -235,7 +292,7 @@ export function RepoScannerPanel({ authSession }) {
 
                 {!isAdmin ? (
                   <p className="text-xs text-slate-400">
-                    Solo un administrador (ADMIN) puede vincular o desconectar la GitHub App del espacio.
+                    Puede conectar GitHub quien administra la organización o es titular de la cuenta individual.
                   </p>
                 ) : ghStatus ? (
                   <div className="rounded-xl bg-[#141923]/75 border border-white/[0.06] p-4 flex flex-wrap items-center justify-between gap-3">
@@ -268,6 +325,19 @@ export function RepoScannerPanel({ authSession }) {
                       className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300 cursor-pointer"
                     >
                       Desvincular
+                    </button>
+                  </div>
+                ) : !isDesktopApp() ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-white/65">Elige en GitHub los repositorios que quieres conectar a este espacio.</p>
+                    <button
+                      type="button"
+                      onClick={connectGitHub}
+                      disabled={ghBusy}
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#2F6FED] px-4 py-2 text-xs font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                    >
+                      <GitHubIcon className="h-4 w-4" />
+                      {ghBusy ? 'Conectando…' : 'Conectar GitHub'}
                     </button>
                   </div>
                 ) : (
@@ -390,7 +460,7 @@ export function RepoScannerPanel({ authSession }) {
                   </div>
                 )}
 
-                {ghError && <p className="text-xs text-rose-400">{ghError}</p>}
+                {ghError && <p role="alert" className="text-xs text-rose-400">{ghError}</p>}
               </section>
 
               <section className="rounded-2xl bg-[#0F131B]/85 backdrop-blur-md border border-white/[0.07] p-6 space-y-4">

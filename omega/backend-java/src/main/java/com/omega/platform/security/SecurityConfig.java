@@ -65,6 +65,12 @@ public class SecurityConfig {
                         .csrfTokenRepository(csrfTokens)
                         .ignoringRequestMatchers("/api/v1/integrations/github/webhook", "/api/v1/billing/webhooks/mercadopago")
                         .ignoringRequestMatchers(request -> {
+                            String google = request.getContextPath() + "/api/v1/auth/google/";
+                            String path = request.getRequestURI();
+                            if (path.startsWith(google)) {
+                                return JwtAuthenticationFilter.isBearerOnlyRequest(request)
+                                        && (path.equals(google + "desktop/start") || path.equals(google + "desktop/finish"));
+                            }
                             String bearer = JwtAuthenticationFilter.extractBearerToken(request);
                             return (bearer != null && !bearer.isEmpty())
                                     || JwtAuthenticationFilter.isBearerOnlyRequest(request);
@@ -84,11 +90,13 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config", "/api/v1/auth/csrf",
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/auth/config", "/api/v1/auth/csrf", "/api/v1/auth/google/config",
                                 "/api/v1/public/status", "/api/v1/public/commercial")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout",
                                 "/api/v1/auth/register", "/api/v1/auth/tenants/register",
+                                "/api/v1/auth/google/start", "/api/v1/auth/google/finish",
+                                "/api/v1/auth/google/desktop/start", "/api/v1/auth/google/desktop/relay", "/api/v1/auth/google/desktop/finish",
                                 "/api/v1/auth/invitations/accept",
                                 "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
                                 "/api/v1/auth/mfa/verify", "/api/v1/auth/mfa/resend-email")

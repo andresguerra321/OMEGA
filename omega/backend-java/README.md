@@ -141,3 +141,12 @@ orígenes ajenos a la lista permitida. `Origin: null` se rechaza por defecto.
 
 El workflow `.github/workflows/backend-security.yml` ejecuta estas pruebas con
 Temurin 21 y Maven en cambios del backend y permite ejecución manual.
+## Acceso web con Google
+
+Configura un cliente OAuth **Aplicación web** en Google Cloud. Registra como URI de retorno el origen web de OMEGA seguido de `/google/callback`, por ejemplo `https://omega.ejemplo.org/google/callback`. Para una prueba local, usa `http://localhost:5173/google/callback` y abre OMEGA con `localhost`. Configura también el origen en `OMEGA_CORS_ALLOWED_ORIGINS` si no está permitido en el despliegue.
+
+Define `OMEGA_GOOGLE_PUBLIC_ORIGIN`, `OMEGA_GOOGLE_CLIENT_ID` y `OMEGA_GOOGLE_CLIENT_SECRET` del lado del backend. La migración V34 crea las tablas de identidades vinculadas y de intentos temporales. El cliente de escritorio conserva el acceso existente de correo.
+
+Google recibe únicamente la solicitud OAuth con `openid email`. OMEGA valida el token de identidad en el backend, guarda una huella del identificador de Google y emite su propia sesión. Los expedientes, los permisos, el MFA y la facturación se gestionan en OMEGA. El nuevo registro acepta direcciones de Gmail o de un dominio administrado por Google Workspace que Google verifique. Una cuenta existente se vincula desde **Mi perfil y sesión** con su contraseña de OMEGA y el mismo correo. Si el acceso comercial está bloqueado, la vinculación también está disponible en la pantalla de membresía.
+
+Nginx desactiva el registro de accesos para la ruta de retorno. Si hay un proxy adicional, excluye los parámetros de consulta de `/google/callback` de sus logs. Configura el secreto OAuth únicamente en el gestor de secretos o entorno del servidor.

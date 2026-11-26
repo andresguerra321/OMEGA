@@ -20,14 +20,20 @@ export async function openBillingCheckout(url, win = typeof window !== 'undefine
   return true;
 }
 
+export function openGoogleAuthorization(url) {
+  return window.__TAURI_INTERNALS__.invoke('open_google_authorization', { url });
+}
+
 export function getMobileDesktopBridge(win = typeof window !== 'undefined' ? window : null) {
   if (!isDesktopApp(win)) return null;
   const invoke = (command, args = {}) => win.__TAURI_INTERNALS__.invoke(command, args);
   return {
-    checkAdbStatus: (customPath = '') => invoke('check_adb_status', { customPath }),
+    checkAdbStatus: (customPath = '', waitForUsb = false) => invoke('check_adb_status', waitForUsb ? { customPath, waitForUsb } : { customPath }),
     checkIosStatus: () => invoke('check_ios_status'),
     pickAdbBinary: () => invoke('pick_adb_binary'),
     installPortableAdb: () => invoke('install_portable_adb'),
+    installIosConnector: () => invoke('install_ios_connector'),
+    openIosPrerequisite: prerequisite => invoke('open_ios_prerequisite', { prerequisite }),
     collectDeviceSnapshot: (customPath, serial) => invoke('collect_device_snapshot', { customPath, serial }),
     collectIosSnapshot: (udid) => invoke('collect_ios_snapshot', { udid }),
     pickIosBackupDir: () => invoke('pick_ios_backup_dir'),

@@ -9,7 +9,8 @@ import { transformWithOxc } from 'vite';
 const componentUrl = new URL('./AuthModulePanel.jsx', import.meta.url);
 const code = (await transformWithOxc(await fs.readFile(componentUrl, 'utf8'), fileURLToPath(componentUrl), { jsx: { runtime: 'automatic' } })).code;
 const names = ['confirmPasswordReset', 'saveAuthSession', 'getAuthConfig',
-  'loginWithPassword', 'registerAccount', 'requestPasswordReset', 'resendMfaEmail', 'verifyMfaLogin'];
+  'loginWithPassword', 'registerAccount', 'requestPasswordReset', 'resendMfaEmail', 'verifyMfaLogin',
+  'googleAuthConfig', 'pendingGoogleAction', 'startGoogleAuth', 'finishGoogleAuth'];
 const api = {};
 globalThis.__omegaRecoveryTestApi = api;
 const apiUrl = new URL('./__recovery_api_mock__.js', import.meta.url).href;
@@ -17,7 +18,7 @@ const stubUrl = new URL('./__recovery_ui_mock__.js', import.meta.url).href;
 const hooks = registerHooks({
   resolve(specifier, context, next) {
     if (context.parentURL === componentUrl.href) {
-      if (specifier === '../lib/api') return { url: apiUrl, shortCircuit: true };
+      if (specifier === '../lib/api' || specifier === '../lib/googleAuth') return { url: apiUrl, shortCircuit: true };
       if (specifier === './CommercialDocumentsPanel' || specifier === './DossierExportButtons' || specifier === './OmegaLogo' || specifier === './OmegaBrandMark' || specifier === './SaasFleetCard' || specifier === './BillingPanel') return { url: stubUrl, shortCircuit: true };
       if (specifier.startsWith('../lib/')) return { url: new URL(`${specifier}.js`, componentUrl).href, shortCircuit: true };
     }
@@ -45,6 +46,8 @@ let root, container;
 beforeEach(() => {
   for (const name of names) api[name] = () => { throw new Error(`Unexpected API: ${name}`); };
   api.getAuthConfig = async () => ({ tenantSelfRegistrationEnabled: true, smtpConfigured: false });
+  api.googleAuthConfig = async () => ({ enabled: false, registrationEnabled: false });
+  api.pendingGoogleAction = () => null;
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
@@ -77,16 +80,66 @@ async function submit() {
 
 test('registration shows the saved key before publishing the authenticated session', async () => {
   const token = { accessToken: 'token', recoveryKey: 'a'.repeat(48) };
-  api.registerAccount = async () => token;
+  let registeredProfile;
+  api.registerAccount = async ({ profile }) => { registeredProfile = profile; return token; };
   let authenticated = false, saved = false;
   api.saveAuthSession = session => { saved = true; return session; };
   await act(async () => root.render(createElement(AuthAccessForm, { defaultTab: 'register', onAuthenticated: () => { authenticated = true; } })));
+  const legalOption = [...container.querySelectorAll('[role="radio"]')].find(button => button.textContent.startsWith('Legal'));
+  assert.match(legalOption.textContent, /expedientes y documentos/i);
+  assert.match(legalOption.textContent, /Requiere Pro o Enterprise/);
+  await act(async () => legalOption.click());
   await input('reg-name', 'Ana Martinez'); await input('reg-email', 'ana@example.org'); await input('reg-password', 'Secure-password-123');
   await submit();
+  assert.equal(registeredProfile, 'LEGAL');
   assert.equal(container.querySelector('code').textContent, token.recoveryKey);
   assert.equal(saved, false); assert.equal(authenticated, false);
   await act(async () => container.querySelector('button').click());
   assert.equal(saved, true); assert.equal(authenticated, true);
+});
+
+test('Google login with a pending second factor uses the existing MFA form', async () => {
+  api.pendingGoogleAction = () => 'LOGIN';
+  api.finishGoogleAuth = async () => ({ action: 'LOGIN', session: {
+    mfaRequired: true, mfaChallengeToken: 'challenge', mfaMethod: 'EMAIL', maskedEmail: 'd***@gmail.com',
+  } });
+  let authenticated = false;
+  await act(async () => root.render(createElement(AuthAccessForm, { onAuthenticated: () => { authenticated = true; } })));
+  assert.match(container.textContent, /d\*\*\*@gmail\.com/);
+  assert.equal(authenticated, false);
+});
+
+test('the circular Google button has an accessible label and starts login', async () => {
+  api.googleAuthConfig = async () => ({ enabled: true });
+  let action;
+  api.startGoogleAuth = async intent => { action = intent; };
+  await act(async () => root.render(createElement(AuthAccessForm)));
+  const button = container.querySelector('button[aria-label="Continuar con Google"]');
+  assert.ok(button);
+  assert.match(container.textContent, /O continúa con/);
+  assert.equal(button.querySelector('img').getAttribute('src'), '/google-signin-round.svg');
+  assert.equal(button.querySelector('img').getAttribute('alt'), '');
+  await act(async () => button.click());
+  assert.equal(action, 'LOGIN');
+});
+
+test('Desktop offers Google access and routes the return through the existing MFA screen', async () => {
+  dom.window.__TAURI_INTERNALS__ = { invoke: async () => ({}) };
+  try {
+    api.googleAuthConfig = async () => ({ enabled: true, desktopEnabled: true });
+    api.startGoogleAuth = async (action, fields, terms, signal) => {
+      assert.equal(action, 'LOGIN');
+      assert.equal(signal.aborted, false);
+      return { action, session: { mfaRequired: true, mfaChallengeToken: 'challenge', mfaMethod: 'EMAIL', maskedEmail: 'a***@gmail.com' } };
+    };
+    let authenticated = false;
+    await act(async () => root.render(createElement(AuthAccessForm, { onAuthenticated: () => { authenticated = true; } })));
+    const button = container.querySelector('[aria-label="Continuar con Google"]');
+    assert.ok(button);
+    await act(async () => button.click());
+    assert.match(container.textContent, /a\*\*\*@gmail\.com/);
+    assert.equal(authenticated, false);
+  } finally { delete dom.window.__TAURI_INTERNALS__; }
 });
 
 test('recovery without SMTP asks for a saved key and never directs the user to Docker logs', async () => {
