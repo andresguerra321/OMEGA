@@ -15,6 +15,7 @@
 --     DROP CONSTRAINT IF EXISTS chk_tenants_org_billing_pair,
 --     DROP CONSTRAINT IF EXISTS chk_tenants_device_limit_override,
 --     DROP CONSTRAINT IF EXISTS chk_tenants_credit_limit_override,
+--     DROP COLUMN IF EXISTS pre_v30_billing_history,
 --     DROP COLUMN IF EXISTS device_limit_override,
 --     DROP COLUMN IF EXISTS credit_limit_override,
 --     DROP COLUMN IF EXISTS billing_tenant_id,
@@ -49,6 +50,7 @@ ALTER TABLE omega_rag.tenants
     ADD COLUMN billing_tenant_id UUID REFERENCES omega_rag.tenants(id),
     ADD COLUMN credit_limit_override INTEGER CONSTRAINT chk_tenants_credit_limit_override CHECK (credit_limit_override IS NULL OR credit_limit_override >= 0),
     ADD COLUMN device_limit_override INTEGER CONSTRAINT chk_tenants_device_limit_override CHECK (device_limit_override IS NULL OR device_limit_override >= 0),
+    ADD COLUMN pre_v30_billing_history BOOLEAN NOT NULL DEFAULT FALSE,
     ADD CONSTRAINT chk_tenants_org_billing_pair CHECK (
         (organization_id IS NULL AND billing_tenant_id IS NULL)
         OR (organization_id IS NOT NULL AND billing_tenant_id IS NOT NULL)
@@ -57,6 +59,12 @@ ALTER TABLE omega_rag.tenants
         FOREIGN KEY (organization_id, billing_tenant_id)
         REFERENCES omega_rag.organizations(id, billing_tenant_id)
         DEFERRABLE INITIALLY IMMEDIATE;
+
+-- Snapshot strictly at V30 migration time which pre-existing tenants already had a subscription or payments.
+UPDATE omega_rag.tenants t
+   SET pre_v30_billing_history = TRUE
+ WHERE EXISTS (SELECT 1 FROM omega_rag.subscriptions s WHERE s.tenant_id = t.id)
+    OR EXISTS (SELECT 1 FROM omega_rag.billing_payments p WHERE p.tenant_id = t.id);
 
 CREATE INDEX idx_tenants_organization_id
     ON omega_rag.tenants(organization_id)
@@ -188,9 +196,10 @@ RETURNS TRIGGER AS $$
 DECLARE
     payer_profile VARCHAR(20);
     payer_active BOOLEAN;
+    payer_pre_v30_billing BOOLEAN;
 BEGIN
-    SELECT t.profile, t.active
-      INTO payer_profile, payer_active
+    SELECT t.profile, t.active, t.pre_v30_billing_history
+      INTO payer_profile, payer_active, payer_pre_v30_billing
       FROM omega_rag.tenants t
      WHERE t.id = NEW.billing_tenant_id;
 
@@ -202,8 +211,17 @@ BEGIN
         RAISE EXCEPTION 'Una organización nueva no puede usar un espacio LEGAL como pagador';
     END IF;
 
-    IF payer_profile <> 'LEGAL' AND NEW.legacy_legal_payer THEN
-        RAISE EXCEPTION 'legacy_legal_payer solo aplica cuando el pagador preexistente ya tenía perfil LEGAL';
+    IF NEW.legacy_legal_payer THEN
+        IF payer_profile <> 'LEGAL' THEN
+            RAISE EXCEPTION 'legacy_legal_payer solo aplica cuando el pagador preexistente ya tenía perfil LEGAL';
+        END IF;
+
+        IF NOT payer_pre_v30_billing OR NOT (
+            EXISTS (SELECT 1 FROM omega_rag.subscriptions s WHERE s.tenant_id = NEW.billing_tenant_id)
+            OR EXISTS (SELECT 1 FROM omega_rag.billing_payments p WHERE p.tenant_id = NEW.billing_tenant_id)
+        ) THEN
+            RAISE EXCEPTION 'legacy_legal_payer requiere que el espacio ya tuviera suscripción o pagos anteriores a V30';
+        END IF;
     END IF;
 
     RETURN NEW;
@@ -221,6 +239,13 @@ DECLARE
     is_payer BOOLEAN;
     has_other_spaces BOOLEAN;
 BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.pre_v30_billing_history THEN
+            RAISE EXCEPTION 'pre_v30_billing_history solo puede asignarse durante la migración V30';
+        END IF;
+        RETURN NEW;
+    END IF;
+
     IF TG_OP = 'DELETE' THEN
         SELECT EXISTS (
             SELECT 1 FROM omega_rag.tenants child
@@ -236,6 +261,10 @@ BEGIN
             RAISE EXCEPTION 'No se puede eliminar el espacio pagador mientras existan otros espacios en la organización';
         END IF;
         RETURN OLD;
+    END IF;
+
+    IF NEW.pre_v30_billing_history IS DISTINCT FROM OLD.pre_v30_billing_history THEN
+        RAISE EXCEPTION 'pre_v30_billing_history es inmutable después de la migración V30';
     END IF;
 
     is_payer := (NEW.billing_tenant_id IS NOT NULL AND NEW.id = NEW.billing_tenant_id)
@@ -265,6 +294,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_tenants_protect_billing_payer
-    BEFORE UPDATE OF profile, active, organization_id, billing_tenant_id OR DELETE ON omega_rag.tenants
+    BEFORE INSERT OR UPDATE OF profile, active, organization_id, billing_tenant_id, pre_v30_billing_history OR DELETE ON omega_rag.tenants
     FOR EACH ROW
     EXECUTE FUNCTION omega_rag.protect_billing_payer_tenant();
