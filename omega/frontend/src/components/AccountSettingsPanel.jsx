@@ -10,12 +10,13 @@ import {
 import { buildProfileInitials } from './AuthModulePanel';
 import DossierExportButtons from './DossierExportButtons';
 import { RecoveryKeyCard } from './RecoveryKeyCard';
+import { GoogleAccountLink } from './GoogleAccountLink';
 import { SaasFleetCard } from './SaasFleetCard';
 import { ApiTokensCard } from './ApiTokensCard';
 import { BillingPanel } from './BillingPanel';
 import { ProfessionalReportsPanel } from './ProfessionalReportsPanel';
 import { CommercialBillingPanel } from './CommercialBillingPanel';
-import { resolveRoleNicheLabel } from '../lib/useTenantProfileConfig.js';
+import { resolveProfileLabel, WORKSPACE_PROFILES } from '../lib/useTenantProfileConfig.js';
 import { PilotWorkspaceCard } from './PilotOpsPanel';
 
 const SettingsPanel = lazy(() =>
@@ -51,6 +52,8 @@ const SIDEBAR_GROUPS = [
 ];
 
 const SETTINGS_SECTION_IDS = new Set(['cuenta', 'permisos', 'ia', 'rag', 'corpus']);
+const ACCOUNT_TYPE_LABELS = { INDIVIDUAL: 'Cuenta personal', ORGANIZATION: 'Organización' };
+const ROLE_LABELS = { ADMIN: 'Administrador', ANALYST: 'Analista', CLIENT: 'Cliente' };
 
 function shortHash(hash) {
   if (!hash) return '';
@@ -82,6 +85,8 @@ export function AccountSettingsPanel({
   onChangeSourceScope,
   initialSection = '',
   initialSectionKey = 0,
+  billingReason = '',
+  onDismissBillingReason,
   onAiConfigured,
   profileConfig = null,
   onSwitchProfile,
@@ -110,16 +115,12 @@ export function AccountSettingsPanel({
   const isAdmin = authSession?.role === 'ADMIN' && authSession?.accountType !== 'INDIVIDUAL';
   const canManage = authSession?.canManageAccount || isAdmin;
   const activeProfile = profileConfig?.profile || authSession?.profile || 'GENERAL';
-  const nicheText =
-    activeProfile === 'DEVELOPER'
-      ? 'desarrollador'
-      : activeProfile === 'LEGAL'
-        ? 'legal'
-        : 'general';
+  const profileLabel = resolveProfileLabel(activeProfile);
   const displayHandle = authSession?.tenantSlug
-    ? `@${authSession.tenantSlug}`
-    : authSession?.email || 'Cuenta activa';
-  const roleLabel = resolveRoleNicheLabel(authSession?.role, activeProfile, authSession?.accountType);
+    ? `Espacio @${authSession.tenantSlug}`
+    : authSession?.email || 'Mi cuenta';
+  const accountTypeLabel = ACCOUNT_TYPE_LABELS[authSession?.accountType];
+  const roleLabel = authSession?.accountType === 'ORGANIZATION' ? ROLE_LABELS[authSession.role] : null;
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-transparent px-3 sm:px-6 lg:px-8 py-5 sm:py-6">
@@ -246,13 +247,12 @@ export function AccountSettingsPanel({
                           <h1 className="text-[15px] font-medium tracking-[-0.015em] text-[#EDEDEF] truncate">
                             {displayHandle}
                           </h1>
-                          <span className="font-mono text-[11px] text-zinc-400">
-                            {roleLabel}
-                          </span>
+                          {accountTypeLabel && <span className="text-xs text-zinc-300">{accountTypeLabel}</span>}
                         </div>
-                        <p className="mt-0.5 text-[12.5px] text-zinc-400 truncate">
-                          {authSession?.tenantSlug ? `${authSession.email} · ` : ''}
-                          {`Perfil ${nicheText}`}
+                        {authSession?.tenantSlug && <p className="mt-0.5 truncate text-xs text-zinc-400">{authSession.email}</p>}
+                        <p className="mt-1 flex flex-wrap gap-x-4 text-xs text-zinc-300">
+                          <span>Perfil activo <strong className="font-medium text-white">{profileLabel}</strong></span>
+                          {roleLabel && <span>Permisos en el equipo <strong className="font-medium text-white">{roleLabel}</strong></span>}
                         </p>
                       </div>
                     </div>
@@ -293,77 +293,46 @@ export function AccountSettingsPanel({
                   </button>
                 </div>
               )}
-            {activeNav === 'plan' && <BillingPanel key={authSession?.tenantId} authSession={authSession} />}
+            {activeNav === 'plan' && <BillingPanel key={authSession?.tenantId} authSession={authSession} billingReason={billingReason} onDismissBillingReason={onDismissBillingReason} onOpenProfiles={canManage && onSwitchProfile ? () => setActiveNav('cuenta') : undefined} />}
             {activeNav === 'informes' && <ProfessionalReportsPanel profile={activeProfile} activeExpedienteId={activeExpedienteId} />}
             {activeNav === 'comercial' && <CommercialBillingPanel canManage={canManage} />}
+            {activeNav === 'cuenta' && authSession && <div className="mb-6"><GoogleAccountLink /></div>}
               {SETTINGS_SECTION_IDS.has(activeNav) && (
                 <>
-                  <Suspense
-                    fallback={
-                      <div className="py-6 text-xs text-[#7E8691]">
-                        Cargando configuración del sistema...
-                      </div>
-                    }
-                  >
-                    <SettingsPanel
-                      embedded
-                      activeSectionOverride={activeNav}
-                      topK={topK}
-                      onChangeTopK={onChangeTopK}
-                      sourceScope={sourceScope}
-                      onChangeSourceScope={onChangeSourceScope}
-                      authSession={authSession}
-                      onOpenAuth={onOpenAuth}
-                      onLogout={onLogout}
-                      onPanicPurge={onPanicPurge}
-                      initialSection={initialSection}
-                      initialSectionKey={initialSectionKey}
-                      onAiConfigured={onAiConfigured}
-                      saveTrigger={saveTrigger}
-                      onSavedFeedback={setSavedFeedback}
-                      onDirtyChange={setIsDirty}
-                    />
-                  </Suspense>
-
                   {activeNav === 'cuenta' && canManage && onSwitchProfile && (
                     <section className="border-t border-white/[0.06] py-6 space-y-3.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <h2 className="text-[14px] font-medium tracking-[-0.015em] text-[#EDEDEF]">
-                            Perfil del espacio
+                            Cambia tu perfil de trabajo
                           </h2>
                           <p className="mt-0.5 text-[12.5px] text-[#7E8691]">
-                            Adapta módulos visibles y alcance del asistente sin borrar datos existentes.
+                            Elige las herramientas que necesitas en este espacio.
                           </p>
                         </div>
-                        <span className="font-mono text-[11px] text-zinc-400">
-                          Activo: {activeProfile}
-                        </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        {[
-                          { id: 'GENERAL', label: 'General', desc: 'Spyware, CTI y verificación estándar' },
-                          { id: 'DEVELOPER', label: 'Developer', desc: 'Repositorios y cadena de suministro' },
-                          { id: 'LEGAL', label: 'Legal', desc: 'Expedientes y lenguaje probatorio' },
-                        ].map((opt) => {
+                        {WORKSPACE_PROFILES.map((opt) => {
                           const selected = (pendingProfile || activeProfile) === opt.id;
                           return (
                             <button
                               key={opt.id}
                               type="button"
+                              aria-pressed={selected}
                               onClick={() => {
                                 setPendingProfile(opt.id);
                                 setProfileConfirm(false);
                                 setProfileError('');
                               }}
-                              className={`rounded-md border p-3 text-left transition-colors cursor-pointer ${selected
-                                ? 'bg-white/[0.05] border-white/30 text-[#EDEDEF]'
-                                : 'border-white/[0.07] bg-white/[0.015] text-zinc-400 hover:border-white/[0.16] hover:text-zinc-200'
+                              className={`rounded-lg border p-3 text-left transition-colors cursor-pointer ${selected
+                                ? 'border-[#2F6FED] bg-[#141923]/75 text-white'
+                                : 'border-white/[0.07] bg-[#141923]/75 text-zinc-200 hover:border-white/[0.16]'
                                 }`}
                             >
-                              <div className="text-[13px] font-medium">{opt.label}</div>
-                              <div className="mt-0.5 text-[11.5px] text-zinc-500">{opt.desc}</div>
+                              <div className="text-[13px] font-medium">{opt.label}{activeProfile === opt.id && <span className="ml-2 text-xs text-zinc-400"> Activo</span>}</div>
+                              <div className="mt-1 text-xs text-zinc-300">{opt.description}</div>
+                              {opt.plan && <div className="mt-1 text-xs text-zinc-400">Requiere {opt.plan}</div>}
                             </button>
                           );
                         })}
@@ -387,7 +356,7 @@ export function AccountSettingsPanel({
                                   }`}
                               />
                             </span>
-                            <span>Confirmo cambiar el espacio a {pendingProfile} (queda en auditoría)</span>
+                            <span>Confirmo cambiar el perfil a {resolveProfileLabel(pendingProfile)}</span>
                           </button>
 
                           <button
@@ -414,10 +383,36 @@ export function AccountSettingsPanel({
                       )}
 
                       {profileError && (
-                        <p className="text-xs text-[#E5484D]">{profileError}</p>
+                        <p role="alert" className="text-sm text-rose-400">{profileError}</p>
                       )}
                     </section>
                   )}
+                  <Suspense
+                    fallback={
+                      <div className="py-6 text-xs text-[#7E8691]">
+                        Cargando configuración del sistema...
+                      </div>
+                    }
+                  >
+                    <SettingsPanel
+                      embedded
+                      activeSectionOverride={activeNav}
+                      topK={topK}
+                      onChangeTopK={onChangeTopK}
+                      sourceScope={sourceScope}
+                      onChangeSourceScope={onChangeSourceScope}
+                      authSession={authSession}
+                      onOpenAuth={onOpenAuth}
+                      onLogout={onLogout}
+                      onPanicPurge={onPanicPurge}
+                      initialSection={initialSection}
+                      initialSectionKey={initialSectionKey}
+                      onAiConfigured={onAiConfigured}
+                      saveTrigger={saveTrigger}
+                      onSavedFeedback={setSavedFeedback}
+                      onDirtyChange={setIsDirty}
+                    />
+                  </Suspense>
                 </>
               )}
 

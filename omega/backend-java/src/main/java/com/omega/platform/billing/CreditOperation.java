@@ -5,8 +5,8 @@ public enum CreditOperation {
     AI_QUERY("Consulta de IA", 1, false, "Por respuesta; Legal: 2 créditos"),
     AI_IMAGE("Análisis de imagen", 3, false, "Por imagen, hasta 10 MB"),
     YARA_SCAN("Escaneo YARA", 5, true, "Hasta 20 archivos y 25 MB en total"),
-    FORENSIC_STANDARD("Análisis forense estándar", 15, true, "Hasta 20 archivos y 25 MB en total"),
-    FORENSIC_DEEP("Análisis forense profundo", 30, true, "Una ejecución, hasta 25 MB de entrada"),
+    FORENSIC_STANDARD("Análisis forense estándar", 15, false, "Hasta 20 archivos y 25 MB en total"),
+    FORENSIC_DEEP("Análisis forense profundo", 30, false, "Una ejecución, hasta 25 MB de entrada"),
     REPO_SCAN("Escaneo de repositorio", 10, true, "Hasta 5 MB comprimidos: 10; hasta 25 MB: 25"),
     DEV_AUDIT("Auditoría de estación", 5, true, "Por ejecución"),
     LEGAL_INDEX("Indexación documental", 1, true, "Cada 10 páginas: texto 1; OCR 3; reserva al máximo");

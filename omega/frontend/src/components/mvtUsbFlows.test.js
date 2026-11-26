@@ -7,7 +7,10 @@ import { JSDOM } from 'jsdom';
 import { transformWithOxc } from 'vite';
 
 const panelUrl = new URL('./MvtVerifierPanel.jsx', import.meta.url);
+const primitivesUrl = new URL('./PanelStatePrimitives.jsx', import.meta.url);
 const source = (await transformWithOxc(await fs.readFile(panelUrl, 'utf8'), fileURLToPath(panelUrl),
+  { jsx: { runtime: 'automatic' } })).code;
+const primitivesSource = (await transformWithOxc(await fs.readFile(primitivesUrl, 'utf8'), fileURLToPath(primitivesUrl),
   { jsx: { runtime: 'automatic' } })).code;
 const api = {};
 globalThis.__mvtUsbApi = api;
@@ -33,8 +36,7 @@ const hooks = registerHooks({
       source: names.map(name => `export const ${name} = (...args) => globalThis.__mvtUsbApi.${name}(...args);`).join('\n') };
     if (url === 'omega-test:stubs') return { format: 'module', shortCircuit: true,
       source: stubNames.map(name => `export const ${name} = () => null;`).join('\n') };
-    if (url.endsWith('/PanelStatePrimitives.jsx')) return { format: 'module', shortCircuit: true,
-      source: 'export const ActionConfirmationBanner = () => null; export const PanelEmptyState = () => null; export const PanelErrorBanner = () => null; export const PanelSkeleton = () => null;' };
+    if (url.endsWith('/PanelStatePrimitives.jsx')) return { format: 'module', source: primitivesSource, shortCircuit: true };
     return next(url, context);
   },
 });
@@ -65,6 +67,7 @@ beforeEach(() => {
   window.__TAURI_INTERNALS__ = { invoke: async (cmd, args) => {
     calls.push([cmd, args]);
     assert.ok(cmd in responses, `Unexpected native command: ${cmd}`);
+    if (responses[cmd] instanceof Error) throw responses[cmd];
     return structuredClone(responses[cmd]);
   } };
   for (const name of names) api[name] = () => { throw new Error(`Unexpected API call: ${name}`); };
@@ -93,7 +96,7 @@ async function settle(predicate) {
 for (const platform of ['android', 'ios']) {
   test(`${platform} USB sends the selected device snapshot to authenticated triage`, async () => {
     await render(platform);
-    const label = platform === 'android' ? 'Iniciar revisión segura' : 'Iniciar revisión de iPhone';
+    const label = platform === 'android' ? 'Analizar teléfono' : 'Analizar iPhone';
     await settle(() => button(label));
     await click(label);
     assert.equal(analyzed.length, 1);
@@ -111,6 +114,86 @@ test('selecting an iOS backup resolves its manifest and reads targeted artifacts
   assert.equal(analyzed.length, 1);
   assert.ok(calls.some(([cmd, args]) => cmd === 'read_ios_backup_artifacts'
     && args.backupPath === backup.path && !args.encrypted && JSON.stringify(args.targets) === JSON.stringify(targets)));
+});
+
+test('Android reports missing authorization and exposes the scan after retry', async () => {
+  const authorized = responses.check_adb_status;
+  responses.check_adb_status = { connected: false, status_code: 'UNAUTHORIZED' };
+  await render('android');
+  await settle(() => container.textContent.includes('Toca «Permitir»'));
+  assert.equal(button('Analizar teléfono'), undefined);
+  assert.equal(button('Ayuda para conectar por USB').getAttribute('aria-expanded'), 'false');
+  responses.check_adb_status = authorized;
+  await click('Buscar teléfono por USB');
+  await click('Analizar teléfono');
+  assert.equal(analyzed.length, 1);
+});
+
+test('manual Android search distinguishes Windows file transfer from ADB authorization', async () => {
+  responses.check_adb_status = { connected: false, status_code: 'NO_DEVICE' };
+  await render('android');
+  await settle(() => container.textContent.includes('ADB no detecta un Android'));
+  responses.check_adb_status = {
+    connected: false, status_code: 'NO_DEVICE', windows_file_transfer: true, windows_device_name: 'Redmi de prueba',
+  };
+  await click('Buscar teléfono por USB');
+  assert.ok(calls.some(([cmd, args]) => cmd === 'check_adb_status' && args.waitForUsb === true));
+  assert.match(container.textContent, /Windows detectó el equipo\. Depuración pendiente/);
+  assert.match(container.textContent, /Windows reconoció Redmi de prueba para transferir archivos/);
+  assert.equal(button('Analizar teléfono'), undefined);
+  assert.equal(analyzed.length, 0);
+});
+
+test('a disconnected iPhone can be found again without opening a backup', async () => {
+  const connected = responses.check_ios_status;
+  responses.check_ios_status = { connected: false, tools_available: true, status_code: 'UNPAIRED' };
+  await render('ios');
+  await settle(() => container.textContent.includes('Toca «Confiar»'));
+  assert.equal(button('Analizar iPhone'), undefined);
+  responses.check_ios_status = connected;
+  await click('Buscar iPhone por USB');
+  await click('Analizar iPhone');
+  assert.equal(analyzed.length, 1);
+  assert.ok(!calls.some(([cmd]) => cmd === 'pick_ios_backup_dir'));
+});
+
+test('iPhone setup installs the connector and checks USB again', async () => {
+  const connected = responses.check_ios_status;
+  responses.check_ios_status = { tools_available: false, connected: false, status_code: 'TOOLS_MISSING' };
+  responses.install_ios_connector = { ok: true };
+  await render('ios');
+  await settle(() => button('Instalar conector para iPhone'));
+  assert.equal(button('Copiar comando'), undefined);
+  responses.check_ios_status = connected;
+  await click('Instalar conector para iPhone');
+  const install = calls.findIndex(([cmd]) => cmd === 'install_ios_connector');
+  assert.ok(install >= 0);
+  assert.ok(calls.slice(install + 1).some(([cmd]) => cmd === 'check_ios_status'));
+  assert.ok(button('Analizar iPhone'));
+});
+
+test('missing Python and Apple USB support show official downloads', async () => {
+  responses.check_ios_status = { tools_available: false, connected: false, status_code: 'TOOLS_MISSING', apple_driver_present: false };
+  responses.install_ios_connector = { ok: false, code: 'PYTHON_REQUIRED', error: 'Instala Python primero.' };
+  responses.open_ios_prerequisite = null;
+  await render('ios');
+  await settle(() => button('Instalar conector para iPhone'));
+  await click('Instalar conector para iPhone');
+  assert.match(container.textContent, /Instala Python primero/);
+  await click('Obtener Python');
+  await click('Descargar desde Apple');
+  assert.deepEqual(calls.filter(([cmd]) => cmd === 'open_ios_prerequisite'), [
+    ['open_ios_prerequisite', { prerequisite: 'python' }], ['open_ios_prerequisite', { prerequisite: 'apple' }],
+  ]);
+});
+
+test('an interrupted Android scan shows the error by the USB action and sends no snapshot', async () => {
+  responses.collect_device_snapshot = new Error('El Android dejó de responder por USB.');
+  await render('android');
+  await settle(() => button('Analizar teléfono'));
+  await click('Analizar teléfono');
+  assert.equal(analyzed.length, 0);
+  assert.match(button('Analizar teléfono').closest('section').textContent, /El Android dejó de responder por USB/);
 });
 
 test('canceling backup selection does not read files or call triage', async () => {
@@ -158,6 +241,36 @@ test('web keeps local USB operations unavailable', async () => {
   delete window.__TAURI_INTERNALS__;
   await render('android');
   assert.match(container.textContent, /El análisis por USB requiere OMEGA Desktop/);
-  assert.equal(button('Iniciar revisión segura'), undefined);
+  assert.equal(button('Analizar teléfono'), undefined);
+  assert.equal(button('Ayuda para conectar por USB'), undefined);
+  let opened = false;
+  container.querySelector('input[type="file"]').addEventListener('click', () => { opened = true; });
+  await click('Elegir archivo o respaldo');
+  assert.equal(opened, true);
   assert.deepEqual(calls, []);
+});
+
+test('insufficient credits on mobile scan explains the reason inline and opens plans only when requested', async () => {
+  const err = new Error('Créditos insuficientes para "Análisis forense estándar": requiere 15 créditos y tu saldo disponible es de 5. Recarga créditos o contrata un plan en Mi plan y créditos.');
+  err.status = 402;
+  err.billingRequired = true;
+  api.analyzeLiveDeviceSnapshot = async () => { throw err; };
+
+  const billingEvents = [];
+  const onBilling = (event) => billingEvents.push(event?.detail?.reason || '');
+  window.addEventListener('omega:billing-required', onBilling);
+  try {
+    await render('ios');
+    await settle(() => button('Analizar iPhone'));
+    await click('Analizar iPhone');
+    assert.equal(billingEvents.length, 0, '402 must not hijack navigation automatically');
+    assert.match(container.textContent, /requiere 15 créditos y tu saldo disponible es de 5/);
+    const goPlans = button('Ir a planes y créditos');
+    assert.ok(goPlans, 'Inline CTA to open plans and credits must be rendered');
+    await act(async () => goPlans.click());
+    assert.equal(billingEvents.length, 1);
+    assert.match(billingEvents[0], /requiere 15 créditos/);
+  } finally {
+    window.removeEventListener('omega:billing-required', onBilling);
+  }
 });

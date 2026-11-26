@@ -55,11 +55,11 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 /// `OMEGA_JWT_SECRET`, usaría una clave de desarrollo pública: aquí se generan
 /// una vez con el RNG del sistema y se persisten en el directorio de datos.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct DesktopSecrets {
-    internal_service_token: String,
-    jwt_secret: String,
+pub(crate) struct DesktopSecrets {
+    pub(crate) internal_service_token: String,
+    pub(crate) jwt_secret: String,
     #[serde(default)]
-    postgres_password: String,
+    pub(crate) postgres_password: String,
 }
 
 /// Registro de las imágenes construidas para detectar imágenes previas cacheadas
@@ -88,7 +88,7 @@ fn random_hex(bytes: usize) -> Result<String, String> {
     Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn load_or_create_secrets(app_data_dir: &Path) -> Result<DesktopSecrets, String> {
+pub(crate) fn load_or_create_secrets(app_data_dir: &Path) -> Result<DesktopSecrets, String> {
     let path = app_data_dir.join("desktop-secrets.json");
     if let Ok(raw) = std::fs::read_to_string(&path) {
         if let Ok(parsed) = serde_json::from_str::<DesktopSecrets>(&raw) {

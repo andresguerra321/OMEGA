@@ -1,6 +1,5 @@
 import { Suspense, lazy, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CreditConfirmationDialog } from './components/CreditConfirmationDialog';
 import { pageVariants, popVariants } from './lib/motion';
 import {
   Plus,
@@ -45,7 +44,6 @@ import { useDesktopBootstrap } from './lib/useDesktopBootstrap';
 import { useTenantProfileConfig } from './lib/useTenantProfileConfig';
 import { DesktopStartupGate } from './components/DesktopStartupGate';
 import { AiSetupGate } from './components/AiSetupGate';
-import { MembershipGate } from './components/MembershipGate';
 import { OmegaAmbientBackdrop } from './components/OmegaAmbientBackdrop';
 import { OmegaAuthBackdrop } from './components/OmegaAuthBackdrop';
 import { OmegaBrandMark } from './components/OmegaBrandMark';
@@ -147,8 +145,11 @@ export default function App() {
   const [linkJump, setLinkJump] = useState({ url: '', key: 0 });
   const [threatJump, setThreatJump] = useState({ query: '', key: 0 });
   const [settingsJump, setSettingsJump] = useState({ section: '', key: 0 });
+  const [billingRedirectReason, setBillingRedirectReason] = useState('');
   useEffect(() => {
-    const openBilling = () => {
+    const openBilling = (event) => {
+      const reason = typeof event?.detail?.reason === 'string' ? event.detail.reason.trim() : '';
+      setBillingRedirectReason(reason);
       setActiveNav('cuenta');
       setSettingsJump((previous) => ({ section: 'plan', key: previous.key + 1 }));
     };
@@ -177,18 +178,17 @@ export default function App() {
   const [draftContext, setDraftContext] = useState(null);
 
   const [authSession, setAuthSession] = useState(() => getAuthSession());
-  const { profileConfig, switchProfile, refresh: refreshProfile } = useTenantProfileConfig(authSession);
+  const { profileConfig, switchProfile } = useTenantProfileConfig(authSession);
   const privateOnlyWorkspace = profileConfig?.ragCorpusScope === 'legal_expedientes';
   const appliedProfileDefaultRef = useRef('');
   useEffect(() => {
     const profileKey = `${authSession?.tenantId || ''}:${profileConfig?.profile || ''}`;
     if (!authSession || !profileConfig?.defaultView || appliedProfileDefaultRef.current === profileKey) return;
     appliedProfileDefaultRef.current = profileKey;
-    if (activeNav === 'cuenta') return;
     if (['inicio', 'equipo', 'exposicion', 'amenazas', 'repo_scanner', 'preguntar', 'cuenta', 'expedientes'].includes(profileConfig.defaultView)) {
       setActiveNav(profileConfig.defaultView);
     }
-  }, [authSession, profileConfig?.profile, profileConfig?.defaultView, activeNav]);
+  }, [authSession, profileConfig?.profile, profileConfig?.defaultView]);
   const [verifyingSession, setVerifyingSession] = useState(true);
   const [enteringWorkspace, setEnteringWorkspace] = useState(false);
   const [authGateReason, setAuthGateReason] = useState('');
@@ -432,9 +432,7 @@ export default function App() {
     const hasPending = expedienteDocs.some(
       (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
     );
-    const inDocRelevantView =
-      activeNav === 'expedientes' || activeNav === 'preguntar' || activeNav === 'cuenta';
-    if (!hasPending || !activeExpedienteId || !authSession || !inDocRelevantView) return undefined;
+    if (!hasPending || !activeExpedienteId || !authSession) return undefined;
     const timer = setInterval(() => {
       void listExpedienteDocuments(activeExpedienteId)
         .then((docs) => {
@@ -447,7 +445,7 @@ export default function App() {
         .catch(() => { });
     }, 2500);
     return () => clearInterval(timer);
-  }, [expedienteDocs, activeExpedienteId, authSession, activeNav, refreshSystemTelemetry]);
+  }, [expedienteDocs, activeExpedienteId, authSession, refreshSystemTelemetry]);
 
   async function handleUploadExpedientePdf(file) {
     if (!file || uploadingPdf) return;
@@ -1017,7 +1015,6 @@ export default function App() {
 
   return (
     <DesktopStartupGate bootstrap={desktopBootstrap}>
-      <MembershipGate authSession={isSignedIn && !verifyingSession ? authSession : null} onLogout={handleLogout} onProfileChanged={refreshProfile}>
       <AiSetupGate key={authSession?.userId || 'signed-out'} accountId={authSession?.userId} authSession={authSession} enabled={isSignedIn && !enteringWorkspace && !verifyingSession}
         forceSetup={newAccountSetup} onLogout={handleLogout}
         onComplete={() => { setNewAccountSetup(false); void refreshSystemTelemetry(); }}>
@@ -1425,7 +1422,6 @@ export default function App() {
                             isLoadingChat={loadingChat}
                             authConnected={Boolean(authSession)}
                             visibleModuleIds={profileConfig?.visibleModules}
-                            moduleLabels={profileConfig?.moduleLabels}
                           />
                         </div>
 
@@ -1531,9 +1527,9 @@ export default function App() {
                                   onChangeSourceScope={setSourceScope}
                                   initialSection={settingsJump.section}
                                   initialSectionKey={settingsJump.key}
+                                  billingReason={billingRedirectReason}
+                                  onDismissBillingReason={() => setBillingRedirectReason('')}
                                   onAiConfigured={() => void refreshSystemTelemetry()}
-                                  profileConfig={profileConfig}
-                                  onSwitchProfile={switchProfile}
                                 />
                               ) : activeNav === 'amenazas' ? (
                                 profileConfig?.ragCorpusScope === 'dev_supply_chain_cti' ? (
@@ -1653,6 +1649,8 @@ export default function App() {
                                   onChangeSourceScope={setSourceScope}
                                   initialSection={settingsJump.section}
                                   initialSectionKey={settingsJump.key}
+                                  billingReason={billingRedirectReason}
+                                  onDismissBillingReason={() => setBillingRedirectReason('')}
                                   onAiConfigured={() => void refreshSystemTelemetry()}
                                   profileConfig={profileConfig}
                                   onSwitchProfile={switchProfile}
@@ -1738,8 +1736,6 @@ export default function App() {
           }
         </AnimatePresence >
       </AiSetupGate >
-      </MembershipGate>
-      <CreditConfirmationDialog />
     </DesktopStartupGate >
   );
 }

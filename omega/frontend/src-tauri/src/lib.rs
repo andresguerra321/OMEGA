@@ -1,4 +1,5 @@
 mod billing_checkout;
+mod google_browser;
 mod desktop_config;
 mod docker_bootstrap;
 mod env_loader;
@@ -10,14 +11,15 @@ use desktop_config::{
     SaveDesktopConfigPayload,
 };
 use docker_bootstrap::{
-    reapply_gateway_services, run_self_hosted_bootstrap, BootstrapStatus, SharedBootstrapState,
+    load_or_create_secrets, reapply_gateway_services, run_self_hosted_bootstrap, BootstrapStatus,
+    SharedBootstrapState,
 };
 use pdf_vault_index::{
     load_index, register_pdf_source, resolve_pdf_source, LocalPdfSourceRecord, ResolvedPdfSource,
 };
 use usb_bridge::{
     check_adb_status, check_ios_status, collect_device_snapshot, collect_ios_snapshot,
-    harden_private_dns, install_portable_adb, pick_adb_binary, pick_ios_backup_dir,
+    harden_private_dns, install_ios_connector, install_portable_adb, open_ios_prerequisite, pick_adb_binary, pick_ios_backup_dir,
     read_ios_backup_artifacts, read_ios_backup_manifest,
 };
 use serde::Serialize;
@@ -213,8 +215,11 @@ fn list_local_pdf_sources(app: tauri::AppHandle) -> Result<Vec<LocalPdfSourceRec
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let bootstrap_state: SharedBootstrapState = Arc::new(Mutex::new(BootstrapStatus::default()));
+    let sensor_daemon: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>> =
+        Arc::new(Mutex::new(None));
+    let sensor_for_exit = sensor_daemon.clone();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(bootstrap_state.clone())
         .plugin(tauri_plugin_shell::init())
         .setup(move |app| {
@@ -228,6 +233,29 @@ pub fn run() {
                     s.message = "Modo Cloud Managed activo (sin Docker local).".to_string();
                 }
             } else {
+                if let Ok(data_dir) = app.path().app_data_dir() {
+                    if let Ok(secrets) = load_or_create_secrets(&data_dir) {
+                        let bind_addr = if cfg!(target_os = "linux") {
+                            "0.0.0.0:18791"
+                        } else {
+                            "127.0.0.1:18791"
+                        };
+                        if let Ok(sidecar) = app
+                            .shell()
+                            .sidecar("omega-sensor")
+                            .map(|cmd| cmd.args(["--serve", bind_addr]))
+                        {
+                            if let Ok((_rx, mut child)) = sidecar.spawn() {
+                                let _ = child.write(
+                                    format!("{}\n", secrets.internal_service_token).as_bytes(),
+                                );
+                                if let Ok(mut guard) = sensor_daemon.lock() {
+                                    *guard = Some(child);
+                                }
+                            }
+                        }
+                    }
+                }
                 // Auto-orquestación Docker en segundo plano al abrir la app
                 let shared = bootstrap_state.clone();
                 let resource_dir = app.path().resource_dir().ok();
@@ -240,6 +268,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             billing_checkout::open_billing_checkout,
+            google_browser::open_google_authorization,
             get_desktop_runtime_info,
             get_bootstrap_status,
             retry_self_hosted_bootstrap,
@@ -252,6 +281,8 @@ pub fn run() {
             check_adb_status,
             pick_adb_binary,
             install_portable_adb,
+            install_ios_connector,
+            open_ios_prerequisite,
             collect_device_snapshot,
             harden_private_dns,
             check_ios_status,
@@ -260,6 +291,16 @@ pub fn run() {
             read_ios_backup_manifest,
             read_ios_backup_artifacts
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running OMEGA Tauri v2 application");
+        .build(tauri::generate_context!())
+        .expect("error while building OMEGA Tauri v2 application");
+
+    app.run(move |_app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            if let Ok(mut guard) = sensor_for_exit.lock() {
+                if let Some(child) = guard.take() {
+                    let _ = child.kill();
+                }
+            }
+        }
+    });
 }

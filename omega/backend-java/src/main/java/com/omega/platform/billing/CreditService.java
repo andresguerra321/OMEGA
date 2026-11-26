@@ -179,7 +179,9 @@ public class CreditService {
             List<Map<String,Object>> grants = jdbc.queryForList("SELECT id, remaining FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now() AND remaining>0 ORDER BY expires_at,id FOR UPDATE", billingTenant);
             long available = grants.stream().mapToLong(g -> ((Number)g.get("remaining")).longValue()).sum();
             if (available < amount) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
-                    "Créditos insuficientes. Esta operación requiere " + amount + ". Saldo disponible: " + available + ". Revisa Mi plan y créditos.");
+                    "Créditos insuficientes para \"" + operation.label + "\": requiere " + amount
+                            + " créditos y tu saldo disponible es de " + available
+                            + ". Recarga créditos o contrata un plan en Mi plan y créditos.");
             requireSpendConsent(operation,amount);
             UUID id = UUID.randomUUID();
             jdbc.update(

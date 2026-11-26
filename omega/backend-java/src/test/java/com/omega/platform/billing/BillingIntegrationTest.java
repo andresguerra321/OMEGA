@@ -229,9 +229,9 @@ class BillingIntegrationTest {
         doThrow(new org.springframework.web.client.ResourceAccessException("timeout")).when(provider).post(anyString(),anyMap(),any(UUID.class));
         BillingService service=new BillingService(jdbc,credits,provider,access,transactions);
         var actor=new OmegaPrincipal(user(account),tenant,account.path("email").asText(),Role.ANALYST,true);
-        assertThatThrownBy(()->service.checkout(actor,"PRO","MONTHLY",false,null))
+        assertThatThrownBy(()->service.checkout(actor,"PRO","MONTHLY",false,"buyer@testuser.com"))
             .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
-        assertThatThrownBy(()->service.checkout(actor,"PRO","MONTHLY",false,null))
+        assertThatThrownBy(()->service.checkout(actor,"PRO","MONTHLY",false,"buyer@testuser.com"))
             .isInstanceOf(org.springframework.web.server.ResponseStatusException.class).hasMessageContaining("409");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM omega_rag.billing_checkouts WHERE tenant_id=?",Integer.class,tenant)).isEqualTo(1);
         verify(provider,times(1)).post(anyString(),anyMap(),any(UUID.class));
@@ -247,7 +247,7 @@ class BillingIntegrationTest {
             return mapper.valueToTree(Map.of("id","sub-"+id,"init_point","https://www.mercadopago.com.co/subscriptions/checkout?preapproval_id="+id));
         }).when(provider).post(anyString(),anyMap(),any(UUID.class));
         BillingService service=new BillingService(jdbc,credits,provider,access,transactions);
-        service.checkout(new OmegaPrincipal(user(account),tenant,account.path("email").asText(),Role.ANALYST,true),"PRO","MONTHLY",false,null);
+        service.checkout(new OmegaPrincipal(user(account),tenant,account.path("email").asText(),Role.ANALYST,true),"PRO","MONTHLY",false,"buyer@testuser.com");
         assertThat(jdbc.queryForObject("SELECT status FROM omega_rag.billing_checkouts WHERE tenant_id=?",String.class,tenant)).isEqualTo("CANCEL_REQUESTED");
         assertThat(credits.isPaid(tenant)).isFalse();
     }
@@ -265,7 +265,51 @@ class BillingIntegrationTest {
         doReturn(mapper.valueToTree(Map.of("status","paused"))).when(provider).get("/preapproval/"+remote);
         service.processResource("subscription_preapproval",remote);
         assertThat(jdbc.queryForObject("SELECT status FROM omega_rag.billing_checkouts WHERE id=?",String.class,checkout)).isEqualTo("PAUSED");
-        assertThatThrownBy(()->service.checkout(new OmegaPrincipal(user(account),tenant,account.path("email").asText(),Role.ANALYST,true),"PRO","MONTHLY",false,null))
+        assertThatThrownBy(()->service.checkout(new OmegaPrincipal(user(account),tenant,account.path("email").asText(),Role.ANALYST,true),"PRO","MONTHLY",false,"buyer@testuser.com"))
             .isInstanceOf(org.springframework.web.server.ResponseStatusException.class).hasMessageContaining("409");
+    }
+
+    @Test void freeGeneralAccountCanUseWelcomeCreditsForMobileAndPcForensicsAndPrepareTopup() throws Exception {
+        JsonNode account = register("GENERAL");
+        UUID tenant = tenant(account);
+
+        // 1. Mobile live triage (FORENSIC_STANDARD = 15 créditos) cotiza primero (409) en vez de bloquear con 402 por plan FREE
+        mvc.perform(post("/api/v1/forensics/triage/device-live").with(csrf())
+                        .header("Authorization", bearer(account))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"platform\":\"ios\",\"device\":{\"udid\":\"sintetico\"}}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("OMEGA_CREDIT_QUOTE:15:FORENSIC_STANDARD")));
+
+        // 2. Reserva real de 15 créditos para móvil y luego intento de PC (30 créditos) con solo 15 disponibles -> 402 explicativo
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        UUID mobileRes = credits.reserve(tenant, user(account), CreditOperation.FORENSIC_STANDARD, 15, null);
+        credits.settle(tenant, mobileRes, 15);
+        assertThat(credits.summary(tenant).get("balance")).isEqualTo(15L);
+
+        mvc.perform(post("/api/v1/forensics/triage/pc-live").with(csrf())
+                        .header("Authorization", bearer(account))
+                        .header("X-Omega-Credit-Limit", "30")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"platform\":\"win32\",\"hostname\":\"pc-sintetica\"}"))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("requiere 30 créditos"),
+                        org.hamcrest.Matchers.containsString("saldo disponible es de 15")
+                )));
+
+        // 3. Cuenta FREE General con acceso activo puede preparar recarga de 200 créditos sin exigir suscripción mensual previa
+        var provider = spy(new MercadoPagoClient("test", "token", "123", "secret", "https://backend.invalid", "https://app.invalid"));
+        doNothing().when(provider).validateSeller();
+        doReturn(mapper.valueToTree(Map.of(
+                "id", "pref-topup-1",
+                "init_point", "https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=1",
+                "sandbox_init_point", "https://sandbox.mercadopago.com.co/checkout/v1/redirect?pref_id=1"
+        ))).when(provider).post(eq("/checkout/preferences"), anyMap(), any(UUID.class));
+
+        BillingService service = new BillingService(jdbc, credits, provider, access, transactions);
+        var actor = new OmegaPrincipal(user(account), tenant, account.path("email").asText(), Role.ANALYST, true);
+        Map<String, Object> topupCheckout = service.checkout(actor, null, null, true, null);
+        assertThat(String.valueOf(topupCheckout.get("checkoutUrl"))).contains("mercadopago.com.co");
     }
 }

@@ -44,6 +44,7 @@ export function PanelSkeleton({
  */
 export function PanelErrorBanner({
   message,
+  billingRequired = false,
   onRetry,
   retryLabel = 'Reintentar',
   onDismiss,
@@ -51,24 +52,49 @@ export function PanelErrorBanner({
 }) {
   if (!message) return null;
 
+  const isBillingPrompt =
+    billingRequired || /Mi plan y créditos|Créditos insuficientes|requiere Pro o Enterprise|requiere un plan/i.test(message);
+
+  const openPlans = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('omega:billing-required', { detail: { reason: message } }));
+    }
+  };
+
   return (
     <div
       role="alert"
-      className={`rounded-[12px] border border-[#FF453A]/35 bg-[#FF453A]/10 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-[12.5px] text-[#FFB2AE] ${className}`}
+      className={`rounded-xl border px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[12.5px] ${
+        isBillingPrompt
+          ? 'border-amber-400/30 bg-[#141923]/85 text-amber-100'
+          : 'border-rose-500/35 bg-rose-500/10 text-[#FFB2AE]'
+      } ${className}`}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <AlertTriangle className="h-4 w-4 text-[#FF453A] shrink-0" />
-        <span className="break-words">{message}</span>
+      <div className="flex items-start gap-2.5 min-w-0">
+        <AlertTriangle
+          className={`h-4 w-4 shrink-0 mt-0.5 ${isBillingPrompt ? 'text-amber-400' : 'text-rose-500'}`}
+          strokeWidth={1.75}
+        />
+        <span className="break-words leading-relaxed">{message}</span>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
+        {isBillingPrompt && (
+          <button
+            type="button"
+            onClick={openPlans}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2F6FED] hover:brightness-110 px-3 py-1.5 text-[12px] font-medium text-white transition-all cursor-pointer"
+          >
+            <span>Ir a planes y créditos</span>
+          </button>
+        )}
         {onRetry && (
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-1 rounded-[8px] border border-[#FF453A]/35 bg-white/[0.06] hover:bg-white/[0.12] px-2.5 py-1 text-[11.5px] font-medium text-white transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 rounded-lg border border-white/[0.12] bg-white/[0.06] hover:bg-white/[0.12] px-2.5 py-1 text-[11.5px] font-medium text-white transition-colors cursor-pointer"
           >
-            <RotateCcw className="h-3 w-3" />
+            <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
             <span>{retryLabel}</span>
           </button>
         )}
@@ -77,9 +103,9 @@ export function PanelErrorBanner({
             type="button"
             onClick={onDismiss}
             aria-label="Cerrar aviso de error"
-            className="h-6 w-6 inline-flex items-center justify-center rounded-full text-[#FFB2AE]/80 hover:text-white hover:bg-white/[0.08] cursor-pointer"
+            className="h-6 w-6 inline-flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-white/[0.08] cursor-pointer"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         )}
       </div>

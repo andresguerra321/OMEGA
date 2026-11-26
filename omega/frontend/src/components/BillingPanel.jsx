@@ -8,11 +8,14 @@ import {
   ChevronDown,
   CreditCard,
   ExternalLink,
+  Coins,
   Info,
   Layers,
   Lock,
   RefreshCw,
   ShieldCheck,
+  Laptop,
+  Users,
 } from 'lucide-react';
 import { isDesktopApp, openBillingCheckout } from '../lib/desktopBridge.js';
 import {
@@ -73,6 +76,9 @@ export function BillingPanel({
   canContinueFreeGeneral = false,
   onContinueFreeGeneral,
   continuingFreeGeneral = false,
+  onOpenProfiles,
+  billingReason = '',
+  onDismissBillingReason,
 }) {
   const tenantId = authSession?.tenantId;
   const [catalog, setCatalog] = useState(null);
@@ -86,12 +92,15 @@ export function BillingPanel({
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [payerEmail, setPayerEmail] = useState('');
   const [accountType, setAccountType] = useState('INDIVIDUAL');
+  const [openedPaymentUrl, setOpenedPaymentUrl] = useState('');
+  const [preparedOffer, setPreparedOffer] = useState(null);
 
   const load = useCallback(async () => {
     const [offers, account] = await Promise.all([fetchBillingPlans(), fetchBillingSummary()]);
     setCatalog(offers);
     setSummary(account);
     if (account.canManage) setHistory(await fetchBillingHistory());
+    return account;
   }, []);
 
   useEffect(() => {
@@ -137,9 +146,18 @@ export function BillingPanel({
       ? ''
       : summary?.paymentUrl || (pending?.status === 'PENDING' ? pending.checkout_url : '');
   const canCheckout = summary?.canManage && catalog?.mode !== 'disabled';
+  const sandbox = catalog?.mode === 'test';
+  const requiresTestPayer = sandbox && catalog.needsTestPayerEmail !== false;
+  const testPayerMissing = requiresTestPayer && !payerEmail.trim();
   const paid = summary && summary.planCode !== 'FREE';
   const movements = Array.isArray(summary?.movements) ? summary.movements : [];
   const operations = Array.isArray(catalog?.operations) ? catalog.operations : [];
+  const creditExamples = operations.filter(({ code }) => ['LINK_VERIFY', 'AI_QUERY', 'LEGAL_INDEX'].includes(code));
+  const hasPendingPayment = Boolean(pending || paymentUrl);
+  const paymentOpened = Boolean(paymentUrl && openedPaymentUrl === paymentUrl);
+  const paymentStep = paymentOpened ? 2 : hasPendingPayment ? 1 : 0;
+  const preparedSelection = preparedOffer?.url === paymentUrl ? preparedOffer : null;
+  const cycleLabel = interval === 'ANNUAL' ? 'Anual' : 'Mensual';
 
   const annualSubtotal =
     interval === 'ANNUAL' && monthlyReference ? Number(monthlyReference.price) * 12 : null;
@@ -155,18 +173,36 @@ export function BillingPanel({
         : 'Cuenta';
   const activeProfileLabel = profileName(summary?.profile || authSession?.profile);
 
+  const sandboxPayerField = sandbox && canCheckout && !pending && !paymentUrl && (
+    <label className="block max-w-md space-y-1.5 text-xs text-white/75">
+      <span>Correo del comprador de prueba{requiresTestPayer ? '' : ' (opcional)'}</span>
+      <input
+        type="email"
+        value={payerEmail}
+        onChange={(event) => setPayerEmail(event.target.value)}
+        placeholder="comprador@testuser.com"
+        required={requiresTestPayer}
+        className="block h-9 w-full rounded-lg border border-white/[0.05] bg-[#141923]/75 px-3 text-xs text-white placeholder:text-white/45 focus-visible:outline-2 focus-visible:outline-offset-2"
+      />
+      <span className="block text-white/55">
+        {requiresTestPayer
+          ? 'Usa una cuenta compradora de prueba de Mercado Pago distinta de la vendedora.'
+          : 'Si lo dejas vacío, se usa el comprador de prueba del entorno.'}
+      </span>
+    </label>
+  );
+
   async function checkout(topup = false) {
     await action(async () => {
       const result = await createBillingCheckout({
         planCode: plan,
         interval,
         topup,
-        payerEmail: payerEmail || undefined,
+        payerEmail: !topup && sandbox ? payerEmail.trim() || undefined : undefined,
       });
       await load();
-      setNotice(
-        'Pago preparado. Abre Mercado Pago para continuar; tu plan se activará al confirmar el cobro.',
-      );
+      if (!topup && selected) setPreparedOffer({ offer: selected, cycle: cycleLabel, url: result.checkoutUrl });
+      if (topup || layout === 'checkout') setNotice('Pago preparado. Abre Mercado Pago para continuar.');
       setSummary((old) => ({ ...old, paymentUrl: result.checkoutUrl }));
     });
   }
@@ -174,7 +210,12 @@ export function BillingPanel({
   function handleRefreshStatus() {
     return action(async () => {
       await refreshBilling();
-      await load();
+      const updated = await load();
+      if (!paid && updated && updated.planCode !== 'FREE') {
+        setNotice(`Pago confirmado. Tu plan ${planName(updated.planCode)} está activo.`);
+      } else if (!paid && hasPendingPayment && layout === 'settings') {
+        setNotice('Mercado Pago aún no ha confirmado la activación. Puedes verificar de nuevo en unos minutos.');
+      }
       window.dispatchEvent(new Event('omega:billing-updated'));
     });
   }
@@ -183,7 +224,12 @@ export function BillingPanel({
     if (!paymentUrl) return;
     if (isDesktopApp()) {
       event.preventDefault();
-      if (!busy) action(() => openBillingCheckout(paymentUrl));
+      if (!busy) action(async () => {
+        await openBillingCheckout(paymentUrl);
+        setOpenedPaymentUrl(paymentUrl);
+      });
+    } else {
+      setOpenedPaymentUrl(paymentUrl);
     }
   }
 
@@ -203,7 +249,32 @@ export function BillingPanel({
     return (
       <section className="space-y-12 text-sm text-[#F5F5F7]" aria-labelledby="billing-title">
         {/* Alertas de error o confirmación */}
-        {error && (
+        {billingReason && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/30 bg-[#141923]/85 px-4 py-3 text-xs text-amber-100"
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            <AlertCircle size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-amber-400" />
+            <div className="space-y-0.5">
+              <p className="font-medium text-amber-300">Motivo por el que se abrió esta sección</p>
+              <p className="text-white/85 leading-relaxed">{billingReason}</p>
+            </div>
+          </div>
+          {onDismissBillingReason && (
+            <button
+              type="button"
+              onClick={onDismissBillingReason}
+              className="shrink-0 rounded-lg px-2 py-1 text-white/60 hover:text-white cursor-pointer"
+            >
+              Ocultar
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && (
           <div
             role="alert"
             className="flex items-start gap-2.5 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs text-rose-300"
@@ -567,6 +638,7 @@ export function BillingPanel({
 
               {/* CTA Principal de alto contraste estilo Apple en una sola línea */}
               <div className="space-y-3 pt-1">
+                {sandboxPayerField}
                 {paymentUrl ? (
                   <a
                     href={paymentUrl}
@@ -581,7 +653,7 @@ export function BillingPanel({
                 ) : (
                   <button
                     type="button"
-                    disabled={busy || !canCheckout || !selected || Boolean(pending)}
+                    disabled={busy || !canCheckout || !selected || Boolean(pending) || testPayerMissing}
                     onClick={() => checkout()}
                     className="flex h-12 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-white hover:bg-neutral-200 active:scale-[0.99] px-4 text-sm font-medium text-[#050608] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0A0C] disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
                   >
@@ -764,34 +836,6 @@ export function BillingPanel({
             </details>
           )}
 
-          {catalog?.mode === 'test' && summary?.canManage && (
-            <details className="group py-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-[#8E929B] hover:text-[#F5F5F7] transition-colors [&::-webkit-details-marker]:hidden">
-                <span>Opciones de prueba (Sandbox)</span>
-                <ChevronDown
-                  size={14}
-                  strokeWidth={1.5}
-                  className="text-white/40 transition-transform duration-150 group-open:rotate-180"
-                />
-              </summary>
-              <div className="mt-3 space-y-2">
-                <label className="block text-xs text-[#D2D6E2]">
-                  Correo del comprador de prueba
-                  <input
-                    type="email"
-                    value={payerEmail}
-                    onChange={(event) => setPayerEmail(event.target.value)}
-                    placeholder="test_user_...@testuser.com"
-                    className="mt-1.5 block h-9 w-full max-w-md rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 text-xs text-[#F5F5F7] placeholder:text-[#8E929B]/70 focus:border-white/30 focus:outline-none"
-                  />
-                </label>
-                <p className="text-[11px] text-[#8E929B]">
-                  Opcional: sobrescribe el correo del comprador al preparar un pago en el sandbox de
-                  Mercado Pago.
-                </p>
-              </div>
-            </details>
-          )}
         <CommercialDocumentsPanel authenticated compact />
       </div>
       </section>
@@ -828,7 +872,7 @@ export function BillingPanel({
           </p>
         </div>
 
-        <button
+        {(!hasPendingPayment || paid) && <button
           type="button"
           aria-label="Actualizar pagos y saldo"
           title="Actualizar pagos y saldo"
@@ -837,8 +881,33 @@ export function BillingPanel({
           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-40 transition-colors cursor-pointer shrink-0"
         >
           <RefreshCw size={13} strokeWidth={1.5} className={busy ? 'animate-spin' : ''} />
-        </button>
+        </button>}
       </div>
+
+      {billingReason && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/30 bg-[#141923]/85 px-4 py-3 text-xs text-amber-100"
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            <AlertCircle size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-amber-400" />
+            <div className="space-y-0.5">
+              <p className="font-medium text-amber-300">Motivo por el que se abrió esta sección</p>
+              <p className="text-white/85 leading-relaxed">{billingReason}</p>
+            </div>
+          </div>
+          {onDismissBillingReason && (
+            <button
+              type="button"
+              onClick={onDismissBillingReason}
+              className="shrink-0 rounded-lg px-2 py-1 text-white/60 hover:text-white cursor-pointer"
+            >
+              Ocultar
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div
@@ -961,8 +1030,23 @@ export function BillingPanel({
                   }`
                 : catalog?.enforced === false
                   ? 'Los límites comerciales se aplican al activar las pruebas de pagos o desplegar en producción.'
-                  : 'General incluye 30 créditos de bienvenida, una sola vez. Desarrollador y Legal requieren Pro o Enterprise.'}
+                  : 'General incluye 30 créditos de bienvenida para probar análisis en vivo. Cuando se agoten, puedes recargar un paquete de 200 créditos o elegir un plan mensual.'}
           </p>
+          {!paid && summary.workspaceAccess && summary.canManage && !hasPendingPayment && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <span className="text-xs text-zinc-300">
+                ¿Solo necesitas más créditos sin suscripción mensual? Recarga 200 créditos por {money(29900)} COP (vigencia 12 meses).
+              </span>
+              <button
+                type="button"
+                disabled={busy || !canCheckout}
+                onClick={() => checkout(true)}
+                className="h-9 rounded-lg border border-white/[0.12] bg-[#141923]/85 hover:border-[#2F6FED]/60 px-3.5 text-xs font-medium text-white transition-colors cursor-pointer disabled:opacity-40"
+              >
+                Recargar 200 créditos
+              </button>
+            </div>
+          )}
           {summary.inGracePeriod && (
             <div
               role="status"
@@ -986,126 +1070,169 @@ export function BillingPanel({
         </div>
       )}
 
-      {!paid && (
-        <div className="space-y-4">
-          <div
-            className="inline-flex items-center rounded-full bg-white/[0.04] border border-white/[0.08] p-1"
-            role="group"
-            aria-label="Período de pago"
-          >
-            {[
-              ['MONTHLY', 'Mensual', null],
-              ['ANNUAL', 'Anual', '2 meses de ahorro'],
-            ].map(([value, label, badge]) => {
-              const active = interval === value;
+      {paid && onOpenProfiles && activeProfileLabel === 'General' && (
+        <button type="button" onClick={onOpenProfiles} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-white underline decoration-white/30 underline-offset-4 hover:decoration-white">
+          Elegir perfil de trabajo <ArrowUpRight size={15} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      )}
+
+      {!paid && summary && (
+        <div className="space-y-5" aria-label="Contratar un plan">
+          <ol aria-label="Pasos del pago" className="grid grid-cols-1 gap-2 border-b border-white/[0.07] pb-4 sm:grid-cols-3">
+            {['Elige tu plan', 'Abre Mercado Pago', 'Verifica la activación'].map((label, index) => {
+              const current = paymentStep === index;
               return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setInterval(value)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                    active ? 'bg-white/[0.12] text-[#F5F5F7]' : 'text-[#8E929B] hover:text-[#F5F5F7]'
-                  }`}
-                >
-                  <span>{label}</span>
-                  {badge && (
-                    <span className="rounded-full bg-white/[0.08] text-white/90 border border-white/10 px-2 py-0.5 text-[10px] font-normal">
-                      {badge}
-                    </span>
-                  )}
-                </button>
+                <li key={label} aria-current={current ? 'step' : undefined} className={`flex items-center gap-2 text-sm ${current ? 'font-semibold text-white' : 'text-zinc-400'}`}>
+                  <span aria-hidden={index < paymentStep ? undefined : true} className={`grid size-6 shrink-0 place-items-center rounded-full border text-xs ${current ? 'border-[#2F6FED]/70 bg-[#2F6FED]/15 text-white' : 'border-white/[0.08]'}`}>
+                    {index < paymentStep ? <><Check size={14} strokeWidth={1.75} aria-hidden="true" /><span className="sr-only">Completado.</span></> : index + 1}
+                  </span>
+                  {label}
+                </li>
               );
             })}
-          </div>
+          </ol>
 
-          <div
-            role="radiogroup"
-            aria-label="Plan de suscripción"
-            className="grid grid-cols-1 sm:grid-cols-2 gap-3.5"
-          >
-            {catalog?.plans
-              ?.filter((item) => item.plan_code !== 'FREE' && item.interval === interval)
-              .map((item) => {
-                const isSelected = plan === item.plan_code;
-                return (
-                  <button
-                    key={item.plan_code}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    onClick={() => setPlan(item.plan_code)}
-                    className={`flex flex-col justify-between gap-4 rounded-2xl border p-5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 cursor-pointer ${
-                      isSelected
-                        ? 'bg-white/[0.07] border-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12)]'
-                        : 'bg-white/[0.03] border-white/[0.08] hover:border-white/[0.14] hover:bg-white/[0.05]'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="text-[14px] font-medium text-[#F5F5F7]">{item.name}</span>
-                        <span className="mt-1 block text-xs text-[#8E929B]">
-                          {item.credits} créditos mensuales · {item.max_users}{' '}
-                          {item.max_users === 1 ? 'usuario' : 'usuarios'} · {item.max_devices}{' '}
-                          equipos
-                        </span>
-                      </div>
-                      <span
-                        aria-hidden="true"
-                        className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                          isSelected
-                            ? 'border-white bg-white text-[#050608]'
-                            : 'border-white/20 bg-transparent'
+          {hasPendingPayment ? (
+            <section aria-label="Estado del pago" className="space-y-4 rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-5 sm:p-6">
+              <div>
+                <h3 className="text-lg font-semibold text-white" role="status">
+                  {paymentOpened ? '¿Ya completaste el pago?' : paymentUrl ? 'Tu pago está listo para continuar' : 'Pago pendiente de confirmación'}
+                </h3>
+                {preparedSelection && <p className="mt-1 text-sm font-medium text-white">{preparedSelection.offer.name} · {preparedSelection.cycle} · {money(preparedSelection.offer.price)} {preparedSelection.offer.currency || 'COP'}</p>}
+                <p className="mt-1 text-sm text-zinc-300">
+                  {paymentUrl && !paymentOpened ? 'Mercado Pago se abre fuera de OMEGA. Después de pagar, vuelve aquí y verifica tu pago.' : 'Verifica el estado para saber si tu suscripción ya está activa.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {paymentUrl && (
+                  <a href={paymentUrl} target="_blank" rel="noopener noreferrer" onClick={handleOpenMercadoPago}
+                    className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 ${paymentOpened ? 'underline underline-offset-4' : 'bg-[#2F6FED] hover:brightness-110'}`}>
+                    {paymentOpened ? 'Volver a Mercado Pago' : 'Abrir Mercado Pago'} <ExternalLink size={15} strokeWidth={1.75} aria-hidden="true" />
+                  </a>
+                )}
+                <button type="button" disabled={busy} onClick={handleRefreshStatus} className={`inline-flex min-h-12 items-center gap-2 rounded-lg px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 disabled:opacity-50 ${paymentOpened || !paymentUrl ? 'bg-[#2F6FED] hover:brightness-110' : 'underline decoration-white/30 underline-offset-4 hover:decoration-white'}`}>
+                  <RefreshCw size={15} strokeWidth={1.75} aria-hidden="true" /> Verificar mi pago
+                </button>
+              </div>
+            </section>
+          ) : (
+            <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(15rem,0.55fr)]">
+              <div className="min-w-0 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Compara los planes</h3>
+                  <p className="mt-1 text-sm text-zinc-300">Ambos incluyen General, Desarrollador y Legal.</p>
+                </div>
+                <div
+                  className="inline-flex items-center rounded-lg border border-white/[0.07] bg-[#141923]/75 p-1"
+                  role="group"
+                  aria-label="Período de pago"
+                >
+                  {[
+                    ['MONTHLY', 'Mensual'],
+                    ['ANNUAL', 'Anual'],
+                  ].map(([value, label]) => {
+                    const active = interval === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={busy}
+                        onClick={() => setInterval(value)}
+                        className={`min-h-9 rounded-md border-b-2 px-3.5 text-sm font-medium transition-colors focus-visible:outline-2 disabled:opacity-60 ${
+                          active ? 'border-[#2F6FED] bg-white/[0.06] text-white' : 'border-transparent text-zinc-400 hover:text-white'
                         }`}
                       >
-                        {isSelected && <Check size={10} strokeWidth={2.5} />}
-                      </span>
-                    </div>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                    <div className="flex items-baseline justify-between gap-2 pt-3 border-t border-white/[0.06]">
-                      <PriceDisplay value={item.price} size="lg" />
-                      <span className="text-[11px] text-[#8E929B]">
-                        {interval === 'ANNUAL' ? '/año, anticipado' : '/mes'}
-                      </span>
+                <div
+                  role="radiogroup"
+                  aria-label="Plan de suscripción"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3.5"
+                >
+                  {catalog?.plans
+                    ?.filter((item) => item.plan_code !== 'FREE' && item.interval === interval)
+                    .map((item) => {
+                      const isSelected = plan === item.plan_code;
+                      return (
+                        <button
+                          key={item.plan_code}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          disabled={busy}
+                          onClick={() => setPlan(item.plan_code)}
+                          className={`flex min-w-0 flex-col gap-4 rounded-2xl border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 2xl:p-5 ${
+                            isSelected
+                              ? 'border-[#2F6FED] bg-[#141923]/75'
+                              : 'border-white/[0.07] bg-[#0F131B]/85 hover:border-white/20'
+                          }`}
+                        >
+                          <span className="block">
+                            <span className="text-lg font-semibold text-white">{item.name}</span>
+                            <span className="mt-1 block text-sm text-zinc-300">{item.max_users === 1 ? 'Para una persona' : 'Para equipos'}</span>
+                          </span>
+                          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <PriceDisplay value={item.price} size="lg" />
+                            <span className="text-xs text-zinc-400">{interval === 'ANNUAL' ? 'COP al año' : 'COP al mes'}</span>
+                          </span>
+                          <span className="w-full space-y-2 border-t border-white/[0.06] pt-3 text-sm text-zinc-200">
+                            <span className="flex items-center gap-2"><Coins size={15} strokeWidth={1.75} aria-hidden="true" /> <strong className="font-medium">{formatCopDigits(item.credits)} créditos al mes</strong></span>
+                            <span className="flex items-center gap-2"><Users size={15} strokeWidth={1.75} aria-hidden="true" /> {item.max_users} {item.max_users === 1 ? 'usuario' : 'usuarios'}</span>
+                            <span className="flex items-center gap-2"><Laptop size={15} strokeWidth={1.75} aria-hidden="true" /> {item.max_devices} {item.max_devices === 1 ? 'equipo' : 'equipos'}</span>
+                          </span>
+                          <span className="mt-auto inline-flex items-center gap-2 text-sm font-medium text-white">
+                            {isSelected ? <><Check size={15} strokeWidth={1.75} aria-hidden="true" /> Seleccionado</> : `Elegir ${item.name}`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+              <aside aria-label="Resumen de tu elección" className="min-w-0 space-y-4 rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-4 sm:p-5 xl:sticky xl:top-4">
+                {selected ? (
+                  <div aria-live="polite" className="space-y-3">
+                    <div>
+                      <p className="text-xs text-zinc-400">Tu elección</p>
+                      <h3 className="mt-1 text-xl font-semibold text-white">{selected.name} · {cycleLabel}</h3>
+                      <p className="mt-1 text-sm text-zinc-300">{formatCopDigits(selected.credits)} créditos cada mes</p>
                     </div>
+                    <div className="space-y-1 border-t border-white/[0.06] pt-4">
+                      <p className="text-sm text-zinc-300">Total del primer cobro</p>
+                      <p className="flex flex-wrap items-baseline gap-2"><PriceDisplay value={selected.price} size="xl" /> <span className="text-xs text-zinc-400">{selected.currency || 'COP'}</span></p>
+                      <p className="text-xs text-zinc-400">{interval === 'ANNUAL' ? 'Un cobro por año. Los créditos se entregan cada mes.' : 'Un cobro por mes.'}</p>
+                      {annualSavings > 0 && <p className="text-xs text-zinc-300">Ahorras {money(annualSavings)} frente a 12 pagos mensuales.</p>}
+                    </div>
+                  </div>
+                ) : <p role="status" className="text-sm text-zinc-300">{catalog ? 'No hay una oferta disponible para esta selección.' : 'Cargando planes…'}</p>}
+                <div className="space-y-3">
+                  {sandboxPayerField}
+                  <button
+                    type="button"
+                    disabled={busy || !canCheckout || !selected || testPayerMissing}
+                    onClick={() => checkout()}
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#2F6FED] px-3 py-2 text-center text-sm font-semibold text-white transition-colors hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span>
+                      {busy
+                        ? 'Preparando pago…'
+                        : 'Preparar pago en Mercado Pago'}
+                    </span>
+                    {!busy && <ArrowUpRight size={14} strokeWidth={1.8} />}
                   </button>
-                );
-              })}
-          </div>
-
-          <p className="text-xs text-[#8E929B]">
-            Pro y Enterprise habilitan los tres perfiles y comparten una única bolsa de créditos. El
-            plan anual entrega créditos cada mes.
-          </p>
-
-          {!pending && (
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                type="button"
-                disabled={busy || !canCheckout || !selected}
-                onClick={() => checkout()}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-white hover:bg-neutral-200 px-4 text-xs font-medium text-[#050608] active:scale-[0.98] transition-all disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <span>
-                  {busy
-                    ? 'Preparando pago…'
-                    : selected
-                      ? `Continuar con Mercado Pago · ${money(selected.price)}`
-                      : `Continuar con ${planName(plan)}`}
-                </span>
-                {!busy && <ArrowUpRight size={14} strokeWidth={1.8} />}
-              </button>
-              {catalog?.mode === 'disabled' && (
-                <span className="text-xs text-[#8E929B]">
-                  Vista de consulta — el cobro se habilita al configurar Mercado Pago.
-                </span>
-              )}
+                  {canCheckout && <p className="text-xs text-zinc-400">En el siguiente paso abrirás Mercado Pago para completar el cobro.</p>}
+                </div>
+              </aside>
             </div>
           )}
         </div>
       )}
 
-      {paymentUrl && (
+      {paid && paymentUrl && (
         <a
           href={paymentUrl}
           target="_blank"
@@ -1124,7 +1251,7 @@ export function BillingPanel({
           suscripción.
         </p>
       )}
-      {pending?.status === 'CREATING' && (
+      {paid && pending?.status === 'CREATING' && (
         <p role="status" className="text-xs text-white/75">
           La creación del pago está pendiente de conciliación. No vuelvas a pagar hasta confirmar su
           estado.
@@ -1132,9 +1259,23 @@ export function BillingPanel({
       )}
 
       <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+        <section className="space-y-3 py-4" aria-labelledby="billing-credits-title">
+          <h3 id="billing-credits-title" className="text-base font-semibold text-white">Cómo funcionan los créditos</h3>
+          <p className="text-sm text-zinc-300">Los créditos se descuentan al usar funciones de análisis. Los perfiles del espacio comparten el mismo saldo.</p>
+          {creditExamples.length > 0 && (
+            <dl className="grid gap-3 sm:grid-cols-3">
+              {creditExamples.map(op => (
+                <div key={op.code} className="border-l border-white/[0.08] pl-3">
+                  <dt className="text-sm font-medium text-white">{op.label}</dt>
+                  <dd className="mt-1 text-xs text-zinc-300">{op.code === 'LEGAL_INDEX' ? op.scope : `${op.credits} ${Number(op.credits) === 1 ? 'crédito' : 'créditos'} · ${op.scope}`}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </section>
         <details className="group py-3.5">
           <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-[#8E929B] hover:text-[#F5F5F7] transition-colors [&::-webkit-details-marker]:hidden">
-            <span>Consumo por función</span>
+            <span>Ver todos los costos en créditos</span>
             <ChevronDown
               size={14}
               strokeWidth={1.5}
@@ -1180,20 +1321,7 @@ export function BillingPanel({
               />
             </summary>
             <div className="mt-4 space-y-4">
-              {catalog?.mode === 'test' && (
-                <label className="block text-xs text-[#D2D6E2]">
-                  Correo del comprador de prueba
-                  <input
-                    type="email"
-                    value={payerEmail}
-                    onChange={(event) => setPayerEmail(event.target.value)}
-                    placeholder="comprador_test@testuser.com"
-                    className="mt-1.5 block h-9 w-full max-w-sm rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-xs text-white placeholder:text-[#8E929B] focus:border-white/30 focus:outline-none"
-                  />
-                </label>
-              )}
-
-              {paid && (
+              {(paid || summary.workspaceAccess) && (
                 <div className="space-y-2">
                   <p className="text-xs text-[#8E929B]">
                     Recarga: 200 créditos por {money(29900)}. Vigencia de 12 meses; no renueva

@@ -244,6 +244,9 @@ function buildFriendlyError(status, payload, fallbackMessage) {
   if (status === 401) {
     return detail || 'Se requiere iniciar sesión en tu tenant OMEGA para acceder a esta función.';
   }
+  if (status === 402) {
+    return detail || 'No tienes créditos suficientes o esta función requiere un plan activo. Revisa Mi plan y créditos.';
+  }
   if (status === 403) {
     return detail || 'Tu rol actual no tiene permisos suficientes para ejecutar esta operación.';
   }
@@ -260,6 +263,12 @@ function buildFriendlyError(status, payload, fallbackMessage) {
     return detail || 'Demasiados intentos fallidos. Espera unos minutos antes de volver a intentarlo.';
   }
   return detail || payload?.title || fallbackMessage || `Error HTTP ${status}`;
+}
+
+export function openBillingPlans(reason = '') {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('omega:billing-required', { detail: { reason: String(reason || '').trim() } }));
+  }
 }
 
 export async function apiFetch(path, { method = 'GET', body, headers = {}, skipAuth = false, rawUrl = false, responseType = 'json', creditLimit } = {}) {
@@ -328,13 +337,13 @@ export async function apiFetch(path, { method = 'GET', body, headers = {}, skipA
       if (!accepted) throw Object.assign(new Error('Operación cancelada. No se consumieron créditos.'), { cancelled: true });
       return apiFetch(path, { method, body, headers, skipAuth, rawUrl, responseType, creditLimit: Number(quote[1]) });
     }
-    if (response.status === 402 && typeof window !== 'undefined') window.dispatchEvent(new Event('omega:billing-required'));
     if (response.status === 401 && !skipAuth && session && inMemoryAuthSession === session) {
       clearAuthSession();
       emitAuthRequired(path);
     }
     const err = new Error(buildFriendlyError(response.status, parsed));
     err.status = response.status;
+    err.billingRequired = response.status === 402;
     err.requiresAuth = response.status === 401;
     err.problem = parsed;
     throw err;
@@ -878,6 +887,18 @@ export async function getGitHubIntegrationStatus() {
 
 export async function createGitHubLinkState() {
   return apiFetch('/integrations/github/state', { method: 'POST', body: {} });
+}
+
+export function startGitHubConnection() {
+  return apiFetch('/integrations/github/connect', { method: 'POST', body: {} });
+}
+
+export function authorizeGitHubConnection(state, installationId) {
+  return apiFetch('/integrations/github/connect/authorize', { method: 'POST', body: { state, installationId } });
+}
+
+export function completeGitHubConnection(state, installationId, code) {
+  return apiFetch('/integrations/github/connect/complete', { method: 'POST', body: { state, installationId, code } });
 }
 
 export async function linkGitHubInstallation({ state, installationId, userAccessToken, accountLogin }) {

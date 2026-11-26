@@ -45,12 +45,13 @@ public class BillingService {
 
     public Map<String,Object> checkout(OmegaPrincipal actor, String plan, String interval, boolean topup, String payerEmail) {
         access.requireBillingManager(actor); mp.requireEnabled();
+        String subscriptionPayer = topup ? null : mp.subscriptionPayerEmail(actor.email(), payerEmail);
         UUID billingTenant = resolver.resolveBillingTenantId(actor.tenantId());
         mp.validateSeller();
         credits.subscription(billingTenant);
         Map<String,Object> offer;
         if (topup) {
-            credits.requirePaid(billingTenant);
+            credits.requireWorkspaceAccess(billingTenant);
             offer = Map.of("price", new BigDecimal("29900"), "credits", 200, "name", "200 créditos OMEGA");
         } else {
             if (plan==null || interval==null || !Set.of("PRO","ENTERPRISE").contains(plan) || !Set.of("MONTHLY","ANNUAL").contains(interval))
@@ -77,7 +78,7 @@ public class BillingService {
                         "back_urls",Map.of("success",mp.returnUrl,"pending",mp.returnUrl,"failure",mp.returnUrl)),id);
             } else {
                 response = mp.post("/preapproval",Map.of("reason","OMEGA "+offer.get("name"),"external_reference",id.toString(),
-                        "payer_email",payerEmail == null || payerEmail.isBlank() ? actor.email() : payerEmail,
+                        "payer_email",subscriptionPayer,
                         "auto_recurring",Map.of("frequency","ANNUAL".equals(interval)?12:1,"frequency_type","months","transaction_amount",offer.get("price"),"currency_id","COP"),
                         "back_url",mp.returnUrl,"status","pending"),id);
             }

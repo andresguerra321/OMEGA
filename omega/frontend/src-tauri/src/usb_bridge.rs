@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -232,11 +233,41 @@ pub fn parse_adb_devices(raw: &str) -> Vec<AdbDeviceEntry> {
         .collect()
 }
 
+fn windows_file_transfer_devices() -> Vec<String> {
+    let script = r#"
+        $ErrorActionPreference = 'Stop'
+        [Console]::OutputEncoding = [Text.Encoding]::UTF8
+        $devices = @(Get-PnpDevice -PresentOnly -Class WPD | Where-Object {
+            $_.Status -eq 'OK' -and $_.InstanceId -like 'USB\*'
+        } | Select-Object -ExpandProperty FriendlyName)
+        ConvertTo-Json -InputObject $devices -Compress
+    "#;
+    let Ok((true, stdout, _)) = run_cmd(
+        "powershell.exe",
+        &["-NoProfile", "-NonInteractive", "-Command", script],
+    ) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&stdout).unwrap_or_default()
+}
+
 #[tauri::command]
-pub fn check_adb_status(app: tauri::AppHandle, custom_path: Option<String>) -> Value {
+pub async fn check_adb_status(
+    app: tauri::AppHandle,
+    custom_path: Option<String>,
+    wait_for_usb: Option<bool>,
+) -> Result<Value, String> {
     let custom = custom_path.unwrap_or_default();
     let app_dir = app.path().app_data_dir().ok();
-    let adb_bin = match resolve_adb_binary(&custom, app_dir.as_deref()) {
+    tauri::async_runtime::spawn_blocking(move || {
+        adb_status(&custom, app_dir.as_deref(), wait_for_usb.unwrap_or(false))
+    })
+    .await
+    .map_err(|_| "No se pudo consultar la conexión USB de Android.".to_string())
+}
+
+fn adb_status(custom: &str, app_dir: Option<&Path>, wait_for_usb: bool) -> Value {
+    let adb_bin = match resolve_adb_binary(custom, app_dir) {
         Ok(Some(bin)) => bin,
         Ok(None) => {
             return json!({
@@ -260,8 +291,20 @@ pub fn check_adb_status(app: tauri::AppHandle, custom_path: Option<String>) -> V
         }
     };
 
-    match run_cmd(&adb_bin, &["devices", "-l"]) {
-        Ok((_, stdout, _)) => {
+    let read_devices = || run_cmd(&adb_bin, &["devices", "-l"]);
+    let mut response = read_devices();
+    if wait_for_usb {
+        for _ in 0..3 {
+            let Ok((true, stdout, _)) = &response else { break; };
+            if !parse_adb_devices(stdout).is_empty() {
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+            response = read_devices();
+        }
+    }
+    match response {
+        Ok((true, stdout, _)) => {
             let devices = parse_adb_devices(&stdout);
             if let Some(auth) = devices.iter().find(|d| d.state == "device") {
                 json!({
@@ -284,24 +327,42 @@ pub fn check_adb_status(app: tauri::AppHandle, custom_path: Option<String>) -> V
                 } else if offline {
                     (
                         "OFFLINE",
-                        "El cable respondió lento. Desconéctalo, elige \"Transferencia de archivos\" en tu teléfono y vuelve a enchufar.",
+                        "El teléfono apareció sin conexión. Desconecta y vuelve a conectar el cable con el teléfono desbloqueado.",
                     )
                 } else {
                     (
                         "NO_DEVICE",
-                        "Computadora lista. Ahora enchufa tu teléfono Android con el cable USB (como en la imagen 2).",
+                        "No se detectó un Android. Conecta un cable de datos y comprueba que la depuración USB esté activada.",
                     )
                 };
-                json!({
+                let mut status = json!({
                     "available": true,
                     "connected": false,
                     "status_code": status_code,
                     "adb_path": adb_bin,
                     "devices": devices,
                     "reason": reason
-                })
+                });
+                if cfg!(target_os = "windows") && wait_for_usb && status_code == "NO_DEVICE" {
+                    let devices = windows_file_transfer_devices();
+                    if !devices.is_empty() {
+                        status["windows_file_transfer"] = json!(true);
+                        if devices.len() == 1 {
+                            status["windows_device_name"] = json!(devices[0]);
+                        }
+                    }
+                }
+                status
             }
         }
+        Ok((false, _, _)) => json!({
+            "available": true,
+            "connected": false,
+            "status_code": "ADB_ERROR",
+            "adb_path": adb_bin,
+            "devices": [],
+            "reason": "El conector Android no pudo comprobar los dispositivos USB."
+        }),
         Err(err) => json!({
             "available": false,
             "connected": false,
@@ -544,6 +605,21 @@ pub fn collect_device_snapshot(
         return Err("ADB_NOT_FOUND".to_string());
     };
 
+    let connection_args = if serial_clean.is_empty() {
+        vec!["get-state"]
+    } else {
+        vec!["-s", serial_clean.as_str(), "get-state"]
+    };
+    let check_connection = || {
+        let (ok, state, _) = run_cmd(&adb_bin, &connection_args)?;
+        if ok && state.trim() == "device" {
+            Ok(())
+        } else {
+            Err("El Android dejó de responder por USB. Reconecta el cable con el teléfono desbloqueado y vuelve a autorizarlo si te lo pide.".to_string())
+        }
+    };
+    check_connection()?;
+
     let queries: &[(&str, &[&str], &str)] = &[
         ("model", &["shell", "getprop", "ro.product.model"], "Desconocido"),
         ("manufacturer", &["shell", "getprop", "ro.product.manufacturer"], ""),
@@ -657,6 +733,7 @@ pub fn collect_device_snapshot(
         String::new()
     };
 
+    check_connection()?;
     Ok(json!({
         "platform": "android",
         "device": {
@@ -752,6 +829,7 @@ fn has_apple_mobile_device_support() -> bool {
     ]
     .iter()
     .any(|d| Path::new(d).exists())
+        || is_runnable_binary("reg.exe", &["query", r"HKLM\SYSTEM\CurrentControlSet\Services\Apple Mobile Device Service"])
 }
 
 struct IosTool {
@@ -761,7 +839,203 @@ struct IosTool {
     has_crash: bool,
 }
 
-fn resolve_ios_tools() -> Option<IosTool> {
+const IOS_CONNECTOR_PACKAGE: &str = "pymobiledevice3==11.65.0";
+static IOS_CONNECTOR_INSTALL: Mutex<()> = Mutex::new(());
+
+fn ios_environment(app_dir: &Path) -> PathBuf {
+    app_dir.join("tools").join("iphone-connector")
+}
+
+fn ios_environment_python(environment: &Path) -> PathBuf {
+    environment.join(if cfg!(target_os = "windows") { "Scripts/python.exe" } else { "bin/python" })
+}
+
+fn portable_python_binary(app_dir: &Path) -> PathBuf {
+    let base = app_dir.join("tools").join("python-runtime");
+    if cfg!(target_os = "windows") {
+        base.join("tools").join("python.exe")
+    } else {
+        base.join("python").join("bin").join("python3")
+    }
+}
+
+fn ensure_portable_python(app_dir: &Path) -> Result<String, String> {
+    let target_bin = portable_python_binary(app_dir);
+    if target_bin.is_file() {
+        let bin_str = target_bin.to_string_lossy().to_string();
+        if is_runnable_binary(&bin_str, &["-I", "-c", "import sys, venv; sys.exit(sys.version_info < (3, 9))"]) {
+            return Ok(bin_str);
+        }
+    }
+
+    let tools_dir = app_dir.join("tools");
+    fs::create_dir_all(&tools_dir)
+        .map_err(|e| format!("No se pudo preparar la carpeta local de herramientas: {e}"))?;
+    let runtime_dir = tools_dir.join("python-runtime");
+    let _ = fs::remove_dir_all(&runtime_dir);
+    fs::create_dir_all(&runtime_dir)
+        .map_err(|e| format!("No se pudo crear la carpeta del motor Python local: {e}"))?;
+
+    if cfg!(target_os = "windows") {
+        let pkg_url = if cfg!(target_arch = "aarch64") {
+            "https://www.nuget.org/api/v2/package/pythonarm64/3.12.8"
+        } else {
+            "https://www.nuget.org/api/v2/package/python/3.12.8"
+        };
+        let tmp_zip = tools_dir.join("python-runtime-tmp.zip");
+        let tmp_zip_str = tmp_zip.to_string_lossy().to_string();
+        let runtime_dir_str = runtime_dir.to_string_lossy().to_string();
+        let script = format!(
+            "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing; Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
+            pkg_url,
+            tmp_zip_str.replace('\'', "''"),
+            tmp_zip_str.replace('\'', "''"),
+            runtime_dir_str.replace('\'', "''")
+        );
+        let res = run_cmd(
+            "powershell.exe",
+            &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &script],
+        );
+        let _ = fs::remove_file(&tmp_zip);
+        match res {
+            Ok((true, _, _)) => {}
+            Ok((false, _, stderr)) => {
+                return Err(format!("No se pudo descargar el motor automático para iPhone: {stderr}"));
+            }
+            Err(err) => return Err(err),
+        }
+    } else {
+        let triple = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            "aarch64-apple-darwin"
+        } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+            "x86_64-apple-darwin"
+        } else {
+            "x86_64-unknown-linux-gnu"
+        };
+        let tar_url = format!(
+            "https://github.com/astral-sh/python-build-standalone/releases/download/20241206/cpython-3.12.8%2B20241206-{triple}-install_only_stripped.tar.gz"
+        );
+        let tmp_tar = tools_dir.join("python-runtime-tmp.tar.gz");
+        let tmp_tar_str = tmp_tar.to_string_lossy().to_string();
+        let runtime_dir_str = runtime_dir.to_string_lossy().to_string();
+        let res = run_cmd("curl", &["-fsSL", &tar_url, "-o", &tmp_tar_str]).and_then(|(ok, _, err)| {
+            if !ok {
+                return Err(format!("Fallo descargando motor Python local: {err}"));
+            }
+            run_cmd("tar", &["-xzf", &tmp_tar_str, "-C", &runtime_dir_str])
+        });
+        let _ = fs::remove_file(&tmp_tar);
+        match res {
+            Ok((true, _, _)) => {}
+            Ok((false, _, stderr)) => {
+                return Err(format!("No se pudo extraer el motor automático para iPhone: {stderr}"));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    let bin_str = target_bin.to_string_lossy().to_string();
+    if !target_bin.is_file()
+        || !is_runnable_binary(&bin_str, &["-I", "-c", "import sys, venv; sys.exit(sys.version_info < (3, 9))"])
+    {
+        return Err("El motor automático descargado no pudo iniciarse en este equipo.".to_string());
+    }
+    Ok(bin_str)
+}
+
+fn pymobiledevice_tool(python: &str) -> Option<IosTool> {
+    is_runnable_binary(python, &["-I", "-m", "pymobiledevice3", "--help"]).then(|| IosTool {
+        kind: "pymobiledevice3",
+        cmd: python.to_string(),
+        prefix: vec!["-I".into(), "-m".into(), "pymobiledevice3".into()],
+        has_crash: true,
+    })
+}
+
+#[tauri::command]
+pub async fn install_ios_connector(app: tauri::AppHandle) -> Result<Value, String> {
+    let app_dir = app.path().app_data_dir().map_err(|_| "No se pudo abrir la carpeta de herramientas de OMEGA.")?;
+    tauri::async_runtime::spawn_blocking(move || install_ios_connector_at(&app_dir))
+        .await
+        .map_err(|_| "No se pudo completar la instalación del conector.".to_string())
+}
+
+fn install_ios_connector_at(app_dir: &Path) -> Value {
+    let Ok(_lock) = IOS_CONNECTOR_INSTALL.try_lock() else {
+        return json!({"ok": false, "error": "Ya se está instalando el conector para iPhone."});
+    };
+    if resolve_ios_tools(Some(app_dir)).is_some() {
+        return json!({"ok": true});
+    }
+    let environment = ios_environment(app_dir);
+    let venv_python = ios_environment_python(&environment);
+    let executable = venv_python.to_string_lossy().to_string();
+    if !is_runnable_binary(&executable, &["-I", "-m", "pip", "--version"]) {
+        let system_python = ["py", "python3", "python"]
+            .into_iter()
+            .find(|python| {
+                is_runnable_binary(python, &["-I", "-c", "import sys, venv; sys.exit(sys.version_info < (3, 9))"])
+            })
+            .map(str::to_string);
+
+        let mut venv_ready = false;
+        if let Some(ref sys_py) = system_python {
+            venv_ready = is_runnable_binary(sys_py, &["-I", "-m", "venv", &environment.to_string_lossy()]);
+        }
+
+        if !venv_ready {
+            let _ = fs::remove_dir_all(&environment);
+            let portable_py = match ensure_portable_python(app_dir) {
+                Ok(py) => py,
+                Err(_) => {
+                    return json!({
+                        "ok": false,
+                        "code": "PYTHON_REQUIRED",
+                        "error": "No se pudo descargar automáticamente el entorno base para iPhone. Comprueba tu conexión a Internet o instala Python 3.9+."
+                    });
+                }
+            };
+            if !is_runnable_binary(&portable_py, &["-I", "-m", "venv", &environment.to_string_lossy()]) {
+                return json!({
+                    "ok": false,
+                    "error": "No se pudo preparar la carpeta aislada del conector para iPhone."
+                });
+            }
+        }
+    }
+    if !is_runnable_binary(&executable, &[
+        "-I", "-c", "import os, runpy; os.environ['PIP_CONFIG_FILE'] = os.devnull; runpy.run_module('pip', run_name='__main__')",
+        "--isolated", "--disable-pip-version-check", "install",
+        "--no-input", "--only-binary=:all:", "--index-url", "https://pypi.org/simple", IOS_CONNECTOR_PACKAGE,
+    ]) {
+        return json!({"ok": false, "error": "No se pudo descargar o instalar el conector. Comprueba tu conexión a Internet e inténtalo de nuevo."});
+    }
+    if pymobiledevice_tool(&executable).is_none() {
+        return json!({"ok": false, "error": "El conector se descargó, pero no pudo iniciarse. Vuelve a intentar la instalación."});
+    }
+    json!({"ok": true})
+}
+
+#[tauri::command]
+pub fn open_ios_prerequisite(app: tauri::AppHandle, prerequisite: String) -> Result<(), String> {
+    let url = match prerequisite.as_str() {
+        "python" => "https://www.python.org/downloads/",
+        "apple" => "https://www.apple.com/itunes/download/win64",
+        _ => return Err("Requisito de iPhone desconocido.".into()),
+    };
+    #[allow(deprecated)]
+    app.shell().open(url, None).map_err(|_| "No se pudo abrir la página de descarga.".into())
+}
+
+fn resolve_ios_tools(app_dir: Option<&Path>) -> Option<IosTool> {
+    if let Some(app_dir) = app_dir {
+        let app_python = ios_environment_python(&ios_environment(app_dir));
+        if app_python.is_file() {
+            if let Some(tool) = pymobiledevice_tool(&app_python.to_string_lossy()) {
+                return Some(tool);
+            }
+        }
+    }
     if is_runnable_binary("idevice_id", &["--version"]) {
         let has_crash = is_runnable_binary("idevicecrashreport", &["--help"]);
         return Some(IosTool {
@@ -957,10 +1231,11 @@ fn parse_key_value_lines(raw: &str) -> HashMap<String, String> {
 }
 
 #[tauri::command]
-pub fn check_ios_status() -> Value {
+pub fn check_ios_status(app: tauri::AppHandle) -> Value {
     let local_backups = discover_local_ios_backups();
     let apple_support = has_apple_mobile_device_support();
-    let Some(tools) = resolve_ios_tools() else {
+    let app_dir = app.path().app_data_dir().ok();
+    let Some(tools) = resolve_ios_tools(app_dir.as_deref()) else {
         let reason = if cfg!(target_os = "windows") && !apple_support {
             "Por seguridad de Apple, un iPhone no deja revisar archivos por cable sin drivers de iTunes/Dispositivos Apple. No pasa nada: puedes revisarlo igual con un reporte rápido (Paso 1 abajo) o una copia de seguridad en esta PC."
         } else {
@@ -1142,8 +1417,9 @@ fn collect_crashlogs_from_dir(dir: &Path, out: &mut Vec<Value>) {
 }
 
 #[tauri::command]
-pub fn collect_ios_snapshot(udid: Option<String>) -> Result<Value, String> {
-    let Some(tools) = resolve_ios_tools() else {
+pub fn collect_ios_snapshot(app: tauri::AppHandle, udid: Option<String>) -> Result<Value, String> {
+    let app_dir = app.path().app_data_dir().ok();
+    let Some(tools) = resolve_ios_tools(app_dir.as_deref()) else {
         return Err(
             "No se encontró pymobiledevice3 ni libimobiledevice para extracción USB directa en iOS."
                 .to_string(),

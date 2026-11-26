@@ -1,5 +1,6 @@
 mod hmac_auth;
 mod infostealer;
+mod server;
 mod telemetry;
 mod windows_audit;
 
@@ -22,6 +23,18 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.iter().any(|a| a == "--version" || a == "-V") {
         println!("omega-sensor {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
+    if let Some(pos) = args.iter().position(|a| a == "--serve") {
+        let bind_addr = args
+            .get(pos + 1)
+            .map(String::as_str)
+            .unwrap_or("127.0.0.1:18791");
+        if let Err(err) = server::serve_loopback(bind_addr) {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
         return;
     }
 

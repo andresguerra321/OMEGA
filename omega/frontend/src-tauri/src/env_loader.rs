@@ -247,6 +247,16 @@ pub fn merge_bootstrap_envs(
             merged.insert("OMEGA_HOST_INTERNAL_SERVICE_TOKEN".to_string(), tok);
         }
     }
+    let uses_container_fallback = merged
+        .get("OMEGA_HOST_WORKER_URL")
+        .map(|u| u.trim().is_empty() || u.contains("forensic-worker"))
+        .unwrap_or(true);
+    if uses_container_fallback {
+        merged.insert(
+            "OMEGA_HOST_WORKER_URL".to_string(),
+            "http://host.docker.internal:18791".to_string(),
+        );
+    }
 
     let has_valid_jwt = merged
         .get("OMEGA_JWT_SECRET")
