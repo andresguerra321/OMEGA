@@ -20,6 +20,7 @@ public class JwtService {
     public static final String CLAIM_TENANT_ID = "tid";
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_EMAIL = "email";
+    public static final String CLAIM_MFA_AT = "mfa_at";
 
     private static final String DEV_SECRET_MARKER = "omega-dev-local-only";
 
@@ -44,9 +45,13 @@ public class JwtService {
     }
 
     public String issueToken(UUID userId, UUID tenantId, String email, Role role) {
+        return issueToken(userId, tenantId, email, role, null);
+    }
+
+    public String issueToken(UUID userId, UUID tenantId, String email, Role role, Instant mfaAt) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(expirationSeconds);
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .issuer(issuer)
                 .subject(userId.toString())
                 .claim(CLAIM_TENANT_ID, tenantId.toString())
@@ -54,9 +59,11 @@ public class JwtService {
                 .claim(CLAIM_EMAIL, email)
                 .claim("authn", "credentials-v1")
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(expiresAt))
-                .signWith(signingKey, Jwts.SIG.HS256)
-                .compact();
+                .expiration(Date.from(expiresAt));
+        if (mfaAt != null) {
+            builder.claim(CLAIM_MFA_AT, mfaAt.getEpochSecond());
+        }
+        return builder.signWith(signingKey, Jwts.SIG.HS256).compact();
     }
 
     public ParsedJwtClaims parseAndValidate(String token) {
@@ -76,7 +83,9 @@ public class JwtService {
             if (email == null || email.isBlank()) {
                 throw new JwtException("Claim email faltante en JWT");
             }
-            return new ParsedJwtClaims(userId, tenantId, email, role);
+            Number rawMfaAt = claims.get(CLAIM_MFA_AT, Number.class);
+            Instant mfaAt = rawMfaAt != null ? Instant.ofEpochSecond(rawMfaAt.longValue()) : null;
+            return new ParsedJwtClaims(userId, tenantId, email, role, mfaAt);
         } catch (IllegalArgumentException | NullPointerException ex) {
             throw new JwtException("Claims JWT inválidos o malformados", ex);
         }
@@ -121,7 +130,11 @@ public class JwtService {
             UUID userId,
             UUID tenantId,
             String email,
-            Role role
+            Role role,
+            Instant mfaAt
     ) {
+        public ParsedJwtClaims(UUID userId, UUID tenantId, String email, Role role) {
+            this(userId, tenantId, email, role, null);
+        }
     }
 }

@@ -115,7 +115,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     member.getTenantId(),
                     member.getEmail(),
                     member.getRole(),
-                    member.isActive()
+                    member.isActive(),
+                    claims.mfaAt()
             );
 
             UsernamePasswordAuthenticationToken authentication =
@@ -123,7 +124,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            TenantContext.set(new TenantScope(principal.tenantId(), principal.userId(), principal.role()));
+            TenantContext.set(new TenantScope(principal.tenantId(), principal.userId(), principal.role(), principal.mfaAt()));
 
             filterChain.doFilter(request, response);
         } catch (JwtException ex) {

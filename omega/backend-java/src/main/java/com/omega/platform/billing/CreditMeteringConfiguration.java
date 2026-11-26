@@ -48,6 +48,10 @@ public class CreditMeteringConfiguration {
             UUID tenant=null,actor=null;
             for(Object arg:call.getArguments()) if(arg instanceof OmegaPrincipal p) { tenant=p.tenantId();actor=p.userId();break; }
             if(tenant==null) { var scope=TenantContext.get().orElseThrow(() -> new IllegalStateException("Falta contexto de cuenta para consumo"));tenant=scope.tenantId();actor=scope.userId(); }
+            boolean isExpedienteQuery = operation == CreditOperation.AI_QUERY && call.getMethod().getName().equals("queryExpediente");
+            boolean belongsToOrganization = Boolean.TRUE.equals(
+                    jdbc.queryForObject("SELECT organization_id IS NOT NULL FROM omega_rag.tenants WHERE id = ?", Boolean.class, tenant));
+            CreditService.requireMeteredActorAllowed(belongsToOrganization, isExpedienteQuery);
             int amount=operation.credits;
             if (operation.paidOnly) credits.requirePaid(tenant);
             if(operation==CreditOperation.AI_QUERY && call.getMethod().getName().equals("queryExpediente")
@@ -70,7 +74,7 @@ public class CreditMeteringConfiguration {
                 if(arg instanceof List<?> items) for(Object item:items) if(item instanceof MultipartFile f) { uploadBytes+=f.getSize();uploadFiles++; }
             }
             if(uploadBytes>25L*1024*1024 || uploadFiles>20) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Esta operación admite hasta 20 archivos y 25 MB en total.");
-            UUID reservation=credits.reserve(tenant,actor,operation,amount,null);
+            UUID reservation=credits.reserve(tenant,actor,operation,amount,null,isExpedienteQuery);
             long startedNanos=System.nanoTime();
             Object result;
             try { result=call.proceed(); }

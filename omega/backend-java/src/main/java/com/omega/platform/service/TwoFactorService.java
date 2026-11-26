@@ -52,7 +52,19 @@ public class TwoFactorService {
     @Value("${OMEGA_SUPPORT_EMAIL:}") private String supportEmail;
     private final byte[] totpAtRestKey;
 
+    @Autowired(required = false)
+    private com.omega.platform.security.LoginRateLimiter loginRateLimiter;
+
+    @Autowired(required = false)
+    private com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
+
+    @Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     public record LoginChallengeResult(String challengeToken, String method, String maskedEmail) {
+    }
+
+    public record VerifiedLoginChallenge(UserEntity user, UUID targetTenantId) {
     }
 
     @Autowired
@@ -228,6 +240,12 @@ public class TwoFactorService {
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw new BadCredentialsException("La contraseña actual no es correcta.");
         }
+        if (mfaPolicy != null && mfaPolicy.hasMandatoryMfaObligation(userId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "MFA_REQUIRED: No puedes desactivar la verificación en dos pasos mientras pertenezcas a múltiples espacios o administres una organización."
+            );
+        }
         user.setMfaEnabled(false);
         user.setMfaMethod("NONE");
         user.setMfaTotpSecret(null);
@@ -252,6 +270,11 @@ public class TwoFactorService {
 
     @Transactional
     public LoginChallengeResult createLoginChallenge(UserEntity user) {
+        return createLoginChallenge(user, user.getTenantId());
+    }
+
+    @Transactional
+    public LoginChallengeResult createLoginChallenge(UserEntity user, UUID targetTenantId) {
         String method = "EMAIL".equalsIgnoreCase(user.getMfaMethod()) ? "EMAIL" : "TOTP";
         UUID challengeId = UUID.randomUUID();
         String emailHash = null;
@@ -267,11 +290,12 @@ public class TwoFactorService {
 
         jdbcTemplate.update(
                 """
-                INSERT INTO omega_rag.mfa_challenges (id, user_id, purpose, method, email_code_hash, attempts, resend_count, last_sent_at, expires_at, created_at)
-                VALUES (?, ?, 'LOGIN', ?, ?, 0, 0, ?, ?, NOW())
+                INSERT INTO omega_rag.mfa_challenges (id, user_id, target_tenant_id, purpose, method, email_code_hash, attempts, resend_count, last_sent_at, expires_at, created_at)
+                VALUES (?, ?, ?, 'LOGIN', ?, ?, 0, 0, ?, ?, NOW())
                 """,
                 challengeId,
                 user.getId(),
+                targetTenantId != null ? targetTenantId : user.getTenantId(),
                 method,
                 emailHash,
                 "EMAIL".equals(method) ? Timestamp.from(Instant.now()) : null,
@@ -356,10 +380,15 @@ public class TwoFactorService {
 
     @Transactional(noRollbackFor = BadCredentialsException.class)
     public UserEntity verifyLoginChallenge(String rawChallengeToken, String rawCode) {
+        return verifyLoginChallengeWithContext(rawChallengeToken, rawCode).user();
+    }
+
+    @Transactional(noRollbackFor = BadCredentialsException.class)
+    public VerifiedLoginChallenge verifyLoginChallengeWithContext(String rawChallengeToken, String rawCode) {
         UUID challengeId = parseChallengeUuid(rawChallengeToken);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 """
-                SELECT id, user_id, method, email_code_hash, attempts
+                SELECT id, user_id, target_tenant_id, method, email_code_hash, attempts
                 FROM omega_rag.mfa_challenges
                 WHERE id = ? AND purpose = 'LOGIN' AND consumed_at IS NULL AND expires_at > NOW()
                 FOR UPDATE
@@ -371,6 +400,7 @@ public class TwoFactorService {
 
         Map<String, Object> row = rows.get(0);
         UUID userId = (UUID) row.get("user_id");
+        UUID targetTenantId = (UUID) row.get("target_tenant_id");
         String method = (String) row.get("method");
         String expectedEmailHash = (String) row.get("email_code_hash");
         int attempts = ((Number) row.get("attempts")).intValue();
@@ -388,7 +418,10 @@ public class TwoFactorService {
         if (code.matches("^\\d{6}$")) {
             if ("TOTP".equals(method)) {
                 String decryptedSecret = TotpUtil.decryptAtRest(user.getMfaTotpSecret(), totpAtRestKey);
-                verified = TotpUtil.verifyTotpCode(decryptedSecret, code);
+                java.util.OptionalLong matchedBucket = TotpUtil.findMatchingTotpBucket(decryptedSecret, code, Instant.now());
+                if (matchedBucket.isPresent() && tryConsumeTotpBucketAtomically(userId, matchedBucket.getAsLong(), code)) {
+                    verified = true;
+                }
             } else if ("EMAIL".equals(method) && expectedEmailHash != null) {
                 String candidate = TotpUtil.sha256Hex(code);
                 verified = MessageDigest.isEqual(
@@ -405,15 +438,99 @@ public class TwoFactorService {
             throw new BadCredentialsException("Código de verificación inválido.");
         }
 
+        UUID effectiveTenantId = targetTenantId != null ? targetTenantId : user.getTenantId();
         jdbcTemplate.update("UPDATE omega_rag.mfa_challenges SET consumed_at = NOW() WHERE id = ?", challengeId);
         auditLogService.record(
-                user.getTenantId(),
+                effectiveTenantId,
                 user.getId(),
                 "MFA_LOGIN_VERIFIED",
                 "USER",
                 user.getId().toString(),
                 Map.of("method", usedBackup ? "BACKUP_CODE" : method));
-        return user;
+        return new VerifiedLoginChallenge(user, effectiveTenantId);
+    }
+
+    /**
+     * Valida y consume de forma atómica un código TOTP de 6 dígitos de un solo uso para step-up MFA
+     * (p. ej. {@code switch-workspace} o elevación hacia espacios {@code LEGAL} de organización),
+     * impidiendo replay dentro de la ventana temporal RFC 6238 y aplicando límite estricto en {@code auth_rate_limits}.
+     */
+    @Transactional(noRollbackFor = {org.springframework.web.server.ResponseStatusException.class, BadCredentialsException.class})
+    public void verifySingleUseTotpStepUp(UUID userId, String rawCode, String clientIp) {
+        String userKey = userId.toString();
+        String ipKey = (clientIp == null || clientIp.isBlank()) ? "unknown" : clientIp.trim();
+        if (loginRateLimiter != null) {
+            loginRateLimiter.assertScopedAllowed("mfa-stepup-user", userKey, MAX_ATTEMPTS);
+            loginRateLimiter.assertScopedAllowed("mfa-stepup-ip", ipKey, 20);
+        }
+
+        UserEntity user = loadActiveUser(userId);
+        if (!user.isMfaEnabled() || user.getMfaTotpSecret() == null || user.getMfaTotpSecret().isBlank()) {
+            if (loginRateLimiter != null) {
+                loginRateLimiter.recordScopedFailure("mfa-stepup-user", userKey, MAX_ATTEMPTS);
+                loginRateLimiter.recordScopedFailure("mfa-stepup-ip", ipKey, 20);
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "MFA_REQUIRED: Debes activar un autenticador TOTP para verificar el cambio de espacio."
+            );
+        }
+
+        String code = rawCode == null ? "" : rawCode.trim();
+        String decryptedSecret = TotpUtil.decryptAtRest(user.getMfaTotpSecret(), totpAtRestKey);
+        java.util.OptionalLong matchedBucket = TotpUtil.findMatchingTotpBucket(decryptedSecret, code, Instant.now());
+        if (matchedBucket.isEmpty()) {
+            if (loginRateLimiter != null) {
+                loginRateLimiter.recordScopedFailure("mfa-stepup-user", userKey, MAX_ATTEMPTS);
+                loginRateLimiter.recordScopedFailure("mfa-stepup-ip", ipKey, 20);
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "MFA_STEP_UP_INVALID: El código TOTP ingresado no es válido."
+            );
+        }
+
+        if (!tryConsumeTotpBucketAtomically(userId, matchedBucket.getAsLong(), code)) {
+            if (loginRateLimiter != null) {
+                loginRateLimiter.recordScopedFailure("mfa-stepup-user", userKey, MAX_ATTEMPTS);
+                loginRateLimiter.recordScopedFailure("mfa-stepup-ip", ipKey, 20);
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "MFA_TOTP_REPLAYED: Este código TOTP ya fue utilizado. Espera al siguiente código."
+            );
+        }
+
+        if (loginRateLimiter != null) {
+            loginRateLimiter.resetScoped("mfa-stepup-user", userKey);
+        }
+    }
+
+    private boolean tryConsumeTotpBucketAtomically(UUID userId, long matchedBucket, String code) {
+        String bucketKey = "totp-replay:" + userId + ":" + TotpUtil.sha256Hex(matchedBucket + ":" + code);
+        Instant expiresAt = Instant.ofEpochSecond((matchedBucket + 2L) * 30L + 30L);
+        java.util.function.Supplier<Boolean> op = () -> {
+            jdbcTemplate.query("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> {}, "totp:" + userId);
+            jdbcTemplate.update(
+                    "DELETE FROM omega_rag.auth_rate_limits WHERE bucket_key = ? AND window_expires_at <= NOW()",
+                    bucketKey
+            );
+            int inserted = jdbcTemplate.update("""
+                    INSERT INTO omega_rag.auth_rate_limits (bucket_key, attempt_count, window_expires_at, updated_at)
+                    VALUES (?, 1, ?, NOW())
+                    ON CONFLICT (bucket_key) DO NOTHING
+                    """,
+                    bucketKey,
+                    Timestamp.from(expiresAt)
+            );
+            return inserted == 1;
+        };
+        if (transactionManager != null) {
+            var tt = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+            tt.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            return Boolean.TRUE.equals(tt.execute(status -> op.get()));
+        }
+        return op.get();
     }
 
     private boolean consumeBackupCodeIfValid(UserEntity user, String rawCode) {

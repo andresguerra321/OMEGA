@@ -22,12 +22,16 @@ import com.omega.platform.web.dto.AuthDtos.LoginRequest;
 import com.omega.platform.web.dto.AuthDtos.PrincipalMeResponse;
 import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
+import com.omega.platform.web.dto.AuthDtos.SwitchWorkspaceRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
+import com.omega.platform.security.WorkspaceMfaPolicyService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.text.Normalizer;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -42,6 +46,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.omega.platform.billing.AccountSeatService seats;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AuditLogService auditLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private WorkspaceMfaPolicyService mfaPolicy;
 
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
@@ -90,7 +103,6 @@ public class AuthService {
     @Transactional
     public AuthTokenResponse registerAccount(RegisterAccountRequest request, String bootstrapHeader) {
         verifyTenantRegistrationAllowed(bootstrapHeader);
-
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsAnyByEmailIgnoreCase(normalizedEmail)) {
             throw new ConflictException("Ya existe una cuenta registrada con este correo electrónico");
@@ -257,10 +269,25 @@ public class AuthService {
             TenantEntity tenant,
             Role effectiveRole,
             String trustedDeviceToken) {
-        boolean trustedDevice = trustedDeviceToken != null
+        boolean orgLegalTarget = WorkspaceMfaPolicyService.isOrganizationalLegalWorkspace(tenant);
+        boolean secondaryWorkspace = !tenant.getId().equals(user.getTenantId());
+        boolean mandatoryMfa = orgLegalTarget
+                || secondaryWorkspace
+                || (mfaPolicy != null && mfaPolicy.hasMandatoryMfaObligation(user.getId()));
+
+        if (!user.isMfaEnabled() && (orgLegalTarget || secondaryWorkspace)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "MFA_REQUIRED: Debes activar la verificación en dos pasos para acceder a este espacio."
+            );
+        }
+
+        // Un dispositivo de confianza NUNCA suple el segundo factor al entrar a un espacio LEGAL organizacional.
+        boolean trustedDevice = !orgLegalTarget
+                && trustedDeviceToken != null
                 && jwtService.isTrustedDeviceTokenValid(trustedDeviceToken, user.getId());
         if (twoFactorService != null && user.isMfaEnabled() && !trustedDevice) {
-            TwoFactorService.LoginChallengeResult challenge = twoFactorService.createLoginChallenge(user);
+            TwoFactorService.LoginChallengeResult challenge = twoFactorService.createLoginChallenge(user, tenant.getId());
             return AuthTokenResponse.mfaChallenge(
                     user.getId(),
                     tenant.getId(),
@@ -272,7 +299,11 @@ public class AuthService {
                     challenge.maskedEmail(),
                     tenant.getProfile());
         }
-        return issueTokenResponse(user, tenant, effectiveRole);
+        // En logins sin desafío 2FA (p. ej. sin MFA o con dispositivo de confianza), mfa_at se emite nulo.
+        if (mandatoryMfa && !user.isMfaEnabled()) {
+            log.info("AUTH_LOGIN_MFA_SETUP_NEEDED: userId={} rootTenantId={}", user.getId(), tenant.getId());
+        }
+        return issueTokenResponse(user, tenant, effectiveRole, null);
     }
 
     public String issueTrustedDeviceToken(UUID userId, long ttlSeconds) {
@@ -284,12 +315,97 @@ public class AuthService {
         if (twoFactorService == null) {
             throw new IllegalStateException("Servicio 2FA no disponible");
         }
-        UserEntity user = twoFactorService.verifyLoginChallenge(challengeToken, code);
-        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(user.getTenantId())
+        TwoFactorService.VerifiedLoginChallenge verified =
+                twoFactorService.verifyLoginChallengeWithContext(challengeToken, code);
+        UserEntity user = verified.user();
+        UUID targetTenantId = verified.targetTenantId() != null ? verified.targetTenantId() : user.getTenantId();
+        TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(targetTenantId)
                 .orElseThrow(() -> new BadCredentialsException("Organización no disponible"));
         Role effectiveRole = userRepository.findActiveWorkspaceRole(user.getId(), tenant.getId())
                 .orElseThrow(() -> new BadCredentialsException("Organización no disponible"));
-        return issueTokenResponse(user, tenant, effectiveRole);
+        return issueTokenResponse(user, tenant, effectiveRole, Instant.now());
+    }
+
+    @Transactional(noRollbackFor = {ResponseStatusException.class, BadCredentialsException.class})
+    public AuthTokenResponse switchWorkspace(
+            OmegaPrincipal principal,
+            SwitchWorkspaceRequest request,
+            String clientIp
+    ) {
+        if (principal == null) {
+            throw new AccessDeniedException("Sesión requerida para cambiar de espacio.");
+        }
+        UserEntity user = userRepository.findById(principal.userId())
+                .filter(UserEntity::isActive)
+                .orElseThrow(() -> new BadCredentialsException("Tu cuenta ya no se encuentra activa."));
+
+        TenantEntity targetTenant = tenantRepository.findByIdAndActiveTrue(request.targetTenantId())
+                .orElseThrow(() -> new AccessDeniedException("No tienes membresía activa en el espacio solicitado."));
+
+        Role targetRole = userRepository.findActiveWorkspaceRole(user.getId(), targetTenant.getId())
+                .orElseThrow(() -> new AccessDeniedException("No tienes membresía activa en el espacio solicitado."));
+
+        if (!user.isMfaEnabled()) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "MFA_REQUIRED: Debes activar la verificación en dos pasos antes de cambiar de espacio."
+            );
+        }
+
+        Instant now = Instant.now();
+        Instant currentMfaAt = principal.mfaAt();
+        boolean targetOrgLegal = WorkspaceMfaPolicyService.isOrganizationalLegalWorkspace(targetTenant);
+        boolean hasProvidedTotp = request.totpCode() != null && !request.totpCode().isBlank();
+        boolean requiresStepUp = (currentMfaAt == null)
+                || (targetOrgLegal && !WorkspaceMfaPolicyService.isRecentMfa(currentMfaAt, now));
+
+        Instant effectiveMfaAt = currentMfaAt;
+        if (requiresStepUp || hasProvidedTotp) {
+            if (!hasProvidedTotp) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "MFA_STEP_UP_REQUIRED: Ingresa un código TOTP vigente para confirmar el acceso al espacio."
+                );
+            }
+            if (twoFactorService == null) {
+                throw new IllegalStateException("Servicio 2FA no disponible");
+            }
+            twoFactorService.verifySingleUseTotpStepUp(user.getId(), request.totpCode(), clientIp);
+            effectiveMfaAt = Instant.now();
+        }
+
+        if (credits != null) {
+            credits.requireWorkspaceAccess(targetTenant.getId());
+        }
+
+        AuthTokenResponse response = issueTokenResponse(user, targetTenant, targetRole, effectiveMfaAt);
+        if (auditLogService != null) {
+            Map<String, Object> meta = Map.of(
+                    "fromTenantId", principal.tenantId().toString(),
+                    "toTenantId", targetTenant.getId().toString(),
+                    "targetProfile", targetTenant.getProfile() != null ? targetTenant.getProfile().name() : "GENERAL",
+                    "role", targetRole.name()
+            );
+            auditLogService.record(
+                    principal.tenantId(),
+                    user.getId(),
+                    "WORKSPACE_SWITCHED",
+                    "TENANT",
+                    targetTenant.getId().toString(),
+                    meta
+            );
+            if (!principal.tenantId().equals(targetTenant.getId())) {
+                auditLogService.record(
+                        targetTenant.getId(),
+                        user.getId(),
+                        "WORKSPACE_SWITCHED",
+                        "TENANT",
+                        targetTenant.getId().toString(),
+                        meta
+                );
+            }
+        }
+        return response;
     }
 
     private static String maskEmail(String normalizedEmail) {
@@ -404,13 +520,23 @@ public class AuthService {
     }
 
     private AuthTokenResponse issueTokenResponse(UserEntity user, TenantEntity account, Role effectiveRole) {
+        return issueTokenResponse(user, account, effectiveRole, null);
+    }
+
+    private AuthTokenResponse issueTokenResponse(
+            UserEntity user,
+            TenantEntity account,
+            Role effectiveRole,
+            Instant mfaAt
+    ) {
         UUID workspaceTenantId = account.getId();
         TenantProfile profile = account.getProfile() != null ? account.getProfile() : TenantProfile.GENERAL;
         String token = jwtService.issueToken(
                 user.getId(),
                 workspaceTenantId,
                 user.getEmail(),
-                effectiveRole);
+                effectiveRole,
+                mfaAt);
         return new AuthTokenResponse(
                 token,
                 "Bearer",

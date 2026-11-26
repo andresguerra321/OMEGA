@@ -125,6 +125,7 @@ public class AccountSeatService {
             if (updated == 0) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Membresía de espacio no encontrada.");
             }
+            revokeCreatorApiTokens(workspaceTenant, userId);
             return;
         }
 
@@ -146,6 +147,19 @@ public class AccountSeatService {
                 targetRole.name(),
                 grantedByUserId
         );
+        if (targetRole == Role.CLIENT) {
+            revokeCreatorApiTokens(workspaceTenant, userId);
+        }
+    }
+
+    private void revokeCreatorApiTokens(UUID workspaceTenant, UUID userId) {
+        jdbc.update("""
+                UPDATE omega_rag.api_tokens
+                   SET revoked_at = NOW()
+                 WHERE tenant_id = ?
+                   AND created_by_user_id = ?
+                   AND revoked_at IS NULL
+                """, workspaceTenant, userId);
     }
 
     private boolean isSoleIndividualOwnerSelfUpdate(UUID workspaceTenant, UUID userId) {

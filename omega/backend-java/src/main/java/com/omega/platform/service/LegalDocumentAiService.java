@@ -60,6 +60,16 @@ public class LegalDocumentAiService {
     public void accept(OmegaPrincipal actor,String fingerprint) {
         Policy current=policy(actor);
         if(!manages(actor)) throw new org.springframework.security.access.AccessDeniedException("Solo un administrador puede aceptar esta política");
+        tenants.findByIdAndActiveTrue(actor.tenantId())
+                .filter(com.omega.platform.security.WorkspaceMfaPolicyService::isOrganizationalLegalWorkspace)
+                .ifPresent(ignored -> {
+                    if (!com.omega.platform.security.WorkspaceMfaPolicyService.isRecentMfa(actor.mfaAt(), java.time.Instant.now())) {
+                        throw new org.springframework.web.server.ResponseStatusException(
+                                org.springframework.http.HttpStatus.FORBIDDEN,
+                                "MFA_STEP_UP_REQUIRED: Aceptar la política de IA documental en un espacio LEGAL organizacional requiere verificación 2FA reciente (máximo 15 minutos)."
+                        );
+                    }
+                });
         if(!current.fingerprint().equals(fingerprint)) throw new ConflictException("La configuración cambió. Revisa la política actual antes de aceptar.");
         if(current.accepted()) return;
         jdbc.update("""

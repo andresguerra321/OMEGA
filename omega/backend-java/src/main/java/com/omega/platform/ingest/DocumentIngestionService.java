@@ -376,6 +376,16 @@ public class DocumentIngestionService {
     @Transactional
     public void deleteDocument(OmegaPrincipal principal, UUID expedienteId, UUID documentId) {
         authorizationService.requireWriteAccess(principal, expedienteId);
+        tenantRepository.findByIdAndActiveTrue(principal.tenantId())
+                .filter(com.omega.platform.security.WorkspaceMfaPolicyService::isOrganizationalLegalWorkspace)
+                .ifPresent(ignored -> {
+                    if (!com.omega.platform.security.WorkspaceMfaPolicyService.isRecentMfa(principal.mfaAt(), Instant.now())) {
+                        throw new org.springframework.web.server.ResponseStatusException(
+                                org.springframework.http.HttpStatus.FORBIDDEN,
+                                "MFA_STEP_UP_REQUIRED: Eliminar evidencia en un espacio LEGAL organizacional requiere verificación 2FA reciente (máximo 15 minutos)."
+                        );
+                    }
+                });
         DocumentEntity document = documentRepository.findByIdAndTenantId(documentId, principal.tenantId())
                 .filter(doc -> doc.getExpedienteId().equals(expedienteId))
                 .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado"));

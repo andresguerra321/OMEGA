@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -103,6 +104,9 @@ public class PilotOpsService {
 
     @Autowired(required = false)
     private CommercialSaasService commercialSaasService;
+
+    @Autowired(required = false)
+    private TwoFactorService twoFactorService;
 
     @Autowired(required = false)
     private AlertDispatcherService alertDispatcherService;
@@ -395,11 +399,14 @@ public class PilotOpsService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ingresa un correo electrónico válido.");
         }
         Role role = targetRole != null ? targetRole : Role.ANALYST;
-        if (seats != null) seats.requireAvailableSeat(admin.tenantId(), null, role);
-
-        if (userRepository.existsByTenantIdAndEmailIgnoreCase(admin.tenantId(), email)) {
+        if (userRepository.findActiveMemberUserByTenantIdAndEmailIgnoreCase(admin.tenantId(), email).isPresent()
+                || userRepository.existsByTenantIdAndEmailIgnoreCase(admin.tenantId(), email)) {
             throw new ConflictException("Este correo ya pertenece al equipo actual.");
         }
+        UUID existingCanonicalId = findCanonicalUserInSameOrganization(admin.tenantId(), email)
+                .map(UserEntity::getId)
+                .orElse(null);
+        if (seats != null) seats.requireAvailableSeat(admin.tenantId(), existingCanonicalId, role);
 
         // Revocar invitaciones previas pendientes para el mismo correo en este tenant
         jdbc.update(
@@ -556,7 +563,7 @@ public class PilotOpsService {
         String tokenHash = sha256Hex(cleanToken);
         List<Map<String, Object>> rows = jdbc.queryForList(
                 """
-                SELECT id, tenant_id, email, role, expires_at, accepted_at, revoked_at
+                SELECT id, tenant_id, email, role, invited_by, expires_at, accepted_at, revoked_at
                 FROM omega_rag.tenant_invitations
                 WHERE token_hash = ?
                 FOR UPDATE
@@ -582,8 +589,77 @@ public class PilotOpsService {
             throw new BadCredentialsException("Esta invitación ya fue utilizada, revocada o expiró.");
         }
 
+        UUID invitedBy = (UUID) row.get("invited_by");
         TenantEntity tenant = tenantRepository.findByIdAndActiveTrue(tenantId)
                 .orElseThrow(() -> new BadCredentialsException("El espacio de trabajo ya no se encuentra activo."));
+
+        if (userRepository.findActiveMemberUserByTenantIdAndEmailIgnoreCase(tenantId, email).isPresent()) {
+            throw new ConflictException("Ya existe un usuario activo con este correo en el espacio actual.");
+        }
+
+        Optional<UserEntity> canonicalOpt = findCanonicalUserInSameOrganization(tenantId, email);
+        if (canonicalOpt.isPresent()) {
+            UserEntity existingUser = canonicalOpt.get();
+            authorizeWorkspaceMembership(existingUser, rawPassword, invitationId);
+            if (seats != null) {
+                seats.assignWorkspaceMembership(tenantId, existingUser.getId(), role, invitedBy);
+            } else {
+                jdbc.update("""
+                        INSERT INTO omega_rag.workspace_memberships (tenant_id, user_id, role, active, granted_by_user_id, created_at, updated_at)
+                        VALUES (?, ?, ?, TRUE, ?, NOW(), NOW())
+                        ON CONFLICT (tenant_id, user_id) DO UPDATE
+                            SET role = EXCLUDED.role, active = TRUE, updated_at = NOW()
+                        """, tenantId, existingUser.getId(), role.name(), invitedBy);
+            }
+            jdbc.update("UPDATE omega_rag.tenant_invitations SET accepted_at = NOW() WHERE id = ?", invitationId);
+            Role effectiveRole = userRepository.findActiveWorkspaceRole(existingUser.getId(), tenantId).orElse(role);
+            auditLogService.record(
+                    tenantId,
+                    existingUser.getId(),
+                    "TENANT_INVITATION_ACCEPTED",
+                    "TENANT_INVITATION",
+                    invitationId.toString(),
+                    Map.of("role", effectiveRole.name(), "canonicalReuse", true)
+            );
+            if (com.omega.platform.security.WorkspaceMfaPolicyService.isOrganizationalLegalWorkspace(tenant)
+                    && !existingUser.isMfaEnabled()) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "MFA_REQUIRED: Membresía vinculada. Activa primero la verificación en dos pasos en tu espacio principal para entrar a este espacio LEGAL."
+                );
+            }
+            if (twoFactorService != null && existingUser.isMfaEnabled()) {
+                TwoFactorService.LoginChallengeResult challenge =
+                        twoFactorService.createLoginChallenge(existingUser, tenantId);
+                return AuthTokenResponse.mfaChallenge(
+                        existingUser.getId(),
+                        tenantId,
+                        tenant.getSlug(),
+                        existingUser.getEmail(),
+                        effectiveRole,
+                        challenge.challengeToken(),
+                        challenge.method(),
+                        challenge.maskedEmail(),
+                        tenant.getProfile()
+                );
+            }
+            String jwt = jwtService.issueToken(
+                    existingUser.getId(),
+                    tenantId,
+                    existingUser.getEmail(),
+                    effectiveRole
+            );
+            return new AuthTokenResponse(
+                    jwt,
+                    "Bearer",
+                    jwtService.getExpirationSeconds(),
+                    existingUser.getId(),
+                    tenantId,
+                    tenant.getSlug(),
+                    existingUser.getEmail(),
+                    effectiveRole
+            );
+        }
 
         if (userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, email)) {
             throw new ConflictException("Ya existe un usuario con este correo en la organización.");
@@ -643,6 +719,38 @@ public class PilotOpsService {
                 Map.of("role", role.name())
         );
         return response;
+    }
+
+    private Optional<UserEntity> findCanonicalUserInSameOrganization(UUID targetTenantId, String normalizedEmail) {
+        TenantEntity target = tenantRepository.findByIdAndActiveTrue(targetTenantId).orElse(null);
+        if (target == null) {
+            return Optional.empty();
+        }
+        UUID orgId = target.getOrganizationId();
+        return userRepository.findAllActiveByEmailIgnoreCase(normalizedEmail).stream()
+                .filter(u -> {
+                    if (u.getTenantId().equals(targetTenantId)) {
+                        return true;
+                    }
+                    if (orgId == null) {
+                        return false;
+                    }
+                    return tenantRepository.findById(u.getTenantId())
+                            .map(root -> orgId.equals(root.getOrganizationId()))
+                            .orElse(false);
+                })
+                .findFirst();
+    }
+
+    private void authorizeWorkspaceMembership(UserEntity existingUser, String rawPassword, UUID invitationId) {
+        if (existingUser == null || !existingUser.isActive() || invitationId == null) {
+            throw new BadCredentialsException("Invitación o cuenta de usuario no disponible.");
+        }
+        if (!passwordEncoder.matches(rawPassword, existingUser.getPasswordHash())) {
+            throw new BadCredentialsException(
+                    "Ya existe una cuenta activa en la organización con este correo; ingresa tu contraseña actual para aceptar la invitación."
+            );
+        }
     }
 
     private boolean trySendInvitationEmail(String email, String tenantName, String role, String rawToken) {

@@ -1,5 +1,6 @@
 package com.omega.platform.security;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -12,8 +13,13 @@ public record OmegaPrincipal(
         UUID tenantId,
         String email,
         Role role,
-        boolean active
+        boolean active,
+        Instant mfaAt
 ) implements UserDetails {
+
+    public OmegaPrincipal(UUID userId, UUID tenantId, String email, Role role, boolean active) {
+        this(userId, tenantId, email, role, active, null);
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

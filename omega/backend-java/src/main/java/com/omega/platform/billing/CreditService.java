@@ -146,8 +146,20 @@ public class CreditService {
     }
 
     public UUID reserve(UUID workspaceTenant, UUID actor, CreditOperation operation, int amount, String reference) {
+        return reserve(workspaceTenant, actor, operation, amount, reference, false);
+    }
+
+    public UUID reserve(
+            UUID workspaceTenant,
+            UUID actor,
+            CreditOperation operation,
+            int amount,
+            String reference,
+            boolean legacyStandaloneExpedienteQuery
+    ) {
         if (!enforced()) return null;
         BillingAccountResolver.ResolvedBillingAccount account = resolver.resolve(workspaceTenant);
+        requireMeteredActorAllowed(account.belongsToOrganization(), legacyStandaloneExpedienteQuery);
         boolean free = !account.belongsToOrganization()
                 && BillingPolicy.freeWorkspace(account.workspaceAccountType(), account.workspaceProfile());
         if (!free) {
@@ -184,6 +196,30 @@ public class CreditService {
             }
             return id;
         });
+    }
+
+    public static void requireMeteredActorAllowed(boolean belongsToOrganization, boolean legacyStandaloneExpedienteQuery) {
+        if (!belongsToOrganization && legacyStandaloneExpedienteQuery) {
+            return;
+        }
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.omega.platform.security.OmegaPrincipal principal) {
+            boolean isScopedMachineToken = !principal.active()
+                    && auth.getAuthorities().stream()
+                            .anyMatch(a -> "SCOPE_REPO_SCAN".equals(a.getAuthority()));
+            if (!isScopedMachineToken && principal.role() == com.omega.platform.security.Role.CLIENT) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "El rol CLIENT es de solo lectura y no puede ejecutar operaciones medidas."
+                );
+            }
+            return;
+        }
+        var scopeOpt = com.omega.platform.security.TenantContext.get();
+        if (scopeOpt.isPresent() && scopeOpt.get().role() == com.omega.platform.security.Role.CLIENT) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "El rol CLIENT es de solo lectura y no puede ejecutar operaciones medidas."
+            );
+        }
     }
 
     public static void requireSpendConsent(CreditOperation operation,int amount) {

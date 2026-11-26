@@ -33,4 +33,18 @@ public interface ApiTokenRepository extends JpaRepository<ApiTokenEntity, UUID> 
             @Param("id") UUID id,
             @Param("tenantId") UUID tenantId,
             @Param("now") Instant now);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE ApiTokenEntity t
+               SET t.revokedAt = :now
+             WHERE t.tenantId = :tenantId
+               AND t.createdByUserId = :userId
+               AND t.revokedAt IS NULL
+            """)
+    int revokeActiveTokensByTenantAndCreator(
+            @Param("tenantId") UUID tenantId,
+            @Param("userId") UUID userId,
+            @Param("now") Instant now
+    );
 }

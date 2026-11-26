@@ -54,6 +54,9 @@ public class ApiTokenService {
     @Autowired(required = false)
     private NamedParameterJdbcTemplate jdbc;
 
+    @Autowired(required = false)
+    private com.omega.platform.repository.UserRepository userRepository;
+
     public ApiTokenService(
             ApiTokenRepository apiTokenRepository,
             RepoScanUsageRepository repoScanUsageRepository,
@@ -155,7 +158,7 @@ public class ApiTokenService {
         return toView(entity);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<AuthenticatedApiToken> authenticate(String rawToken) {
         if (rawToken == null || !rawToken.startsWith(TOKEN_PREFIX)) {
             return Optional.empty();
@@ -178,6 +181,20 @@ public class ApiTokenService {
         }
         if (tenantRepository.findByIdAndActiveTrue(token.getTenantId()).isEmpty()) {
             return Optional.empty();
+        }
+        if (userRepository != null) {
+            Optional<Role> creatorRole = userRepository.findActiveWorkspaceRole(
+                    token.getCreatedByUserId(),
+                    token.getTenantId()
+            );
+            if (creatorRole.isEmpty() || creatorRole.get() == Role.CLIENT) {
+                apiTokenRepository.revokeActiveTokensByTenantAndCreator(
+                        token.getTenantId(),
+                        token.getCreatedByUserId(),
+                        now
+                );
+                return Optional.empty();
+            }
         }
         return Optional.of(new AuthenticatedApiToken(
                 token.getId(),

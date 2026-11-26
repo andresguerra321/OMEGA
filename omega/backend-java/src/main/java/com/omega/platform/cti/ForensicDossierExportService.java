@@ -44,6 +44,9 @@ public class ForensicDossierExportService {
     private final ObjectMapper mapper;
     private final ExpedientePermissionRepository permissions;
 
+    @Autowired(required = false)
+    private com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
+
     public ForensicDossierExportService(ExpedienteAuthorizationService authorization, DocumentRepository documents,
             AuditLogRepository logs, AuditLogService audit, ObjectMapper mapper) {
         this(authorization, documents, logs, audit, mapper, null);
@@ -126,8 +129,11 @@ public class ForensicDossierExportService {
 
     private DossierExportPayload collect(UUID expedienteId, String format) {
         var scope = TenantContext.get().orElseThrow(() -> new AccessDeniedException("Se requiere una sesión con TenantScope."));
-        var principal = new OmegaPrincipal(scope.userId(), scope.tenantId(), "", scope.role(), true);
+        var principal = new OmegaPrincipal(scope.userId(), scope.tenantId(), "", scope.role(), true, scope.mfaAt());
         var expediente = authorization.requireReadAccess(principal, expedienteId);
+        if (mfaPolicy != null) {
+            mfaPolicy.requireRecentMfaIfOrganizationalLegal(principal);
+        }
         var evidence = documents.findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(scope.tenantId(), expedienteId).stream()
                 .map(doc -> new EvidenceItem(doc.getId(), "Documento " + doc.getId(), doc.getSha256Hash(), doc.getStatus().name(),
                         expediente.getClassification().name(), doc.getTotalPages(), doc.getEmbeddingModel(), doc.getCreatedAt())).toList();

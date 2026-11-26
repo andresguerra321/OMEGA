@@ -24,6 +24,7 @@ import com.omega.platform.web.dto.AuthDtos.PasswordResetResponse;
 import com.omega.platform.web.dto.AuthDtos.PrincipalMeResponse;
 import com.omega.platform.web.dto.AuthDtos.RegisterAccountRequest;
 import com.omega.platform.web.dto.AuthDtos.RegisterTenantRequest;
+import com.omega.platform.web.dto.AuthDtos.SwitchWorkspaceRequest;
 import com.omega.platform.web.dto.AuthDtos.UserSummaryResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -245,6 +246,19 @@ public class AuthController {
     @GetMapping("/me")
     public PrincipalMeResponse me(@AuthenticationPrincipal OmegaPrincipal principal) {
         return authService.resolveCurrentPrincipal(principal);
+    }
+
+    @PostMapping("/switch-workspace")
+    public AuthTokenResponse switchWorkspace(
+            @AuthenticationPrincipal OmegaPrincipal principal,
+            @Valid @RequestBody SwitchWorkspaceRequest request,
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse
+    ) {
+        String ip = httpServletRequest != null ? httpServletRequest.getRemoteAddr() : "unknown";
+        AuthTokenResponse response = authService.switchWorkspace(principal, request, ip);
+        attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
+        return response;
     }
 
     @PostMapping("/password-reset/request")

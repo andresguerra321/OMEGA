@@ -46,24 +46,35 @@ public final class TotpUtil {
     }
 
     public static boolean verifyTotpCode(String base32Secret, String rawCode) {
-        if (base32Secret == null || base32Secret.isBlank() || rawCode == null) {
-            return false;
+        return findMatchingTotpBucket(base32Secret, rawCode, Instant.now()).isPresent();
+    }
+
+    public static java.util.OptionalLong findMatchingTotpBucket(String base32Secret, String rawCode, Instant now) {
+        if (base32Secret == null || base32Secret.isBlank() || rawCode == null || now == null) {
+            return java.util.OptionalLong.empty();
         }
         String code = rawCode.trim();
         if (!code.matches("^\\d{6}$")) {
-            return false;
+            return java.util.OptionalLong.empty();
         }
         byte[] key = decodeBase32(base32Secret);
-        long currentBucket = Instant.now().getEpochSecond() / TIME_STEP_SECONDS;
+        long currentBucket = now.getEpochSecond() / TIME_STEP_SECONDS;
         for (long offset = -1; offset <= 1; offset++) {
-            String candidate = generateCodeForBucket(key, currentBucket + offset);
+            long candidateBucket = currentBucket + offset;
+            String candidate = generateCodeForBucket(key, candidateBucket);
             if (MessageDigest.isEqual(
                     candidate.getBytes(StandardCharsets.UTF_8),
                     code.getBytes(StandardCharsets.UTF_8))) {
-                return true;
+                return java.util.OptionalLong.of(candidateBucket);
             }
         }
-        return false;
+        return java.util.OptionalLong.empty();
+    }
+
+    public static String generateTotpCodeAt(String base32Secret, Instant instant) {
+        byte[] key = decodeBase32(base32Secret);
+        long bucket = instant.getEpochSecond() / TIME_STEP_SECONDS;
+        return generateCodeForBucket(key, bucket);
     }
 
     public static String generateNumericOtp6() {

@@ -38,6 +38,9 @@ public class ExpedienteService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private ObjectStoragePort objectStoragePort;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
+
     public ExpedienteService(
             ExpedienteRepository expedienteRepository,
             ExpedientePermissionRepository permissionRepository,
@@ -102,6 +105,7 @@ public class ExpedienteService {
             GrantPermissionRequest request
     ) {
         ExpedienteEntity expediente = authorizationService.requirePermissionManagementAccess(principal, expedienteId);
+        if (mfaPolicy != null) mfaPolicy.requireRecentMfaIfOrganizationalLegal(principal);
         UserEntity targetUser = userRepository.findByIdAndTenantId(request.userId(), principal.tenantId())
                 .filter(UserEntity::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario destino no encontrado en el tenant actual"));
@@ -137,6 +141,7 @@ public class ExpedienteService {
     @Transactional
     public void revokePermission(OmegaPrincipal principal, UUID expedienteId, UUID userId) {
         authorizationService.requirePermissionManagementAccess(principal, expedienteId);
+        if (mfaPolicy != null) mfaPolicy.requireRecentMfaIfOrganizationalLegal(principal);
         ExpedientePermissionEntity permission = permissionRepository
                 .findByTenantIdAndExpedienteIdAndUserId(principal.tenantId(), expedienteId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Permiso no encontrado"));
@@ -159,6 +164,7 @@ public class ExpedienteService {
     @Transactional
     public void deleteExpediente(OmegaPrincipal principal, UUID expedienteId) {
         ExpedienteEntity expediente = authorizationService.requireWriteAccess(principal, expedienteId);
+        if (mfaPolicy != null) mfaPolicy.requireRecentMfaIfOrganizationalLegal(principal);
         List<DocumentEntity> storedDocs = documentRepository
                 .findAllByTenantIdAndExpedienteIdOrderByCreatedAtDesc(principal.tenantId(), expedienteId)
                 .stream()

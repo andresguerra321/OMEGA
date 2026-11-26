@@ -350,4 +350,16 @@ public final class AuthDtos {
             String message
     ) {
     }
+
+    public record SwitchWorkspaceRequest(
+            @NotNull(message = "El espacio destino es obligatorio")
+            UUID targetTenantId,
+            @Size(min = 6, max = 6, message = "Ingresa un código TOTP de 6 dígitos")
+            @Pattern(regexp = "^\\d{6}$", message = "Ingresa un código TOTP de 6 dígitos")
+            String totpCode
+    ) {
+        public SwitchWorkspaceRequest(UUID targetTenantId) {
+            this(targetTenantId, null);
+        }
+    }
 }
