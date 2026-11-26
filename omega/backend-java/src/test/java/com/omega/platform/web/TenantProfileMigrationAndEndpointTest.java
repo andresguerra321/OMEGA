@@ -32,12 +32,16 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = ProfileConfigController.class)
 @Import({
-
+        SecurityConfig.class,
+        JwtAuthenticationFilter.class,
+        SessionCookieHelper.class,
+        JsonSecurityHandlers.class,
         TenantProfileConfigService.class
 })
 class TenantProfileMigrationAndEndpointTest {
 
-    private void m
+    @Autowired
+    private MockMvc mvc;
 
     @MockBean
     private TenantRepository tenantRepository;
@@ -120,7 +124,8 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.defaultView").value("expedientes"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("legal_expedientes"))
                 .andExpect(jsonPath("$.copilotTone").value("forensic_legal"))
-                .andExpect(jsonPath("$.visibleModules").value(org.hamcrest.Matchers.contains("expedientes", "preguntar", "seguridad_despacho", "cuenta")));
+                .andExpect(jsonPath("$.visibleModules").value(
+                        org.hamcrest.Matchers.contains("expedientes", "preguntar", "seguridad_despacho", "cuenta")));
 
         mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))

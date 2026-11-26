@@ -349,7 +349,7 @@ class WorkspaceMembershipSecurityIntegrationTest {
         DriverManagerDataSource isolatedDs = new DriverManagerDataSource(targetUrl, username, password);
         JdbcTemplate isolatedJdbc = new JdbcTemplate(isolatedDs);
         try {
-            Flyway.configure().dataSource(isolatedDs).locations("classpath:db/migration").load().migrate();
+            Flyway.configure().dataSource(isolatedDs).locations("classpath:db/migration").target("31").load().migrate();
             try (Connection conn = isolatedDs.getConnection();
                  Statement stmt = conn.createStatement()) {
                 stmt.execute(reverseSql);
@@ -362,6 +362,90 @@ class WorkspaceMembershipSecurityIntegrationTest {
             assertThat(isolatedJdbc.queryForObject(
                     "SELECT role FROM omega_rag.workspace_memberships WHERE tenant_id = ? AND user_id = ?",
                     String.class, tId, uId)).isEqualTo("ADMIN");
+        } finally {
+            try (Connection adminConn = dataSource.getConnection();
+                 Statement stmt = adminConn.createStatement()) {
+                adminConn.setAutoCommit(true);
+                stmt.execute("DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)");
+            }
+        }
+    }
+
+    @Test
+    void v32MakesTenantOrganizationIdImmutableOnceAssignedAndSupportsReverseSql() throws Exception {
+        String suffix = Long.toUnsignedString(System.nanoTime());
+        TwoSpacesOrg orgX = createPaidOrgWithTwoSpaces("v32x-" + suffix, "ENTERPRISE", 25, 3000);
+        TwoSpacesOrg orgY = createPaidOrgWithTwoSpaces("v32y-" + suffix, "ENTERPRISE", 25, 3000);
+
+        // 1. Cambiar organization_id de un espacio ya asignado hacia otra organización falla por trigger V32
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE omega_rag.tenants SET organization_id = ?, billing_tenant_id = ? WHERE id = ?",
+                orgY.orgId(), orgY.billingTenantId(), orgX.spaceATenantId()))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("organization_id de un espacio es inmutable");
+
+        // 2. Poner organization_id en NULL (junto con billing_tenant_id = NULL) también falla por trigger V32
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE omega_rag.tenants SET organization_id = NULL, billing_tenant_id = NULL WHERE id = ?",
+                orgX.spaceATenantId()))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("organization_id de un espacio es inmutable");
+
+        // 3. Reversa documentada de V32 ejecuta limpio
+        Path v32Path = Path.of("src/main/resources/db/migration/V32__immutable_tenant_organization_id.sql");
+        List<String> lines = Files.readAllLines(v32Path, StandardCharsets.UTF_8);
+        StringBuilder reverseBuilder = new StringBuilder();
+        boolean inReverse = false;
+        for (String line : lines) {
+            if (line.startsWith("-- Reverse")) {
+                inReverse = true;
+                continue;
+            }
+            if (inReverse) {
+                if (!line.startsWith("--")) {
+                    break;
+                }
+                reverseBuilder.append(line.length() > 3 ? line.substring(3) : "").append('\n');
+            }
+        }
+        String reverseSql = reverseBuilder.toString().trim();
+        assertThat(reverseSql).contains("CREATE OR REPLACE FUNCTION omega_rag.protect_billing_payer_tenant()");
+
+        String dbName = "omega_v32_rev_" + Long.toUnsignedString(System.nanoTime());
+        String baseUrl = container != null ? container.getJdbcUrl() : System.getenv("OMEGA_TEST_DB_URL");
+        String username = container != null ? container.getUsername() : System.getenv().getOrDefault("OMEGA_TEST_DB_USER", "omega_test");
+        String password = container != null ? container.getPassword() : System.getenv().getOrDefault("OMEGA_TEST_DB_PASSWORD", "omega_test_only");
+
+        try (Connection adminConn = dataSource.getConnection();
+             Statement stmt = adminConn.createStatement()) {
+            adminConn.setAutoCommit(true);
+            stmt.execute("CREATE DATABASE " + dbName);
+        }
+
+        int qIdx = baseUrl.indexOf('?');
+        String withoutParams = qIdx >= 0 ? baseUrl.substring(0, qIdx) : baseUrl;
+        String params = qIdx >= 0 ? baseUrl.substring(qIdx) : "";
+        String targetUrl = withoutParams.substring(0, withoutParams.lastIndexOf('/') + 1) + dbName + params;
+
+        DriverManagerDataSource isolatedDs = new DriverManagerDataSource(targetUrl, username, password);
+        JdbcTemplate isolatedJdbc = new JdbcTemplate(isolatedDs);
+        try {
+            Flyway.configure().dataSource(isolatedDs).locations("classpath:db/migration").load().migrate();
+            try (Connection conn = isolatedDs.getConnection();
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute(reverseSql);
+            }
+            UUID rootT = UUID.randomUUID();
+            UUID childT = UUID.randomUUID();
+            UUID ownerU = UUID.randomUUID();
+            UUID orgId = UUID.randomUUID();
+            isolatedJdbc.update("INSERT INTO omega_rag.tenants (id, slug, name, active, profile, account_type) VALUES (?, 'r32-root', 'R32 Root', TRUE, 'GENERAL', 'ORGANIZATION')", rootT);
+            isolatedJdbc.update("INSERT INTO omega_rag.users (id, tenant_id, email, password_hash, full_name, role, active) VALUES (?, ?, 'o@r32.invalid', 'h', 'Owner', 'ADMIN', TRUE)", ownerU, rootT);
+            isolatedJdbc.update("INSERT INTO omega_rag.organizations (id, name, slug, billing_tenant_id, owner_user_id) VALUES (?, 'Org R32', 'org-r32', ?, ?)", orgId, rootT, ownerU);
+            isolatedJdbc.update("UPDATE omega_rag.tenants SET organization_id = ?, billing_tenant_id = ? WHERE id = ?", orgId, rootT, rootT);
+            isolatedJdbc.update("INSERT INTO omega_rag.tenants (id, slug, name, active, profile, account_type, organization_id, billing_tenant_id) VALUES (?, 'r32-child', 'R32 Child', TRUE, 'DEVELOPER', 'ORGANIZATION', ?, ?)", childT, orgId, rootT);
+            isolatedJdbc.update("UPDATE omega_rag.tenants SET organization_id = NULL, billing_tenant_id = NULL WHERE id = ?", childT);
+            assertThat(isolatedJdbc.queryForObject("SELECT organization_id FROM omega_rag.tenants WHERE id = ?", UUID.class, childT)).isNull();
         } finally {
             try (Connection adminConn = dataSource.getConnection();
                  Statement stmt = adminConn.createStatement()) {
