@@ -411,11 +411,11 @@ class LegalCaseSheetAndConflictIntegrationTest {
     }
 
     @Test
-    void reverseBlockCleanlyRollsBackV34Migration() throws Exception {
+    void reverseBlockCleanlyRollsBackV36Migration() throws Exception {
         if (pgContainer == null) {
             return;
         }
-        String isolatedDb = "omega_v34_rev_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String isolatedDb = "omega_v36_rev_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         try (Connection adminConn = pgContainer.createConnection("");
              Statement st = adminConn.createStatement()) {
             st.execute("CREATE DATABASE " + isolatedDb);
@@ -436,7 +436,7 @@ class LegalCaseSheetAndConflictIntegrationTest {
         Flyway.configure()
                 .dataSource(isolatedDs)
                 .locations("classpath:db/migration")
-                .target("34")
+                .target("36")
                 .load()
                 .migrate();
 
@@ -447,7 +447,7 @@ class LegalCaseSheetAndConflictIntegrationTest {
                   AND column_name IN ('client_name', 'counterparty_name', 'court_name', 'process_type', 'case_stage')
                 """, Integer.class)).isEqualTo(5);
 
-        String migrationSql = new ClassPathResource("db/migration/V34__legal_case_sheet.sql")
+        String migrationSql = new ClassPathResource("db/migration/V36__legal_case_sheet.sql")
                 .getContentAsString(StandardCharsets.UTF_8);
         String reverseSql = migrationSql.lines()
                 .takeWhile(line -> line.startsWith("--"))
