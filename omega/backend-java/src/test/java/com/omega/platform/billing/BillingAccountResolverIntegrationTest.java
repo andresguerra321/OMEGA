@@ -221,17 +221,17 @@ class BillingAccountResolverIntegrationTest {
         assertThat(resolved.billingTenantId()).isEqualTo(tenantId);
         assertThat(resolved.billingWorkspace()).isTrue();
 
-        // Trigger V30 sincroniza automáticamente la membresía raíz en workspace_memberships
+        // Trigger raíz crea la membresía en INSERT; desde V31 el UPDATE directo en users.role ya no sobrescribe workspace_memberships
         String syncedRole = jdbc.queryForObject(
                 "SELECT role FROM omega_rag.workspace_memberships WHERE tenant_id = ? AND user_id = ? AND active = TRUE",
                 String.class, tenantId, userId);
         assertThat(syncedRole).isEqualTo("ANALYST");
 
         jdbc.update("UPDATE omega_rag.users SET role = 'ADMIN' WHERE id = ?", userId);
-        String updatedRole = jdbc.queryForObject(
+        String decoupledRole = jdbc.queryForObject(
                 "SELECT role FROM omega_rag.workspace_memberships WHERE tenant_id = ? AND user_id = ?",
                 String.class, tenantId, userId);
-        assertThat(updatedRole).isEqualTo("ADMIN");
+        assertThat(decoupledRole).isEqualTo("ANALYST");
     }
 
     @Test
@@ -728,6 +728,7 @@ class BillingAccountResolverIntegrationTest {
             Flyway.configure()
                     .dataSource(migDs)
                     .locations("classpath:db/migration")
+                    .target("30")
                     .load()
                     .migrate();
 
@@ -808,7 +809,7 @@ class BillingAccountResolverIntegrationTest {
         assertThat(reverseSql).contains("Reversa V30 abortada");
 
         withIsolatedDatabase((migJdbc, migDs) -> {
-            Flyway.configure().dataSource(migDs).locations("classpath:db/migration").load().migrate();
+            Flyway.configure().dataSource(migDs).locations("classpath:db/migration").target("30").load().migrate();
 
             UUID rootTenantId = UUID.randomUUID();
             UUID childTenantId = UUID.randomUUID();
@@ -889,7 +890,7 @@ class BillingAccountResolverIntegrationTest {
                     """, UUID.randomUUID(), tenantId);
 
             // Aplicar V30 y usar las tablas nuevas antes de revertir
-            Flyway.configure().dataSource(migDs).locations("classpath:db/migration").load().migrate();
+            Flyway.configure().dataSource(migDs).locations("classpath:db/migration").target("30").load().migrate();
 
             UUID orgId = UUID.randomUUID();
             migJdbc.update("""
