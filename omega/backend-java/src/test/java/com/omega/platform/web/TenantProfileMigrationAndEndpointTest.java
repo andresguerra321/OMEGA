@@ -124,8 +124,7 @@ class TenantProfileMigrationAndEndpointTest {
                 .andExpect(jsonPath("$.defaultView").value("expedientes"))
                 .andExpect(jsonPath("$.ragCorpusScope").value("legal_expedientes"))
                 .andExpect(jsonPath("$.copilotTone").value("forensic_legal"))
-                .andExpect(jsonPath("$.visibleModules").value(
-                        org.hamcrest.Matchers.contains("expedientes", "preguntar", "seguridad_despacho", "cuenta")));
+                .andExpect(jsonPath("$.visibleModules").value(org.hamcrest.Matchers.contains("expedientes", "preguntar", "seguridad_despacho", "cuenta")));
 
         mockAuth("tok-gen-client", UUID.randomUUID(), Role.CLIENT, TenantProfile.GENERAL);
         mvc.perform(get("/api/v1/profile/config").header("Authorization", "Bearer tok-gen-client"))
