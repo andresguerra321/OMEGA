@@ -390,12 +390,12 @@ public class PilotOpsService {
             Role targetRole
     ) {
         requireAdmin(admin);
-        if (seats != null) seats.requireAvailableSeat(admin.tenantId());
         String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase(Locale.ROOT);
         if (!EMAIL_PATTERN.matcher(email).matches() || email.length() > 255) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ingresa un correo electrónico válido.");
         }
         Role role = targetRole != null ? targetRole : Role.ANALYST;
+        if (seats != null) seats.requireAvailableSeat(admin.tenantId(), null, role);
 
         if (userRepository.existsByTenantIdAndEmailIgnoreCase(admin.tenantId(), email)) {
             throw new ConflictException("Este correo ya pertenece al equipo actual.");
@@ -589,7 +589,7 @@ public class PilotOpsService {
             throw new ConflictException("Ya existe un usuario con este correo en la organización.");
         }
 
-        if (seats != null) seats.requireAvailableSeat(tenantId);
+        if (seats != null) seats.requireAvailableSeat(tenantId, null, role);
         UserEntity createdUser = userRepository.saveAndFlush(new UserEntity(
                 tenantId,
                 email,

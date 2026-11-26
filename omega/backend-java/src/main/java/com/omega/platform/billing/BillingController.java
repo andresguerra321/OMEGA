@@ -24,9 +24,10 @@ public class BillingController {
     private final MercadoPagoClient mp;
     private final JdbcTemplate jdbc;
     private final AccountAccessService access;
+    private final BillingAccountResolver resolver;
     private final TenantRepository tenants;
-    public BillingController(BillingService billing,CreditService credits,MercadoPagoClient mp,JdbcTemplate jdbc,AccountAccessService access,TenantRepository tenants) {
-        this.billing=billing;this.credits=credits;this.mp=mp;this.jdbc=jdbc;this.access=access;this.tenants=tenants;
+    public BillingController(BillingService billing,CreditService credits,MercadoPagoClient mp,JdbcTemplate jdbc,AccountAccessService access,BillingAccountResolver resolver,TenantRepository tenants) {
+        this.billing=billing;this.credits=credits;this.mp=mp;this.jdbc=jdbc;this.access=access;this.resolver=resolver;this.tenants=tenants;
     }
     @GetMapping("/plans")
     public Map<String,Object> plans() {
@@ -34,22 +35,25 @@ public class BillingController {
     }
     @GetMapping("/summary")
     public Map<String,Object> summary(@AuthenticationPrincipal OmegaPrincipal actor) {
+        UUID billingTenant = resolver.resolveBillingTenantId(actor.tenantId());
         Map<String,Object> result = credits.summary(actor.tenantId());
         var tenant=tenants.findByIdAndActiveTrue(actor.tenantId()).orElseThrow();
         result.put("accountType",tenant.getAccountType());
         result.put("profile",tenant.getProfile());
-        result.put("workspaceAccess", BillingPolicy.freeWorkspace(tenant.getAccountType(), tenant.getProfile().name())
-                || !"FREE".equals(result.get("planCode")));
-        boolean canManage=access.canManage(actor.tenantId(),actor.userId(),actor.role());
+        boolean freeWorkspace = tenant.getOrganizationId() == null
+                && BillingPolicy.freeWorkspace(tenant.getAccountType(), tenant.getProfile().name());
+        result.put("workspaceAccess", freeWorkspace || !"FREE".equals(result.get("planCode")));
+        boolean canManage=access.canManageBilling(actor.tenantId(),actor.userId(),actor.role());
         result.put("canManage",canManage);
         result.put("mode",mp.mode);
-        result.put("checkouts",canManage ? jdbc.queryForList("SELECT id,kind,status,checkout_url,created_at FROM omega_rag.billing_checkouts WHERE tenant_id=? ORDER BY created_at DESC LIMIT 10",actor.tenantId()) : List.of());
+        result.put("checkouts",canManage ? jdbc.queryForList("SELECT id,kind,status,checkout_url,created_at FROM omega_rag.billing_checkouts WHERE tenant_id=? ORDER BY created_at DESC LIMIT 10",billingTenant) : List.of());
         return result;
     }
     @GetMapping("/history")
     public List<Map<String,Object>> history(@AuthenticationPrincipal OmegaPrincipal actor) {
-        access.requireManager(actor);
-        return jdbc.queryForList("SELECT mp_payment_id,amount,currency,status,approved_at FROM omega_rag.billing_payments WHERE tenant_id=? ORDER BY updated_at DESC LIMIT 100",actor.tenantId());
+        access.requireBillingManager(actor);
+        UUID billingTenant = resolver.resolveBillingTenantId(actor.tenantId());
+        return jdbc.queryForList("SELECT mp_payment_id,amount,currency,status,approved_at FROM omega_rag.billing_payments WHERE tenant_id=? ORDER BY updated_at DESC LIMIT 100",billingTenant);
     }
     public record CheckoutRequest(String planCode,String interval,boolean topup,@Email @Size(max=255) String payerEmail) {}
     @PostMapping("/subscribe")
@@ -61,7 +65,7 @@ public class BillingController {
     public Map<String,Object> cancel(@AuthenticationPrincipal OmegaPrincipal actor) { billing.cancel(actor); return Map.of("ok",true); }
     @PostMapping("/refresh")
     public Map<String,Object> refresh(@AuthenticationPrincipal OmegaPrincipal actor) {
-        access.requireManager(actor);billing.reconcile(actor.tenantId());return summary(actor);
+        access.requireBillingManager(actor);billing.reconcile(actor.tenantId());return summary(actor);
     }
     @org.springframework.beans.factory.annotation.Value("${OMEGA_MP_WEBHOOK_MAX_AGE_SECONDS:300}")
     private long webhookMaxAgeSeconds = MercadoPagoSignature.DEFAULT_MAX_AGE_SECONDS;

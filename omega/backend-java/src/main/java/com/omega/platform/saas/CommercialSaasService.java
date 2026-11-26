@@ -16,6 +16,12 @@ public class CommercialSaasService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.omega.platform.billing.CreditService credits;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.BillingAccountResolver billingResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.BillingPolicy billingPolicy;
+
 
     public record PlanLimits(String planCode, int maxDevices, int monthlyAiQuota) {}
 
@@ -41,14 +47,19 @@ public class CommercialSaasService {
         this.alertDispatchRepository = alertDispatchRepository;
     }
 
+    private UUID resolveBillingTenantId(UUID tenantId) {
+        return billingResolver != null ? billingResolver.resolveBillingTenantId(tenantId) : tenantId;
+    }
+
     @Transactional
     public SubscriptionEntity getOrProvisionSubscription(UUID tenantId) {
-        SubscriptionEntity result = subscriptionRepository.findByTenantId(tenantId).orElseGet(() -> {
+        UUID billingTenantId = resolveBillingTenantId(tenantId);
+        SubscriptionEntity result = subscriptionRepository.findByTenantId(billingTenantId).orElseGet(() -> {
             OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
             PlanLimits defaults = PLAN_CATALOG.get("FREE");
             SubscriptionEntity sub = new SubscriptionEntity();
             sub.setId(UUID.randomUUID());
-            sub.setTenantId(tenantId);
+            sub.setTenantId(billingTenantId);
             sub.setPlanCode(defaults.planCode());
             sub.setStatus("ACTIVE");
             sub.setMaxDevices(defaults.maxDevices());
@@ -58,9 +69,13 @@ public class CommercialSaasService {
             sub.setUpdatedAt(now);
             return subscriptionRepository.save(sub);
         });
-        if (credits != null && credits.enforced() && (!result.isPaidVerified() || !result.getCurrentPeriodEnd().isAfter(OffsetDateTime.now(ZoneOffset.UTC)))) {
+        int graceDays = billingPolicy != null ? billingPolicy.graceDays() : 0;
+        OffsetDateTime effectiveEnd = result.getCurrentPeriodEnd() != null && !result.isCancelAtPeriodEnd()
+                ? result.getCurrentPeriodEnd().plusDays(graceDays)
+                : result.getCurrentPeriodEnd();
+        if (credits != null && credits.enforced() && (!result.isPaidVerified() || effectiveEnd == null || !effectiveEnd.isAfter(OffsetDateTime.now(ZoneOffset.UTC)))) {
             SubscriptionEntity view = new SubscriptionEntity();
-            view.setId(result.getId()); view.setTenantId(tenantId); view.setPlanCode("FREE");
+            view.setId(result.getId()); view.setTenantId(billingTenantId); view.setPlanCode("FREE");
             view.setStatus("ACTIVE"); view.setMaxDevices(1); view.setMonthlyAiQuota(30);
             view.setCurrentPeriodStart(result.getCurrentPeriodStart()); view.setCurrentPeriodEnd(result.getCurrentPeriodEnd());
             return view;
@@ -70,12 +85,13 @@ public class CommercialSaasService {
 
     @Transactional
     public SubscriptionEntity updateSubscriptionPlan(UUID tenantId, String rawPlanCode) {
+        UUID billingTenantId = resolveBillingTenantId(tenantId);
         String normalized = rawPlanCode == null ? "" : rawPlanCode.trim().toUpperCase(Locale.ROOT);
         PlanLimits target = PLAN_CATALOG.get(normalized);
         if (target == null) {
             throw new IllegalArgumentException("Plan no soportado: " + rawPlanCode + ". Usa FREE, PRO o ENTERPRISE.");
         }
-        SubscriptionEntity sub = getOrProvisionSubscription(tenantId);
+        SubscriptionEntity sub = getOrProvisionSubscription(billingTenantId);
         sub.setPlanCode(target.planCode());
         sub.setMaxDevices(target.maxDevices());
         sub.setMonthlyAiQuota(target.monthlyAiQuota());
@@ -92,7 +108,8 @@ public class CommercialSaasService {
             String hostname,
             String osPlatform,
             String sensorVersion) {
-        if (credits != null) credits.lock(tenantId);
+        UUID billingTenantId = resolveBillingTenantId(tenantId);
+        if (credits != null) credits.lock(billingTenantId);
         String cleanUid = deviceUid == null ? "" : deviceUid.trim();
         if (cleanUid.isEmpty()) {
             throw new IllegalArgumentException("deviceUid es obligatorio.");
@@ -111,8 +128,10 @@ public class CommercialSaasService {
             return deviceRepository.save(existing);
         }
 
-        SubscriptionEntity sub = getOrProvisionSubscription(tenantId);
-        long activeCount = deviceRepository.countByTenantIdAndStatus(tenantId, "ACTIVE");
+        SubscriptionEntity sub = getOrProvisionSubscription(billingTenantId);
+        long activeCount = billingResolver != null
+                ? deviceRepository.countActiveInBillingAccount(billingTenantId, "ACTIVE")
+                : deviceRepository.countByTenantIdAndStatus(tenantId, "ACTIVE");
         if (activeCount >= sub.getMaxDevices()) {
             throw new IllegalStateException(
                     "Límite de dispositivos del plan " + sub.getPlanCode()
@@ -187,9 +206,12 @@ public class CommercialSaasService {
 
     @Transactional
     public Map<String, Object> getSaasSummary(UUID tenantId, UUID userId) {
-        SubscriptionEntity sub = getOrProvisionSubscription(tenantId);
+        UUID billingTenantId = resolveBillingTenantId(tenantId);
+        SubscriptionEntity sub = getOrProvisionSubscription(billingTenantId);
         List<DeviceEntity> devices = deviceRepository.findByTenantIdOrderByLastHeartbeatAtDesc(tenantId);
-        long activeDevices = devices.stream().filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus())).count();
+        long activeDevices = billingResolver != null
+                ? deviceRepository.countActiveInBillingAccount(billingTenantId, "ACTIVE")
+                : devices.stream().filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus())).count();
 
         String periodYm = currentPeriodYm();
         AiUsageQuotaEntity quota = aiUsageQuotaRepository

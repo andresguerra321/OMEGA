@@ -13,6 +13,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class CommercialDocuments {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.omega.platform.billing.BillingAccountResolver billingResolver;
+
     private final JdbcTemplate jdbc;
     private final Map<String,String> documents;
     private final Map<String,String> seller;
@@ -46,13 +49,15 @@ public class CommercialDocuments {
                 "seller",seller,"documents",documents,"invoiceStatus","NOT_CONFIGURED");
     }
     public boolean accepted(OmegaPrincipal actor) {
+        UUID billingTenant = billingResolver != null ? billingResolver.resolveBillingTenantId(actor.tenantId()) : actor.tenantId();
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM omega_rag.commercial_acceptances WHERE tenant_id=? AND user_id=? AND version=?)",
-                Boolean.class,actor.tenantId(),actor.userId(),version));
+                Boolean.class,billingTenant,actor.userId(),version));
     }
     public void accept(OmegaPrincipal actor,String requestedVersion) {
         if(!published) throw new ResponseStatusException(HttpStatus.CONFLICT,"Los documentos comerciales siguen en revisión; no se registra una aceptación definitiva.");
         if(!version.equals(requestedVersion)) throw new ResponseStatusException(HttpStatus.CONFLICT,"Los documentos cambiaron. Vuelve a revisarlos.");
-        jdbc.update("INSERT INTO omega_rag.commercial_acceptances(tenant_id,user_id,version) VALUES (?,?,?) ON CONFLICT DO NOTHING",actor.tenantId(),actor.userId(),version);
+        UUID billingTenant = billingResolver != null ? billingResolver.resolveBillingTenantId(actor.tenantId()) : actor.tenantId();
+        jdbc.update("INSERT INTO omega_rag.commercial_acceptances(tenant_id,user_id,version) VALUES (?,?,?) ON CONFLICT DO NOTHING",billingTenant,actor.userId(),version);
     }
     public void requireRegistration(String requestedVersion) {
         if(published && !version.equals(requestedVersion)) throw new ResponseStatusException(HttpStatus.CONFLICT,"Debes revisar y aceptar la versión vigente de términos y tratamiento de datos antes de registrarte.");

@@ -39,10 +39,30 @@ public class TenantEntity {
     @Column(name = "owner_user_id")
     private UUID ownerUserId;
 
+    @Column(name = "organization_id")
+    private UUID organizationId;
+
+    @Column(name = "billing_tenant_id")
+    private UUID billingTenantId;
+
+    @Column(name = "credit_limit_override")
+    private Integer creditLimitOverride;
+
+    @Column(name = "device_limit_override")
+    private Integer deviceLimitOverride;
+
     public String getAccountType() { return accountType; }
     public void setAccountType(String accountType) { this.accountType = accountType; }
     public UUID getOwnerUserId() { return ownerUserId; }
     public void setOwnerUserId(UUID ownerUserId) { this.ownerUserId = ownerUserId; }
+    public UUID getOrganizationId() { return organizationId; }
+    public void setOrganizationId(UUID organizationId) { this.organizationId = organizationId; }
+    public UUID getBillingTenantId() { return billingTenantId; }
+    public void setBillingTenantId(UUID billingTenantId) { this.billingTenantId = billingTenantId; }
+    public Integer getCreditLimitOverride() { return creditLimitOverride; }
+    public void setCreditLimitOverride(Integer creditLimitOverride) { this.creditLimitOverride = creditLimitOverride; }
+    public Integer getDeviceLimitOverride() { return deviceLimitOverride; }
+    public void setDeviceLimitOverride(Integer deviceLimitOverride) { this.deviceLimitOverride = deviceLimitOverride; }
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

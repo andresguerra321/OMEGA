@@ -23,19 +23,34 @@ public class BillingService {
     private final CreditService credits;
     private final MercadoPagoClient mp;
     private final AccountAccessService access;
+    private final BillingAccountResolver resolver;
     private final TransactionTemplate tx;
+
     public BillingService(JdbcTemplate jdbc, CreditService credits, MercadoPagoClient mp, AccountAccessService access, PlatformTransactionManager manager) {
-        this.jdbc = jdbc; this.credits = credits; this.mp = mp; this.access = access; this.tx = new TransactionTemplate(manager);
+        this(jdbc, credits, mp, access, new BillingAccountResolver(jdbc), manager);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BillingService(
+            JdbcTemplate jdbc,
+            CreditService credits,
+            MercadoPagoClient mp,
+            AccountAccessService access,
+            BillingAccountResolver resolver,
+            PlatformTransactionManager manager
+    ) {
+        this.jdbc = jdbc; this.credits = credits; this.mp = mp; this.access = access; this.resolver = resolver; this.tx = new TransactionTemplate(manager);
     }
     public List<Map<String,Object>> plans() { return jdbc.queryForList("SELECT * FROM omega_rag.billing_plans WHERE active ORDER BY price"); }
 
     public Map<String,Object> checkout(OmegaPrincipal actor, String plan, String interval, boolean topup, String payerEmail) {
-        access.requireManager(actor); mp.requireEnabled();
+        access.requireBillingManager(actor); mp.requireEnabled();
+        UUID billingTenant = resolver.resolveBillingTenantId(actor.tenantId());
         mp.validateSeller();
-        credits.subscription(actor.tenantId());
+        credits.subscription(billingTenant);
         Map<String,Object> offer;
         if (topup) {
-            credits.requirePaid(actor.tenantId());
+            credits.requirePaid(billingTenant);
             offer = Map.of("price", new BigDecimal("29900"), "credits", 200, "name", "200 créditos OMEGA");
         } else {
             if (plan==null || interval==null || !Set.of("PRO","ENTERPRISE").contains(plan) || !Set.of("MONTHLY","ANNUAL").contains(interval))
@@ -43,14 +58,14 @@ public class BillingService {
             offer = jdbc.queryForMap("SELECT * FROM omega_rag.billing_plans WHERE plan_code=? AND interval=? AND active", plan, interval);
         }
         UUID id = tx.execute(s -> {
-            credits.lock(actor.tenantId());
+            credits.lock(billingTenant);
             // One recurring subscription at a time prevents accidental overlapping charges.
-            if (!topup && !jdbc.queryForList("SELECT id FROM omega_rag.billing_checkouts WHERE tenant_id=? AND kind='SUBSCRIPTION' AND status IN ('CREATING','PENDING','ACTIVE','PAUSED','CANCEL_REQUESTED')",actor.tenantId()).isEmpty())
+            if (!topup && !jdbc.queryForList("SELECT id FROM omega_rag.billing_checkouts WHERE tenant_id=? AND kind='SUBSCRIPTION' AND status IN ('CREATING','PENDING','ACTIVE','PAUSED','CANCEL_REQUESTED')",billingTenant).isEmpty())
                 throw new ResponseStatusException(HttpStatus.CONFLICT,"Ya tienes una suscripción o un pago pendiente. Cancélalo antes de crear otro.");
-            if (!topup && !"FREE".equals(CreditService.effectivePlan(jdbc.queryForMap("SELECT * FROM omega_rag.subscriptions WHERE tenant_id=?",actor.tenantId()),OffsetDateTime.now(ZoneOffset.UTC))))
+            if (!topup && !"FREE".equals(CreditService.effectivePlan(jdbc.queryForMap("SELECT * FROM omega_rag.subscriptions WHERE tenant_id=?",billingTenant),OffsetDateTime.now(ZoneOffset.UTC))))
                 throw new ResponseStatusException(HttpStatus.CONFLICT,"Tu período pagado sigue activo. Puedes renovar o cambiar de plan al finalizar.");
             UUID key = UUID.randomUUID();
-            jdbc.update("INSERT INTO omega_rag.billing_checkouts(id,tenant_id,actor_user_id,kind,plan_code,interval,amount,credits) VALUES (?,?,?,?,?,?,?,?)", key,actor.tenantId(),actor.userId(),topup?"TOPUP":"SUBSCRIPTION",plan,interval,offer.get("price"),offer.get("credits"));
+            jdbc.update("INSERT INTO omega_rag.billing_checkouts(id,tenant_id,actor_user_id,kind,plan_code,interval,amount,credits) VALUES (?,?,?,?,?,?,?,?)", key,billingTenant,actor.userId(),topup?"TOPUP":"SUBSCRIPTION",plan,interval,offer.get("price"),offer.get("credits"));
             return key;
         });
         try {
@@ -95,21 +110,23 @@ public class BillingService {
     }
 
     public void cancel(OmegaPrincipal actor) {
-        access.requireManager(actor); mp.requireEnabled();
-        List<Map<String,Object>> rows = jdbc.queryForList("SELECT * FROM omega_rag.billing_checkouts WHERE tenant_id=? AND kind='SUBSCRIPTION' AND status IN ('CREATING','PENDING','ACTIVE','PAUSED','CANCEL_REQUESTED')",actor.tenantId());
+        access.requireBillingManager(actor); mp.requireEnabled();
+        UUID billingTenant = resolver.resolveBillingTenantId(actor.tenantId());
+        List<Map<String,Object>> rows = jdbc.queryForList("SELECT * FROM omega_rag.billing_checkouts WHERE tenant_id=? AND kind='SUBSCRIPTION' AND status IN ('CREATING','PENDING','ACTIVE','PAUSED','CANCEL_REQUESTED')",billingTenant);
         for (Map<String,Object> checkout : rows) {
             jdbc.update("UPDATE omega_rag.billing_checkouts SET status='CANCEL_REQUESTED' WHERE id=?",checkout.get("id"));
             if(checkout.get("mp_id")==null) { recoverCheckout(checkout); continue; }
             mp.cancel(checkout.get("mp_id").toString());
             jdbc.update("UPDATE omega_rag.billing_checkouts SET status='CANCELLED' WHERE id=?",checkout.get("id"));
         }
-        jdbc.update("UPDATE omega_rag.subscriptions SET cancel_at_period_end=true WHERE tenant_id=?",actor.tenantId());
+        jdbc.update("UPDATE omega_rag.subscriptions SET cancel_at_period_end=true WHERE tenant_id=?",billingTenant);
         for(var checkout:rows) notifyPayment(checkout,checkout.get("id").toString(),"cancelled-renewal","OMEGA · Renovación cancelada",
                 "La renovación automática fue cancelada. El acceso ya pagado se conserva hasta el final de su período. Puedes consultar la fecha en Cuenta · Mi plan y créditos.");
     }
 
-    public void reconcile(UUID tenant) {
+    public void reconcile(UUID workspaceOrBillingTenant) {
         if (!mp.enabled()) return;
+        UUID tenant = resolver.resolveBillingTenantId(workspaceOrBillingTenant);
         for(Map<String,Object> checkout:jdbc.queryForList("SELECT * FROM omega_rag.billing_checkouts WHERE tenant_id=? AND kind='SUBSCRIPTION' AND mp_id IS NULL AND status IN ('CREATING','CANCEL_REQUESTED')",tenant)) recoverCheckout(checkout);
         for (Map<String,Object> checkout : jdbc.queryForList("SELECT * FROM omega_rag.billing_checkouts WHERE tenant_id=? AND kind='SUBSCRIPTION' AND mp_id IS NOT NULL ORDER BY created_at DESC LIMIT 20",tenant)) {
             String id = checkout.get("mp_id").toString();

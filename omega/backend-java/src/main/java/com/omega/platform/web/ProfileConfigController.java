@@ -2,8 +2,8 @@ package com.omega.platform.web;
 
 import com.omega.platform.domain.TenantEntity;
 import com.omega.platform.domain.TenantProfile;
-import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.repository.DocumentRepository;
+import com.omega.platform.repository.TenantRepository;
 import com.omega.platform.security.Role;
 import com.omega.platform.security.TenantContext;
 import com.omega.platform.security.TenantScope;
@@ -13,9 +13,9 @@ import com.omega.platform.service.TenantProfileConfigService.ProfileConfig;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,11 +30,12 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/profile")
 public class ProfileConfigController {
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.omega.platform.billing.AccountAccessService accountAccess;
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.omega.platform.billing.CreditService credits;
 
+    @Autowired(required = false)
+    private com.omega.platform.billing.AccountAccessService accountAccess;
+
+    @Autowired(required = false)
+    private com.omega.platform.billing.CreditService credits;
 
     private final TenantRepository tenantRepository;
     private final TenantProfileConfigService configService;
@@ -72,7 +73,9 @@ public class ProfileConfigController {
     public ProfileConfig updateTenantProfile(@Valid @RequestBody UpdateTenantProfileRequest request) {
         TenantScope scope = TenantContext.get()
                 .orElseThrow(() -> new AccessDeniedException("Se requiere contexto de tenant autenticado"));
-        if (accountAccess != null ? !accountAccess.canManage(scope.tenantId(), scope.userId(), scope.role()) : scope.role() != Role.ADMIN) {
+        if (accountAccess != null
+                ? !accountAccess.canManage(scope.tenantId(), scope.userId(), scope.role())
+                : scope.role() != Role.ADMIN) {
             throw new AccessDeniedException("Solo un administrador del espacio puede cambiar el perfil");
         }
         if (!Boolean.TRUE.equals(request.confirmed())) {
@@ -80,12 +83,22 @@ public class ProfileConfigController {
                     HttpStatus.BAD_REQUEST,
                     "Debes confirmar explícitamente el cambio de perfil del espacio");
         }
-        if (credits != null && request.profile() != TenantProfile.GENERAL) credits.requirePaid(scope.tenantId());
+        if (credits != null && request.profile() != TenantProfile.GENERAL) {
+            credits.requirePaid(scope.tenantId());
+        }
         TenantEntity tenant = tenantRepository.findActiveForUpdate(scope.tenantId())
                 .orElseThrow(() -> new AccessDeniedException("Tenant inactivo o inexistente"));
 
         TenantProfile previousProfile = tenant.getProfile() != null ? tenant.getProfile() : TenantProfile.GENERAL;
         TenantProfile nextProfile = request.profile();
+        if (nextProfile == TenantProfile.LEGAL
+                && previousProfile != TenantProfile.LEGAL
+                && tenant.getBillingTenantId() != null
+                && tenant.getId().equals(tenant.getBillingTenantId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "El espacio pagador de una organización debe mantenerse administrativo y no puede cambiar al perfil LEGAL");
+        }
         if (previousProfile != nextProfile) {
             tenant.setProfile(nextProfile);
             tenantRepository.save(tenant);

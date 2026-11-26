@@ -321,7 +321,7 @@ public class AuthService {
     public UserSummaryResponse createUserInCurrentTenant(OmegaPrincipal adminPrincipal,
             CreateTenantUserRequest request) {
         UUID tenantId = adminPrincipal.tenantId();
-        if (seats != null) seats.requireAvailableSeat(tenantId);
+        if (seats != null) seats.requireAvailableSeat(tenantId, null, request.role());
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, normalizedEmail)) {
             throw new ConflictException("El correo ya se encuentra registrado en el tenant actual");

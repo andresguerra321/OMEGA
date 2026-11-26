@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -17,10 +18,22 @@ public class CreditService {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final BillingPolicy policy;
+    private final BillingAccountResolver resolver;
 
     public CreditService(JdbcTemplate jdbc, PlatformTransactionManager manager, BillingPolicy policy) {
+        this(jdbc, manager, policy, new BillingAccountResolver(jdbc));
+    }
+
+    @Autowired
+    public CreditService(
+            JdbcTemplate jdbc,
+            PlatformTransactionManager manager,
+            BillingPolicy policy,
+            BillingAccountResolver resolver
+    ) {
         this.jdbc = jdbc;
         this.policy = policy;
+        this.resolver = resolver;
         this.tx = new TransactionTemplate(manager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -72,41 +85,45 @@ public class CreditService {
         throw new IllegalStateException("Fecha de facturación inválida");
     }
 
-    public Map<String, Object> subscription(UUID tenant) {
-        return tx.execute(s -> { lock(tenant); return provision(tenant); });
+    public Map<String, Object> subscription(UUID workspaceTenant) {
+        UUID billingTenant = resolver.resolveBillingTenantId(workspaceTenant);
+        return tx.execute(s -> { lockBillingTenant(billingTenant); return provision(billingTenant); });
     }
 
-    public boolean isPaid(UUID tenant) {
-        return !"FREE".equals(effectivePlan(subscription(tenant), OffsetDateTime.now(ZoneOffset.UTC), policy.graceDays()));
+    public boolean isPaid(UUID workspaceTenant) {
+        return !"FREE".equals(effectivePlan(subscription(workspaceTenant), OffsetDateTime.now(ZoneOffset.UTC), policy.graceDays()));
     }
 
-    public void requirePaid(UUID tenant) {
+    public void requirePaid(UUID workspaceTenant) {
         if (!enforced()) return;
-        if (!isPaid(tenant)) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
+        if (!isPaid(workspaceTenant)) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
                 "Esta función requiere Pro o Enterprise. Revisa Mi plan y créditos.");
     }
 
-    public void requireWorkspaceAccess(UUID tenant) {
-        Map<String, Object> identity = jdbc.queryForMap(
-                "SELECT account_type,profile FROM omega_rag.tenants WHERE id=? AND active", tenant);
-        if (!BillingPolicy.freeWorkspace((String) identity.get("account_type"), (String) identity.get("profile")))
-            requirePaid(tenant);
+    public void requireWorkspaceAccess(UUID workspaceTenant) {
+        BillingAccountResolver.ResolvedBillingAccount account = resolver.resolve(workspaceTenant);
+        boolean free = !account.belongsToOrganization()
+                && BillingPolicy.freeWorkspace(account.workspaceAccountType(), account.workspaceProfile());
+        if (!free) {
+            requirePaid(account.billingTenantId());
+        }
     }
 
-    public <T> T execute(UUID tenant, UUID actor, CreditOperation operation, int amount, java.util.function.Supplier<T> work) {
-        UUID reservation = reserve(tenant, actor, operation, amount, null);
+    public <T> T execute(UUID workspaceTenant, UUID actor, CreditOperation operation, int amount, java.util.function.Supplier<T> work) {
+        UUID reservation = reserve(workspaceTenant, actor, operation, amount, null);
         T result;
         try { result = work.get(); }
-        catch (RuntimeException ex) { settle(tenant, reservation, 0); throw ex; }
-        settle(tenant, reservation, amount);
+        catch (RuntimeException ex) { settle(workspaceTenant, reservation, 0); throw ex; }
+        settle(workspaceTenant, reservation, amount);
         return result;
     }
 
-    public Map<String, Object> summary(UUID tenant) {
+    public Map<String, Object> summary(UUID workspaceTenant) {
+        UUID billingTenant = resolver.resolveBillingTenantId(workspaceTenant);
         return tx.execute(s -> {
-            lock(tenant);
-            Map<String, Object> sub = provision(tenant);
-            ensureGrants(tenant, sub);
+            lockBillingTenant(billingTenant);
+            Map<String, Object> sub = provision(billingTenant);
+            ensureGrants(billingTenant, sub);
             OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
             int graceDays = policy.graceDays();
             boolean inGrace = inGracePeriod(sub, now, graceDays);
@@ -120,34 +137,43 @@ public class CreditService {
             result.put("graceUntil", inGrace ? graceUntil(sub, graceDays) : null);
             result.put("graceDays", graceDays);
             result.put("cancelAtPeriodEnd", sub.get("cancel_at_period_end"));
-            result.put("balance", jdbc.queryForObject("SELECT coalesce(sum(remaining),0) FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now()", Long.class, tenant));
-            result.put("reserved", jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM omega_rag.credit_reservations WHERE tenant_id=? AND status='RESERVED'", Long.class, tenant));
-            result.put("buckets", jdbc.queryForList("SELECT source, granted, remaining, expires_at FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now() ORDER BY expires_at", tenant));
-            result.put("movements", jdbc.queryForList("SELECT operation,amount,charged,status,created_at FROM omega_rag.credit_reservations WHERE tenant_id=? ORDER BY created_at DESC LIMIT 30", tenant));
+            result.put("balance", jdbc.queryForObject("SELECT coalesce(sum(remaining),0) FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now()", Long.class, billingTenant));
+            result.put("reserved", jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM omega_rag.credit_reservations WHERE tenant_id=? AND status='RESERVED'", Long.class, billingTenant));
+            result.put("buckets", jdbc.queryForList("SELECT source, granted, remaining, expires_at FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now() ORDER BY expires_at", billingTenant));
+            result.put("movements", jdbc.queryForList("SELECT operation,amount,charged,status,created_at FROM omega_rag.credit_reservations WHERE tenant_id=? ORDER BY created_at DESC LIMIT 30", billingTenant));
             return result;
         });
     }
 
-    public UUID reserve(UUID tenant, UUID actor, CreditOperation operation, int amount, String reference) {
+    public UUID reserve(UUID workspaceTenant, UUID actor, CreditOperation operation, int amount, String reference) {
         if (!enforced()) return null;
-        requireWorkspaceAccess(tenant);
+        BillingAccountResolver.ResolvedBillingAccount account = resolver.resolve(workspaceTenant);
+        boolean free = !account.belongsToOrganization()
+                && BillingPolicy.freeWorkspace(account.workspaceAccountType(), account.workspaceProfile());
+        if (!free) {
+            requirePaid(account.billingTenantId());
+        }
         if (amount < 0 || amount > 100000) throw new IllegalArgumentException("Consumo inválido");
+        UUID billingTenant = account.billingTenantId();
         return tx.execute(s -> {
-            lock(tenant);
-            Map<String,Object> sub = provision(tenant);
+            lockBillingTenant(billingTenant);
+            Map<String,Object> sub = provision(billingTenant);
             boolean paid = !"FREE".equals(effectivePlan(sub, OffsetDateTime.now(ZoneOffset.UTC), policy.graceDays()));
             if (operation.paidOnly && !paid) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
                     "Esta función requiere un plan de pago.");
-            ensureGrants(tenant, sub);
-            if (reference != null && !jdbc.queryForList("SELECT id FROM omega_rag.credit_reservations WHERE tenant_id=? AND reference=?", tenant, reference).isEmpty())
+            ensureGrants(billingTenant, sub);
+            if (reference != null && !jdbc.queryForList("SELECT id FROM omega_rag.credit_reservations WHERE tenant_id=? AND reference=?", billingTenant, reference).isEmpty())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta operación ya fue registrada.");
-            List<Map<String,Object>> grants = jdbc.queryForList("SELECT id, remaining FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now() AND remaining>0 ORDER BY expires_at,id FOR UPDATE", tenant);
+            List<Map<String,Object>> grants = jdbc.queryForList("SELECT id, remaining FROM omega_rag.credit_grants WHERE tenant_id=? AND expires_at>now() AND remaining>0 ORDER BY expires_at,id FOR UPDATE", billingTenant);
             long available = grants.stream().mapToLong(g -> ((Number)g.get("remaining")).longValue()).sum();
             if (available < amount) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
                     "Créditos insuficientes. Esta operación requiere " + amount + ". Saldo disponible: " + available + ". Revisa Mi plan y créditos.");
             requireSpendConsent(operation,amount);
             UUID id = UUID.randomUUID();
-            jdbc.update("INSERT INTO omega_rag.credit_reservations(id,tenant_id,actor_user_id,operation,amount,reference) VALUES (?,?,?,?,?,?)", id, tenant, actor, operation.name(), amount, reference);
+            jdbc.update(
+                    "INSERT INTO omega_rag.credit_reservations(id,tenant_id,workspace_tenant_id,actor_user_id,operation,amount,reference) VALUES (?,?,?,?,?,?,?)",
+                    id, billingTenant, workspaceTenant, actor, operation.name(), amount, reference
+            );
             int pending = amount;
             for (Map<String,Object> grant : grants) {
                 if (pending == 0) break;
@@ -169,11 +195,18 @@ public class CreditService {
         }
     }
 
-    public void settle(UUID tenant, UUID reservation, int charged) {
+    public void settle(UUID workspaceOrBillingTenant, UUID reservation, int charged) {
         if (reservation == null) return;
+        UUID billingTenant = resolver.resolveBillingTenantId(workspaceOrBillingTenant);
         tx.executeWithoutResult(s -> {
-            lock(tenant);
-            Map<String,Object> row = jdbc.queryForMap("SELECT * FROM omega_rag.credit_reservations WHERE id=? AND tenant_id=? FOR UPDATE", reservation, tenant);
+            lockBillingTenant(billingTenant);
+            Map<String,Object> row = jdbc.queryForMap("""
+                    SELECT * FROM omega_rag.credit_reservations
+                     WHERE id = ?
+                       AND tenant_id = ?
+                       AND (workspace_tenant_id IS NULL OR workspace_tenant_id = ? OR ? = tenant_id)
+                     FOR UPDATE
+                    """, reservation, billingTenant, workspaceOrBillingTenant, workspaceOrBillingTenant);
             if (!"RESERVED".equals(row.get("status"))) return;
             int amount = ((Number)row.get("amount")).intValue();
             if (charged < 0 || charged > amount) throw new IllegalArgumentException("Liquidación inválida");
@@ -188,22 +221,38 @@ public class CreditService {
         });
     }
 
-    public void attachReference(UUID tenant, UUID reservation, String reference) {
-        jdbc.update("UPDATE omega_rag.credit_reservations SET reference=? WHERE id=? AND tenant_id=? AND status='RESERVED'",reference,reservation,tenant);
+    public void attachReference(UUID workspaceTenant, UUID reservation, String reference) {
+        UUID billingTenant = resolver.resolveBillingTenantId(workspaceTenant);
+        jdbc.update("""
+                UPDATE omega_rag.credit_reservations
+                   SET reference = ?
+                 WHERE id = ?
+                   AND tenant_id = ?
+                   AND (workspace_tenant_id IS NULL OR workspace_tenant_id = ?)
+                   AND status = 'RESERVED'
+                """, reference, reservation, billingTenant, workspaceTenant);
     }
 
-    public void settleMobile(UUID tenant, String job, String status) {
+    public void settleMobile(UUID workspaceTenant, String job, String status) {
         boolean done="COMPLETED".equalsIgnoreCase(status),failed="FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status);
         if(!done && !failed) return;
-        for(Map<String,Object> row:jdbc.queryForList("SELECT id,amount FROM omega_rag.credit_reservations WHERE tenant_id=? AND reference=? AND status='RESERVED'",tenant,"mobile:"+job))
-            settle(tenant,(UUID)row.get("id"),done?((Number)row.get("amount")).intValue():0);
+        UUID billingTenant = resolver.resolveBillingTenantId(workspaceTenant);
+        for(Map<String,Object> row:jdbc.queryForList("""
+                SELECT id, amount
+                  FROM omega_rag.credit_reservations
+                 WHERE tenant_id = ?
+                   AND COALESCE(workspace_tenant_id, tenant_id) = ?
+                   AND reference = ?
+                   AND status = 'RESERVED'
+                """, billingTenant, workspaceTenant, "mobile:"+job))
+            settle(workspaceTenant,(UUID)row.get("id"),done?((Number)row.get("amount")).intValue():0);
     }
 
     @org.springframework.scheduling.annotation.Scheduled(fixedDelayString="${omega.billing.credit-reconcile-delay-ms:60000}")
     public void reconcileDocuments() {
         for (Map<String,Object> row : jdbc.queryForList("""
                 SELECT r.id,r.tenant_id,d.status,d.total_pages,d.ocr_applied FROM omega_rag.credit_reservations r
-                JOIN omega_rag.documents d ON r.reference='document:'||d.id::text AND r.tenant_id=d.tenant_id
+                JOIN omega_rag.documents d ON r.reference='document:'||d.id::text AND COALESCE(r.workspace_tenant_id, r.tenant_id)=d.tenant_id
                 WHERE r.status='RESERVED' AND d.status IN ('INDEXED','FAILED') LIMIT 100
                 """)) {
             int charged="INDEXED".equals(row.get("status")) ? CreditOperation.pageCredits(((Number)row.get("total_pages")).intValue(),Boolean.TRUE.equals(row.get("ocr_applied"))) : 0;
@@ -214,8 +263,13 @@ public class CreditService {
             settle((UUID)row.get("tenant_id"),(UUID)row.get("id"),0);
     }
 
-    public void lock(UUID tenant) {
-        jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", rs -> {}, "billing:" + tenant);
+    public void lock(UUID workspaceOrBillingTenant) {
+        UUID billingTenant = resolver.resolveBillingTenantId(workspaceOrBillingTenant);
+        lockBillingTenant(billingTenant);
+    }
+
+    private void lockBillingTenant(UUID billingTenant) {
+        jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", rs -> {}, "billing:" + billingTenant);
     }
 
     private Map<String,Object> provision(UUID tenant) {
