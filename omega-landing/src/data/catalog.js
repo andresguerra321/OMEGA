@@ -7,55 +7,22 @@ export const OMEGA_APP_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OMEGA_APP_URL) ||
   'http://localhost:5173';
 
-export const OMEGA_HERO_IMAGE = '/media/omega-general.png';
-
 export const OMEGA_DEMO_VIDEO = {
   src: '/media/omega-demo.mp4',
-  poster: '/media/omega-general.png',
-  headline: 'Así se siente tener el control en una sola pantalla.',
-  subtitle:
-    'Un recorrido real por OMEGA: revisión de equipos, protección de software y análisis documental confidencial.',
-  highlights: [
-    {
-      title: 'Revisión sin copias',
-      detail: 'Inspecciona computadores y celulares sin almacenar archivos personales.',
-    },
-    {
-      title: 'Seguridad para tu software',
-      detail: 'Detecta riesgos en el código de tu equipo antes de salir a producción.',
-    },
-    {
-      title: 'Asistente para expedientes',
-      detail: 'Resume y verifica contratos o casos largos citando siempre la página exacta.',
-    },
-  ],
 };
 
 export const LANDING_PAGES = [
   { id: 'plataforma', label: 'Plataforma' },
-  { id: 'demo', label: 'Demostración' },
   { id: 'perfiles', label: 'Perfiles' },
   { id: 'seguridad', label: 'Privacidad' },
   { id: 'planes', label: 'Planes' },
 ];
 
-export const HERO_PILLARS = [
-  {
-    title: 'Cero rastro',
-    detail: 'Nada se guarda ni se copia. Tus archivos se revisan al instante y desaparecen al terminar.',
-  },
-  {
-    title: 'Contra espionaje real',
-    detail: 'Detecta amenazas avanzadas en computadores y teléfonos móviles en minutos.',
-  },
-  {
-    title: 'Privacidad absoluta',
-    detail: 'Opción de trabajar 100% dentro de tu empresa, sin enviar un solo dato a terceros.',
-  },
-  {
-    title: 'Informes verificables',
-    detail: 'Cada revisión genera un reporte profesional listo para dirección, auditoría o clientes.',
-  },
+export const HERO_DISCRETE_CONCEPTS = [
+  'Cero rastro',
+  'Contra espionaje real',
+  'Privacidad absoluta',
+  'Informes verificables',
 ];
 
 export const LANDING_PROFILES = [
