@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -21,11 +21,10 @@ import {
   X,
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
-import { OmegaObsidianOrb } from './OmegaObsidianOrb';
+import { OmegaHeroStage } from './OmegaHeroStage';
 import { OmegaPrivacyBento } from './OmegaPrivacyBento';
 import { OmegaProfilePreview } from './OmegaProfilePreview';
 import {
-  HERO_DISCRETE_CONCEPTS,
   LANDING_FAQ,
   LANDING_PAGES,
   LANDING_PROFILES,
@@ -37,6 +36,7 @@ import {
 } from '../data/catalog';
 
 const EASE_OUT = [0.22, 1, 0.36, 1];
+const SPRING_KOWALSKI = { type: 'spring', stiffness: 420, damping: 36 };
 const VALID_PAGE_IDS = new Set(LANDING_PAGES.map((p) => p.id));
 
 const PROFILE_ICONS = {
@@ -150,7 +150,7 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
         initial={{ opacity: 0, y: 10, scale: 0.99 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 6, scale: 0.99 }}
-        transition={{ duration: 0.22, ease: EASE_OUT }}
+        transition={SPRING_KOWALSKI}
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg rounded-2xl omega-glass p-6 sm:p-7 shadow-[0_32px_80px_rgba(0,0,0,0.85)]"
       >
@@ -170,7 +170,7 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
             type="button"
             onClick={onClose}
             aria-label="Cerrar ventana"
-            className="rounded-lg p-1.5 text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-white/[0.06] transition-colors"
+            className="rounded-full p-1.5 text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-white/[0.06] transition-transform active:scale-[0.97]"
           >
             <X className="w-4 h-4" strokeWidth={1.75} />
           </button>
@@ -198,7 +198,7 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
             <button
               type="button"
               onClick={() => onEnterApp('register')}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-4 py-2.5 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium h-11 px-5 transition-transform active:scale-[0.97]"
             >
               Crear espacio empresarial
               <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
@@ -206,7 +206,7 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
             <button
               type="button"
               onClick={copyPilotSummary}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] text-[#F8FAFC] text-sm font-medium px-4 py-2.5 transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F8FAFC] text-sm font-medium h-11 px-5 transition-transform active:scale-[0.97]"
             >
               {copied ? (
                 <>
@@ -228,14 +228,12 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
 }
 
 export function OmegaLandingPage({ onEnterApp }) {
-  const heroRef = useRef(null);
   const [activePage, setActivePage] = useState(readPageFromHash);
   const [activeProfile, setActiveProfile] = useState('GENERAL');
   const [pricingProfile, setPricingProfile] = useState('GENERAL');
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [openFaq, setOpenFaq] = useState(0);
   const [pilotModalOpen, setPilotModalOpen] = useState(false);
-  const [orbParallax, setOrbParallax] = useState({ x: 0, y: 0 });
 
   const selectedProfile =
     LANDING_PROFILES.find((item) => item.id === activeProfile) || LANDING_PROFILES[0];
@@ -270,42 +268,18 @@ export function OmegaLandingPage({ onEnterApp }) {
     }
   }
 
-  function scrollToDemoVideo() {
-    const target = document.getElementById('demo-video');
-    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-  }
-
-  function handleHeroPointerMove(event) {
-    if (event.pointerType === 'touch') return;
-    const host = heroRef.current;
-    if (!host || typeof window === 'undefined') return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    const rect = host.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const nx = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-    const ny = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
-    setOrbParallax({
-      x: Math.max(-1, Math.min(1, nx)),
-      y: Math.max(-1, Math.min(1, ny)),
-    });
-  }
-
-  function handleHeroPointerLeave() {
-    setOrbParallax({ x: 0, y: 0 });
-  }
-
   return (
     <div className="min-h-screen w-full bg-[#05070B] text-[#F8FAFC] flex flex-col overflow-x-hidden">
       {/* Navbar fija minimalista en vidrio real */}
       <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-6 pt-4">
         <nav
           aria-label="Navegación principal"
-          className="max-w-6xl mx-auto rounded-2xl px-4 sm:px-5 h-14 flex items-center justify-between omega-glass shadow-[0_12px_32px_-12px_rgba(0,0,0,0.65)]"
+          className="max-w-6xl mx-auto rounded-full px-4 sm:px-5 h-14 flex items-center justify-between omega-glass shadow-[0_12px_32px_-12px_rgba(0,0,0,0.65)]"
         >
           <button
             type="button"
             onClick={() => navigatePage('plataforma')}
-            className="rounded-lg text-left"
+            className="rounded-full text-left transition-transform active:scale-[0.97]"
           >
             <OmegaBrandMark />
           </button>
@@ -319,15 +293,15 @@ export function OmegaLandingPage({ onEnterApp }) {
                   type="button"
                   aria-current={isCurrent ? 'page' : undefined}
                   onClick={() => navigatePage(page.id)}
-                  className={`relative rounded-lg px-3.5 py-1.5 text-[13.5px] font-medium transition-colors ${
+                  className={`relative rounded-full px-4 py-1.5 text-[13.5px] font-medium transition-transform active:scale-[0.97] ${
                     isCurrent ? 'text-[#F8FAFC]' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
                   }`}
                 >
                   {isCurrent && (
                     <motion.span
                       layoutId="omega-nav-active"
-                      transition={{ duration: 0.22, ease: EASE_OUT }}
-                      className="absolute inset-0 rounded-lg bg-white/[0.08] border border-white/[0.09]"
+                      transition={SPRING_KOWALSKI}
+                      className="absolute inset-0 rounded-full bg-white/[0.08] border border-white/[0.09]"
                     />
                   )}
                   <span className="relative z-10">{page.label}</span>
@@ -340,14 +314,14 @@ export function OmegaLandingPage({ onEnterApp }) {
             <button
               type="button"
               onClick={() => navigateToApp('login')}
-              className="rounded-lg px-3.5 py-2 text-[13.5px] font-medium text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-white/[0.05] transition-colors"
+              className="rounded-full px-4 py-2 text-[13.5px] font-medium text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-white/[0.05] transition-transform active:scale-[0.97]"
             >
               Iniciar sesión
             </button>
             <button
               type="button"
               onClick={() => setPilotModalOpen(true)}
-              className="rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-[13.5px] font-medium px-4 py-2 transition-colors"
+              className="rounded-full bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-[13.5px] font-medium px-4 py-2 transition-transform active:scale-[0.97]"
             >
               Solicitar piloto
             </button>
@@ -364,7 +338,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                 type="button"
                 aria-current={isCurrent ? 'page' : undefined}
                 onClick={() => navigatePage(page.id)}
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
                   isCurrent
                     ? 'bg-white/[0.09] text-[#F8FAFC] border border-white/[0.10]'
                     : 'text-[#94A3B8] hover:text-[#F8FAFC]'
@@ -385,57 +359,13 @@ export function OmegaLandingPage({ onEnterApp }) {
           transition={{ duration: 0.28, ease: EASE_OUT }}
           className="w-full"
         >
-          {/* 1. HERO DE 2 COLUMNAS: COPY EJECUTIVO + ORBE DE CRISTAL OBSIDIANA */}
+          {/* 1. HERO EDITORIAL CON PROFUNDIDAD EJE Z + VIDEO NATIVO INFERIOR */}
           {activePage === 'plataforma' && (
             <>
-              <section
-                ref={heroRef}
-                onPointerMove={handleHeroPointerMove}
-                onPointerLeave={handleHeroPointerLeave}
-                className="relative px-6 pt-36 md:pt-40 pb-20 md:pb-28 overflow-hidden"
-              >
-                <ClippedRoyalArc position="top" />
-
-                <div className="relative z-10 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                  <div className="lg:col-span-6 text-left">
-                    <h1 className="text-5xl md:text-6xl lg:text-[68px] font-medium tracking-[-0.04em] leading-[1.04] text-[#F8FAFC]">
-                      Seguridad real.
-                      <br />
-                      Privacidad absoluta.
-                    </h1>
-
-                    <p className="mt-5 text-base md:text-lg text-[#94A3B8] max-w-lg leading-relaxed">
-                      Protege tus equipos, tu código y tus documentos confidenciales sin guardar ni exponer tus datos.
-                    </p>
-
-                    <div className="mt-8 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => navigateToApp('register')}
-                        className="inline-flex items-center justify-center gap-2 bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 rounded-xl text-sm font-medium shadow-[0_0_24px_rgba(47,111,237,0.35)] transition-colors"
-                      >
-                        Comenzar gratis
-                        <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={scrollToDemoVideo}
-                        className="inline-flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F1F5F9] h-11 px-6 rounded-xl text-sm font-medium transition-colors"
-                      >
-                        Ver demostración
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-6 flex items-center justify-center">
-                    <OmegaObsidianOrb parallax={orbParallax} />
-                  </div>
-                </div>
-
-                <p className="relative z-10 max-w-6xl mx-auto mt-16 md:mt-20 text-center text-xs text-[#64748B]">
-                  {HERO_DISCRETE_CONCEPTS.join('  ·  ')}
-                </p>
-              </section>
+              <OmegaHeroStage
+                onStartFree={() => navigateToApp('register')}
+                onViewPlans={() => navigatePage('planes')}
+              />
 
               <section
                 id="demo-video"
@@ -485,14 +415,14 @@ export function OmegaLandingPage({ onEnterApp }) {
                           aria-selected={isActive}
                           aria-controls={`profile-panel-${profile.id}`}
                           onClick={() => setActiveProfile(profile.id)}
-                          className={`relative rounded-full px-4 py-2 text-sm font-medium transition-colors inline-flex items-center gap-2 ${
+                          className={`relative rounded-full px-4 py-2 text-sm font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-2 ${
                             isActive ? 'text-white' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
                           }`}
                         >
                           {isActive && (
                             <motion.span
                               layoutId="landing-profile-pill"
-                              transition={{ duration: 0.32, ease: EASE_OUT }}
+                              transition={SPRING_KOWALSKI}
                               className="absolute inset-0 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#2563EB] shadow-[0_6px_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.35)]"
                             />
                           )}
@@ -511,7 +441,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                     role="tabpanel"
                     initial={{ opacity: 0, scale: 0.985 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.32, ease: EASE_OUT }}
+                    transition={SPRING_KOWALSKI}
                     className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center"
                   >
                     <div className="lg:col-span-5 space-y-6">
@@ -618,7 +548,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                           key={p.id}
                           type="button"
                           onClick={() => setPricingProfile(p.id)}
-                          className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                          className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
                             pricingProfile === p.id
                               ? 'bg-white/[0.12] text-white'
                               : 'text-[#94A3B8] hover:text-white'
@@ -637,7 +567,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                       <button
                         type="button"
                         onClick={() => setBillingCycle('monthly')}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
                           billingCycle === 'monthly'
                             ? 'bg-white/[0.12] text-white'
                             : 'text-[#94A3B8] hover:text-white'
@@ -648,7 +578,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                       <button
                         type="button"
                         onClick={() => setBillingCycle('annual')}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-1.5 ${
                           billingCycle === 'annual'
                             ? 'bg-white/[0.12] text-white'
                             : 'text-[#94A3B8] hover:text-white'
@@ -729,7 +659,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                               navigateToApp('register');
                             }
                           }}
-                          className={`relative z-10 mt-6 w-full h-11 rounded-xl font-medium text-sm inline-flex items-center justify-center transition-colors ${ctaClass}`}
+                          className={`relative z-10 mt-6 w-full h-11 rounded-full font-medium text-sm inline-flex items-center justify-center transition-transform active:scale-[0.97] ${ctaClass}`}
                         >
                           {plan.ctaLabel}
                         </button>
@@ -802,7 +732,7 @@ export function OmegaLandingPage({ onEnterApp }) {
             <button
               type="button"
               onClick={() => navigateToApp('register')}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 text-sm font-medium transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 text-sm font-medium transition-transform active:scale-[0.97]"
             >
               Comenzar gratis
               <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
@@ -810,7 +740,7 @@ export function OmegaLandingPage({ onEnterApp }) {
             <button
               type="button"
               onClick={() => setPilotModalOpen(true)}
-              className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F1F5F9] h-11 px-6 text-sm font-medium transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F1F5F9] h-11 px-6 text-sm font-medium transition-transform active:scale-[0.97]"
             >
               Agendar demostración
             </button>

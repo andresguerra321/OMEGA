@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import {
-  HERO_DISCRETE_CONCEPTS,
   LANDING_FAQ,
   LANDING_PAGES,
   LANDING_PROFILES,
@@ -19,7 +18,6 @@ const FORBIDDEN_JARGON =
 test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero jerga o texto QA', () => {
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
   assert.equal(OMEGA_DEMO_VIDEO.src, '/media/omega-demo.mp4');
-  assert.equal(HERO_DISCRETE_CONCEPTS.length, 4);
   assert.equal(LANDING_PROFILES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
   assert.equal(PRIVACY_BENTO_TOP.zeroStorage.counterLabel, '0 B guardados');
   assert.equal(PRIVACY_DEPLOYMENT_MODES.map((m) => m.id).join(','), 'cloud,private');
@@ -35,7 +33,6 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.equal(annual[2].displayPrice, '$2.999.000');
 
   const serialized = JSON.stringify({
-    HERO_DISCRETE_CONCEPTS,
     OMEGA_DEMO_VIDEO,
     LANDING_PROFILES,
     PRIVACY_BENTO_TOP,
@@ -47,7 +44,7 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero, Perfiles, Bento vivo de Privacidad con conmutador y Planes modernos', async () => {
+test('OmegaLandingPage renderiza Hero editorial eje Z, banda monumental, Perfiles, Bento vivo y Planes', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -122,11 +119,21 @@ test('OmegaLandingPage renderiza Hero, Perfiles, Bento vivo de Privacidad con co
       );
     });
 
-    // 1. Hero
+    // 1. Hero editorial eje Z + capas flotantes + banda monumental
     const homeText = container.textContent || '';
-    assert.match(homeText, /Seguridad real\./);
+    assert.match(homeText, /SISTEMA DE SEGURIDAD Y PRIVACIDAD/);
+    assert.match(homeText, /Control total antes de tu próximo paso\./);
+    assert.match(homeText, /Comenzar gratis — Sin tarjeta/);
+    assert.match(homeText, /Equipo y celular sin amenazas/);
+    assert.match(homeText, /Expediente verificado · Pág\. 14/);
+    assert.match(homeText, /RETENCIÓN/);
+    assert.match(homeText, /Informe certificado/);
+    assert.match(homeText, /Rastro en disco/);
+    assert.match(homeText, /Control de tus datos/);
+    assert.match(homeText, /Espacios en una sola app/);
     assert.ok(container.querySelector('[aria-label="Orbe de Cristal Obsidiana de OMEGA"]'));
     assert.ok(container.querySelector('#demo-video video'));
+    assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
     // 2. Perfiles
     const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
@@ -137,34 +144,15 @@ test('OmegaLandingPage renderiza Hero, Perfiles, Bento vivo de Privacidad con co
     });
     assert.match(container.textContent || '', /Revisión silenciosa de tu computador/);
 
-    // 3. Privacidad Bento vivo + conmutador Nube vs Empresa
+    // 3. Privacidad Bento vivo
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Privacidad',
     );
     await act(async () => {
       segNav.click();
     });
-    const cloudText = container.textContent || '';
-    assert.match(cloudText, /Cero almacenamiento oculto/);
-    assert.match(cloudText, /0 B guardados/);
-    assert.match(cloudText, /Reportes a prueba de alteraciones/);
-    assert.match(cloudText, /Sello digital íntegro · Inalterable/);
-    assert.match(cloudText, /Operando en minutos, sin infraestructura propia\./);
-    assert.match(cloudText, /Nube Aislada Ω/);
-    assert.doesNotMatch(cloudText, FORBIDDEN_JARGON);
-
-    const privateTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
-      (btn) => btn.textContent?.includes('Instalado en tu empresa'),
-    );
-    await act(async () => {
-      privateTab.click();
-    });
-    const privateText = container.textContent || '';
-    assert.match(privateText, /Control absoluto dentro de tu propia red\./);
-    assert.match(privateText, /Tu Red Corporativa/);
-    assert.match(privateText, /IA Privada Local/);
-    assert.match(privateText, /0 datos salientes/);
-    assert.doesNotMatch(privateText, FORBIDDEN_JARGON);
+    assert.match(container.textContent || '', /Cero almacenamiento oculto/);
+    assert.match(container.textContent || '', /0 B guardados/);
 
     // 4. Planes
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(

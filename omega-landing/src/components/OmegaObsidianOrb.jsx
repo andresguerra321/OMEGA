@@ -1,45 +1,86 @@
 import { useId } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 
 /**
- * Orbe de Cristal Obsidiana de OMEGA en CSS/SVG puro (60fps):
- * vidrio negro pulido, reflejo curvo de lente óptica, arco orbital azul rey,
- * isotipo Ω centrado con degradado sutil y micro-paralaje al cursor.
+ * Escultura Central de OMEGA:
+ * 3 anillos concéntricos en perspectiva (rotateX 68deg) con vidrio ahumado
+ * + Orbe de Cristal Obsidiana flotando suavemente (±5px en 6s).
  */
-export function OmegaObsidianOrb({ parallax = { x: 0, y: 0 } }) {
+export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px] md:h-[320px]' }) {
   const uid = useId().replace(/:/g, '');
   const omegaGradId = `omegaOrbGlyph-${uid}`;
   const lensArcId = `omegaOrbLens-${uid}`;
-
-  const orbTx = parallax.x * 6;
-  const orbTy = parallax.y * 6;
-  const lensTx = parallax.x * -4;
-  const lensTy = parallax.y * -4;
+  const reducedMotion = useReducedMotion();
 
   return (
     <div
       aria-label="Orbe de Cristal Obsidiana de OMEGA"
       role="img"
-      className="relative flex items-center justify-center w-[300px] h-[300px] md:w-[380px] md:h-[380px] select-none pointer-events-none"
+      className="relative flex items-center justify-center select-none pointer-events-none"
     >
-      {/* 1. Halo ambiental contenido detrás */}
+      {/* Halo ambiental concentrado detrás de la orbe */}
       <div
         aria-hidden="true"
-        className="omega-orb-breathe absolute -inset-8 rounded-full opacity-[0.28]"
+        className="omega-orb-breathe absolute h-[320px] w-[320px] md:h-[400px] md:w-[400px] rounded-full opacity-[0.34] blur-[76px]"
         style={{
           background:
-            'radial-gradient(circle, rgba(37, 99, 235, 0.92) 0%, rgba(29, 78, 216, 0.55) 45%, rgba(5, 7, 11, 0) 74%)',
-          filter: 'blur(64px)',
+            'radial-gradient(circle, #2F6FED 0%, #1D4ED8 46%, rgba(5, 7, 11, 0) 76%)',
         }}
       />
 
-      {/* Contenedor físico de la esfera con micro-paralaje suave */}
+      {/* Base escultórica: 3 anillos concéntricos escalonados en perspectiva */}
       <div
-        className="relative w-full h-full rounded-full transition-transform duration-300 ease-out"
-        style={{
-          transform: `translate3d(${orbTx.toFixed(2)}px, ${orbTy.toFixed(2)}px, 0)`,
-        }}
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-10 md:-bottom-12 left-1/2 -translate-x-1/2 flex items-center justify-center"
+        style={{ perspective: '900px' }}
       >
-        {/* 2. Cuerpo de la esfera (Cristal Obsidiana) */}
+        <div
+          className="relative flex items-center justify-center"
+          style={{ transform: 'rotateX(68deg)' }}
+        >
+          {/* Anillo exterior */}
+          <div
+            className="h-[310px] w-[310px] md:h-[390px] md:w-[390px] rounded-full"
+            style={{
+              border: '1px solid rgba(96, 165, 250, 0.25)',
+              background:
+                'radial-gradient(circle, rgba(15, 23, 42, 0.35) 0%, rgba(11, 16, 27, 0.14) 68%, transparent 100%)',
+              boxShadow: 'inset 0 1px 8px rgba(96, 165, 250, 0.16)',
+            }}
+          />
+          {/* Anillo medio */}
+          <div
+            className="absolute h-[230px] w-[230px] md:h-[290px] md:w-[290px] rounded-full"
+            style={{
+              border: '1px solid rgba(96, 165, 250, 0.28)',
+              background:
+                'radial-gradient(circle, rgba(29, 78, 216, 0.16) 0%, rgba(7, 10, 18, 0.28) 72%, transparent 100%)',
+              boxShadow: '0 0 24px rgba(47, 111, 237, 0.14)',
+            }}
+          />
+          {/* Anillo interior */}
+          <div
+            className="absolute h-[155px] w-[155px] md:h-[195px] md:w-[195px] rounded-full"
+            style={{
+              border: '1px solid rgba(147, 197, 253, 0.32)',
+              background:
+                'radial-gradient(circle, rgba(47, 111, 237, 0.22) 0%, rgba(5, 7, 11, 0.45) 75%)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Orbe principal flotando suavemente (±5px en 6s) */}
+      <motion.div
+        animate={reducedMotion ? undefined : { y: [-5, 5, -5] }}
+        transition={
+          reducedMotion
+            ? undefined
+            : { duration: 6, repeat: Infinity, ease: 'easeInOut' }
+        }
+        className={`relative ${sizeClass} rounded-full`}
+      >
+        {/* Cuerpo de Cristal Obsidiana */}
         <div
           className="relative w-full h-full rounded-full overflow-hidden"
           style={{
@@ -50,19 +91,16 @@ export function OmegaObsidianOrb({ parallax = { x: 0, y: 0 } }) {
               'inset 0 -24px 48px rgba(0, 0, 0, 0.92), inset 0 2px 10px rgba(255, 255, 255, 0.14), 0 36px 90px rgba(0, 0, 0, 0.85)',
           }}
         >
-          {/* 3. Reflejo curvo de lente de vidrio óptico (con leve contramovimiento al cursor) */}
+          {/* Reflejo curvo de lente óptica */}
           <svg
             viewBox="0 0 380 380"
             fill="none"
-            className="absolute inset-0 w-full h-full transition-transform duration-300 ease-out"
-            style={{
-              transform: `translate3d(${lensTx.toFixed(2)}px, ${lensTy.toFixed(2)}px, 0)`,
-              filter: 'blur(1px)',
-            }}
+            className="absolute inset-0 w-full h-full"
+            style={{ filter: 'blur(1px)' }}
           >
             <defs>
               <linearGradient id={lensArcId} x1="68" y1="34" x2="292" y2="176" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.22" />
+                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.24" />
                 <stop offset="48%" stopColor="#E2E8F0" stopOpacity="0.11" />
                 <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
               </linearGradient>
@@ -82,7 +120,7 @@ export function OmegaObsidianOrb({ parallax = { x: 0, y: 0 } }) {
           </svg>
         </div>
 
-        {/* 4. Arco de luz azul rey orbitando el borde (anillo nítido + halo difuso sincronizado) */}
+        {/* Arco de luz azul rey orbitando el borde */}
         <div
           aria-hidden="true"
           className="omega-orb-spin omega-orb-ring-mask-glow pointer-events-none absolute -inset-[2px] rounded-full opacity-90"
@@ -101,12 +139,12 @@ export function OmegaObsidianOrb({ parallax = { x: 0, y: 0 } }) {
           }}
         />
 
-        {/* 5. Isotipo Ω centrado adentro */}
+        {/* Isotipo Ω centrado */}
         <div className="absolute inset-0 flex items-center justify-center">
           <svg
             viewBox="0 0 120 120"
             fill="none"
-            className="w-[100px] md:w-[125px] h-auto"
+            className="w-[96px] md:w-[118px] h-auto"
             style={{
               filter: 'drop-shadow(0 0 18px rgba(96, 165, 250, 0.28))',
             }}
@@ -123,7 +161,7 @@ export function OmegaObsidianOrb({ parallax = { x: 0, y: 0 } }) {
             />
           </svg>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

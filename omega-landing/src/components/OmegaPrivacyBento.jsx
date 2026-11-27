@@ -462,7 +462,7 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
                 <button
                   type="button"
                   onClick={onRequestPilot}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium h-11 px-5 shadow-[0_0_24px_rgba(47,111,237,0.35)] transition-colors"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium h-11 px-6 shadow-[0_0_24px_rgba(47,111,237,0.35)] transition-transform active:scale-[0.97]"
                 >
                   <Building2 className="w-4 h-4" strokeWidth={1.75} />
                   Solicitar piloto empresarial
@@ -470,7 +470,7 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
                 <button
                   type="button"
                   onClick={onViewPlans}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-sm font-medium text-[#F1F5F9] h-11 px-5 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] text-sm font-medium text-[#F1F5F9] h-11 px-6 transition-transform active:scale-[0.97]"
                 >
                   Ver planes
                   <ArrowRight className="w-4 h-4 text-[#60A5FA]" strokeWidth={1.75} />
