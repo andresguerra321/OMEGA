@@ -26,8 +26,8 @@ public class WorkspaceMfaPolicyService {
 
     @Autowired
     public WorkspaceMfaPolicyService(
-            @Autowired(required = false) JdbcTemplate jdbc,
-            @Autowired(required = false) TenantRepository tenantRepository
+            JdbcTemplate jdbc,
+            TenantRepository tenantRepository
     ) {
         this.jdbc = jdbc;
         this.tenantRepository = tenantRepository;

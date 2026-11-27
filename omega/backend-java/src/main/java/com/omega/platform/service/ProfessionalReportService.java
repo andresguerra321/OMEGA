@@ -33,13 +33,24 @@ public class ProfessionalReportService {
     private final ExpedienteAuthorizationService authorization;
     private final CreditService credits;
     private final AuditLogService audit;
+    private final com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
 
     public ProfessionalReportService(JdbcTemplate jdbc, ObjectMapper mapper, DevReportService development,
             ForensicDossierExportService dossier, LegalTimelineService timeline, DocumentRepository documents,
             DevProjectRepository projects, ExpedienteAuthorizationService authorization, CreditService credits, AuditLogService audit,
             com.omega.platform.repository.DocumentChunkRepository chunks) {
+        this(jdbc, mapper, development, dossier, timeline, documents, projects, authorization, credits, audit, chunks, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ProfessionalReportService(JdbcTemplate jdbc, ObjectMapper mapper, DevReportService development,
+            ForensicDossierExportService dossier, LegalTimelineService timeline, DocumentRepository documents,
+            DevProjectRepository projects, ExpedienteAuthorizationService authorization, CreditService credits, AuditLogService audit,
+            com.omega.platform.repository.DocumentChunkRepository chunks,
+            com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy) {
         this.jdbc=jdbc; this.mapper=mapper; this.development=development; this.dossier=dossier; this.timeline=timeline;
-        this.documents=documents; this.projects=projects; this.authorization=authorization; this.credits=credits; this.audit=audit; this.chunks=chunks;
+        this.documents=documents; this.projects=projects; this.authorization=authorization; this.credits=credits; this.audit=audit;
+        this.chunks=chunks; this.mfaPolicy=mfaPolicy;
     }
 
     @Transactional
@@ -191,6 +202,9 @@ public class ProfessionalReportService {
         var rows=jdbc.queryForList("SELECT * FROM omega_rag.report_snapshots WHERE tenant_id=? AND id=?",actor.tenantId(),id);
         if(rows.isEmpty() || !canRead(actor,rows.getFirst())) throw new ResourceNotFoundException("Informe no disponible");
         var row=rows.getFirst();
+        if (mfaPolicy != null && (row.get("expediente_id") != null || "LEGAL".equals(row.get("profile")))) {
+            mfaPolicy.requireRecentMfaIfOrganizationalLegal(actor);
+        }
         return "pdf".equals(format) ? (byte[])row.get("pdf_bytes") : row.get("payload_json").toString().getBytes(StandardCharsets.UTF_8);
     }
     private boolean canRead(OmegaPrincipal actor,Map<String,Object> row) {
@@ -208,6 +222,9 @@ public class ProfessionalReportService {
         var row=rows.getFirst();
         if(!actor.userId().equals(row.get("actor_user_id")) && actor.role()!=Role.ADMIN)
             throw new org.springframework.security.access.AccessDeniedException("Solo quien generó el informe o un administrador puede eliminarlo.");
+        if (mfaPolicy != null && (row.get("expediente_id") != null || "LEGAL".equals(row.get("profile")))) {
+            mfaPolicy.requireRecentMfaIfOrganizationalLegal(actor);
+        }
         jdbc.update("DELETE FROM omega_rag.report_snapshots WHERE tenant_id=? AND id=?",actor.tenantId(),id);
         audit.record(actor.tenantId(),actor.userId(),"PROFESSIONAL_REPORT_DELETED","REPORT",id.toString(),Map.of());
     }

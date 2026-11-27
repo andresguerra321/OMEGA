@@ -52,13 +52,13 @@ public class TwoFactorService {
     @Value("${OMEGA_SUPPORT_EMAIL:}") private String supportEmail;
     private final byte[] totpAtRestKey;
 
-    @Autowired(required = false)
+    @Autowired
     private com.omega.platform.security.LoginRateLimiter loginRateLimiter;
 
-    @Autowired(required = false)
+    @Autowired
     private com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
 
-    @Autowired(required = false)
+    @Autowired
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     public record LoginChallengeResult(String challengeToken, String method, String maskedEmail) {
@@ -175,7 +175,7 @@ public class TwoFactorService {
                 "Enviamos un código de 6 dígitos a " + maskEmail(user.getEmail()) + " para confirmar.");
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BadCredentialsException.class)
     public MfaActivationResponse confirmEmailSetup(UUID userId, String code) {
         UserEntity user = loadActiveUser(userId);
         String trimmed = code == null ? "" : code.trim();
@@ -189,6 +189,7 @@ public class TwoFactorService {
                 WHERE user_id = ? AND purpose = 'SETUP_EMAIL' AND consumed_at IS NULL AND expires_at > NOW()
                 ORDER BY created_at DESC
                 LIMIT 1
+                FOR UPDATE
                 """,
                 user.getId());
         if (rows.isEmpty()) {
@@ -307,7 +308,7 @@ public class TwoFactorService {
     public static final int MAX_EMAIL_RESENDS = 3;
     public static final long EMAIL_RESEND_COOLDOWN_SECONDS = 60L;
 
-    @Transactional
+    @Transactional(noRollbackFor = {BadCredentialsException.class, com.omega.platform.security.TooManyLoginAttemptsException.class})
     public MfaEmailSetupResponse resendEmailLoginChallenge(String rawChallengeToken) {
         UUID challengeId = parseChallengeUuid(rawChallengeToken);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
@@ -506,14 +507,21 @@ public class TwoFactorService {
         }
     }
 
+    /** Limpieza de desafíos MFA vencidos/consumidos y de marcas anti-replay TOTP expiradas. */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 600000, initialDelay = 120000)
+    public void purgeExpiredMfaState() {
+        jdbcTemplate.update("DELETE FROM omega_rag.mfa_challenges WHERE expires_at < NOW() - INTERVAL '1 day'");
+        jdbcTemplate.update("DELETE FROM omega_rag.auth_rate_limits WHERE bucket_key LIKE 'totp-replay:%' AND window_expires_at <= NOW()");
+    }
+
     private boolean tryConsumeTotpBucketAtomically(UUID userId, long matchedBucket, String code) {
         String bucketKey = "totp-replay:" + userId + ":" + TotpUtil.sha256Hex(matchedBucket + ":" + code);
         Instant expiresAt = Instant.ofEpochSecond((matchedBucket + 2L) * 30L + 30L);
         java.util.function.Supplier<Boolean> op = () -> {
             jdbcTemplate.query("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> {}, "totp:" + userId);
             jdbcTemplate.update(
-                    "DELETE FROM omega_rag.auth_rate_limits WHERE bucket_key = ? AND window_expires_at <= NOW()",
-                    bucketKey
+                    "DELETE FROM omega_rag.auth_rate_limits WHERE bucket_key LIKE ? AND window_expires_at <= NOW()",
+                    "totp-replay:" + userId + ":%"
             );
             int inserted = jdbcTemplate.update("""
                     INSERT INTO omega_rag.auth_rate_limits (bucket_key, attempt_count, window_expires_at, updated_at)

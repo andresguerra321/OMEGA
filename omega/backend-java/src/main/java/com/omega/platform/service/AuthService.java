@@ -44,16 +44,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     private com.omega.platform.billing.AccountSeatService seats;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     private com.omega.platform.billing.CreditService credits;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     private AuditLogService auditLogService;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     private WorkspaceMfaPolicyService mfaPolicy;
 
 
@@ -89,7 +89,7 @@ public class AuthService {
             JwtService jwtService,
             OmegaProperties properties,
             LoginRateLimiter loginRateLimiter,
-            @Autowired(required = false) TwoFactorService twoFactorService) {
+            TwoFactorService twoFactorService) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
         this.expedienteRepository = expedienteRepository;

@@ -49,10 +49,16 @@ public class LoginRateLimiter {
 
     @Autowired
     public LoginRateLimiter(
-            @Autowired(required = false) JdbcTemplate jdbc,
-            @Autowired(required = false) PlatformTransactionManager transactionManager
+            JdbcTemplate jdbc,
+            PlatformTransactionManager transactionManager
     ) {
-        this(Clock.systemUTC(), DEFAULT_MAX_ATTEMPTS_PER_ACCOUNT, DEFAULT_MAX_ATTEMPTS_PER_IP, DEFAULT_WINDOW, jdbc, transactionManager);
+        this(Clock.systemUTC(), DEFAULT_MAX_ATTEMPTS_PER_ACCOUNT, DEFAULT_MAX_ATTEMPTS_PER_IP, DEFAULT_WINDOW,
+                java.util.Objects.requireNonNull(jdbc, "JdbcTemplate requerido en LoginRateLimiter"),
+                java.util.Objects.requireNonNull(transactionManager, "PlatformTransactionManager requerido en LoginRateLimiter"));
+    }
+
+    public boolean isPersistentBacked() {
+        return jdbc != null && requiresNewTx != null;
     }
 
     public LoginRateLimiter(Clock clock, int maxAttemptsPerAccount, int maxAttemptsPerIp, Duration window) {

@@ -9,6 +9,7 @@ import com.omega.platform.domain.*;
 import com.omega.platform.repository.*;
 import com.omega.platform.security.*;
 import com.omega.platform.service.AuditLogService;
+import com.omega.platform.service.LegalCaseService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
@@ -99,6 +100,47 @@ class ForensicDossierExportTest {
         assertThatThrownBy(() -> exporter.exportAsJson(caseId)).isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(documents);
         verifyNoInteractions(repository);
+    }
+
+    @Test void exportsCaseSheetInJsonAndPdf() throws Exception {
+        var expediente = new ExpedienteEntity(tenant, user, "Caso de seguridad", ClassificationLevel.CONFIDENTIAL);
+        expediente.setCaseReference("RAD-2026-001");
+        LegalCaseService.applyCaseSheet(expediente, "Cliente Sintético SAS", "Contraparte Sintética Ltda", "Juzgado 4 Civil", "CIVIL", "Admisión");
+        when(authorization.requireReadAccess(any(), eq(caseId))).thenReturn(expediente);
+        var payload = exporter.exportAsJson(caseId);
+        assertThat(payload.schemaVersion()).isEqualTo("omega-dossier-v2");
+        var meta = payload.caseMetadata();
+        assertThat(meta.caseReference()).isEqualTo("RAD-2026-001");
+        assertThat(meta.clientName()).isEqualTo("Cliente Sintético SAS");
+        assertThat(meta.counterpartyName()).isEqualTo("Contraparte Sintética Ltda");
+        assertThat(meta.courtName()).isEqualTo("Juzgado 4 Civil");
+        assertThat(meta.processType()).isEqualTo("CIVIL");
+        assertThat(meta.caseStage()).isEqualTo("Admisión");
+        try (var parsed = org.apache.pdfbox.Loader.loadPDF(exporter.exportAsPdf(caseId))) {
+            String text = new org.apache.pdfbox.text.PDFTextStripper().getText(parsed);
+            assertThat(text).contains("Ficha del caso", "RAD-2026-001", "Cliente Sintético SAS", "Juzgado 4 Civil", "Admisión");
+        }
+        Instant fixedExportTime = Instant.parse("2026-11-26T18:00:00Z");
+        var alteredMeta = new ForensicDossierExportService.CaseMetadata(
+                meta.expedienteId(), meta.tenantId(), meta.title(), meta.classification(), meta.createdAtUtc(),
+                meta.caseReference(), meta.status(), "Otro Cliente", meta.counterpartyName(),
+                meta.courtName(), meta.processType(), meta.caseStage());
+        String hashOriginal = ForensicDossierExportService.computePackageHash(
+                meta, payload.evidence(), payload.activePermissions(), payload.chainOfCustody().finalHash(), fixedExportTime);
+        String hashAltered = ForensicDossierExportService.computePackageHash(
+                alteredMeta, payload.evidence(), payload.activePermissions(), payload.chainOfCustody().finalHash(), fixedExportTime);
+        assertThat(hashAltered).isNotEqualTo(hashOriginal);
+
+        var boundaryLeft = new ForensicDossierExportService.CaseMetadata(
+                meta.expedienteId(), meta.tenantId(), meta.title(), meta.classification(), meta.createdAtUtc(),
+                meta.caseReference(), meta.status(), "A|B", "C", null, meta.processType(), meta.caseStage());
+        var boundaryRight = new ForensicDossierExportService.CaseMetadata(
+                meta.expedienteId(), meta.tenantId(), meta.title(), meta.classification(), meta.createdAtUtc(),
+                meta.caseReference(), meta.status(), "A", "B|C", "null", meta.processType(), meta.caseStage());
+        assertThat(ForensicDossierExportService.computePackageHash(
+                boundaryLeft, payload.evidence(), payload.activePermissions(), payload.chainOfCustody().finalHash(), fixedExportTime))
+                .isNotEqualTo(ForensicDossierExportService.computePackageHash(
+                        boundaryRight, payload.evidence(), payload.activePermissions(), payload.chainOfCustody().finalHash(), fixedExportTime));
     }
 
     @Test void requiresATenantScope() {

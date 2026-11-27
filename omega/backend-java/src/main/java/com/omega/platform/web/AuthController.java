@@ -208,14 +208,8 @@ public class AuthController {
                 ? authService.login(request, httpServletRequest.getRemoteAddr(), trustedDeviceToken)
                 : authService.login(request, httpServletRequest.getRemoteAddr());
         attachSessionCookieIfAvailable(httpServletRequest, httpServletResponse, response);
-        if (sessionCookieHelper != null && response != null && !response.mfaRequired() && response.userId() != null) {
-            if (Boolean.FALSE.equals(request.rememberMe())) {
-                sessionCookieHelper.clearTrustedDeviceCookie(httpServletRequest, httpServletResponse);
-            } else {
-                String renewed = authService.issueTrustedDeviceToken(response.userId(), TRUSTED_DEVICE_TTL_SECONDS);
-                sessionCookieHelper.attachTrustedDeviceCookie(
-                        httpServletRequest, httpServletResponse, renewed, TRUSTED_DEVICE_TTL_SECONDS);
-            }
+        if (sessionCookieHelper != null && response != null && !response.mfaRequired() && Boolean.FALSE.equals(request.rememberMe())) {
+            sessionCookieHelper.clearTrustedDeviceCookie(httpServletRequest, httpServletResponse);
         }
         return response;
     }
@@ -379,7 +373,16 @@ public class AuthController {
     public MfaActivationResponse confirmEmailMfaSetup(
             @AuthenticationPrincipal OmegaPrincipal principal,
             @Valid @RequestBody MfaCodeRequest request) {
-        return requireTwoFactorService().confirmEmailSetup(principal.userId(), request.code());
+        String userKey = principal.userId().toString();
+        recoveryLimiter.assertScopedAllowed("mfa-email-confirm-user", userKey, 5);
+        try {
+            MfaActivationResponse result = requireTwoFactorService().confirmEmailSetup(principal.userId(), request.code());
+            recoveryLimiter.resetScoped("mfa-email-confirm-user", userKey);
+            return result;
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            recoveryLimiter.recordScopedFailure("mfa-email-confirm-user", userKey, 5);
+            throw ex;
+        }
     }
 
     @PostMapping("/mfa/disable")

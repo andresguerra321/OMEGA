@@ -44,7 +44,7 @@ public class ForensicDossierExportService {
     private final ObjectMapper mapper;
     private final ExpedientePermissionRepository permissions;
 
-    @Autowired(required = false)
+    @Autowired
     private com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
 
     public ForensicDossierExportService(ExpedienteAuthorizationService authorization, DocumentRepository documents,
@@ -82,6 +82,16 @@ public class ForensicDossierExportService {
             section(pdf, "1. Resumen Ejecutivo para el Usuario");
             pdf.add(new Paragraph("Riesgo registrado: " + payload.riskLevel() + ". " + payload.executiveSummary(), font(11, false)));
             pdf.add(new Paragraph("Expediente: " + expedienteId + " · Clasificación: " + payload.caseMetadata().classification(), font(10, false)));
+            var meta = payload.caseMetadata();
+            PdfPTable sheet = table("Ficha del caso", "Valor");
+            row(sheet, "Radicado / referencia", orNone(meta.caseReference()));
+            row(sheet, "Estado", orNone(meta.status()));
+            row(sheet, "Cliente", orNone(meta.clientName()));
+            row(sheet, "Contraparte", orNone(meta.counterpartyName()));
+            row(sheet, "Juzgado o autoridad", orNone(meta.courtName()));
+            row(sheet, "Tipo de proceso", orNone(meta.processType()));
+            row(sheet, "Etapa", orNone(meta.caseStage()));
+            pdf.add(sheet);
             section(pdf, "2. Inventario de Evidencia y Hashes SHA-256");
             PdfPTable inventory = table("Documento / estado", "SHA-256 / clasificación");
             for (EvidenceItem item : payload.evidence()) {
@@ -179,11 +189,13 @@ public class ForensicDossierExportService {
                 AuditLogService.GENESIS_HASH, sequence.isEmpty() ? AuditLogService.GENESIS_HASH : sequence.getFirst().getCurrentHash(),
                 sequence.isEmpty() ? AuditLogService.GENESIS_HASH : sequence.getLast().getCurrentHash(), verification.verifiedCount(),
                 sequence.size(), verification.brokenEntryId(), verification.detail(), List.copyOf(exportedEntries));
-        var caseMeta = new CaseMetadata(expedienteId, scope.tenantId(), "Expediente " + expedienteId, expediente.getClassification().name(), expediente.getCreatedAt());
+        var caseMeta = new CaseMetadata(expedienteId, scope.tenantId(), "Expediente " + expedienteId, expediente.getClassification().name(), expediente.getCreatedAt(),
+                expediente.getCaseReference(), expediente.getStatus() == null ? null : expediente.getStatus().name(), expediente.getClientName(),
+                expediente.getCounterpartyName(), expediente.getCourtName(), expediente.getProcessType(), expediente.getCaseStage());
         String pkgHash = computePackageHash(caseMeta, evidence, activePermissions, chain.finalHash(), exportedAt);
         var packageIntegrity = new PackageIntegrity("SHA-256", pkgHash,
                 "Verificación técnica de integridad del paquete exportado; no constituye firma electrónica ni acredita valor probatorio legal.");
-        return new DossierExportPayload("omega-dossier-v1", exportedAt,
+        return new DossierExportPayload("omega-dossier-v2", exportedAt,
                 caseMeta,
                 risk, summary, evidence, List.copyOf(findings), activePermissions, packageIntegrity, chain, List.of(
                 "Informe automatizado de OMEGA: verificación técnica de integridad; no constituye firma electrónica, certificación jurídica ni sello de tiempo de una autoridad externa.",
@@ -192,28 +204,57 @@ public class ForensicDossierExportService {
                 "Los SHA-256 de documentos son los registrados al ingresar; el original no se conserva en el servidor bajo política Zero-Retention y no se ha vuelto a medir durante esta exportación. El hash SHA-256 ofrece verificación técnica de integridad, pero NO reemplaza la custodia ni la presentación del documento original conservado localmente."));
     }
 
-    private static String computePackageHash(CaseMetadata meta, List<EvidenceItem> evidence,
+    static String computePackageHash(CaseMetadata meta, List<EvidenceItem> evidence,
             List<PermissionItem> permissions, String chainFinalHash, Instant exportedAt) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update((meta.expedienteId() + "|" + meta.tenantId() + "|" + meta.classification() + "|" + exportedAt + "|").getBytes(StandardCharsets.UTF_8));
+            updateFrame(md, String.valueOf(meta.expedienteId()));
+            updateFrame(md, String.valueOf(meta.tenantId()));
+            updateFrame(md, meta.title());
+            updateFrame(md, meta.classification());
+            updateFrame(md, exportedAt == null ? null : exportedAt.toString());
+            updateFrame(md, meta.caseReference());
+            updateFrame(md, meta.status());
+            updateFrame(md, meta.clientName());
+            updateFrame(md, meta.counterpartyName());
+            updateFrame(md, meta.courtName());
+            updateFrame(md, meta.processType());
+            updateFrame(md, meta.caseStage());
+            updateFrame(md, String.valueOf(evidence.size()));
             for (EvidenceItem e : evidence) {
-                md.update((e.documentId() + ":" + e.sha256Hash() + ":" + e.status() + "|").getBytes(StandardCharsets.UTF_8));
+                updateFrame(md, String.valueOf(e.documentId()));
+                updateFrame(md, e.sha256Hash());
+                updateFrame(md, e.status());
             }
+            updateFrame(md, String.valueOf(permissions.size()));
             for (PermissionItem p : permissions) {
-                md.update((p.userId() + ":" + p.permission() + "|").getBytes(StandardCharsets.UTF_8));
+                updateFrame(md, String.valueOf(p.userId()));
+                updateFrame(md, p.permission());
             }
-            md.update((chainFinalHash == null ? "" : chainFinalHash).getBytes(StandardCharsets.UTF_8));
+            updateFrame(md, chainFinalHash);
             return HexFormat.of().formatHex(md.digest());
         } catch (Exception ex) {
             throw new IllegalStateException("DOSSIER_PACKAGE_HASH_FAILED", ex);
         }
     }
 
+    private static void updateFrame(MessageDigest md, String value) {
+        if (value == null) {
+            md.update("-1;".getBytes(StandardCharsets.UTF_8));
+            return;
+        }
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        md.update((bytes.length + ":").getBytes(StandardCharsets.US_ASCII));
+        md.update(bytes);
+        md.update((byte) ';');
+    }
+
     private JsonNode readMetadata(String raw) {
         try { JsonNode value = mapper.readTree(raw); return value != null && value.isObject() ? value : mapper.createObjectNode().put("unreadableMetadata", true); }
         catch (Exception ex) { return mapper.createObjectNode().put("unreadableMetadata", true); }
     }
+
+    private static String orNone(String value) { return value == null || value.isBlank() ? "No registrado" : value; }
 
     private static int riskRank(String risk) {
         return switch (risk) { case "CRITICAL" -> 4; case "HIGH" -> 3; case "MEDIUM" -> 2; case "LOW" -> 1; default -> 0; };
@@ -244,7 +285,9 @@ public class ForensicDossierExportService {
             ChainOfCustody chainOfCustody, List<String> limitations) {}
     public record PermissionItem(UUID userId, String permission, Instant grantedAtUtc) {}
     public record PackageIntegrity(String algorithm, String sha256Hash, String disclaimer) {}
-    public record CaseMetadata(UUID expedienteId, UUID tenantId, String title, String classification, Instant createdAtUtc) {}
+    public record CaseMetadata(UUID expedienteId, UUID tenantId, String title, String classification, Instant createdAtUtc,
+            String caseReference, String status, String clientName, String counterpartyName, String courtName,
+            String processType, String caseStage) {}
     public record EvidenceItem(UUID documentId, String originalFilename, String sha256Hash, String status, String classification,
             int totalPages, String embeddingModel, Instant createdAtUtc) {}
     public record FindingItem(UUID auditEntryId, String action, Instant createdAtUtc, String explanation, JsonNode technicalEvidence) {}
