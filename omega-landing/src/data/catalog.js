@@ -137,45 +137,46 @@ export const LANDING_PROFILES = [
   },
 ];
 
-export const PRIVACY_GUARANTEES = [
-  {
-    id: 'no-storage',
+export const PRIVACY_BENTO_TOP = {
+  zeroStorage: {
     title: 'Cero almacenamiento oculto',
-    detail:
-      'Los archivos y respaldos que analizas se descartan automáticamente al emitir tu resultado.',
+    description:
+      'Tus archivos, respaldos y enlaces se revisan al instante en memoria activa y se descartan automáticamente al emitir el diagnóstico. Nada queda retenido en disco.',
+    counterLabel: '0 B guardados',
   },
-  {
-    id: 'tamper-proof',
+  tamperProof: {
     title: 'Reportes a prueba de alteraciones',
-    detail:
-      'Cada informe incluye un sello digital único que demuestra su autenticidad e integridad.',
+    description:
+      'Cada informe incluye un sello digital único y trazabilidad de permisos que demuestra ante dirección, auditorías o clientes que el documento nunca fue modificado.',
+    docLabel: 'Informe Ejecutivo · PDF',
+    pillLabel: 'Sello digital íntegro · Inalterable',
+    sealCode: 'ID · 9F4A-82C1 · VERIFICADO',
   },
-  {
-    id: 'deployment-choice',
-    title: 'Tú eliges dónde opera',
-    detail:
-      'Empieza hoy en nuestra nube aislada o instálalo en los servidores privados de tu empresa.',
-  },
-];
+};
 
-export const DEPLOYMENT_OPTIONS = [
+export const PRIVACY_DEPLOYMENT_MODES = [
   {
     id: 'cloud',
-    title: 'En la nube de OMEGA',
+    label: 'En la nube de OMEGA',
+    headline: 'Operando en minutos, sin infraestructura propia.',
+    description:
+      'Ideal para equipos ágiles, consultores y empresas que quieren protección inmediata con aislamiento total por organización.',
     points: [
-      'Listo en minutos',
-      'Sin instalación de servidores',
-      'Consumo predecible con límites claros',
-      'Cero retención de tus archivos',
+      { icon: 'zap', text: 'Activación inmediata sin instalar servidores' },
+      { icon: 'sliders', text: 'Consumo predecible con límites claros antes de ejecutar' },
+      { icon: 'shield', text: 'Cero retención de tus archivos originales' },
     ],
   },
   {
     id: 'private',
-    title: 'Instalado en tu empresa (Modo Privado)',
+    label: 'Instalado en tu empresa (Modo Privado)',
+    headline: 'Control absoluto dentro de tu propia red.',
+    description:
+      'Pensado para despachos jurídicos, bancos y sectores regulados donde ningún dato puede salir del perímetro corporativo.',
     points: [
-      'Corre 100% en tu propia red',
-      'Inteligencia artificial privada sin costos por consulta',
-      'Control normativo total para sectores regulados',
+      { icon: 'server', text: 'Opera 100% dentro de tus propios servidores' },
+      { icon: 'cpu', text: 'Inteligencia artificial privada sin costos por consulta' },
+      { icon: 'lock', text: 'Cumplimiento normativo y soberanía total de datos' },
     ],
   },
 ];

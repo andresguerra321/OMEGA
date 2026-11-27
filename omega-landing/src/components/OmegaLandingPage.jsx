@@ -3,12 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
   Briefcase,
-  Building2,
   Check,
   ChevronDown,
   Code2,
   Copy,
-  FileCheck2,
   FileText,
   GitBranch,
   Globe,
@@ -24,9 +22,9 @@ import {
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
 import { OmegaObsidianOrb } from './OmegaObsidianOrb';
+import { OmegaPrivacyBento } from './OmegaPrivacyBento';
 import { OmegaProfilePreview } from './OmegaProfilePreview';
 import {
-  DEPLOYMENT_OPTIONS,
   HERO_DISCRETE_CONCEPTS,
   LANDING_FAQ,
   LANDING_PAGES,
@@ -34,7 +32,6 @@ import {
   OMEGA_APP_URL,
   OMEGA_DEMO_VIDEO,
   PILOT_SUMMARY_TEXT,
-  PRIVACY_GUARANTEES,
   PROFILE_ACCESS_NOTES,
   getPlansForProfile,
 } from '../data/catalog';
@@ -64,12 +61,6 @@ const ATMOSPHERE_SHIFT = {
   GENERAL: 'top-4 right-8',
   DEVELOPER: 'top-14 right-2',
   LEGAL: 'bottom-2 right-12',
-};
-
-const GUARANTEE_ICONS = {
-  'no-storage': ShieldCheck,
-  'tamper-proof': FileCheck2,
-  'deployment-choice': Lock,
 };
 
 function readPageFromHash() {
@@ -467,7 +458,7 @@ export function OmegaLandingPage({ onEnterApp }) {
             </>
           )}
 
-          {/* 2. TRES ESPACIOS. UN SOLO CONTROL. (Glassmorphismo Óptico + Neomorfismo Táctil) */}
+          {/* 2. TRES ESPACIOS. UN SOLO CONTROL. */}
           {activePage === 'perfiles' && (
             <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-24 overflow-hidden">
               <ClippedRoyalArc position="top" />
@@ -478,7 +469,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                     Tres espacios. Un solo control.
                   </h1>
 
-                  {/* Carril hundido (Debossed) con píldora elevada iluminada */}
                   <div
                     role="tablist"
                     aria-label="Espacios de trabajo"
@@ -524,7 +514,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                     transition={{ duration: 0.32, ease: EASE_OUT }}
                     className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center"
                   >
-                    {/* Columna izquierda: 3 bloques ejecutivos con squircle neomórfico táctil */}
                     <div className="lg:col-span-5 space-y-6">
                       <div>
                         <p className="text-sm font-medium text-[#60A5FA]">{selectedProfile.domain}</p>
@@ -559,7 +548,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                       </div>
                     </div>
 
-                    {/* Columna derecha: Capa 0 (Luz atmosférica) + Capa 1 (Vidrio óptico) + Capa 2 (Neomorfismo) */}
                     <div className="relative lg:col-span-7">
                       <div
                         aria-hidden="true"
@@ -582,9 +570,9 @@ export function OmegaLandingPage({ onEnterApp }) {
             </section>
           )}
 
-          {/* 3. PRIVACIDAD Y DESPLIEGUE */}
+          {/* 3. PRIVACIDAD Y DESPLIEGUE (BENTO GRID ANIMADO) */}
           {activePage === 'seguridad' && (
-            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-24 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
@@ -597,67 +585,15 @@ export function OmegaLandingPage({ onEnterApp }) {
                   </p>
                 </div>
 
-                <div className="mt-12 border-y border-white/[0.08]">
-                  <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.08]">
-                    {PRIVACY_GUARANTEES.map((item) => {
-                      const Icon = GUARANTEE_ICONS[item.id] || ShieldCheck;
-                      return (
-                        <article key={item.id} className="py-8 md:px-7 first:md:pl-0 last:md:pr-0">
-                          <Icon className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
-                          <h2 className="mt-4 text-lg font-medium tracking-[-0.02em] text-[#F8FAFC]">
-                            {item.title}
-                          </h2>
-                          <p className="mt-2.5 text-sm text-[#94A3B8] leading-relaxed">
-                            {item.detail}
-                          </p>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {DEPLOYMENT_OPTIONS.map((option) => (
-                    <div key={option.id} className="rounded-2xl omega-glass p-7">
-                      <h3 className="text-lg font-medium text-[#F8FAFC]">{option.title}</h3>
-                      <ul className="mt-5 space-y-3 text-sm text-[#CBD5E1]">
-                        {option.points.map((point) => (
-                          <li key={point} className="flex items-start gap-2.5">
-                            <Check
-                              className="mt-0.5 w-4 h-4 text-[#2F6FED] shrink-0"
-                              strokeWidth={1.75}
-                            />
-                            <span>{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-10 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPilotModalOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium h-11 px-6 transition-colors"
-                  >
-                    <Building2 className="w-4 h-4" strokeWidth={1.75} />
-                    Solicitar piloto empresarial
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigatePage('planes')}
-                    className="inline-flex items-center gap-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-sm font-medium text-[#F1F5F9] h-11 px-6 transition-colors"
-                  >
-                    Ver planes
-                    <ArrowRight className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
-                  </button>
-                </div>
+                <OmegaPrivacyBento
+                  onRequestPilot={() => setPilotModalOpen(true)}
+                  onViewPlans={() => navigatePage('planes')}
+                />
               </div>
             </section>
           )}
 
-          {/* 4. PLANES Y PRECIOS (Estilo Linear / Cursor / Vercel / Avenna) */}
+          {/* 4. PLANES Y PRECIOS */}
           {activePage === 'planes' && (
             <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
