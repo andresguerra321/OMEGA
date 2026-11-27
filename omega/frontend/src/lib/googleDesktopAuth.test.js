@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { relayDesktopGoogleReturn, startGoogleAuth } from './googleAuth.js';
+import { JSDOM } from 'jsdom';
+import { startGoogleAuth } from './googleAuth.js';
 
 const state = `D_${'s'.repeat(41)}`;
 const proof = 'p'.repeat(43);
@@ -29,20 +31,38 @@ test('Desktop uses the native browser and keeps the proof out of the browser URL
   assert.deepEqual(calls, [['open_google_authorization', { url }]]);
 });
 
-test('browser return clears the URL and relays only the code and attempt state', async t => {
-  let cleaned = false;
-  globalThis.window = {
-    location: { pathname: '/google/callback', search: `?state=${state}&code=test-code`, protocol: 'http:' },
-    history: { replaceState: (_state, _unused, path) => { cleaned = path === '/'; } },
-  };
-  t.after(() => delete globalThis.window);
-  t.mock.method(globalThis, 'fetch', async (endpoint, request) => {
-    assert.ok(cleaned);
-    if (endpoint.endsWith('/auth/csrf')) return Response.json({ token: 'csrf', headerName: 'X-XSRF-TOKEN' });
-    assert.ok(endpoint.endsWith('/desktop/relay'));
-    assert.deepEqual(JSON.parse(request.body), { state, code: 'test-code' });
-    return new Response(null, { status: 204 });
+const callbackHtml = readFileSync(new URL('../../public/google-desktop-return.html', import.meta.url), 'utf8');
+
+for (const scenario of [
+  { query: 'code=test-code', code: 'test-code', reply: 204, state: 'success', title: 'Autenticación completada' },
+  { query: 'error=access_denied', code: null, reply: 204, state: 'error', title: 'No se pudo completar el acceso' },
+  { query: 'code=expired', code: 'expired', reply: 401, state: 'error', title: 'No se pudo completar el acceso' },
+]) test(`standalone Desktop callback ${scenario.query}`, async t => {
+  const { window } = new JSDOM(callbackHtml, {
+    url: `https://omega.test/google/callback?state=${state}&${scenario.query}`, runScripts: 'outside-only',
   });
-  await relayDesktopGoogleReturn();
-  assert.equal(cleaned, true);
+  t.after(window.close.bind(window));
+  const requests = [];
+  window.fetch = async (endpoint, request) => {
+    requests.push([endpoint, request, window.location.search]);
+    if (endpoint.endsWith('/auth/csrf')) return Response.json({ token: 'csrf', headerName: 'X-XSRF-TOKEN' });
+    return new Response(null, { status: scenario.reply });
+  };
+  const { document } = window;
+  assert.equal(document.querySelectorAll('script[src], link[href], img[src]').length, 0);
+  window.eval(document.querySelector('script').textContent);
+  for (let count = 0; count < 10 && requests.length < 2; count++) await new Promise(setImmediate);
+  await new Promise(setImmediate);
+  assert.deepEqual(requests.map(([path, , search]) => [path, search]), [
+    ['/api/v1/auth/csrf', ''], ['/api/v1/auth/google/desktop/relay', ''],
+  ]);
+  assert.equal(requests[1][1].headers['X-XSRF-TOKEN'], 'csrf');
+  assert.deepEqual(JSON.parse(requests[1][1].body), { state, code: scenario.code });
+  assert.equal(document.querySelector('main').dataset.state, scenario.state);
+  assert.equal(document.querySelector('h1').textContent, scenario.title);
+  let triedClose = false;
+  window.close = () => { triedClose = true; };
+  document.querySelector('#close').click();
+  assert.equal(triedClose, true);
+  assert.match(document.querySelector('#note').textContent, /desde tu navegador/);
 });

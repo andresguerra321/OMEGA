@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileText, FolderOpen, Search } from 'lucide-react';
 import { legalApi } from '../lib/legalApi.js';
-import { LEGAL_INPUT, LEGAL_PRIMARY } from '../lib/legalPresentation.js';
+import { LEGAL_INPUT, LEGAL_SECONDARY } from '../lib/legalPresentation.js';
 import { LegalPagination } from './LegalWorkspacePrimitives';
 
 export function LegalFirmSearchPanel({ onOpenCase }) {
@@ -36,8 +36,9 @@ export function LegalFirmSearchPanel({ onOpenCase }) {
   return (
     <section
       aria-label="Búsqueda en todo el despacho"
-      className="rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-4 backdrop-blur-md space-y-3"
+      className="space-y-3"
     >
+      <p className="text-sm text-zinc-400">Busca palabras dentro de los documentos procesados y en los datos de tus expedientes.</p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -57,7 +58,7 @@ export function LegalFirmSearchPanel({ onOpenCase }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={120}
-            placeholder="Buscar en todo el despacho (metadatos y texto indexado de tus expedientes)…"
+            placeholder="Palabra o frase"
             aria-label="Buscar en todo el despacho"
             className={`${LEGAL_INPUT} pl-9`}
           />
@@ -65,9 +66,9 @@ export function LegalFirmSearchPanel({ onOpenCase }) {
         <button
           type="submit"
           disabled={loading || query.trim().length < 2}
-          className={`${LEGAL_PRIMARY} shrink-0`}
+          className={`${LEGAL_SECONDARY} shrink-0`}
         >
-          {loading ? 'Buscando…' : 'Buscar en despacho'}
+          {loading ? 'Buscando…' : 'Buscar en documentos'}
         </button>
       </form>
 

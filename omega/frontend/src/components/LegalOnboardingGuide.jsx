@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpenCheck, X } from 'lucide-react';
+import { BookOpenCheck, ChevronDown, X } from 'lucide-react';
 import { LEGAL_SECONDARY } from '../lib/legalPresentation.js';
 
 const STORAGE_KEY = 'omega_legal_onboarding_dismissed_v1';
@@ -12,7 +12,7 @@ function isDismissedInitially() {
   }
 }
 
-export function LegalOnboardingGuide({ policyAccepted }) {
+export function LegalOnboardingGuide() {
   const [dismissed, setDismissed] = useState(isDismissedInitially);
 
   if (dismissed) return null;
@@ -27,15 +27,17 @@ export function LegalOnboardingGuide({ policyAccepted }) {
   }
 
   return (
-    <aside
-      aria-label="Guía rápida de inicio para perfil LEGAL"
-      className="rounded-2xl border border-[#2F6FED]/25 bg-[#0F131B]/90 p-5 space-y-3"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-white">
-          <BookOpenCheck size={16} strokeWidth={1.75} className="text-[#2F6FED]" aria-hidden="true" />
-          <span>Guía rápida de tu espacio LEGAL</span>
-        </div>
+    <details className="group border-t border-white/[0.06]">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm text-zinc-300 hover:text-white focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
+        <BookOpenCheck size={16} strokeWidth={1.75} aria-hidden="true" /> Cómo empezar
+        <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" className="group-open:rotate-180" />
+      </summary>
+      <div className="flex items-start justify-between gap-3 pb-3">
+        <ul className="space-y-2 text-sm text-zinc-300">
+          <li><strong className="font-medium text-white">Crea un expediente.</strong> Abre una ficha para reunir los datos de tu caso.</li>
+          <li><strong className="font-medium text-white">Agrega tus documentos.</strong> Puedes subir PDF, Word, PNG o JPEG después de que se apruebe el uso de IA.</li>
+          <li><strong className="font-medium text-white">Consulta y comparte.</strong> Revisa las citas y la cronología, o exporta el informe del caso.</li>
+        </ul>
         <button
           type="button"
           onClick={dismiss}
@@ -45,28 +47,6 @@ export function LegalOnboardingGuide({ policyAccepted }) {
           <X size={13} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
-      <ol className="grid gap-3 sm:grid-cols-3 text-xs text-white/75">
-        <li className="space-y-1">
-          <p className="font-medium text-white">
-            1. Aceptar política de IA {policyAccepted ? '(listo)' : '(pendiente)'}
-          </p>
-          <p className="text-white/60">
-            Un administrador revisa dónde se indexan y responden los documentos antes de la primera carga.
-          </p>
-        </li>
-        <li className="space-y-1">
-          <p className="font-medium text-white">2. Crear expediente y cargar archivos</p>
-          <p className="text-white/60">
-            Admite PDF, Word (.docx), PNG y JPEG. OMEGA extrae texto y elimina el archivo original (Zero-Retention).
-          </p>
-        </li>
-        <li className="space-y-1">
-          <p className="font-medium text-white">3. Consultar con citas y exportar dossier</p>
-          <p className="text-white/60">
-            Usa el Asistente y Cronología dentro de cada expediente y descarga el dossier PDF/JSON con verificación técnica SHA-256.
-          </p>
-        </li>
-      </ol>
-    </aside>
+    </details>
   );
 }

@@ -51,16 +51,6 @@ async function waitForDesktopGoogle(state, proof, headers, signal) {
   throw new Error('La autorización de Google venció. Vuelve a intentarlo.');
 }
 
-export function relayDesktopGoogleReturn() {
-  if (window.location.pathname !== callbackPath) return null;
-  const params = new URLSearchParams(window.location.search);
-  const state = params.get('state');
-  if (!/^D_[A-Za-z0-9_-]{41}$/.test(state || '')) return null;
-  window.history.replaceState(window.history.state, '', '/');
-  const code = params.has('error') ? null : params.get('code');
-  return apiFetch('/auth/google/desktop/relay', { method: 'POST', skipAuth: true, body: { state, code } });
-}
-
 export function pendingGoogleAction() {
   return window.location.pathname === callbackPath ? window.sessionStorage.getItem(intentKey) : null;
 }

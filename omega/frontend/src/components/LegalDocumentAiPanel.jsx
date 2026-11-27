@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrainCircuit, Check } from 'lucide-react';
+import { BrainCircuit, Check, ChevronDown } from 'lucide-react';
 import { fetchLegalDocumentAiPolicy, acceptLegalDocumentAiPolicy } from '../lib/api.js';
 import { PanelErrorBanner } from './PanelStatePrimitives';
 
@@ -8,7 +8,7 @@ const PROVIDERS = { LOCAL_TEXT: 'Índice local de texto', EXTRACTIVE: 'Lectura e
 function Target({ value }) {
   return <div className="space-y-1 text-sm">
     <p className="text-white">{PROVIDERS[value.provider] || 'Proveedor configurado'} <span className="text-xs text-white/60">{value.model}</span></p>
-    <p className="text-xs text-white/60">{value.destination === 'LOCAL' ? 'Se queda en tu equipo' : `Sale a: ${PROVIDERS[value.provider] || 'proveedor configurado'} (${value.destination})`}</p>
+    <p className="text-xs text-white/70">{value.destination === 'LOCAL' ? 'Se procesa en la instalación de OMEGA' : `Se envía a ${PROVIDERS[value.provider] || 'un proveedor externo'} (${value.destination})`}</p>
   </div>;
 }
 
@@ -38,21 +38,31 @@ export function LegalDocumentAiPanel({ onPolicyChange }) {
     } finally { setAccepting(false); }
   }
 
-  return <section aria-labelledby="document-ai-title" className="space-y-4 rounded-2xl border border-white/[0.07] bg-[#0F131B]/85 p-5 backdrop-blur-md">
-    <h2 id="document-ai-title" className="flex items-center gap-2 font-medium text-white"><BrainCircuit size={16} strokeWidth={1.75} aria-hidden="true" /> IA de tus documentos</h2>
+  return <details className="group rounded-xl border border-white/[0.07] bg-[#0F131B]/85">
+    <summary className="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-2.5 text-sm font-medium text-white focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
+      <BrainCircuit size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-zinc-400" />
+      <span>Uso de IA en documentos</span>
+      {policy?.accepted && <span className="inline-flex items-center gap-1 text-xs text-emerald-400"><Check size={14} strokeWidth={1.75} aria-hidden="true" /> Política aceptada</span>}
+      {policy && !policy.accepted && <span className="text-xs text-amber-400">Aprobación pendiente</span>}
+      {error && <span className="text-xs text-amber-400">Revisar estado</span>}
+      <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" className="ml-auto shrink-0 text-zinc-400 group-open:rotate-180" />
+    </summary>
+    <div className="space-y-4 border-t border-white/[0.06] p-4">
     {error && <PanelErrorBanner message={error} onRetry={() => setAttempt((value) => value + 1)} />}
     {!policy ? !error && <p role="status" className="text-sm text-white/60">Comprobando proveedores…</p> : <>
       <div className="grid gap-5 sm:grid-cols-2">
-        <div className="space-y-2"><h3 className="text-xs font-medium text-white/60">Indexación de documentos</h3><Target value={policy.disclosure.indexing} /></div>
-        <div className="space-y-2"><h3 className="text-xs font-medium text-white/60">Modelo de respuestas y posibles alternativas</h3>{policy.disclosure.responses.map((value) => <Target key={value.provider} value={value} />)}</div>
+        <div className="space-y-2"><h3 className="text-sm font-medium text-white/75">Cómo se prepara el texto para buscarlo</h3><Target value={policy.disclosure.indexing} /></div>
+        <div className="space-y-2"><h3 className="text-sm font-medium text-white/75">Quién procesa las respuestas del asistente</h3>{policy.disclosure.responses.map((value) => <Target key={value.provider} value={value} />)}</div>
       </div>
       <p className="text-xs text-white/60">En instalaciones web, «local» se refiere al servidor de OMEGA. Un servidor intermediario puede reenviar contenido a otros proveedores.</p>
-      {!policy.accepted && <p className="text-sm text-amber-400">Antes de cargar o consultar documentos, un administrador debe aceptar los proveedores mostrados. La aceptación queda auditada.</p>}
-      {policy.accepted && <p role="status" className="flex items-center gap-2 text-xs text-emerald-400"><Check size={14} strokeWidth={1.75} aria-hidden="true" /> Política aceptada para esta configuración</p>}
+      {!policy.accepted && <p className="text-sm text-amber-400">{policy.canAccept
+        ? 'Revisa dónde se procesan los documentos y acepta la política para poder cargarlos y consultarlos.'
+        : 'La persona que administra el espacio debe aprobar este uso de IA antes de que puedas cargar o consultar documentos.'}</p>}
       <div className="flex flex-wrap items-center gap-3">
-        {!policy.accepted && policy.canAccept && <button type="button" onClick={accept} disabled={accepting} className="rounded-lg bg-[#2F6FED] px-4 py-2 text-sm text-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">{accepting ? 'Guardando aceptación…' : 'Acepto esta política de documentos'}</button>}
+        {!policy.accepted && policy.canAccept && <button type="button" onClick={accept} disabled={accepting} className="rounded-lg border border-white/20 bg-white/[0.07] px-4 py-2 text-sm font-medium text-white hover:bg-white/[0.12] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">{accepting ? 'Guardando aceptación…' : 'Acepto esta política de documentos'}</button>}
         {policy.canAccept && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('omega:configure-local-ai'))} className="rounded-lg border border-white/[0.07] px-3 py-2 text-sm text-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">Configurar todo local (Ollama)</button>}
       </div>
     </>}
-  </section>;
+    </div>
+  </details>;
 }

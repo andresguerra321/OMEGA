@@ -59,6 +59,10 @@ test('navegación por perfil y estados reales de Expedientes', async (t) => {
     assert.match(document.querySelector('[aria-busy="true"]').textContent, /Cargando/);
     await act(async () => finishRequest(json(emptyPage)));
     assert.match(document.body.textContent, /No hay expedientes para mostrar/);
+    const summaries = [...document.querySelectorAll('summary')];
+    for (const label of ['Uso de IA en documentos', 'Filtros y orden', 'Buscar dentro de los documentos', 'Cómo empezar']) {
+      assert.equal(summaries.find(item => item.textContent.includes(label)).parentElement.open, false);
+    }
     await act(async () => findButton('Nuevo expediente').click());
     assert.equal(document.querySelector('[role="dialog"] input'), document.activeElement);
     await act(async () => findButton('Cancelar').click());
@@ -68,8 +72,8 @@ test('navegación por perfil y estados reales de Expedientes', async (t) => {
     await act(async () => root.render(createElement(ExpedientesPanel, { key: 'otro-tenant' })));
     assert.match(document.querySelector('ul').textContent, /Caso sintético/);
     assert.match(document.body.textContent, /no ofrece asesoría legal/);
-    assert.match(document.body.textContent, /Se queda en tu equipo/);
-    assert.match(document.body.textContent, /Sale a: Groq/);
+    assert.match(document.body.textContent, /Se procesa en la instalación de OMEGA/);
+    assert.match(document.body.textContent, /Se envía a Groq/);
     globalThis.fetch = async url => String(url).endsWith('/policy') ? json(policy) : String(url).endsWith('/metadata') ? json(synthetic) : json(emptyPage);
     await act(async () => findButton('Caso sintético').click());
     assert.equal(document.querySelectorAll('[role="tab"]').length, 6);
@@ -85,6 +89,8 @@ test('navegación por perfil y estados reales de Expedientes', async (t) => {
       return String(url).endsWith('/policy') ? json(policy) : json(emptyPage);
     };
     await act(async () => root.render(createElement(ExpedientesPanel, { key: 'admin' })));
+    assert.match(document.body.textContent, /Aprobación pendiente/);
+    await act(async () => [...document.querySelectorAll('summary')].find(item => item.textContent.includes('Uso de IA en documentos')).click());
     await act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Acepto')).click());
     assert.equal(acceptedHash, policy.fingerprint);
     assert.match(document.body.textContent, /Política aceptada/);
