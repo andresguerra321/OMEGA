@@ -256,7 +256,7 @@ export function ProductOverviewSection({ onScrollToOffset, onExploreSpaces }) {
                           <p className="text-sm text-[#94A3B8] leading-relaxed">
                             {pillar.detail}
                           </p>
-                          <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/[0.08]">
+                          <div className="flex flex-wrap gap-x-6 gap-y-3 sm:grid sm:grid-cols-3 sm:gap-3 pt-2 border-t border-white/[0.08]">
                             {pillar.metrics.map((m) => (
                               <div key={m.label}>
                                 <p className="text-[13px] font-medium text-[#F8FAFC] tabular-nums whitespace-nowrap">

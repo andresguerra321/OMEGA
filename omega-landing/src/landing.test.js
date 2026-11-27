@@ -5,6 +5,7 @@ import { createServer } from 'vite';
 import {
   DRIVE_PRIVACY_MODES,
   EDITORIAL_SPACES,
+  HERO_CONTENT,
   HERO_SPECS,
   LANDING_FAQ,
   LANDING_SECTIONS,
@@ -15,16 +16,17 @@ import {
 } from './data/catalog.js';
 
 const FORBIDDEN_CATALOG_JARGON =
-  /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:|omega-demo\.mp4/i;
+  /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión|control total|solución integral|revolucionario)\b|ventas@omega-sec\.local|:memory:|omega-demo\.mp4/i;
 
 const FORBIDDEN_DOM_JARGON =
-  /\b(STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:|omega-demo\.mp4/i;
+  /\b(STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión|control total|solución integral|revolucionario)\b|ventas@omega-sec\.local|:memory:|omega-demo\.mp4/i;
 
 test('catalog mantiene datos reales en COP, descripción ejecutiva de producto y cero jerga técnica', () => {
   assert.equal(
     LANDING_SECTIONS.map((s) => s.id).join(','),
-    'plataforma,producto,espacios,privacidad,planes',
+    'plataforma,perfiles,privacidad,planes',
   );
+  assert.equal(HERO_CONTENT.headline, 'Cada hallazgo, con su prueba.');
   assert.equal(HERO_SPECS.map((s) => s.value).join(','), '0 B,3,100%');
   assert.equal(PRODUCT_OVERVIEW.pillars.length, 4);
   assert.equal(MANIFESTO_LINES.length, 3);
@@ -145,18 +147,20 @@ test('OmegaLandingPage renderiza Hero con Ver más, ProductOverview Anti-Slop, S
 
     const fullText = container.textContent || '';
 
-    // 1. HeroKeynote + botón Ver más hacia #producto
-    assert.match(fullText, /OMEGA\./);
-    assert.match(fullText, /Control total\. Cero rastro\./);
+    // 1. HeroKeynote Fase 1 (píldora, H1 Sora, CTA único + Ver planes, captura inferior)
+    assert.match(fullText, /Nuevo · Informes con sello digital/);
+    assert.match(fullText, /Cada hallazgo, con su prueba\./);
+    assert.match(fullText, /30 créditos de bienvenida · sin tarjeta/);
+    assert.match(fullText, /Cabina de Evidencia/);
     assert.ok(container.querySelector('[aria-label="Eclipse OMEGA"]'));
-    const verMasBtn = Array.from(container.querySelectorAll('#plataforma button')).find((btn) =>
-      btn.textContent?.includes('Ver más'),
+    const verPlanesLink = Array.from(container.querySelectorAll('#plataforma a')).find((el) =>
+      el.textContent?.includes('Ver planes'),
     );
-    assert.equal(Boolean(verMasBtn), true);
+    assert.equal(Boolean(verPlanesLink), true);
     await act(async () => {
-      verMasBtn.click();
+      verPlanesLink.click();
     });
-    assert.equal(scrolledIds.includes('producto'), true);
+    assert.equal(scrolledIds.includes('planes'), true);
 
     // 2. ProductOverviewSection minimalista con Orbe Ω y tarjetas flotantes (#producto)
     assert.match(container.textContent || '', /Defensa preventiva e inteligencia privada en un solo lugar\./);
@@ -184,8 +188,8 @@ test('OmegaLandingPage renderiza Hero con Ver más, ProductOverview Anti-Slop, S
     assert.match(container.textContent || '', /Citas exactas por documento y página/);
     assert.match(container.textContent || '', /Doc\. y página/);
 
-    // 3. SpacesShowcase + SpaceModal visual (+ clic, Esc, clic fuera, salto a Planes)
-    const spaceImgs = Array.from(container.querySelectorAll('#espacios article img')).map((el) =>
+    // 3. SpacesShowcase (#perfiles) + SpaceModal visual (+ clic, Esc, clic fuera, salto a Planes)
+    const spaceImgs = Array.from(container.querySelectorAll('#perfiles article img')).map((el) =>
       el.getAttribute('src'),
     );
     assert.deepEqual(spaceImgs, [
@@ -194,7 +198,7 @@ test('OmegaLandingPage renderiza Hero con Ver más, ProductOverview Anti-Slop, S
       '/media/space-legal.jpg',
     ]);
     assert.equal(
-      Array.from(container.querySelectorAll('#espacios span')).some(
+      Array.from(container.querySelectorAll('#perfiles span')).some(
         (el) => el.textContent?.trim() === 'Explorar',
       ),
       false,

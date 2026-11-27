@@ -10,11 +10,44 @@ export const OMEGA_APP_URL =
 
 export const LANDING_SECTIONS = [
   { id: 'plataforma', label: 'Plataforma' },
-  { id: 'producto', label: 'Producto' },
-  { id: 'espacios', label: 'Espacios' },
+  { id: 'perfiles', label: 'Perfiles' },
   { id: 'privacidad', label: 'Privacidad' },
   { id: 'planes', label: 'Planes' },
 ];
+
+export const HERO_CONTENT = {
+  pill: 'Nuevo · Informes con sello digital',
+  headline: 'Cada hallazgo, con su prueba.',
+  subtitle:
+    'Omega revisa dispositivos, código y expedientes, y entrega conclusiones con citas exactas y un sello que nadie puede alterar.',
+  ctaPrimary: 'Comenzar gratis',
+  ctaSecondary: 'Ver planes',
+  microtext: '30 créditos de bienvenida · sin tarjeta',
+  preview: {
+    sealCode: 'ID · 9F4A-82C1',
+    statusLabel: 'Evidencia verificada',
+    rows: [
+      {
+        space: 'General',
+        subject: 'Equipo Windows y teléfono USB',
+        evidence: 'Procesos y red auditados · Solo lectura',
+        badge: 'Sin hallazgos',
+      },
+      {
+        space: 'Desarrollo',
+        subject: 'Repositorio plataforma-web',
+        evidence: 'Dependencias verificadas · Regla explicable',
+        badge: '98 / 100',
+      },
+      {
+        space: 'Legal',
+        subject: 'Contrato_servicios_2026.pdf',
+        evidence: 'Cláusula de confidencialidad · Pág. 14',
+        badge: 'Cita exacta',
+      },
+    ],
+  },
+};
 
 export const HERO_SPECS = [
   { value: '0 B', label: 'Rastro en disco' },

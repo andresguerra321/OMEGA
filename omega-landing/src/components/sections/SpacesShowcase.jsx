@@ -85,7 +85,7 @@ export function SpacesShowcase({ onOpenSpace }) {
   });
 
   return (
-    <section id="espacios" ref={sectionRef} className="py-32 md:py-44 bg-[#05070B]">
+    <section id="perfiles" ref={sectionRef} className="py-32 md:py-44 bg-[#05070B]">
       <div className="max-w-6xl mx-auto px-6 mb-14">
         <p className="text-xs tracking-[0.2em] uppercase text-[#60A5FA]">
           LOS TRES FRENTES

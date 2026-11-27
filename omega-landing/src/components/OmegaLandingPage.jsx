@@ -195,19 +195,18 @@ export function OmegaLandingPage({ onEnterApp }) {
         activeSection={activeSection}
         onNavigateSection={(id) => scrollToSection(id)}
         onLogin={() => navigateToApp('login')}
-        onRequestPilot={() => setPilotModalOpen(true)}
+        onStartFree={() => navigateToApp('register')}
       />
 
       <main className="flex-1">
         <HeroKeynote
           onStartFree={() => navigateToApp('register')}
-          onLearnMore={() => scrollToSection('producto')}
           onViewPlans={() => scrollToSection('planes')}
         />
 
         <ProductOverviewSection
           onScrollToOffset={(targetY) => scrollToTarget(targetY)}
-          onExploreSpaces={() => scrollToSection('espacios')}
+          onExploreSpaces={() => scrollToSection('perfiles')}
         />
 
         <ManifestoReveal />
