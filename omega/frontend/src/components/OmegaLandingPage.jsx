@@ -568,17 +568,15 @@ export function OmegaLandingPage({ onEnterApp }) {
             </Reveal>
 
             <div className="mt-12">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={selectedProfile.id}
-                  id={`profile-panel-${selectedProfile.id}`}
-                  role="tabpanel"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.32, ease: EASE_OUT }}
-                  className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center"
-                >
+              <motion.div
+                key={selectedProfile.id}
+                id={`profile-panel-${selectedProfile.id}`}
+                role="tabpanel"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: EASE_OUT }}
+                className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center"
+              >
                   <div className="lg:col-span-6 space-y-6">
                     <div>
                       <p className="font-mono text-xs uppercase tracking-[0.14em] text-[#2F6FED]">
@@ -646,7 +644,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                     </div>
                   </div>
                 </motion.div>
-              </AnimatePresence>
             </div>
           </div>
         </section>

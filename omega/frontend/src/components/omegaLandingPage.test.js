@@ -36,15 +36,21 @@ test('OmegaLandingPage renderiza secciones clave, alterna perfiles/ciclo anual y
   const saved = {
     window: globalThis.window,
     document: globalThis.document,
+    Element: globalThis.Element,
+    Node: globalThis.Node,
     HTMLElement: globalThis.HTMLElement,
     SVGElement: globalThis.SVGElement,
     IntersectionObserver: globalThis.IntersectionObserver,
     ResizeObserver: globalThis.ResizeObserver,
     matchMedia: globalThis.matchMedia,
+    IS_REACT_ACT_ENVIRONMENT: globalThis.IS_REACT_ACT_ENVIRONMENT,
   };
 
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  globalThis.Element = dom.window.Element;
+  globalThis.Node = dom.window.Node;
   globalThis.HTMLElement = dom.window.HTMLElement;
   globalThis.SVGElement = dom.window.SVGElement;
   globalThis.IntersectionObserver = class {
@@ -78,6 +84,7 @@ test('OmegaLandingPage renderiza secciones clave, alterna perfiles/ciclo anual y
     const React = await import('react');
     const { act } = React;
     const { createRoot } = await import('react-dom/client');
+    const { MotionConfig } = await import('framer-motion');
     const { OmegaLandingPage } = await vite.ssrLoadModule('/src/components/OmegaLandingPage.jsx');
 
     const container = dom.window.document.getElementById('root');
@@ -86,9 +93,13 @@ test('OmegaLandingPage renderiza secciones clave, alterna perfiles/ciclo anual y
 
     await act(async () => {
       root.render(
-        React.createElement(OmegaLandingPage, {
-          onEnterApp: (intent) => intents.push(intent),
-        }),
+        React.createElement(
+          MotionConfig,
+          { reducedMotion: 'always' },
+          React.createElement(OmegaLandingPage, {
+            onEnterApp: (intent) => intents.push(intent),
+          }),
+        ),
       );
     });
 
@@ -110,7 +121,9 @@ test('OmegaLandingPage renderiza secciones clave, alterna perfiles/ciclo anual y
     assert.ok(legalTab, 'Debe existir la pestaña Legal');
     await act(async () => {
       legalTab.click();
+      await new Promise((r) => setTimeout(r, 400));
     });
+    assert.equal(legalTab.getAttribute('aria-selected'), 'true');
     assert.match(container.textContent || '', /Expedientes confidenciales con revisión documental citada/);
 
     // Cambiar toggle a Anual
@@ -141,11 +154,14 @@ test('OmegaLandingPage renderiza secciones clave, alterna perfiles/ciclo anual y
     await vite.close();
     globalThis.window = saved.window;
     globalThis.document = saved.document;
+    globalThis.Element = saved.Element;
+    globalThis.Node = saved.Node;
     globalThis.HTMLElement = saved.HTMLElement;
     globalThis.SVGElement = saved.SVGElement;
     globalThis.IntersectionObserver = saved.IntersectionObserver;
     globalThis.ResizeObserver = saved.ResizeObserver;
     globalThis.matchMedia = saved.matchMedia;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = saved.IS_REACT_ACT_ENVIRONMENT;
     dom.window.close();
   }
 });
