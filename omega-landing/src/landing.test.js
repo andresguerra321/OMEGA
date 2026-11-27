@@ -5,12 +5,17 @@ import { createServer } from 'vite';
 import {
   LANDING_FAQ,
   LANDING_METRICS,
+  LANDING_PAGES,
   LANDING_PROFILES,
+  OMEGA_DEMO_VIDEO,
   OPERATIONAL_GUARANTEES,
   getPlansForProfile,
 } from './data/catalog.js';
 
-test('catalog mantiene precios reales en COP, límites operativos y FAQ de OMEGA', () => {
+test('catalog mantiene rutas, demo de YouTube, precios reales en COP y límites de OMEGA', () => {
+  assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,demo,perfiles,seguridad,planes');
+  assert.equal(OMEGA_DEMO_VIDEO.youtubeId, 'h8RutTVyJzY');
+  assert.equal(OMEGA_DEMO_VIDEO.watchUrl, 'https://youtu.be/h8RutTVyJzY');
   assert.equal(LANDING_METRICS.length, 4);
   assert.equal(LANDING_PROFILES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
   assert.equal(OPERATIONAL_GUARANTEES.length, 3);
@@ -26,7 +31,7 @@ test('catalog mantiene precios reales en COP, límites operativos y FAQ de OMEGA
   assert.equal(annual[2].displayPrice, '$2.999.000');
 });
 
-test('OmegaLandingPage renderiza secciones reales, ficha operativa por perfil, precios anuales y cero clichés', async () => {
+test('OmegaLandingPage navega entre vistas separadas, monta orbe 3D, demo YouTube y planes COP', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -70,6 +75,7 @@ test('OmegaLandingPage renderiza secciones reales, ficha operativa por perfil, p
   });
   dom.window.matchMedia = globalThis.matchMedia;
   dom.window.IntersectionObserver = globalThis.IntersectionObserver;
+  dom.window.scrollTo = () => {};
 
   const vite = await createServer({
     server: { middlewareMode: true, hmr: false },
@@ -100,25 +106,40 @@ test('OmegaLandingPage renderiza secciones reales, ficha operativa por perfil, p
       );
     });
 
-    const text = container.textContent || '';
-    assert.match(text, /OMEGA v2\.2/);
-    assert.match(text, /0 B en disco/);
-    assert.match(text, /STIX2 & YARA/);
-    assert.match(text, /Modo Soberano/);
-    assert.match(text, /App Nativa/);
-    assert.match(text, /Manifest\.db en :memory:/);
-    assert.match(text, /\$59\.900/);
-    assert.match(text, /\$299\.900/);
-    assert.doesNotMatch(text, /borrador en revisión/i);
-    assert.doesNotMatch(text, /ventas@omega-sec\.local/i);
+    // 1. Vista Plataforma (Hero + Orbe 3D + 4 métricas; NO mezcla planes en la misma vista)
+    const homeText = container.textContent || '';
+    assert.match(homeText, /OMEGA v2\.2/);
+    assert.match(homeText, /0 B en disco/);
+    assert.match(homeText, /WebGL 3D interactivo/);
+    assert.doesNotMatch(homeText, /\$599\.000/);
+    assert.doesNotMatch(homeText, /borrador en revisión/i);
+    assert.doesNotMatch(homeText, /ventas@omega-sec\.local/i);
 
-    const devTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
-      (btn) => btn.textContent?.includes('Desarrollo'),
+    // 2. Vista Demostración (YouTube h8RutTVyJzY)
+    const demoNav = Array.from(container.querySelectorAll('header nav button')).find(
+      (btn) => btn.textContent?.trim() === 'Demostración',
     );
     await act(async () => {
-      devTab.click();
+      demoNav.click();
     });
-    assert.match(container.textContent || '', /Sin señales detectadas con las reglas actuales/);
+    assert.match(container.textContent || '', /youtu\.be\/h8RutTVyJzY/);
+
+    const playDemoBtn = container.querySelector('button[aria-label="Reproducir demostración oficial de OMEGA"]');
+    await act(async () => {
+      playDemoBtn.click();
+    });
+    const iframe = container.querySelector('iframe');
+    assert.ok(iframe);
+    assert.match(iframe.getAttribute('src') || '', /youtube-nocookie\.com\/embed\/h8RutTVyJzY/);
+
+    // 3. Vista Perfiles (tabs General / Desarrollo / Legal)
+    const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
+      (btn) => btn.textContent?.trim() === 'Perfiles',
+    );
+    await act(async () => {
+      perfilesNav.click();
+    });
+    assert.match(container.textContent || '', /Manifest\.db en :memory:/);
 
     const legalTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
       (btn) => btn.textContent?.includes('Legal'),
@@ -127,6 +148,25 @@ test('OmegaLandingPage renderiza secciones reales, ficha operativa por perfil, p
       legalTab.click();
     });
     assert.match(container.textContent || '', /LEGAL_ABSTENTION/);
+
+    // 4. Vista Seguridad
+    const segNav = Array.from(container.querySelectorAll('header nav button')).find(
+      (btn) => btn.textContent?.trim() === 'Seguridad',
+    );
+    await act(async () => {
+      segNav.click();
+    });
+    assert.match(container.textContent || '', /Modo Soberano \(SELF_HOSTED\)/);
+
+    // 5. Vista Planes + toggle anual
+    const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
+      (btn) => btn.textContent?.trim() === 'Planes',
+    );
+    await act(async () => {
+      planesNav.click();
+    });
+    assert.match(container.textContent || '', /\$59\.900/);
+    assert.match(container.textContent || '', /\$299\.900/);
 
     const annualBtn = Array.from(container.querySelectorAll('button')).find(
       (btn) => btn.textContent?.includes('Anual'),
@@ -137,7 +177,8 @@ test('OmegaLandingPage renderiza secciones reales, ficha operativa por perfil, p
     assert.match(container.textContent || '', /\$599\.000/);
     assert.match(container.textContent || '', /\$2\.999\.000/);
 
-    const loginBtn = Array.from(container.querySelectorAll('button')).find(
+    // 6. CTA Iniciar sesión
+    const loginBtn = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Iniciar sesión',
     );
     await act(async () => {

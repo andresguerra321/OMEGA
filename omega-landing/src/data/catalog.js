@@ -8,6 +8,37 @@ export const OMEGA_APP_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OMEGA_APP_URL) ||
   'http://localhost:5173';
 
+export const OMEGA_DEMO_VIDEO = {
+  youtubeId: 'h8RutTVyJzY',
+  watchUrl: 'https://youtu.be/h8RutTVyJzY',
+  embedUrl:
+    'https://www.youtube-nocookie.com/embed/h8RutTVyJzY?autoplay=1&rel=0&modestbranding=1',
+  poster: '/landing/omega-v2-0-1-showcase.jpg',
+  title: 'Demostración oficial de OMEGA v2.2',
+  highlights: [
+    {
+      label: 'Inspección en RAM',
+      detail: 'Auditoría local de PC y triaje USB Android/iOS sin persistir archivos fuente en disco.',
+    },
+    {
+      label: 'AppSec & SBOM',
+      detail: 'Escaneo de repositorios GitHub, inventario CycloneDX/SPDX y salida SARIF para CI.',
+    },
+    {
+      label: 'Módulo Legal',
+      detail: 'Expedientes confidenciales con citas obligatorias por página y abstención determinista.',
+    },
+  ],
+};
+
+export const LANDING_PAGES = [
+  { id: 'plataforma', label: 'Plataforma' },
+  { id: 'demo', label: 'Demostración' },
+  { id: 'perfiles', label: 'Perfiles' },
+  { id: 'seguridad', label: 'Seguridad' },
+  { id: 'planes', label: 'Planes' },
+];
+
 export const LANDING_METRICS = [
   {
     value: '0 B en disco',
@@ -172,6 +203,21 @@ export const OPERATIONAL_GUARANTEES = [
     whatItDoes:
       'Opera en infraestructura gestionada o en modo autoalojado (SELF_HOSTED) con Ollama en tu red interna, MFA obligatorio y separación por espacios.',
     boundary: 'En Ollama local la inferencia de IA consume 0 créditos y ningún dato sale de tu red.',
+  },
+];
+
+export const DEPLOYMENT_MODES = [
+  {
+    mode: 'Nube administrada',
+    infra: 'Infraestructura gestionada con aislamiento por espacio y MFA obligatorio.',
+    aiCost: 'Consumo predecible en créditos con límite visible antes de ejecutar.',
+    retention: '0 bytes de volcados móviles o archivos fuente en disco.',
+  },
+  {
+    mode: 'Modo Soberano (SELF_HOSTED)',
+    infra: 'Contenedores en tu propia red con motor local Ollama.',
+    aiCost: '0 créditos de IA en inferencia local.',
+    retention: 'Control físico y normativo total dentro de tu infraestructura.',
   },
 ];
 
