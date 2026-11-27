@@ -29,74 +29,64 @@ export const LANDING_PROFILES = [
   {
     id: 'GENERAL',
     label: 'General',
-    domain: 'Protección Personal y Ejecutiva',
-    headline: 'Revisa computadores y celulares sin copiar tu información privada.',
-    summary:
-      'Ideal para directivos, periodistas, independientes y familias que necesitan saber si sus dispositivos o enlaces son seguros.',
-    image: '/media/omega-general.png',
-    imageAlt: 'Vista principal del espacio General en OMEGA',
+    domain: 'Personal y Directivo',
+    headline: 'Protege tus dispositivos sin copiar tus archivos.',
+    summary: 'Revisión rápida para computadores, celulares y enlaces sospechosos.',
     capabilities: [
-      {
-        title: 'Revisión rápida de tu PC',
-        detail: 'Identifica programas ocultos o comportamientos anómalos sin tocar tus documentos.',
-      },
-      {
-        title: 'Diagnóstico de celulares por USB',
-        detail: 'Conecta iPhone o Android y verifica señales de espionaje en minutos.',
-      },
-      {
-        title: 'Verificador seguro de enlaces',
-        detail: 'Comprueba links sospechosos antes de abrirlos, sin exponerte al sitio.',
-      },
+      'Diagnóstico preventivo de tu computador',
+      'Detección de espionaje en iPhone y Android por USB',
+      'Verificación segura de enlaces antes de abrirlos',
     ],
+    preview: {
+      greeting: '¡Hola!',
+      roleLabel: 'Directivo',
+      modules: [
+        { name: 'Equipo Local', status: 'Limpio' },
+        { name: 'iPhone por USB', status: 'Sin amenazas' },
+        { name: 'Escudo Web', status: 'Activo' },
+      ],
+    },
   },
   {
     id: 'DEVELOPER',
     label: 'Desarrollo',
     domain: 'Equipos de Tecnología',
-    headline: 'Encuentra fallos de seguridad en tu código antes que tus clientes.',
-    summary:
-      'Conecta tus repositorios y recibe alertas claras, priorizadas y listas para corregir sin frenar las entregas.',
-    image: '/media/omega-developer.png',
-    imageAlt: 'Vista de revisión de software y alertas del espacio Desarrollo en OMEGA',
+    headline: 'Detén fallos de seguridad antes de publicar.',
+    summary: 'Revisión automática de tu código y dependencias sin frenar entregas.',
     capabilities: [
-      {
-        title: 'Auditoría automática de repositorios',
-        detail: 'Revisa cada cambio nuevo y bloquea riesgos críticos a tiempo.',
-      },
-      {
-        title: 'Control de librerías externas',
-        detail: 'Detecta componentes vulnerables de terceros antes de publicar.',
-      },
-      {
-        title: 'Reportes listos para auditoría',
-        detail: 'Descarga informes ejecutivos y técnicos en un clic.',
-      },
+      'Alertas claras y priorizadas en cada cambio',
+      'Control automático de librerías externas vulnerables',
+      'Informes ejecutivos listos en un clic',
     ],
+    preview: {
+      repoLabel: 'repositorio-pagos · Rama principal',
+      repoBadge: 'Protegido',
+      alertBadge: 'Riesgo crítico bloqueado',
+      alertTitle: 'Librería externa con vulnerabilidad conocida',
+      alertStatus: 'Actualización segura lista · Revisado antes de publicación',
+      footerLeft: '0 fallos críticos en producción',
+      footerRight: 'Informe PDF disponible',
+    },
   },
   {
     id: 'LEGAL',
     label: 'Legal',
-    domain: 'Firmas y Despachos Jurídicos',
-    headline: 'Analiza expedientes confidenciales con citas exactas y cero filtraciones.',
-    summary:
-      'Organiza casos sensibles, detecta conflictos de interés y consulta cientos de páginas en segundos.',
-    image: '/media/omega-legal.png',
-    imageAlt: 'Vista de verificación de documentos con citas en el espacio Legal de OMEGA',
+    domain: 'Firmas y Despachos',
+    headline: 'Analiza expedientes con citas exactas y cero filtraciones.',
+    summary: 'Consulta contratos y casos confidenciales en segundos.',
     capabilities: [
-      {
-        title: 'Respuestas siempre respaldadas',
-        detail: 'Cada conclusión cita el documento y la página exacta; si no hay prueba, no inventa.',
-      },
-      {
-        title: 'Control por expediente',
-        detail: 'Define quién puede ver cada caso y mantén trazabilidad completa.',
-      },
-      {
-        title: 'Informes ejecutivos en PDF',
-        detail: 'Genera resúmenes y líneas de tiempo listas para presentar a socios o clientes.',
-      },
+      'Cada respuesta cita el documento y la página exacta',
+      'Control estricto de acceso por expediente',
+      'Resúmenes e informes PDF listos para clientes',
     ],
+    preview: {
+      caseLabel: 'Expediente #2026-041 · Acceso restringido',
+      question: '¿Existe cláusula de penalidad por terminación anticipada?',
+      answer:
+        'Sí. Se establece un preaviso obligatorio de 30 días y compensación equivalente a un mes de servicio.',
+      citation: 'Contrato_Servicios_2026.pdf · Página 14 · Cláusula 8.2',
+      verifiedNote: 'Verificado sin copias externas',
+    },
   },
 ];
 

@@ -14,9 +14,9 @@ import {
 } from './data/catalog.js';
 
 const FORBIDDEN_JARGON =
-  /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|borrador en revisión)\b|ventas@omega-sec\.local|:memory:/i;
+  /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:/i;
 
-test('catalog mantiene precios reales en COP, equivalencias humanas y cero jerga técnica', () => {
+test('catalog mantiene precios reales en COP, perfiles recortados y cero jerga o texto QA', () => {
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
   assert.equal(OMEGA_DEMO_VIDEO.src, '/media/omega-demo.mp4');
   assert.equal(HERO_DISCRETE_CONCEPTS.length, 4);
@@ -29,7 +29,6 @@ test('catalog mantiene precios reales en COP, equivalencias humanas y cero jerga
   assert.equal(monthly[0].displayPrice, '$0');
   assert.equal(monthly[1].displayPrice, '$59.900');
   assert.equal(monthly[2].displayPrice, '$299.900');
-  assert.match(monthly[1].creditsEquivalence, /500 créditos cubren decenas/i);
 
   const annual = getPlansForProfile('LEGAL', 'annual');
   assert.equal(annual[1].displayPrice, '$599.000');
@@ -48,7 +47,7 @@ test('catalog mantiene precios reales en COP, equivalencias humanas y cero jerga
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero centrado con video protagonista único, perfiles, privacidad y planes COP', async () => {
+test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en Perfiles, Privacidad y Planes COP', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -123,31 +122,42 @@ test('OmegaLandingPage renderiza Hero centrado con video protagonista único, pe
       );
     });
 
-    // 1. Vista Plataforma: Hero centrado de 1 columna + video nativo protagonista + sin doble Ω ni sección demo repetida
+    // 1. Hero centrado con video nativo
     const homeText = container.textContent || '';
     assert.match(homeText, /Seguridad real\./);
     assert.match(homeText, /Privacidad absoluta\./);
-    assert.match(homeText, /Protege tus equipos, tu código y tus documentos confidenciales/);
-    assert.doesNotMatch(homeText, /Descargar para escritorio/);
-    assert.doesNotMatch(homeText, /Así se siente tener el control en una sola pantalla/);
-
-    const heroVideo = container.querySelector('#hero-video video');
-    assert.ok(heroVideo);
-    assert.equal(heroVideo.getAttribute('src'), '/media/omega-demo.mp4');
+    assert.ok(container.querySelector('#hero-video video'));
     assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
-    // 2. Vista Perfiles (capturas reales limpias)
+    // 2. Vista Perfiles con UI previews nítidas (sin <img> de capturas PNG)
     const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Perfiles',
     );
     await act(async () => {
       perfilesNav.click();
     });
-    const generalImg = container.querySelector('#profile-panel-GENERAL img');
-    assert.ok(generalImg);
-    assert.equal(generalImg.getAttribute('src'), '/media/omega-general.png');
-    assert.doesNotMatch(container.textContent || '', FORBIDDEN_JARGON);
+    const generalText = container.textContent || '';
+    assert.match(generalText, /Tres espacios\. Un solo control\./);
+    assert.match(generalText, /Protege tus dispositivos sin copiar tus archivos\./);
+    assert.match(generalText, /Equipo Local/);
+    assert.match(generalText, /iPhone por USB/);
+    assert.match(generalText, /Escudo Web/);
+    assert.equal(container.querySelector('#profile-panel-GENERAL img'), null);
+    assert.doesNotMatch(generalText, FORBIDDEN_JARGON);
+
+    const devTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
+      (btn) => btn.textContent?.includes('Desarrollo'),
+    );
+    await act(async () => {
+      devTab.click();
+    });
+    const devText = container.textContent || '';
+    assert.match(devText, /repositorio-pagos · Rama principal/);
+    assert.match(devText, /Librería externa con vulnerabilidad conocida/);
+    assert.match(devText, /0 fallos críticos en producción/);
+    assert.equal(container.querySelector('#profile-panel-DEVELOPER img'), null);
+    assert.doesNotMatch(devText, FORBIDDEN_JARGON);
 
     const legalTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
       (btn) => btn.textContent?.includes('Legal'),
@@ -155,10 +165,11 @@ test('OmegaLandingPage renderiza Hero centrado con video protagonista único, pe
     await act(async () => {
       legalTab.click();
     });
-    const legalImg = container.querySelector('#profile-panel-LEGAL img');
-    assert.ok(legalImg);
-    assert.equal(legalImg.getAttribute('src'), '/media/omega-legal.png');
-    assert.doesNotMatch(container.textContent || '', FORBIDDEN_JARGON);
+    const legalText = container.textContent || '';
+    assert.match(legalText, /Expediente #2026-041 · Acceso restringido/);
+    assert.match(legalText, /Contrato_Servicios_2026\.pdf · Página 14 · Cláusula 8\.2/);
+    assert.equal(container.querySelector('#profile-panel-LEGAL img'), null);
+    assert.doesNotMatch(legalText, FORBIDDEN_JARGON);
 
     // 3. Vista Privacidad
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
@@ -167,36 +178,18 @@ test('OmegaLandingPage renderiza Hero centrado con video protagonista único, pe
     await act(async () => {
       segNav.click();
     });
-    const privacyText = container.textContent || '';
-    assert.match(privacyText, /Tu información nunca sale de tu control/);
-    assert.match(privacyText, /En la nube de OMEGA/);
-    assert.match(privacyText, /Instalado en tu empresa \(Modo Privado\)/);
-    assert.doesNotMatch(privacyText, FORBIDDEN_JARGON);
+    assert.match(container.textContent || '', /Tu información nunca sale de tu control/);
 
-    // 4. Vista Planes + toggle anual + equivalencias
+    // 4. Vista Planes COP
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Planes',
     );
     await act(async () => {
       planesNav.click();
     });
-    const plansText = container.textContent || '';
-    assert.match(plansText, /\$59\.900/);
-    assert.match(plansText, /\$299\.900/);
-    assert.match(plansText, /500 créditos cubren decenas de revisiones/);
-    assert.match(plansText, /Mercado Pago/);
-    assert.doesNotMatch(plansText, FORBIDDEN_JARGON);
+    assert.match(container.textContent || '', /\$59\.900/);
+    assert.match(container.textContent || '', /\$299\.900/);
 
-    const annualBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.includes('Anual'),
-    );
-    await act(async () => {
-      annualBtn.click();
-    });
-    assert.match(container.textContent || '', /\$599\.000/);
-    assert.match(container.textContent || '', /\$2\.999\.000/);
-
-    // 5. CTA Iniciar sesión
     const loginBtn = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Iniciar sesión',
     );

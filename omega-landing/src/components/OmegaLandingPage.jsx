@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
+import { OmegaProfilePreview } from './OmegaProfilePreview';
 import {
   DEPLOYMENT_OPTIONS,
   HERO_DISCRETE_CONCEPTS,
@@ -380,7 +381,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                 </div>
               </div>
 
-              {/* Un único visual protagonista debajo: ventana limpia reproduciendo omega-demo.mp4 */}
               <div className="relative z-10 px-6 pb-16">
                 <div
                   id="hero-video"
@@ -398,7 +398,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                   />
                 </div>
 
-                {/* Una sola línea discreta sin párrafos */}
                 <p className="max-w-4xl mx-auto mt-10 text-center text-xs tracking-wide text-[#64748B]">
                   {HERO_DISCRETE_CONCEPTS.join('  ·  ')}
                 </p>
@@ -406,23 +405,21 @@ export function OmegaLandingPage({ onEnterApp }) {
             </section>
           )}
 
-          {/* 2. LOS 3 ESPACIOS DE TRABAJO (TABS INTERACTIVOS CON CAPTURAS REALES) */}
+          {/* 2. LOS 3 ESPACIOS DE TRABAJO (COPY RECORTADO + UI PREVIEWS NÍTIDAS HTML/TAILWIND) */}
           {activePage === 'perfiles' && (
             <section className="relative px-4 sm:px-6 pt-28 md:pt-36 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                  <div className="max-w-2xl">
-                    <h1 className="text-3xl sm:text-5xl font-medium tracking-[-0.03em] leading-[1.08] text-[#F8FAFC] text-balance">
-                      Una sola plataforma. Tres espacios diseñados para cada equipo.
-                    </h1>
-                  </div>
+                  <h1 className="text-3xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
+                    Tres espacios. Un solo control.
+                  </h1>
 
                   <div
                     role="tablist"
                     aria-label="Espacios de trabajo"
-                    className="inline-flex self-start md:self-auto rounded-full omega-glass p-1"
+                    className="inline-flex self-start md:self-auto rounded-full omega-glass p-1 shrink-0"
                   >
                     {LANDING_PROFILES.map((profile) => {
                       const isActive = profile.id === activeProfile;
@@ -459,7 +456,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                     key={selectedProfile.id}
                     id={`profile-panel-${selectedProfile.id}`}
                     role="tabpanel"
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.24, ease: EASE_OUT }}
                     className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center"
@@ -467,38 +464,26 @@ export function OmegaLandingPage({ onEnterApp }) {
                     <div className="lg:col-span-5 space-y-6">
                       <div>
                         <p className="text-sm font-medium text-[#2F6FED]">{selectedProfile.domain}</p>
-                        <h2 className="mt-2 text-2xl sm:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
+                        <h2 className="mt-2 text-2xl md:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
                           {selectedProfile.headline}
                         </h2>
-                        <p className="mt-3 text-sm sm:text-base text-[#94A3B8] leading-relaxed">
+                        <p className="mt-3 text-sm md:text-base text-[#94A3B8] leading-relaxed">
                           {selectedProfile.summary}
                         </p>
                       </div>
 
-                      <div className="divide-y divide-white/[0.08] border-t border-white/[0.08]">
+                      <ul className="divide-y divide-white/[0.08] border-t border-white/[0.08]">
                         {selectedProfile.capabilities.map((cap) => (
-                          <div key={cap.title} className="py-4 flex items-start gap-3">
-                            <Check className="mt-0.5 w-4 h-4 text-[#2F6FED] shrink-0" strokeWidth={1.75} />
-                            <div>
-                              <h3 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h3>
-                              <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">{cap.detail}</p>
-                            </div>
-                          </div>
+                          <li key={cap} className="py-3.5 flex items-center gap-3 text-sm text-[#E2E8F0]">
+                            <Check className="w-4 h-4 text-[#2F6FED] shrink-0" strokeWidth={1.75} />
+                            <span>{cap}</span>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     </div>
 
-                    {/* Captura real y limpia sin cajas técnicas debajo */}
                     <div className="lg:col-span-7">
-                      <div className="rounded-2xl border border-white/[0.10] bg-[#0B101B] shadow-[0_32px_80px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.12)] overflow-hidden">
-                        <div className="aspect-[16/10] bg-[#05070B]">
-                          <img
-                            src={selectedProfile.image}
-                            alt={selectedProfile.imageAlt}
-                            className="h-full w-full object-cover object-top"
-                          />
-                        </div>
-                      </div>
+                      <OmegaProfilePreview profile={selectedProfile} />
                     </div>
                   </motion.div>
                 </div>
@@ -521,7 +506,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                   </p>
                 </div>
 
-                {/* 3 garantías claras */}
                 <div className="mt-12 border-y border-white/[0.08]">
                   <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.08]">
                     {PRIVACY_GUARANTEES.map((item) => {
@@ -541,7 +525,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                   </div>
                 </div>
 
-                {/* Comparativa limpia de 2 tarjetas: Nube vs En tu empresa */}
                 <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
                   {DEPLOYMENT_OPTIONS.map((option) => (
                     <div key={option.id} className="rounded-2xl omega-glass p-7">
@@ -647,7 +630,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                         }`}
                       >
                         Anual
-                        <span className="font-mono tabular-nums text-[10px] opacity-90">-17%</span>
+                        <span className="font-mono tabular-nums text-xs opacity-90">-17%</span>
                       </button>
                     </div>
                   </div>
@@ -739,7 +722,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                   Pagos procesados de forma segura con Mercado Pago · Cancela cuando quieras · Facturación corporativa disponible
                 </p>
 
-                {/* Preguntas frecuentes en español cotidiano */}
                 <div className="mt-14 max-w-3xl mx-auto">
                   <div className="divide-y divide-white/[0.08] border-y border-white/[0.08]">
                     {LANDING_FAQ.map((item, idx) => {
