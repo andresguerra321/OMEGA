@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fontsource/sora/latin-300.css'
 import '@fontsource/sora/latin-ext-300.css'
@@ -18,7 +18,43 @@ import '@fontsource/ibm-plex-mono/latin-500.css'
 import '@fontsource/ibm-plex-mono/latin-ext-500.css'
 import './index.css'
 import { MotionConfig } from 'framer-motion'
-import App from './App.jsx'
+
+const App = lazy(() => import('./App.jsx'))
+const OmegaLandingPage = lazy(() => import('./components/OmegaLandingPage.jsx'))
+
+function isLandingRoute() {
+  if (typeof window === 'undefined') return false
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  if (path === '/landing' || path === '/presentacion') return true
+  const params = new URLSearchParams(window.location.search)
+  return params.get('landing') === '1'
+}
+
+export function RootEntry() {
+  const [showLanding, setShowLanding] = useState(() => isLandingRoute())
+
+  useEffect(() => {
+    const onPopState = () => setShowLanding(isLandingRoute())
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  function handleEnterApp(intent = 'login') {
+    const nextUrl = intent === 'register' ? '/?auth=register' : '/'
+    if (typeof window !== 'undefined' && window.history?.pushState) {
+      window.history.pushState({}, '', nextUrl)
+    }
+    setShowLanding(false)
+  }
+
+  return (
+    <MotionConfig reducedMotion="user">
+      <Suspense fallback={<div className="h-screen w-screen bg-[#05070B]" />}>
+        {showLanding ? <OmegaLandingPage onEnterApp={handleEnterApp} /> : <App />}
+      </Suspense>
+    </MotionConfig>
+  )
+}
 
 // Auto-recuperación si se despliega una nueva compilación mientras la pestaña seguía abierta
 if (typeof window !== 'undefined') {
@@ -46,8 +82,6 @@ if (typeof window !== 'undefined') {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <MotionConfig reducedMotion="user">
-      <App />
-    </MotionConfig>
+    <RootEntry />
   </StrictMode>,
 )
