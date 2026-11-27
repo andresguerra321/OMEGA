@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Building2,
   Check,
+  ChevronDown,
   Code2,
   Cpu,
   Download,
@@ -21,14 +22,25 @@ import {
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
 import {
+  LANDING_FAQ,
   LANDING_METRICS,
   LANDING_PROFILES,
+  OMEGA_APP_URL,
   PROFILE_ACCESS_NOTES,
   TRUST_PILLARS,
   getPlansForProfile,
-} from '../lib/landingCatalog';
+} from '../data/catalog';
 
-const EASE_OUT = [0.22, 1, 0.36, 1];
+/* Easing expo-out (skill animation-systems + top-design) */
+const EASE_EXPO_OUT = [0.16, 1, 0.3, 1];
+
+/* Sombras neutras multicapa (skill beautiful-shadows) */
+const SHADOW_SM =
+  'shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.28),0px_1px_0px_0px_rgba(255,255,255,0.06),0px_0px_0px_1px_rgba(255,255,255,0.08)]';
+const SHADOW_MD =
+  'shadow-[0px_0px_0px_1px_rgba(255,255,255,0.06),0px_1px_1px_-0.5px_rgba(0,0,0,0.35),0px_3px_3px_-1.5px_rgba(0,0,0,0.35),0px_6px_6px_-3px_rgba(0,0,0,0.35),0px_12px_12px_-6px_rgba(0,0,0,0.4),0px_24px_24px_-12px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)]';
+const SHADOW_LG =
+  'shadow-[0_2.8px_2.2px_rgba(0,0,0,0.18),0_6.7px_5.3px_rgba(0,0,0,0.24),0_12.5px_10px_rgba(0,0,0,0.30),0_22.3px_17.9px_rgba(0,0,0,0.38),0_41.8px_33.4px_rgba(0,0,0,0.48),0_80px_70px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.12)]';
 
 const PROFILE_ICONS = {
   GENERAL: Shield,
@@ -48,7 +60,7 @@ function Reveal({ children, className = '', delay = 0 }) {
       initial={{ opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.5, delay, ease: EASE_OUT }}
+      transition={{ duration: 0.5, delay, ease: EASE_EXPO_OUT }}
       className={className}
     >
       {children}
@@ -58,7 +70,7 @@ function Reveal({ children, className = '', delay = 0 }) {
 
 /**
  * Arco luminoso azul rey recortado en el horizonte superior.
- * Mantiene el fondo #05070B puro en las esquinas sin lavar el contraste.
+ * Mantiene el negro obsidiana #05070B intacto en las esquinas.
  */
 function LandingEclipseArc({ variant = 'hero' }) {
   const uid = useId().replace(/:/g, '');
@@ -71,14 +83,15 @@ function LandingEclipseArc({ variant = 'hero' }) {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 overflow-hidden select-none"
     >
+      <div className="omega-film-grain absolute inset-0" />
       <div
         className="absolute left-1/2 -translate-x-1/2 rounded-full"
         style={{
-          top: isCta ? '-140px' : '-220px',
-          width: isCta ? 'min(920px, 120vw)' : 'min(1280px, 140vw)',
-          height: isCta ? '420px' : '620px',
+          top: isCta ? '-140px' : '-210px',
+          width: isCta ? 'min(920px, 120vw)' : 'min(1320px, 145vw)',
+          height: isCta ? '420px' : '640px',
           background:
-            'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(47, 111, 237, 0.26) 0%, rgba(37, 99, 235, 0.11) 42%, rgba(5, 7, 11, 0) 76%)',
+            'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(47, 111, 237, 0.28) 0%, rgba(37, 99, 235, 0.12) 42%, rgba(5, 7, 11, 0) 76%)',
         }}
       />
       <svg
@@ -88,17 +101,17 @@ function LandingEclipseArc({ variant = 'hero' }) {
         className="absolute inset-x-0 top-0 h-full w-full"
       >
         <defs>
-          <linearGradient id={arcGrad} x1="220" y1="220" x2="1220" y2="220" gradientUnits="userSpaceOnUse">
+          <linearGradient id={arcGrad} x1="200" y1="220" x2="1240" y2="220" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#2F6FED" stopOpacity="0" />
-            <stop offset="22%" stopColor="#2F6FED" stopOpacity="0.45" />
-            <stop offset="50%" stopColor="#93C5FD" stopOpacity="0.92" />
-            <stop offset="78%" stopColor="#2F6FED" stopOpacity="0.45" />
+            <stop offset="22%" stopColor="#2F6FED" stopOpacity="0.48" />
+            <stop offset="50%" stopColor="#93C5FD" stopOpacity="0.95" />
+            <stop offset="78%" stopColor="#2F6FED" stopOpacity="0.48" />
             <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
           </linearGradient>
           <radialGradient id={haloGrad} cx="720" cy={isCta ? '560' : '640'} r="560" gradientUnits="userSpaceOnUse">
             <stop offset="78%" stopColor="#05070B" stopOpacity="1" />
-            <stop offset="93%" stopColor="#0B1326" stopOpacity="0.92" />
-            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0.14" />
+            <stop offset="93%" stopColor="#0B1326" stopOpacity="0.94" />
+            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0.16" />
           </radialGradient>
         </defs>
         <circle
@@ -130,9 +143,9 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
         initial={{ opacity: 0, y: 12, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.98 }}
-        transition={{ duration: 0.24, ease: EASE_OUT }}
+        transition={{ duration: 0.24, ease: EASE_EXPO_OUT }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl bg-[#0B101B]/95 backdrop-blur-2xl border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_32px_90px_rgba(0,0,0,0.75)] p-6 sm:p-7"
+        className={`w-full max-w-lg rounded-2xl omega-glass-surface omega-border-gradient ${SHADOW_LG} p-6 sm:p-7`}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -141,7 +154,7 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
             </p>
             <h3
               id="landing-modal-title"
-              className="mt-1.5 text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]"
+              className="mt-1.5 font-[var(--font-display)] text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]"
             >
               {isDownload
                 ? 'Instala OMEGA Desktop en tu equipo'
@@ -162,7 +175,7 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
           <div className="mt-5 space-y-4">
             <p className="text-sm text-[#94A3B8] leading-relaxed">
               Aplicación nativa en Tauri con sensor local de PC en RAM y conector USB Android/iOS.
-              Puedes iniciar sesión inmediatamente en la versión web o instalar el cliente de escritorio.
+              También puedes iniciar sesión inmediatamente en la aplicación web.
             </p>
             <div className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
               <div className="py-3 flex items-center justify-between gap-3">
@@ -170,7 +183,7 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
                   <Terminal className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
                   <div>
                     <p className="text-sm font-medium text-[#F8FAFC]">Windows 10 / 11 (x64)</p>
-                    <p className="text-xs text-[#64748B] font-mono">Instalador MSI / NSIS + sensor local</p>
+                    <p className="text-xs text-[#64748B] font-mono">Instalador MSI / NSIS + sensor local Rust</p>
                   </div>
                 </div>
                 <span className="rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/30 px-2.5 py-0.5 text-[11px] font-mono text-[#93C5FD]">
@@ -250,7 +263,6 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
 }
 
 export function OmegaLandingPage({ onEnterApp }) {
-  const scrollContainerRef = useRef(null);
   const videoRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const [activeProfile, setActiveProfile] = useState('GENERAL');
@@ -258,6 +270,7 @@ export function OmegaLandingPage({ onEnterApp }) {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [videoPlaying, setVideoPlaying] = useState(true);
   const [videoError, setVideoError] = useState(false);
+  const [openFaq, setOpenFaq] = useState(0);
   const [modalMode, setModalMode] = useState(null);
 
   const selectedProfile =
@@ -265,11 +278,9 @@ export function OmegaLandingPage({ onEnterApp }) {
   const plans = getPlansForProfile(pricingProfile, billingCycle);
 
   useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return undefined;
-    const onScroll = () => setScrolled(el.scrollTop > 24);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   function navigateToApp(intent = 'login') {
@@ -278,14 +289,14 @@ export function OmegaLandingPage({ onEnterApp }) {
       return;
     }
     if (typeof window !== 'undefined') {
-      window.location.assign(intent === 'register' ? '/?auth=register' : '/');
+      const base = OMEGA_APP_URL.replace(/\/+$/, '');
+      window.open(intent === 'register' ? `${base}/?auth=register` : base, '_self');
     }
   }
 
   function scrollToSection(sectionId) {
-    const container = scrollContainerRef.current;
     const target = document.getElementById(sectionId);
-    if (!container || !target) return;
+    if (!target) return;
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -302,17 +313,20 @@ export function OmegaLandingPage({ onEnterApp }) {
   }
 
   return (
-    <div
-      ref={scrollContainerRef}
-      className="relative h-screen w-full overflow-y-auto overflow-x-hidden scroll-smooth bg-[#05070B] text-[#F8FAFC] select-text"
-    >
+    <div className="relative min-h-screen w-full bg-[#05070B] text-[#F8FAFC] overflow-x-hidden">
+      {/* Progressive Blur óptico superior (skill progressive-blur) */}
+      <div aria-hidden="true" className="omega-progressive-blur-top">
+        <div />
+        <div />
+      </div>
+
       {/* 1. Navbar fija minimalista */}
-      <header className="sticky top-0 z-40 px-4 sm:px-6 pt-4">
+      <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-6 pt-4">
         <nav
           aria-label="Navegación principal"
           className={`max-w-6xl mx-auto rounded-2xl px-4 sm:px-5 h-14 flex items-center justify-between transition-all duration-300 ${
             scrolled
-              ? 'bg-[#0B101B]/80 backdrop-blur-2xl border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_12px_36px_rgba(0,0,0,0.45)]'
+              ? `omega-glass-surface border border-white/[0.09] ${SHADOW_MD}`
               : 'bg-transparent border border-transparent'
           }`}
         >
@@ -322,7 +336,7 @@ export function OmegaLandingPage({ onEnterApp }) {
               e.preventDefault();
               scrollToSection('plataforma');
             }}
-            className="focus-visible:outline-2 focus-visible:outline-[#2F6FED] rounded-lg"
+            className="rounded-lg"
           >
             <OmegaBrandMark />
           </a>
@@ -369,7 +383,7 @@ export function OmegaLandingPage({ onEnterApp }) {
 
       <main>
         {/* 2. Hero cinematográfico */}
-        <section id="plataforma" className="relative pt-14 sm:pt-20 pb-20 sm:pb-28 px-4 sm:px-6 overflow-hidden">
+        <section id="plataforma" className="relative pt-32 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6 overflow-hidden">
           <LandingEclipseArc variant="hero" />
 
           <div className="relative z-10 max-w-6xl mx-auto">
@@ -377,17 +391,17 @@ export function OmegaLandingPage({ onEnterApp }) {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, ease: EASE_OUT }}
-                className="inline-flex items-center gap-2 rounded-full bg-[#0B101B]/72 border border-white/[0.09] px-3.5 py-1.5 text-[11.5px] font-mono text-[#94A3B8] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                transition={{ duration: 0.45, ease: EASE_EXPO_OUT }}
+                className={`inline-flex items-center gap-2 rounded-full bg-[#0B101B]/80 border border-white/[0.09] px-3.5 py-1.5 text-[11.5px] font-mono text-[#94A3B8] ${SHADOW_SM}`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2F6FED]" aria-hidden="true" />
                 OMEGA v2.2 · Zero-Retention &amp; Soberanía de Datos
               </motion.div>
 
               <motion.h1
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.06, ease: EASE_OUT }}
+                transition={{ duration: 0.55, delay: 0.06, ease: EASE_EXPO_OUT }}
                 className="mt-6 font-[var(--font-display)] text-4xl sm:text-5xl md:text-6xl font-medium tracking-[-0.03em] leading-[1.06] text-[#F8FAFC]"
               >
                 Inteligencia forense, AppSec y análisis documental sin exponer tus datos.
@@ -396,22 +410,22 @@ export function OmegaLandingPage({ onEnterApp }) {
               <motion.p
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.12, ease: EASE_OUT }}
+                transition={{ duration: 0.55, delay: 0.12, ease: EASE_EXPO_OUT }}
                 className="mt-5 text-base sm:text-lg text-[#94A3B8] max-w-2xl mx-auto leading-relaxed"
               >
-                Protección preventiva en RAM para PC y móviles, auditoría de código y expedientes confidenciales con IA citada en una sola plataforma nativa.
+                Auditoría volátil en RAM para equipos y móviles, seguridad de repositorios y expedientes confidenciales con IA citada en una sola plataforma nativa.
               </motion.p>
 
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.18, ease: EASE_OUT }}
+                transition={{ duration: 0.55, delay: 0.18, ease: EASE_EXPO_OUT }}
                 className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3"
               >
                 <button
                   type="button"
                   onClick={() => navigateToApp('register')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-colors shadow-[0_0_28px_rgba(47,111,237,0.32)]"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5 shadow-[0_0_28px_rgba(47,111,237,0.34)]"
                 >
                   Comenzar gratis
                   <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
@@ -419,7 +433,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                 <button
                   type="button"
                   onClick={() => scrollToSection('showcase')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B101B]/72 hover:bg-[#141923]/90 backdrop-blur-xl border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-colors"
+                  className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg omega-glass-surface hover:bg-[#141923]/90 border border-white/[0.09] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5 ${SHADOW_SM}`}
                 >
                   <Play className="w-3.5 h-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                   Ver demostración
@@ -427,25 +441,27 @@ export function OmegaLandingPage({ onEnterApp }) {
               </motion.div>
             </div>
 
-            {/* Product Showcase real */}
+            {/* Product Showcase real con borde gradiente especular + sombra multicapa */}
             <motion.div
               id="showcase"
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.24, ease: EASE_OUT }}
+              transition={{ duration: 0.65, delay: 0.24, ease: EASE_EXPO_OUT }}
               className="relative mt-14 sm:mt-16 max-w-5xl mx-auto"
             >
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -inset-x-8 -top-10 h-44 rounded-full blur-3xl opacity-70"
+                className="pointer-events-none absolute -inset-x-10 -top-12 h-48 rounded-full blur-3xl opacity-75"
                 style={{
                   background:
-                    'radial-gradient(ellipse at 50% 50%, rgba(47, 111, 237, 0.24) 0%, rgba(5, 7, 11, 0) 72%)',
+                    'radial-gradient(ellipse at 50% 50%, rgba(47, 111, 237, 0.26) 0%, rgba(5, 7, 11, 0) 72%)',
                 }}
               />
 
-              <div className="relative rounded-2xl bg-[#0B101B]/72 backdrop-blur-2xl border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_36px_96px_rgba(0,0,0,0.72)] overflow-hidden">
-                <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.07] bg-[#080C15]/80">
+              <div
+                className={`relative rounded-2xl omega-glass-surface omega-border-gradient ${SHADOW_LG} overflow-hidden`}
+              >
+                <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.07] bg-[#080C15]/85">
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full bg-white/[0.14]" />
                     <span className="h-2.5 w-2.5 rounded-full bg-white/[0.14]" />
@@ -502,13 +518,16 @@ export function OmegaLandingPage({ onEnterApp }) {
           </div>
         </section>
 
-        {/* 3. Banda de credenciales técnicas (4 métricas) */}
+        {/* 3. Banda de credenciales técnicas (4 métricas con hairline) */}
         <section aria-label="Credenciales técnicas" className="px-4 sm:px-6 py-4">
           <Reveal className="max-w-6xl mx-auto border-y border-white/[0.08]">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.08]">
               {LANDING_METRICS.map((metric) => (
                 <div key={metric.value} className="px-6 py-7">
-                  <p className="font-mono text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] tabular-nums">
+                  <p className="font-mono text-[10.5px] tracking-[0.16em] text-[#64748B]">
+                    {metric.code}
+                  </p>
+                  <p className="mt-2 font-mono text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] tabular-nums">
                     {metric.value}
                   </p>
                   <p className="mt-1.5 text-sm font-medium text-[#CBD5E1]">{metric.label}</p>
@@ -535,7 +554,7 @@ export function OmegaLandingPage({ onEnterApp }) {
               <div
                 role="tablist"
                 aria-label="Perfiles de espacio de trabajo"
-                className="inline-flex self-start md:self-auto rounded-full bg-[#0B101B]/80 border border-white/[0.09] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                className={`inline-flex self-start md:self-auto rounded-full bg-[#0B101B]/85 border border-white/[0.09] p-1 ${SHADOW_SM}`}
               >
                 {LANDING_PROFILES.map((profile) => {
                   const isActive = profile.id === activeProfile;
@@ -555,7 +574,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                       {isActive && (
                         <motion.span
                           layoutId="landing-profile-pill"
-                          transition={{ duration: 0.28, ease: EASE_OUT }}
+                          transition={{ duration: 0.24, ease: EASE_EXPO_OUT }}
                           className="absolute inset-0 rounded-full bg-[#2F6FED]"
                         />
                       )}
@@ -574,76 +593,76 @@ export function OmegaLandingPage({ onEnterApp }) {
                 role="tabpanel"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, ease: EASE_OUT }}
+                transition={{ duration: 0.28, ease: EASE_EXPO_OUT }}
                 className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center"
               >
-                  <div className="lg:col-span-6 space-y-6">
-                    <div>
-                      <p className="font-mono text-xs uppercase tracking-[0.14em] text-[#2F6FED]">
-                        {selectedProfile.badge}
-                      </p>
-                      <h3 className="mt-2 font-[var(--font-display)] text-2xl sm:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
-                        {selectedProfile.headline}
-                      </h3>
-                      <p className="mt-3 text-sm sm:text-base text-[#94A3B8] leading-relaxed">
-                        {selectedProfile.summary}
-                      </p>
+                <div className="lg:col-span-6 space-y-6">
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-[0.14em] text-[#2F6FED]">
+                      {selectedProfile.badge}
+                    </p>
+                    <h3 className="mt-2 font-[var(--font-display)] text-2xl sm:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
+                      {selectedProfile.headline}
+                    </h3>
+                    <p className="mt-3 text-sm sm:text-base text-[#94A3B8] leading-relaxed">
+                      {selectedProfile.summary}
+                    </p>
+                  </div>
+
+                  <div className="divide-y divide-white/[0.07] border-t border-white/[0.07]">
+                    {selectedProfile.capabilities.map((cap) => (
+                      <div key={cap.title} className="py-4 flex items-start gap-3.5">
+                        <span className="mt-0.5 rounded-full bg-[#2F6FED]/15 text-[#2F6FED] p-1 shrink-0">
+                          <Check className="w-3.5 h-3.5" strokeWidth={2} />
+                        </span>
+                        <div>
+                          <h4 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h4>
+                          <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">{cap.detail}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-6">
+                  <div
+                    className={`rounded-2xl omega-glass-surface border border-white/[0.09] ${SHADOW_MD} overflow-hidden`}
+                  >
+                    <div className="relative aspect-[16/10] bg-[#080C15] overflow-hidden border-b border-white/[0.07]">
+                      <img
+                        src={selectedProfile.image}
+                        alt={selectedProfile.imageAlt}
+                        loading="lazy"
+                        className="h-full w-full object-cover opacity-90"
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="absolute inset-0 bg-gradient-to-t from-[#0B101B] via-transparent to-transparent"
+                      />
+                      <div className="absolute bottom-4 left-5 right-5">
+                        <p className="font-mono text-[10.5px] tracking-[0.14em] text-[#93C5FD]">
+                          {selectedProfile.previewTag}
+                        </p>
+                        <p className="mt-0.5 text-base font-medium text-[#F8FAFC]">
+                          {selectedProfile.previewTitle}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="divide-y divide-white/[0.07] border-t border-white/[0.07]">
-                      {selectedProfile.capabilities.map((cap) => (
-                        <div key={cap.title} className="py-4 flex items-start gap-3.5">
-                          <span className="mt-0.5 rounded-full bg-[#2F6FED]/15 text-[#2F6FED] p-1 shrink-0">
-                            <Check className="w-3.5 h-3.5" strokeWidth={2} />
-                          </span>
-                          <div>
-                            <h4 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h4>
-                            <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">{cap.detail}</p>
-                          </div>
+                    <div className="divide-y divide-white/[0.06] px-5">
+                      {selectedProfile.previewStats.map((stat) => (
+                        <div
+                          key={stat.k}
+                          className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-sm"
+                        >
+                          <span className="font-mono text-xs text-[#64748B]">{stat.k}</span>
+                          <span className="text-[#E2E8F0]">{stat.v}</span>
                         </div>
                       ))}
                     </div>
                   </div>
-
-                  <div className="lg:col-span-6">
-                    <div className="rounded-2xl bg-[#0B101B]/72 backdrop-blur-2xl border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_64px_rgba(0,0,0,0.55)] overflow-hidden">
-                      <div className="relative aspect-[16/10] bg-[#080C15] overflow-hidden border-b border-white/[0.07]">
-                        <img
-                          src={selectedProfile.image}
-                          alt={selectedProfile.imageAlt}
-                          loading="lazy"
-                          className="h-full w-full object-cover opacity-90"
-                        />
-                        <div
-                          aria-hidden="true"
-                          className="absolute inset-0 bg-gradient-to-t from-[#0B101B] via-transparent to-transparent"
-                        />
-                        <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between gap-3">
-                          <div>
-                            <p className="font-mono text-[10.5px] tracking-[0.14em] text-[#93C5FD]">
-                              {selectedProfile.previewTag}
-                            </p>
-                            <p className="mt-0.5 text-base font-medium text-[#F8FAFC]">
-                              {selectedProfile.previewTitle}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="divide-y divide-white/[0.06] px-5">
-                        {selectedProfile.previewStats.map((stat) => (
-                          <div
-                            key={stat.k}
-                            className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-sm"
-                          >
-                            <span className="font-mono text-xs text-[#64748B]">{stat.k}</span>
-                            <span className="text-[#E2E8F0]">{stat.v}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
+                </div>
+              </motion.div>
             </div>
           </div>
         </section>
@@ -665,7 +684,9 @@ export function OmegaLandingPage({ onEnterApp }) {
                 const Icon = PILLAR_ICONS[pillar.id] || ShieldCheck;
                 return (
                   <Reveal key={pillar.id} delay={idx * 0.06}>
-                    <article className="h-full rounded-2xl bg-[#0B101B]/72 backdrop-blur-2xl border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] p-7 flex flex-col justify-between">
+                    <article
+                      className={`h-full rounded-2xl omega-glass-surface border border-white/[0.09] ${SHADOW_MD} p-7 flex flex-col justify-between transition-transform duration-200 hover:-translate-y-0.5`}
+                    >
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-[11px] tracking-[0.14em] text-[#64748B]">
@@ -708,11 +729,10 @@ export function OmegaLandingPage({ onEnterApp }) {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                {/* Selector de perfil en precios */}
                 <div
                   role="group"
                   aria-label="Filtrar planes por perfil"
-                  className="inline-flex rounded-lg bg-[#0B101B]/80 border border-white/[0.09] p-1"
+                  className={`inline-flex rounded-lg bg-[#0B101B]/85 border border-white/[0.09] p-1 ${SHADOW_SM}`}
                 >
                   {LANDING_PROFILES.map((p) => (
                     <button
@@ -730,11 +750,10 @@ export function OmegaLandingPage({ onEnterApp }) {
                   ))}
                 </div>
 
-                {/* Toggle Mensual / Anual */}
                 <div
                   role="group"
                   aria-label="Frecuencia de facturación"
-                  className="inline-flex rounded-lg bg-[#0B101B]/80 border border-white/[0.09] p-1"
+                  className={`inline-flex rounded-lg bg-[#0B101B]/85 border border-white/[0.09] p-1 ${SHADOW_SM}`}
                 >
                   <button
                     type="button"
@@ -767,10 +786,10 @@ export function OmegaLandingPage({ onEnterApp }) {
               {plans.map((plan, idx) => (
                 <Reveal key={plan.id} delay={idx * 0.06} className="h-full">
                   <article
-                    className={`relative h-full rounded-2xl bg-[#0B101B]/72 backdrop-blur-2xl p-7 flex flex-col justify-between overflow-hidden ${
+                    className={`relative h-full rounded-2xl omega-glass-surface p-7 flex flex-col justify-between overflow-hidden transition-transform duration-200 hover:-translate-y-0.5 ${
                       plan.featured
-                        ? 'border border-[#2F6FED]/50 shadow-[inset_0_1px_0_rgba(147,197,253,0.28),0_20px_60px_rgba(47,111,237,0.12)]'
-                        : 'border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                        ? `omega-border-gradient-pro ${SHADOW_MD}`
+                        : `border border-white/[0.09] ${SHADOW_MD}`
                     }`}
                   >
                     {plan.featured && (
@@ -847,13 +866,48 @@ export function OmegaLandingPage({ onEnterApp }) {
             <p className="mt-8 text-center text-xs font-mono text-[#64748B]">
               Pagos procesados de forma segura con Mercado Pago · Cancela cuando quieras · Facturación corporativa disponible · Recarga opcional de 200 créditos por $29.900 COP
             </p>
+
+            {/* Preguntas clave de objeción B2B (skill pricing-page & landing-page) */}
+            <Reveal className="mt-16 max-w-3xl mx-auto">
+              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#64748B]">
+                PREGUNTAS FRECUENTES
+              </p>
+              <div className="mt-4 divide-y divide-white/[0.08] border-y border-white/[0.08]">
+                {LANDING_FAQ.map((item, idx) => {
+                  const isOpen = openFaq === idx;
+                  return (
+                    <div key={item.q}>
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => setOpenFaq(isOpen ? -1 : idx)}
+                        className="w-full py-4 flex items-center justify-between gap-4 text-left text-sm font-medium text-[#F8FAFC] hover:text-white transition-colors"
+                      >
+                        <span>{item.q}</span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-[#64748B] shrink-0 transition-transform duration-200 ${
+                            isOpen ? 'rotate-180 text-[#2F6FED]' : ''
+                          }`}
+                          strokeWidth={1.75}
+                        />
+                      </button>
+                      {isOpen && (
+                        <p className="pb-4 text-sm text-[#94A3B8] leading-relaxed">{item.a}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Reveal>
           </div>
         </section>
 
         {/* 7. CTA Final */}
         <section className="px-4 sm:px-6 py-20 sm:py-24">
           <Reveal className="max-w-6xl mx-auto">
-            <div className="relative rounded-2xl bg-[#0B101B]/72 backdrop-blur-2xl border border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] px-6 sm:px-12 py-16 sm:py-20 text-center overflow-hidden">
+            <div
+              className={`relative rounded-2xl omega-glass-surface omega-border-gradient ${SHADOW_LG} px-6 sm:px-12 py-16 sm:py-20 text-center overflow-hidden`}
+            >
               <LandingEclipseArc variant="cta" />
               <div className="relative z-10 max-w-2xl mx-auto">
                 <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#93C5FD]">
@@ -869,7 +923,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                   <button
                     type="button"
                     onClick={() => setModalMode('download')}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-colors shadow-[0_0_28px_rgba(47,111,237,0.3)]"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5 shadow-[0_0_28px_rgba(47,111,237,0.32)]"
                   >
                     <Download className="w-4 h-4" strokeWidth={1.75} />
                     Descargar OMEGA Desktop
@@ -877,7 +931,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                   <button
                     type="button"
                     onClick={() => setModalMode('pilot')}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.10] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-colors"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.10] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5"
                   >
                     <Building2 className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
                     Agendar demo

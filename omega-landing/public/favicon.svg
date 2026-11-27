@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#141418" />
+      <stop offset="100%" stop-color="#0A0A0C" />
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="50%" stop-color="#2F6FED" />
+      <stop offset="100%" stop-color="#1C2438" />
+    </linearGradient>
+    <linearGradient id="omegaGrad" x1="20" y1="18" x2="44" y2="45" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="55%" stop-color="#F2F2F4" />
+      <stop offset="100%" stop-color="#A8B3C5" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0A0A0C" stroke="#1C2438" stroke-width="1.5" />
+  <path
+    d="M32 9L51 15.5V30.5C51 42.6 42.9 51.3 32 55C21.1 51.3 13 42.6 13 30.5V15.5L32 9Z"
+    fill="url(#bgGrad)"
+    stroke="url(#rimGrad)"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M32 13L47 18.2V30.4C47 40.1 40.6 47.1 32 50.4C23.4 47.1 17 40.1 17 30.4V18.2L32 13Z"
+    fill="none"
+    stroke="#2F6FED"
+    stroke-opacity="0.24"
+    stroke-width="1"
+  />
+  <path
+    d="M21 38.5H27.2V35.2C25.2 33.7 24 31.4 24 28.7C24 24 27.6 20.4 32 20.4C36.4 20.4 40 24 40 28.7C40 31.4 38.8 33.7 36.8 35.2V38.5H43V42H33.6V34.1C35.2 32.9 36.1 31 36.1 28.8C36.1 26.2 34.3 24.1 32 24.1C29.7 24.1 27.9 26.2 27.9 28.8C27.9 31 28.8 32.9 30.4 34.1V42H21V38.5Z"
+    fill="url(#omegaGrad)"
+  />
+</svg>
