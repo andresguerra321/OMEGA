@@ -24,19 +24,19 @@ import { OmegaBrandMark } from './OmegaBrandMark';
 import { OmegaHeroStage } from './OmegaHeroStage';
 import { OmegaPrivacyBento } from './OmegaPrivacyBento';
 import { OmegaProfilePreview } from './OmegaProfilePreview';
+import { SpecularCard } from './SpecularCard';
 import {
   LANDING_FAQ,
   LANDING_PAGES,
   LANDING_PROFILES,
   OMEGA_APP_URL,
-  OMEGA_DEMO_VIDEO,
   PILOT_SUMMARY_TEXT,
   PROFILE_ACCESS_NOTES,
   getPlansForProfile,
 } from '../data/catalog';
 
 const EASE_OUT = [0.22, 1, 0.36, 1];
-const SPRING_KOWALSKI = { type: 'spring', stiffness: 420, damping: 36 };
+const SPRING_KOWALSKI = { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 };
 const VALID_PAGE_IDS = new Set(LANDING_PAGES.map((p) => p.id));
 
 const PROFILE_ICONS = {
@@ -69,9 +69,6 @@ function readPageFromHash() {
   return VALID_PAGE_IDS.has(raw) ? raw : 'plataforma';
 }
 
-/**
- * Arco luminoso azul rey muy sutil heredado del Login (sin lavar esquinas).
- */
 function ClippedRoyalArc({ position = 'top' }) {
   const uid = useId().replace(/:/g, '');
   const strokeId = `omegaHorizonStroke-${uid}`;
@@ -152,7 +149,7 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
         exit={{ opacity: 0, y: 6, scale: 0.99 }}
         transition={SPRING_KOWALSKI}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl omega-glass p-6 sm:p-7 shadow-[0_32px_80px_rgba(0,0,0,0.85)]"
+        className="w-full max-w-lg rounded-2xl omega-glass p-6 sm:p-7"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -228,6 +225,9 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
 }
 
 export function OmegaLandingPage({ onEnterApp }) {
+  const grainUri =
+    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
   const [activePage, setActivePage] = useState(readPageFromHash);
   const [activeProfile, setActiveProfile] = useState('GENERAL');
   const [pricingProfile, setPricingProfile] = useState('GENERAL');
@@ -269,12 +269,19 @@ export function OmegaLandingPage({ onEnterApp }) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#05070B] text-[#F8FAFC] flex flex-col overflow-x-hidden">
-      {/* Navbar fija minimalista en vidrio real */}
+    <div className="min-h-screen w-full bg-[#05070B] text-[#F8FAFC] antialiased flex flex-col overflow-x-hidden">
+      {/* Grano óptico SVG global */}
+      <div
+        aria-hidden="true"
+        className="opacity-[0.028] mix-blend-overlay pointer-events-none fixed inset-0 z-50"
+        style={{ backgroundImage: grainUri, backgroundSize: '180px 180px' }}
+      />
+
+      {/* Navbar flotante */}
       <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-6 pt-4">
         <nav
           aria-label="Navegación principal"
-          className="max-w-6xl mx-auto rounded-full px-4 sm:px-5 h-14 flex items-center justify-between omega-glass shadow-[0_12px_32px_-12px_rgba(0,0,0,0.65)]"
+          className="max-w-6xl mx-auto rounded-full px-4 sm:px-5 h-14 flex items-center justify-between omega-glass"
         >
           <button
             type="button"
@@ -293,15 +300,14 @@ export function OmegaLandingPage({ onEnterApp }) {
                   type="button"
                   aria-current={isCurrent ? 'page' : undefined}
                   onClick={() => navigatePage(page.id)}
-                  className={`relative rounded-full px-4 py-1.5 text-[13.5px] font-medium transition-transform active:scale-[0.97] ${
-                    isCurrent ? 'text-[#F8FAFC]' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                  }`}
+                  className={`relative rounded-full px-4 py-1.5 text-[13.5px] font-medium transition-transform active:scale-[0.97] ${isCurrent ? 'text-[#F8FAFC]' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                    }`}
                 >
                   {isCurrent && (
-                    <motion.span
+                    <motion.div
                       layoutId="omega-nav-active"
                       transition={SPRING_KOWALSKI}
-                      className="absolute inset-0 rounded-full bg-white/[0.08] border border-white/[0.09]"
+                      className="omega-sculpted absolute inset-0 rounded-full"
                     />
                   )}
                   <span className="relative z-10">{page.label}</span>
@@ -328,7 +334,7 @@ export function OmegaLandingPage({ onEnterApp }) {
           </div>
         </nav>
 
-        {/* Navegación compacta móvil */}
+        {/* Navegación móvil */}
         <div className="md:hidden max-w-6xl mx-auto mt-2 flex items-center gap-1 overflow-x-auto pb-1">
           {LANDING_PAGES.map((page) => {
             const isCurrent = activePage === page.id;
@@ -340,7 +346,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                 onClick={() => navigatePage(page.id)}
                 className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
                   isCurrent
-                    ? 'bg-white/[0.09] text-[#F8FAFC] border border-white/[0.10]'
+                    ? 'omega-sculpted text-[#F8FAFC]'
                     : 'text-[#94A3B8] hover:text-[#F8FAFC]'
                 }`}
               >
@@ -354,55 +360,34 @@ export function OmegaLandingPage({ onEnterApp }) {
       <main className="flex-1">
         <motion.div
           key={activePage}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, ease: EASE_OUT }}
+          transition={{ duration: 0.45, ease: EASE_OUT }}
           className="w-full"
         >
-          {/* 1. HERO EDITORIAL CON PROFUNDIDAD EJE Z + VIDEO NATIVO INFERIOR */}
+          {/* FASE 2: HERO EDITORIAL CON PROFUNDIDAD EJE Z (Cero video ni capturas) */}
           {activePage === 'plataforma' && (
-            <>
-              <OmegaHeroStage
-                onStartFree={() => navigateToApp('register')}
-                onViewPlans={() => navigatePage('planes')}
-              />
-
-              <section
-                id="demo-video"
-                aria-label="Demostración de producto"
-                className="border-t border-white/[0.06] px-6 py-20 md:py-24"
-              >
-                <div className="max-w-5xl mx-auto rounded-2xl overflow-hidden border border-white/[0.10] bg-[#0B101B] shadow-[0_32px_90px_rgba(0,0,0,0.75)]">
-                  <video
-                    src={OMEGA_DEMO_VIDEO.src}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="auto"
-                    aria-label="Demostración de la plataforma OMEGA"
-                    className="block w-full aspect-video object-cover"
-                  />
-                </div>
-              </section>
-            </>
+            <OmegaHeroStage
+              onStartFree={() => navigateToApp('register')}
+              onViewPlans={() => navigatePage('planes')}
+            />
           )}
 
-          {/* 2. TRES ESPACIOS. UN SOLO CONTROL. */}
+          {/* FASE 3: TRES ESPACIOS. UN SOLO CONTROL. */}
           {activePage === 'perfiles' && (
-            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-24 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-32 md:pt-40 pb-24 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                  <h1 className="text-3xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
+                  <h2 className="text-3xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
                     Tres espacios. Un solo control.
-                  </h1>
+                  </h2>
 
                   <div
                     role="tablist"
                     aria-label="Espacios de trabajo"
-                    className="inline-flex self-start md:self-auto bg-[#050810]/85 rounded-full border border-white/[0.04] shadow-[inset_4px_4px_10px_rgba(0,0,0,0.85),inset_-1px_-1px_4px_rgba(255,255,255,0.05)] p-1.5 shrink-0"
+                    className="omega-debossed inline-flex self-start md:self-auto rounded-full p-1 shrink-0"
                   >
                     {LANDING_PROFILES.map((profile) => {
                       const isActive = profile.id === activeProfile;
@@ -415,13 +400,12 @@ export function OmegaLandingPage({ onEnterApp }) {
                           aria-selected={isActive}
                           aria-controls={`profile-panel-${profile.id}`}
                           onClick={() => setActiveProfile(profile.id)}
-                          className={`relative rounded-full px-4 py-2 text-sm font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-2 ${
-                            isActive ? 'text-white' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                          }`}
+                          className={`relative rounded-full px-4 py-2 text-sm font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-2 ${isActive ? 'text-white' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                            }`}
                         >
                           {isActive && (
-                            <motion.span
-                              layoutId="landing-profile-pill"
+                            <motion.div
+                              layoutId="profile-tab-pill"
                               transition={SPRING_KOWALSKI}
                               className="absolute inset-0 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#2563EB] shadow-[0_6px_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.35)]"
                             />
@@ -435,74 +419,76 @@ export function OmegaLandingPage({ onEnterApp }) {
                 </div>
 
                 <div className="mt-12">
-                  <motion.div
-                    key={selectedProfile.id}
-                    id={`profile-panel-${selectedProfile.id}`}
-                    role="tabpanel"
-                    initial={{ opacity: 0, scale: 0.985 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={SPRING_KOWALSKI}
-                    className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center"
-                  >
-                    <div className="lg:col-span-5 space-y-6">
-                      <div>
-                        <p className="text-sm font-medium text-[#60A5FA]">{selectedProfile.domain}</p>
-                        <h2 className="mt-2 text-2xl md:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
-                          {selectedProfile.headline}
-                        </h2>
-                        <p className="mt-2.5 text-sm md:text-base text-[#94A3B8] leading-relaxed">
-                          {selectedProfile.summary}
-                        </p>
-                      </div>
+                  <AnimatePresence initial={false}>
+                    <motion.div
+                      key={selectedProfile.id}
+                      id={`profile-panel-${selectedProfile.id}`}
+                      role="tabpanel"
+                      initial={{ opacity: 0, scale: 0.985 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={SPRING_KOWALSKI}
+                      className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center"
+                    >
+                      <div className="lg:col-span-5 space-y-6">
+                        <div>
+                          <p className="text-sm font-medium text-[#60A5FA]">{selectedProfile.domain}</p>
+                          <h1 className="mt-2 text-2xl md:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC] text-balance">
+                            {selectedProfile.headline}
+                          </h1>
+                          <p className="mt-2.5 text-sm md:text-base text-[#94A3B8] leading-relaxed">
+                            {selectedProfile.summary}
+                          </p>
+                        </div>
 
-                      <div className="space-y-4 pt-2 border-t border-white/[0.08]">
-                        {selectedProfile.capabilities.map((cap) => {
-                          const CapIcon = CAPABILITY_ICONS[cap.icon] || ShieldCheck;
-                          return (
-                            <div key={cap.title} className="pt-3 flex items-start gap-3.5">
-                              <span
-                                aria-hidden="true"
-                                className="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-gradient-to-b from-[#151E30]/90 to-[#0B101B]/95 border border-white/[0.08] shadow-[8px_10px_20px_rgba(0,0,0,0.55),-1px_-1px_6px_rgba(255,255,255,0.03),inset_0_1px_0_rgba(255,255,255,0.16)] flex items-center justify-center"
-                              >
-                                <CapIcon className="w-4 h-4 text-[#60A5FA]" strokeWidth={1.75} />
-                              </span>
-                              <div>
-                                <h3 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h3>
-                                <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">
-                                  {cap.detail}
-                                </p>
+                        <div className="space-y-4 pt-2 border-t border-white/[0.08]">
+                          {selectedProfile.capabilities.map((cap) => {
+                            const CapIcon = CAPABILITY_ICONS[cap.icon] || ShieldCheck;
+                            return (
+                              <div key={cap.title} className="pt-3 flex items-start gap-3.5">
+                                <span
+                                  aria-hidden="true"
+                                  className="omega-sculpted mt-0.5 h-9 w-9 shrink-0 rounded-xl flex items-center justify-center"
+                                >
+                                  <CapIcon className="w-4 h-4 text-[#60A5FA]" strokeWidth={1.75} />
+                                </span>
+                                <div>
+                                  <h3 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h3>
+                                  <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">
+                                    {cap.detail}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="relative lg:col-span-7">
-                      <div
-                        aria-hidden="true"
-                        className={`pointer-events-none absolute h-[340px] w-[340px] md:h-[420px] md:w-[420px] rounded-full opacity-[0.34] blur-[90px] transition-all duration-500 ${
-                          ATMOSPHERE_SHIFT[selectedProfile.id] || ATMOSPHERE_SHIFT.GENERAL
-                        }`}
-                        style={{
-                          background:
-                            'radial-gradient(circle, #2563EB 0%, #1D4ED8 48%, rgba(5, 7, 11, 0) 76%)',
-                        }}
-                      />
+                      <div className="relative lg:col-span-7">
+                        <div
+                          aria-hidden="true"
+                          className={`pointer-events-none absolute h-[340px] w-[340px] md:h-[420px] md:w-[420px] rounded-full opacity-[0.34] blur-[90px] transition-all duration-500 ${
+                            ATMOSPHERE_SHIFT[selectedProfile.id] || ATMOSPHERE_SHIFT.GENERAL
+                          }`}
+                          style={{
+                            background:
+                              'radial-gradient(circle, #2563EB 0%, #1D4ED8 48%, rgba(5, 7, 11, 0) 76%)',
+                          }}
+                        />
 
-                      <div className="relative z-10">
-                        <OmegaProfilePreview profile={selectedProfile} />
+                        <div className="relative z-10">
+                          <OmegaProfilePreview profile={selectedProfile} />
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               </div>
             </section>
           )}
 
-          {/* 3. PRIVACIDAD Y DESPLIEGUE (BENTO GRID ANIMADO) */}
+          {/* FASE 4: PRIVACIDAD (BENTO ANIMADO SIN CARD-IN-CARD) */}
           {activePage === 'seguridad' && (
-            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-24 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-32 md:pt-40 pb-24 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
@@ -523,14 +509,14 @@ export function OmegaLandingPage({ onEnterApp }) {
             </section>
           )}
 
-          {/* 4. PLANES Y PRECIOS */}
+          {/* FASE 5: PLANES SIMPLES */}
           {activePage === 'planes' && (
-            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-32 md:pt-40 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
                 <div className="text-center max-w-2xl mx-auto mb-12">
-                  <h1 className="text-4xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
+                  <h1 className="text-4xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
                     Planes simples.
                   </h1>
                   <p className="text-base text-[#94A3B8] mt-3">
@@ -541,51 +527,73 @@ export function OmegaLandingPage({ onEnterApp }) {
                     <div
                       role="group"
                       aria-label="Filtrar planes por perfil"
-                      className="inline-flex rounded-full bg-white/[0.04] border border-white/[0.08] p-1"
+                      className="omega-debossed inline-flex rounded-full p-1"
                     >
-                      {LANDING_PROFILES.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setPricingProfile(p.id)}
-                          className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
-                            pricingProfile === p.id
-                              ? 'bg-white/[0.12] text-white'
-                              : 'text-[#94A3B8] hover:text-white'
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
+                      {LANDING_PROFILES.map((p) => {
+                        const active = pricingProfile === p.id;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setPricingProfile(p.id)}
+                            className={`relative rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
+                              active ? 'text-white' : 'text-[#94A3B8] hover:text-white'
+                            }`}
+                          >
+                            {active && (
+                              <motion.div
+                                layoutId="pricing-space-pill"
+                                transition={SPRING_KOWALSKI}
+                                className="omega-sculpted absolute inset-0 rounded-full"
+                              />
+                            )}
+                            <span className="relative z-10">{p.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
 
                     <div
                       role="group"
                       aria-label="Frecuencia de facturación"
-                      className="inline-flex rounded-full bg-white/[0.04] border border-white/[0.08] p-1"
+                      className="omega-debossed inline-flex rounded-full p-1"
                     >
                       <button
                         type="button"
                         onClick={() => setBillingCycle('monthly')}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
+                        className={`relative rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] ${
                           billingCycle === 'monthly'
-                            ? 'bg-white/[0.12] text-white'
+                            ? 'text-white'
                             : 'text-[#94A3B8] hover:text-white'
                         }`}
                       >
-                        Mensual
+                        {billingCycle === 'monthly' && (
+                          <motion.div
+                            layoutId="pricing-cycle-pill"
+                            transition={SPRING_KOWALSKI}
+                            className="omega-sculpted absolute inset-0 rounded-full"
+                          />
+                        )}
+                        <span className="relative z-10">Mensual</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setBillingCycle('annual')}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-1.5 ${
+                        className={`relative rounded-full px-3.5 py-1.5 text-xs font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-1.5 ${
                           billingCycle === 'annual'
-                            ? 'bg-white/[0.12] text-white'
+                            ? 'text-white'
                             : 'text-[#94A3B8] hover:text-white'
                         }`}
                       >
-                        <span>Anual</span>
-                        <span className="text-[#60A5FA] bg-[#2F6FED]/15 px-2 py-0.5 rounded-full text-[11px] tabular-nums">
+                        {billingCycle === 'annual' && (
+                          <motion.div
+                            layoutId="pricing-cycle-pill"
+                            transition={SPRING_KOWALSKI}
+                            className="omega-sculpted absolute inset-0 rounded-full"
+                          />
+                        )}
+                        <span className="relative z-10">Anual</span>
+                        <span className="relative z-10 text-[#60A5FA] bg-[#2F6FED]/15 px-2 py-0.5 rounded-full text-[11px] tabular-nums">
                           -17%
                         </span>
                       </button>
@@ -607,15 +615,20 @@ export function OmegaLandingPage({ onEnterApp }) {
                           ? 'bg-[#F8FAFC] text-[#05070B] hover:bg-white'
                           : 'bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.12] text-white';
 
+                    const CardWrapper = isFeatured ? SpecularCard : 'article';
+                    const cardProps = isFeatured
+                      ? {
+                          as: 'article',
+                          className:
+                            'rounded-2xl p-7 flex flex-col !bg-[#0B1222]/85 !border-[#2F6FED]/45',
+                        }
+                      : {
+                          className:
+                            'relative rounded-2xl p-7 flex flex-col omega-glass',
+                        };
+
                     return (
-                      <article
-                        key={plan.id}
-                        className={`relative rounded-2xl p-7 flex flex-col backdrop-blur-xl overflow-hidden ${
-                          isFeatured
-                            ? 'bg-[#0B1222]/85 border border-[#2F6FED]/45 shadow-[inset_0_1px_0_rgba(147,197,253,0.35),0_24px_60px_rgba(0,0,0,0.5)]'
-                            : 'bg-white/[0.02] border border-white/[0.08]'
-                        }`}
-                      >
+                      <CardWrapper key={plan.id} {...cardProps}>
                         {isFeatured && (
                           <div
                             aria-hidden="true"
@@ -628,7 +641,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                         )}
 
                         <div className="relative z-10 flex items-center justify-between gap-2">
-                          <h2 className="text-lg font-medium text-white">{plan.name}</h2>
+                          <h2 className="text-lg font-medium text-white text-balance">{plan.name}</h2>
                           {plan.badge && (
                             <span className="bg-[#2F6FED]/15 text-[#60A5FA] border border-[#2F6FED]/30 text-[11px] font-medium px-2.5 py-0.5 rounded-full">
                               {plan.badge}
@@ -677,7 +690,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                             </li>
                           ))}
                         </ul>
-                      </article>
+                      </CardWrapper>
                     );
                   })}
                 </div>
@@ -700,9 +713,8 @@ export function OmegaLandingPage({ onEnterApp }) {
                           >
                             <span>{item.q}</span>
                             <ChevronDown
-                              className={`w-4 h-4 text-[#64748B] shrink-0 transition-transform duration-200 ${
-                                isOpen ? 'rotate-180 text-[#F8FAFC]' : ''
-                              }`}
+                              className={`w-4 h-4 text-[#64748B] shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#F8FAFC]' : ''
+                                }`}
                               strokeWidth={1.75}
                             />
                           </button>
@@ -720,7 +732,7 @@ export function OmegaLandingPage({ onEnterApp }) {
         </motion.div>
       </main>
 
-      {/* Cierre Ejecutivo con arco azul rey contenido */}
+      {/* Cierre Ejecutivo */}
       <section className="relative border-t border-white/[0.08] px-4 sm:px-6 py-16 sm:py-20 overflow-hidden">
         <ClippedRoyalArc position="bottom" />
 

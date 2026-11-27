@@ -2,9 +2,7 @@ import { useId } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
 /**
- * Escultura Central de OMEGA:
- * 3 anillos concéntricos en perspectiva (rotateX 68deg) con vidrio ahumado
- * + Orbe de Cristal Obsidiana flotando suavemente (±5px en 6s).
+ * Orbe de Cristal Obsidiana de OMEGA sobre 3 anillos concéntricos en perspectiva.
  */
 export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px] md:h-[320px]' }) {
   const uid = useId().replace(/:/g, '');
@@ -18,17 +16,7 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
       role="img"
       className="relative flex items-center justify-center select-none pointer-events-none"
     >
-      {/* Halo ambiental concentrado detrás de la orbe */}
-      <div
-        aria-hidden="true"
-        className="omega-orb-breathe absolute h-[320px] w-[320px] md:h-[400px] md:w-[400px] rounded-full opacity-[0.34] blur-[76px]"
-        style={{
-          background:
-            'radial-gradient(circle, #2F6FED 0%, #1D4ED8 46%, rgba(5, 7, 11, 0) 76%)',
-        }}
-      />
-
-      {/* Base escultórica: 3 anillos concéntricos escalonados en perspectiva */}
+      {/* Base escultórica: 3 anillos concéntricos escalonados en perspectiva (rotateX 68deg) */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -bottom-10 md:-bottom-12 left-1/2 -translate-x-1/2 flex items-center justify-center"
@@ -38,31 +26,28 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
           className="relative flex items-center justify-center"
           style={{ transform: 'rotateX(68deg)' }}
         >
-          {/* Anillo exterior */}
           <div
             className="h-[310px] w-[310px] md:h-[390px] md:w-[390px] rounded-full"
             style={{
-              border: '1px solid rgba(96, 165, 250, 0.25)',
+              border: '1px solid rgba(96, 165, 250, 0.24)',
               background:
                 'radial-gradient(circle, rgba(15, 23, 42, 0.35) 0%, rgba(11, 16, 27, 0.14) 68%, transparent 100%)',
               boxShadow: 'inset 0 1px 8px rgba(96, 165, 250, 0.16)',
             }}
           />
-          {/* Anillo medio */}
           <div
             className="absolute h-[230px] w-[230px] md:h-[290px] md:w-[290px] rounded-full"
             style={{
-              border: '1px solid rgba(96, 165, 250, 0.28)',
+              border: '1px solid rgba(96, 165, 250, 0.24)',
               background:
                 'radial-gradient(circle, rgba(29, 78, 216, 0.16) 0%, rgba(7, 10, 18, 0.28) 72%, transparent 100%)',
               boxShadow: '0 0 24px rgba(47, 111, 237, 0.14)',
             }}
           />
-          {/* Anillo interior */}
           <div
             className="absolute h-[155px] w-[155px] md:h-[195px] md:w-[195px] rounded-full"
             style={{
-              border: '1px solid rgba(147, 197, 253, 0.32)',
+              border: '1px solid rgba(96, 165, 250, 0.28)',
               background:
                 'radial-gradient(circle, rgba(47, 111, 237, 0.22) 0%, rgba(5, 7, 11, 0.45) 75%)',
             }}
@@ -70,7 +55,7 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
         </div>
       </div>
 
-      {/* Orbe principal flotando suavemente (±5px en 6s) */}
+      {/* Orbe principal con flotación vertical suave (±5px, 6s) */}
       <motion.div
         animate={reducedMotion ? undefined : { y: [-5, 5, -5] }}
         transition={
@@ -80,18 +65,17 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
         }
         className={`relative ${sizeClass} rounded-full`}
       >
-        {/* Cuerpo de Cristal Obsidiana */}
+        {/* Cuerpo radial profundo */}
         <div
           className="relative w-full h-full rounded-full overflow-hidden"
           style={{
             background:
               'radial-gradient(circle at 32% 28%, #161E31 0%, #070A12 52%, #030407 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.10)',
             boxShadow:
               'inset 0 -24px 48px rgba(0, 0, 0, 0.92), inset 0 2px 10px rgba(255, 255, 255, 0.14), 0 36px 90px rgba(0, 0, 0, 0.85)',
           }}
         >
-          {/* Reflejo curvo de lente óptica */}
+          {/* Reflejo curvo de lente óptica en el cuadrante superior */}
           <svg
             viewBox="0 0 380 380"
             fill="none"
@@ -100,8 +84,8 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
           >
             <defs>
               <linearGradient id={lensArcId} x1="68" y1="34" x2="292" y2="176" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.24" />
-                <stop offset="48%" stopColor="#E2E8F0" stopOpacity="0.11" />
+                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.22" />
+                <stop offset="50%" stopColor="#E2E8F0" stopOpacity="0.10" />
                 <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
               </linearGradient>
             </defs>
@@ -109,18 +93,10 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
               d="M72 152C82 78 148 30 226 36C274 40 314 66 336 106C306 72 260 54 210 56C140 59 92 98 72 152Z"
               fill={`url(#${lensArcId})`}
             />
-            <ellipse
-              cx="126"
-              cy="76"
-              rx="56"
-              ry="18"
-              transform="rotate(-26 126 76)"
-              fill="rgba(255, 255, 255, 0.08)"
-            />
           </svg>
         </div>
 
-        {/* Arco de luz azul rey orbitando el borde */}
+        {/* Aro cónico de luz azul rey orbitando el perímetro */}
         <div
           aria-hidden="true"
           className="omega-orb-spin omega-orb-ring-mask-glow pointer-events-none absolute -inset-[2px] rounded-full opacity-90"
@@ -139,14 +115,14 @@ export function OmegaObsidianOrb({ sizeClass = 'w-[260px] h-[260px] md:w-[320px]
           }}
         />
 
-        {/* Isotipo Ω centrado */}
+        {/* Isotipo Ω vectorial nítido centrado */}
         <div className="absolute inset-0 flex items-center justify-center">
           <svg
             viewBox="0 0 120 120"
             fill="none"
-            className="w-[96px] md:w-[118px] h-auto"
+            className="w-[92px] md:w-[112px] h-auto"
             style={{
-              filter: 'drop-shadow(0 0 18px rgba(96, 165, 250, 0.28))',
+              filter: 'drop-shadow(0 0 18px rgba(96, 165, 250, 0.30))',
             }}
           >
             <defs>

@@ -6,7 +6,6 @@ import {
   LANDING_FAQ,
   LANDING_PAGES,
   LANDING_PROFILES,
-  OMEGA_DEMO_VIDEO,
   PRIVACY_BENTO_TOP,
   PRIVACY_DEPLOYMENT_MODES,
   getPlansForProfile,
@@ -17,7 +16,6 @@ const FORBIDDEN_JARGON =
 
 test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero jerga o texto QA', () => {
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
-  assert.equal(OMEGA_DEMO_VIDEO.src, '/media/omega-demo.mp4');
   assert.equal(LANDING_PROFILES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
   assert.equal(PRIVACY_BENTO_TOP.zeroStorage.counterLabel, '0 B guardados');
   assert.equal(PRIVACY_DEPLOYMENT_MODES.map((m) => m.id).join(','), 'cloud,private');
@@ -33,7 +31,6 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.equal(annual[2].displayPrice, '$2.999.000');
 
   const serialized = JSON.stringify({
-    OMEGA_DEMO_VIDEO,
     LANDING_PROFILES,
     PRIVACY_BENTO_TOP,
     PRIVACY_DEPLOYMENT_MODES,
@@ -44,7 +41,7 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero editorial eje Z, banda monumental, Perfiles, Bento vivo y Planes', async () => {
+test('OmegaLandingPage cumple fases 1-5: Hero sin video, Perfiles SpecularCard, Bento anti-anidamiento y Planes', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -119,42 +116,43 @@ test('OmegaLandingPage renderiza Hero editorial eje Z, banda monumental, Perfile
       );
     });
 
-    // 1. Hero editorial eje Z + capas flotantes + banda monumental
+    // Fase 2: Hero sin <video>, sin <iframe>, con Orbe + 3 capas flotantes + banda monumental
     const homeText = container.textContent || '';
-    assert.match(homeText, /SISTEMA DE SEGURIDAD Y PRIVACIDAD/);
     assert.match(homeText, /Control total antes de tu próximo paso\./);
-    assert.match(homeText, /Comenzar gratis — Sin tarjeta/);
-    assert.match(homeText, /Equipo y celular sin amenazas/);
-    assert.match(homeText, /Expediente verificado · Pág\. 14/);
-    assert.match(homeText, /RETENCIÓN/);
-    assert.match(homeText, /Informe certificado/);
-    assert.match(homeText, /Rastro en disco/);
-    assert.match(homeText, /Control de tus datos/);
-    assert.match(homeText, /Espacios en una sola app/);
     assert.ok(container.querySelector('[aria-label="Orbe de Cristal Obsidiana de OMEGA"]'));
-    assert.ok(container.querySelector('#demo-video video'));
+    assert.equal(container.querySelector('video'), null);
+    assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
-    // 2. Perfiles
+    // Fase 3: Perfiles
     const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Perfiles',
     );
     await act(async () => {
       perfilesNav.click();
     });
+    assert.match(container.textContent || '', /Tres espacios\. Un solo control\./);
     assert.match(container.textContent || '', /Revisión silenciosa de tu computador/);
 
-    // 3. Privacidad Bento vivo
+    // Fase 4: Privacidad (0 datos salientes aparece SOLO una vez en modo privado)
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Privacidad',
     );
     await act(async () => {
       segNav.click();
     });
-    assert.match(container.textContent || '', /Cero almacenamiento oculto/);
-    assert.match(container.textContent || '', /0 B guardados/);
+    const privateTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
+      (btn) => btn.textContent?.includes('Instalado en tu empresa'),
+    );
+    await act(async () => {
+      privateTab.click();
+    });
+    const privateText = container.textContent || '';
+    assert.equal((privateText.match(/0 datos salientes/g) || []).length, 1);
+    assert.match(privateText, /Internet externo bloqueado/);
+    assert.doesNotMatch(privateText, FORBIDDEN_JARGON);
 
-    // 4. Planes
+    // Fase 5: Planes
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Planes',
     );

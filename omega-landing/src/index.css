@@ -10,6 +10,46 @@
   --color-cobalt-deep: #1D4ED8;
 }
 
+@utility omega-glass {
+  position: relative;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.065) 0%, rgba(11, 16, 27, 0.58) 48%, rgba(5, 7, 11, 0.80) 100%);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.72),
+    0 24px 64px -16px rgba(0, 0, 0, 0.75);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(47, 111, 237, 0.22) 40%, rgba(255, 255, 255, 0.03) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@utility omega-debossed {
+  background: rgba(4, 6, 11, 0.88);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.92),
+    inset 0 1px 1px rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+@utility omega-sculpted {
+  background: linear-gradient(180deg, rgba(22, 31, 48, 0.92) 0%, rgba(11, 16, 27, 0.96) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 10px 24px -6px rgba(0, 0, 0, 0.75),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
 @layer base {
   :root {
     color-scheme: dark;
@@ -75,23 +115,11 @@
   }
 }
 
-/* Superficie de vidrio real coherente con Login y Home de OMEGA */
-.omega-glass {
-  background-color: rgba(11, 16, 27, 0.68);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+.omega-dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.85) 1px, transparent 0);
+  background-size: 20px 20px;
 }
 
-/* Grano óptico SVG al 2.5% para eliminar banding en gradientes oscuros */
-.omega-grain-overlay {
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-}
-
-/* Orbe de Cristal Obsidiana (animaciones CSS puras a 60fps) */
 @keyframes omega-orb-spin {
   from {
     transform: rotate(0deg);
@@ -101,22 +129,8 @@
   }
 }
 
-@keyframes omega-orb-breathe {
-  0%,
-  100% {
-    transform: scale(0.96);
-  }
-  50% {
-    transform: scale(1.04);
-  }
-}
-
 .omega-orb-spin {
   animation: omega-orb-spin 10s linear infinite;
-}
-
-.omega-orb-breathe {
-  animation: omega-orb-breathe 5s ease-in-out infinite;
 }
 
 .omega-orb-ring-mask {
@@ -148,8 +162,7 @@
     scroll-behavior: auto;
   }
 
-  .omega-orb-spin,
-  .omega-orb-breathe {
+  .omega-orb-spin {
     animation: none;
   }
 }

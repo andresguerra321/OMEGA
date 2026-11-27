@@ -8,7 +8,6 @@ import {
   Cpu,
   FileCheck2,
   FileText,
-  Globe,
   Laptop,
   Lock,
   Server,
@@ -16,18 +15,11 @@ import {
   SlidersHorizontal,
   Zap,
 } from 'lucide-react';
+import { SpecularCard } from './SpecularCard';
 import { PRIVACY_BENTO_TOP, PRIVACY_DEPLOYMENT_MODES } from '../data/catalog';
 
-const EASE_OUT = [0.22, 1, 0.36, 1];
-
-const BENTO_CARD_CLASS =
-  'relative rounded-[24px] bg-gradient-to-br from-white/[0.07] via-[#0B1222]/60 to-[#060912]/80 backdrop-blur-2xl border border-white/[0.11] shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_28px_70px_rgba(0,0,0,0.7)] p-7 overflow-hidden';
-
-const TACTILE_NODE_CLASS =
-  'bg-gradient-to-b from-[#151E30]/90 to-[#0B101B]/95 rounded-2xl border border-white/[0.08] shadow-[10px_14px_28px_rgba(0,0,0,0.65),-2px_-2px_8px_rgba(255,255,255,0.03),inset_0_1px_0_rgba(255,255,255,0.16)]';
-
-const DEBOSSED_CLASS =
-  'bg-[#050810]/85 border border-white/[0.04] shadow-[inset_4px_4px_10px_rgba(0,0,0,0.85),inset_-1px_-1px_4px_rgba(255,255,255,0.05)]';
+const SPRING_KOWALSKI = { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 };
+const ENTRANCE_EASE = [0.22, 1, 0.36, 1];
 
 const POINT_ICONS = {
   zap: Zap,
@@ -38,82 +30,61 @@ const POINT_ICONS = {
   lock: Lock,
 };
 
+function DotGridBackdrop() {
+  return (
+    <div
+      aria-hidden="true"
+      className="omega-dot-grid pointer-events-none absolute inset-0 opacity-[0.06] [mask-image:radial-gradient(ellipse_at_center,black_45%,transparent_80%)]"
+    />
+  );
+}
+
 function ZeroStorageStage({ active, reducedMotion }) {
   const animateLoop = active && !reducedMotion;
 
   return (
-    <div
-      className={`relative h-[220px] rounded-2xl ${DEBOSSED_CLASS} p-5 flex flex-col justify-between overflow-hidden`}
-    >
-      {/* Conectores SVG con pulso de luz azul rey */}
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 460 120"
-        fill="none"
-        className="pointer-events-none absolute inset-x-4 top-5 h-[120px] w-[calc(100%-2rem)]"
-      >
-        <path
-          d="M96 60 H188"
-          stroke="rgba(255,255,255,0.10)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <motion.path
-          d="M96 60 H188"
-          stroke="#60A5FA"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray="24 68"
-          animate={animateLoop ? { strokeDashoffset: [92, 0] } : { strokeDashoffset: 32 }}
-          transition={
-            animateLoop ? { duration: 2.2, repeat: Infinity, ease: 'linear' } : undefined
-          }
-        />
-        <path
-          d="M272 60 H364"
-          stroke="rgba(255,255,255,0.10)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <motion.path
-          d="M272 60 H364"
-          stroke="#34D399"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray="24 68"
-          animate={animateLoop ? { strokeDashoffset: [92, 0] } : { strokeDashoffset: 32 }}
-          transition={
-            animateLoop
-              ? { duration: 2.2, delay: 0.45, repeat: Infinity, ease: 'linear' }
-              : undefined
-          }
-        />
-      </svg>
+    <div className="relative h-[220px] flex flex-col justify-between py-2 overflow-hidden">
+      <DotGridBackdrop />
 
-      {/* Flujo de 3 nodos táctiles */}
-      <div className="relative z-10 grid grid-cols-3 items-center gap-3 pt-2">
-        {/* Nodo 1: Archivo / Respaldo entrando y desvaneciéndose al terminar */}
+      {/* Flujo horizontal de 3 nodos conectado por líneas SVG con pulso de luz */}
+      <div className="relative z-10 flex items-center justify-between gap-2 pt-5">
+        {/* Nodo 1: Archivo / Respaldo */}
         <motion.div
           animate={
             animateLoop
-              ? { opacity: [1, 1, 0.35, 1], scale: [1, 0.96, 0.85, 1] }
+              ? { opacity: [1, 1, 0.35, 1], scale: [1, 0.96, 0.86, 1] }
               : { opacity: 1, scale: 1 }
           }
           transition={
-            animateLoop
-              ? { duration: 3.6, repeat: Infinity, ease: EASE_OUT }
-              : undefined
+            animateLoop ? { duration: 3.6, repeat: Infinity, ease: ENTRANCE_EASE } : undefined
           }
-          className={`${TACTILE_NODE_CLASS} p-3 flex flex-col items-center text-center gap-2`}
+          className="omega-sculpted rounded-2xl px-3 py-3.5 w-[31%] flex flex-col items-center text-center gap-2"
         >
           <Laptop className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
           <span className="text-xs font-medium text-[#CBD5E1]">Archivo / Respaldo</span>
         </motion.div>
 
-        {/* Nodo 2: Cápsula central Ω con barrido vertical azul */}
-        <div
-          className={`${TACTILE_NODE_CLASS} relative p-3.5 flex flex-col items-center text-center gap-2 overflow-hidden border-[#2F6FED]/30`}
-        >
+        {/* Conector SVG 1 -> 2 */}
+        <svg aria-hidden="true" viewBox="0 0 60 12" fill="none" className="w-10 shrink-0 h-3">
+          <line x1="0" y1="6" x2="60" y2="6" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+          <motion.line
+            x1="0"
+            y1="6"
+            x2="60"
+            y2="6"
+            stroke="#60A5FA"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray="16 44"
+            animate={animateLoop ? { strokeDashoffset: [60, 0] } : { strokeDashoffset: 20 }}
+            transition={
+              animateLoop ? { duration: 1.9, repeat: Infinity, ease: 'linear' } : undefined
+            }
+          />
+        </svg>
+
+        {/* Nodo 2: Cápsula protagonista Ω */}
+        <div className="omega-sculpted rounded-2xl px-3 py-4 w-[33%] relative flex flex-col items-center text-center gap-2 overflow-hidden">
           <motion.div
             aria-hidden="true"
             animate={animateLoop ? { y: [-28, 36, -28] } : { y: 0 }}
@@ -130,24 +101,43 @@ function ZeroStorageStage({ active, reducedMotion }) {
           </span>
         </div>
 
+        {/* Conector SVG 2 -> 3 */}
+        <svg aria-hidden="true" viewBox="0 0 60 12" fill="none" className="w-10 shrink-0 h-3">
+          <line x1="0" y1="6" x2="60" y2="6" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+          <motion.line
+            x1="0"
+            y1="6"
+            x2="60"
+            y2="6"
+            stroke="#34D399"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray="16 44"
+            animate={animateLoop ? { strokeDashoffset: [60, 0] } : { strokeDashoffset: 20 }}
+            transition={
+              animateLoop
+                ? { duration: 1.9, delay: 0.4, repeat: Infinity, ease: 'linear' }
+                : undefined
+            }
+          />
+        </svg>
+
         {/* Nodo 3: Resultado verificado */}
         <motion.div
           animate={animateLoop ? { opacity: [0.65, 1, 1, 0.65] } : { opacity: 1 }}
           transition={
-            animateLoop ? { duration: 3.6, repeat: Infinity, ease: EASE_OUT } : undefined
+            animateLoop ? { duration: 3.6, repeat: Infinity, ease: ENTRANCE_EASE } : undefined
           }
-          className={`${TACTILE_NODE_CLASS} p-3 flex flex-col items-center text-center gap-2 border-emerald-400/25`}
+          className="omega-sculpted rounded-2xl px-3 py-3.5 w-[31%] flex flex-col items-center text-center gap-2"
         >
           <CheckCircle2 className="w-4 h-4 text-emerald-400" strokeWidth={1.75} />
           <span className="text-xs font-medium text-emerald-400">Resultado verificado</span>
         </motion.div>
       </div>
 
-      {/* Contador táctil hundido */}
-      <div className="relative z-10 flex justify-center">
-        <div
-          className={`${DEBOSSED_CLASS} rounded-full px-4 py-1.5 inline-flex items-center gap-2 text-xs font-mono tabular-nums text-[#CBD5E1]`}
-        >
+      {/* Píldora hundida 0 B guardados */}
+      <div className="relative z-10 flex justify-center pb-1">
+        <div className="omega-debossed rounded-full px-4 py-1.5 inline-flex items-center gap-2 text-xs font-mono tabular-nums text-[#CBD5E1]">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
           <span>{PRIVACY_BENTO_TOP.zeroStorage.counterLabel}</span>
         </div>
@@ -164,13 +154,15 @@ function TamperProofStage({ active, reducedMotion }) {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`relative h-[220px] rounded-2xl ${DEBOSSED_CLASS} p-5 flex flex-col justify-between overflow-hidden`}
+      className="relative h-[220px] flex flex-col justify-between py-2 overflow-hidden"
     >
-      {/* Tarjeta de informe ejecutivo en cristal elevado */}
+      <DotGridBackdrop />
+
+      {/* Documento flotante directamente sobre la SpecularCard */}
       <motion.div
-        animate={{ rotate: hovered ? 0 : -1.25, y: hovered ? -2 : 0 }}
-        transition={{ duration: 0.3, ease: EASE_OUT }}
-        className={`${TACTILE_NODE_CLASS} relative mx-auto w-full max-w-[360px] p-4 overflow-hidden`}
+        animate={{ rotate: hovered ? 0 : -1.2, y: hovered ? -2 : 0 }}
+        transition={{ duration: 0.3, ease: ENTRANCE_EASE }}
+        className="relative z-10 omega-sculpted rounded-2xl mx-auto mt-2 w-full max-w-[360px] p-4 overflow-hidden"
       >
         {/* Destello especular diagonal */}
         <motion.div
@@ -191,20 +183,19 @@ function TamperProofStage({ active, reducedMotion }) {
               <span>{PRIVACY_BENTO_TOP.tamperProof.docLabel}</span>
             </div>
             <div className="space-y-1.5 pt-0.5">
-              <div className="h-2 w-4/5 rounded-full bg-white/[0.10]" />
+              <div className="h-2 w-4/5 rounded-full bg-white/[0.12]" />
+              <div className="h-2 w-11/12 rounded-full bg-white/[0.08]" />
               <div className="h-2 w-3/5 rounded-full bg-white/[0.06]" />
             </div>
           </div>
 
-          {/* Sello digital neomórfico Ω */}
-          <div className="h-11 w-11 shrink-0 rounded-xl bg-[#070B14] border border-[#2F6FED]/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_rgba(47,111,237,0.22)] flex items-center justify-center">
+          <div className="omega-debossed h-11 w-11 shrink-0 rounded-xl flex items-center justify-center">
             <span className="text-sm font-semibold text-[#93C5FD]">Ω</span>
           </div>
         </div>
       </motion.div>
 
-      {/* Píldora luminosa + cadena corta discreta */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pb-1">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2F6FED]/15 border border-[#60A5FA]/35 px-3 py-1 text-xs font-medium text-[#93C5FD]">
           <FileCheck2 className="w-3.5 h-3.5" strokeWidth={1.75} />
           <span>{PRIVACY_BENTO_TOP.tamperProof.pillLabel}</span>
@@ -222,18 +213,18 @@ function DeploymentTopology({ mode, active, reducedMotion }) {
   const animateLoop = active && !reducedMotion;
 
   return (
-    <div
-      className={`relative rounded-2xl ${DEBOSSED_CLASS} p-5 md:p-6 min-h-[260px] flex flex-col justify-between gap-5 overflow-hidden`}
-    >
-      {/* Estado superior de topología */}
-      <div className="flex items-center justify-between text-xs">
+    <div className="relative min-h-[260px] flex flex-col justify-between gap-6 py-2 overflow-hidden">
+      <DotGridBackdrop />
+
+      {/* Encabezado de topología: 0 datos salientes aparece SOLO aquí en modo privado */}
+      <div className="relative z-10 flex items-center justify-between text-xs">
         <span className="font-medium text-[#CBD5E1]">
           {isPrivate ? 'Topología · Red Corporativa Privada' : 'Topología · Nube Aislada OMEGA'}
         </span>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium ${
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium ${
             isPrivate
-              ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/25'
+              ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/30'
               : 'bg-[#2F6FED]/15 text-[#93C5FD] border border-[#2F6FED]/35'
           }`}
         >
@@ -242,93 +233,129 @@ function DeploymentTopology({ mode, active, reducedMotion }) {
         </span>
       </div>
 
-      {/* Diagrama animado con layout transitions */}
+      {/* Diagrama animado directamente sobre la SpecularCard (cero cajas oscuras anidadas) */}
       {isPrivate ? (
         <motion.div
           layout
-          className="relative rounded-2xl border border-emerald-400/35 bg-gradient-to-br from-[#0F1B26]/80 to-[#08101A]/90 p-4 space-y-4 shadow-[inset_0_1px_0_rgba(52,211,153,0.22)]"
+          className="relative z-10 rounded-2xl border border-emerald-400/35 p-4 md:p-5 space-y-4"
         >
           <p className="text-xs font-medium text-emerald-400">Tu Red Corporativa</p>
 
-          <div className="grid grid-cols-3 gap-3 items-center">
-            <motion.div layout className={`${TACTILE_NODE_CLASS} p-3 text-center space-y-1.5`}>
+          <div className="flex items-center justify-between gap-2">
+            <motion.div layout className="omega-sculpted rounded-2xl p-3 flex-1 text-center space-y-1.5">
               <Laptop className="w-4 h-4 mx-auto text-[#CBD5E1]" strokeWidth={1.75} />
               <p className="text-xs font-medium text-[#F8FAFC]">Tus equipos</p>
             </motion.div>
 
-            <motion.div
-              layout
-              className={`${TACTILE_NODE_CLASS} p-3 text-center space-y-1.5 border-[#2F6FED]/40`}
-            >
+            <svg aria-hidden="true" viewBox="0 0 48 12" fill="none" className="w-8 shrink-0 h-3">
+              <line x1="0" y1="6" x2="48" y2="6" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+              <motion.line
+                x1="0"
+                y1="6"
+                x2="48"
+                y2="6"
+                stroke="#34D399"
+                strokeWidth="2"
+                strokeDasharray="14 34"
+                animate={animateLoop ? { strokeDashoffset: [48, 0] } : { strokeDashoffset: 16 }}
+                transition={
+                  animateLoop ? { duration: 1.8, repeat: Infinity, ease: 'linear' } : undefined
+                }
+              />
+            </svg>
+
+            <motion.div layout className="omega-sculpted rounded-2xl p-3 flex-1 text-center space-y-1.5">
               <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#2F6FED]/20 text-xs font-semibold text-[#93C5FD]">
                 Ω
               </span>
               <p className="text-xs font-medium text-[#F8FAFC]">Núcleo Ω</p>
             </motion.div>
 
-            <motion.div
-              layout
-              className={`${TACTILE_NODE_CLASS} p-3 text-center space-y-1.5 border-emerald-400/30`}
-            >
+            <svg aria-hidden="true" viewBox="0 0 48 12" fill="none" className="w-8 shrink-0 h-3">
+              <line x1="0" y1="6" x2="48" y2="6" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+              <motion.line
+                x1="0"
+                y1="6"
+                x2="48"
+                y2="6"
+                stroke="#34D399"
+                strokeWidth="2"
+                strokeDasharray="14 34"
+                animate={animateLoop ? { strokeDashoffset: [48, 0] } : { strokeDashoffset: 16 }}
+                transition={
+                  animateLoop
+                    ? { duration: 1.8, delay: 0.35, repeat: Infinity, ease: 'linear' }
+                    : undefined
+                }
+              />
+            </svg>
+
+            <motion.div layout className="omega-sculpted rounded-2xl p-3 flex-1 text-center space-y-1.5">
               <Cpu className="w-4 h-4 mx-auto text-emerald-400" strokeWidth={1.75} />
               <p className="text-xs font-medium text-[#F8FAFC]">IA Privada Local</p>
             </motion.div>
           </div>
         </motion.div>
       ) : (
-        <motion.div layout className="relative py-2">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-            <motion.div layout className={`${TACTILE_NODE_CLASS} p-4 text-center space-y-2`}>
-              <Laptop className="w-4 h-4 mx-auto text-[#CBD5E1]" strokeWidth={1.75} />
-              <p className="text-xs font-medium text-[#F8FAFC]">Tus equipos</p>
-            </motion.div>
+        <motion.div layout className="relative z-10 flex items-center justify-between gap-2 py-4">
+          <motion.div layout className="omega-sculpted rounded-2xl p-4 flex-1 text-center space-y-2">
+            <Laptop className="w-4 h-4 mx-auto text-[#CBD5E1]" strokeWidth={1.75} />
+            <p className="text-xs font-medium text-[#F8FAFC]">Tus equipos</p>
+          </motion.div>
 
-            <motion.div
-              layout
-              className={`${TACTILE_NODE_CLASS} relative p-4 text-center space-y-2 border-[#2F6FED]/45`}
-              style={{
-                boxShadow:
-                  '0 0 28px rgba(47, 111, 237, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
-              }}
-            >
-              <Cloud className="w-4 h-4 mx-auto text-[#60A5FA]" strokeWidth={1.75} />
-              <p className="text-xs font-medium text-[#F8FAFC]">Nube Aislada Ω</p>
-              {animateLoop && (
-                <motion.span
-                  aria-hidden="true"
-                  animate={{ opacity: [0.35, 0.9, 0.35] }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-                  className="pointer-events-none absolute inset-x-4 top-0 h-px bg-[#60A5FA]"
-                />
-              )}
-            </motion.div>
+          <svg aria-hidden="true" viewBox="0 0 48 12" fill="none" className="w-8 shrink-0 h-3">
+            <line x1="0" y1="6" x2="48" y2="6" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+            <motion.line
+              x1="0"
+              y1="6"
+              x2="48"
+              y2="6"
+              stroke="#60A5FA"
+              strokeWidth="2"
+              strokeDasharray="14 34"
+              animate={animateLoop ? { strokeDashoffset: [48, 0] } : { strokeDashoffset: 16 }}
+              transition={
+                animateLoop ? { duration: 1.8, repeat: Infinity, ease: 'linear' } : undefined
+              }
+            />
+          </svg>
 
-            <motion.div
-              layout
-              className={`${TACTILE_NODE_CLASS} p-4 text-center space-y-2 border-emerald-400/25`}
-            >
-              <FileCheck2 className="w-4 h-4 mx-auto text-emerald-400" strokeWidth={1.75} />
-              <p className="text-xs font-medium text-[#F8FAFC]">Informe seguro</p>
-            </motion.div>
-          </div>
+          <motion.div layout className="omega-sculpted rounded-2xl p-4 flex-1 text-center space-y-2">
+            <Cloud className="w-4 h-4 mx-auto text-[#60A5FA]" strokeWidth={1.75} />
+            <p className="text-xs font-medium text-[#F8FAFC]">Nube Aislada Ω</p>
+          </motion.div>
+
+          <svg aria-hidden="true" viewBox="0 0 48 12" fill="none" className="w-8 shrink-0 h-3">
+            <line x1="0" y1="6" x2="48" y2="6" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+            <motion.line
+              x1="0"
+              y1="6"
+              x2="48"
+              y2="6"
+              stroke="#34D399"
+              strokeWidth="2"
+              strokeDasharray="14 34"
+              animate={animateLoop ? { strokeDashoffset: [48, 0] } : { strokeDashoffset: 16 }}
+              transition={
+                animateLoop
+                  ? { duration: 1.8, delay: 0.35, repeat: Infinity, ease: 'linear' }
+                  : undefined
+              }
+            />
+          </svg>
+
+          <motion.div layout className="omega-sculpted rounded-2xl p-4 flex-1 text-center space-y-2">
+            <FileCheck2 className="w-4 h-4 mx-auto text-emerald-400" strokeWidth={1.75} />
+            <p className="text-xs font-medium text-[#F8FAFC]">Informe seguro</p>
+          </motion.div>
         </motion.div>
       )}
 
-      {/* Pie contextual de perímetro */}
-      <div
-        className={`flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 border transition-opacity duration-300 ${
-          isPrivate
-            ? 'border-white/[0.06] bg-white/[0.02] opacity-60'
-            : 'border-white/[0.06] bg-white/[0.03] opacity-90'
-        }`}
-      >
-        <span className="inline-flex items-center gap-2 text-xs text-[#94A3B8]">
-          <Globe className="w-3.5 h-3.5" strokeWidth={1.75} />
-          <span>{isPrivate ? 'Internet externo bloqueado' : 'Conexión cifrada de extremo a extremo'}</span>
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#CBD5E1]">
-          <Lock className="w-3.5 h-3.5 text-[#60A5FA]" strokeWidth={1.75} />
-          <span>{isPrivate ? '0 datos salientes' : 'Cero retención'}</span>
+      {/* Barra inferior limpia (sin duplicar '0 datos salientes') */}
+      <div className="relative z-10 omega-debossed rounded-full px-4 py-2.5 inline-flex items-center gap-2 text-xs text-[#94A3B8] self-start">
+        <Lock className="w-3.5 h-3.5 text-[#60A5FA]" strokeWidth={1.75} />
+        <span>
+          {isPrivate ? 'Internet externo bloqueado' : 'Conexión cifrada de extremo a extremo'}
         </span>
       </div>
     </div>
@@ -347,7 +374,6 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
 
   return (
     <div ref={sectionRef} className="relative mt-12">
-      {/* Luz atmosférica azul rey detrás del Bento para refracción real */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute left-1/2 top-1/3 -translate-x-1/2 h-[380px] w-[min(780px,92vw)] rounded-full opacity-[0.28] blur-[100px]"
@@ -358,44 +384,49 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
       />
 
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Módulo 1 (Superior Izquierdo): Cero almacenamiento oculto */}
-        <article className={`${BENTO_CARD_CLASS} lg:col-span-6 flex flex-col justify-between gap-6`}>
+        {/* Módulo 1 */}
+        <SpecularCard
+          as="article"
+          className="lg:col-span-6 rounded-[24px] p-7 flex flex-col justify-between gap-6"
+        >
           <ZeroStorageStage active={inView} reducedMotion={Boolean(reducedMotion)} />
-          <div>
-            <h2 className="text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]">
+          <div className="relative z-10">
+            <h2 className="text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] text-balance">
               {PRIVACY_BENTO_TOP.zeroStorage.title}
             </h2>
             <p className="mt-2 text-sm text-[#94A3B8] leading-relaxed">
               {PRIVACY_BENTO_TOP.zeroStorage.description}
             </p>
           </div>
-        </article>
+        </SpecularCard>
 
-        {/* Módulo 2 (Superior Derecho): Reportes a prueba de alteraciones */}
-        <article className={`${BENTO_CARD_CLASS} lg:col-span-6 flex flex-col justify-between gap-6`}>
+        {/* Módulo 2 */}
+        <SpecularCard
+          as="article"
+          className="lg:col-span-6 rounded-[24px] p-7 flex flex-col justify-between gap-6"
+        >
           <TamperProofStage active={inView} reducedMotion={Boolean(reducedMotion)} />
-          <div>
-            <h2 className="text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]">
+          <div className="relative z-10">
+            <h2 className="text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] text-balance">
               {PRIVACY_BENTO_TOP.tamperProof.title}
             </h2>
             <p className="mt-2 text-sm text-[#94A3B8] leading-relaxed">
               {PRIVACY_BENTO_TOP.tamperProof.description}
             </p>
           </div>
-        </article>
+        </SpecularCard>
 
-        {/* Módulo 3 (Inferior Ancho Completo): Conmutador Vivo de Despliegue */}
-        <article className={`${BENTO_CARD_CLASS} lg:col-span-12 space-y-8`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h2 className="text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]">
+        {/* Módulo 3 */}
+        <SpecularCard as="article" className="lg:col-span-12 rounded-[24px] p-7 space-y-8">
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] text-balance">
               Tú eliges dónde opera OMEGA
             </h2>
 
-            {/* Switch neomórfico hundido con layoutId */}
             <div
               role="tablist"
               aria-label="Modalidad de despliegue"
-              className={`inline-flex flex-wrap rounded-full ${DEBOSSED_CLASS} p-1.5`}
+              className="omega-debossed inline-flex flex-wrap rounded-full p-1"
             >
               {PRIVACY_DEPLOYMENT_MODES.map((opt) => {
                 const isSelected = opt.id === deploymentMode;
@@ -406,14 +437,14 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
                     role="tab"
                     aria-selected={isSelected}
                     onClick={() => setDeploymentMode(opt.id)}
-                    className={`relative rounded-full px-4 py-2 text-xs sm:text-sm font-medium transition-colors ${
+                    className={`relative rounded-full px-4 py-2 text-xs sm:text-sm font-medium transition-transform active:scale-[0.97] ${
                       isSelected ? 'text-white' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
                     }`}
                   >
                     {isSelected && (
-                      <motion.span
-                        layoutId="privacy-deployment-pill"
-                        transition={{ duration: 0.28, ease: EASE_OUT }}
+                      <motion.div
+                        layoutId="deploy-mode-pill"
+                        transition={SPRING_KOWALSKI}
                         className="absolute inset-0 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#2563EB] shadow-[0_6px_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.35)]"
                       />
                     )}
@@ -424,16 +455,16 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             <motion.div
               key={activeDeployment.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.26, ease: EASE_OUT }}
+              transition={{ duration: 0.28, ease: ENTRANCE_EASE }}
               className="lg:col-span-5 space-y-6"
             >
               <div>
-                <h3 className="text-2xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
+                <h3 className="text-2xl font-medium tracking-[-0.025em] text-[#F8FAFC] text-balance">
                   {activeDeployment.headline}
                 </h3>
                 <p className="mt-2.5 text-sm text-[#94A3B8] leading-relaxed">
@@ -448,7 +479,7 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
                     <li key={point.text} className="flex items-center gap-3 text-sm text-[#CBD5E1]">
                       <span
                         aria-hidden="true"
-                        className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-b from-[#151E30]/90 to-[#0B101B]/95 border border-white/[0.08] shadow-[6px_8px_16px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.16)] flex items-center justify-center"
+                        className="omega-sculpted h-8 w-8 shrink-0 rounded-xl flex items-center justify-center"
                       >
                         <Icon className="w-4 h-4 text-[#60A5FA]" strokeWidth={1.75} />
                       </span>
@@ -486,7 +517,7 @@ export function OmegaPrivacyBento({ onRequestPilot, onViewPlans }) {
               />
             </div>
           </div>
-        </article>
+        </SpecularCard>
       </div>
     </div>
   );
