@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
 import { OmegaHeroStage } from './OmegaHeroStage';
-import { OmegaPrivacyBento } from './OmegaPrivacyBento';
 import { SpecularCard } from './SpecularCard';
 import {
   EDITORIAL_SPACES,
@@ -17,6 +16,8 @@ import {
   LANDING_PAGES,
   OMEGA_APP_URL,
   PILOT_SUMMARY_TEXT,
+  PRIVACY_BANNER_MODES,
+  PRIVACY_MANIFESTO,
   PROFILE_ACCESS_NOTES,
   getPlansForProfile,
 } from '../data/catalog';
@@ -193,10 +194,13 @@ export function OmegaLandingPage({ onEnterApp }) {
   const [activePage, setActivePage] = useState(readPageFromHash);
   const [pricingProfile, setPricingProfile] = useState('GENERAL');
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [privacyDeployMode, setPrivacyDeployMode] = useState('cloud');
   const [openFaq, setOpenFaq] = useState(0);
   const [pilotModalOpen, setPilotModalOpen] = useState(false);
 
   const plans = getPlansForProfile(pricingProfile, billingCycle);
+  const activePrivacyBanner =
+    PRIVACY_BANNER_MODES.find((mode) => mode.id === privacyDeployMode) || PRIVACY_BANNER_MODES[0];
 
   useEffect(() => {
     const onHashChange = () => setActivePage(readPageFromHash());
@@ -381,23 +385,111 @@ export function OmegaLandingPage({ onEnterApp }) {
 
           {/* PRIVACIDAD */}
           {activePage === 'seguridad' && (
-            <section className="relative px-4 sm:px-6 pt-32 md:pt-36 pb-24 overflow-hidden">
-              <ClippedRoyalArc position="top" />
+            <section id="seguridad" className="max-w-6xl mx-auto px-6 pt-32 md:pt-36 pb-28">
+              {/* Bloque 1: Manifiesto Tipográfico en 3 Columnas (Cero cajas, cero iconos) */}
+              <div className="max-w-2xl mb-16">
+                <h2 className="text-3xl md:text-5xl font-medium tracking-[-0.035em] text-[#F8FAFC] text-balance">
+                  Privacidad por arquitectura.
+                </h2>
+                <p className="text-base text-[#94A3B8] mt-4">
+                  Sin promesas vagas ni almacenamiento oculto.
+                </p>
+              </div>
 
-              <div className="relative z-10 max-w-6xl mx-auto">
-                <div className="max-w-2xl">
-                  <h1 className="text-3xl sm:text-5xl font-medium tracking-[-0.03em] leading-[1.08] text-[#F8FAFC] text-balance">
-                    Tu información nunca sale de tu control.
-                  </h1>
-                  <p className="mt-4 text-base text-[#94A3B8] leading-relaxed">
-                    Diseñado desde cero para organizaciones donde la confidencialidad no es negociable.
-                  </p>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 border-t border-white/[0.08]">
+                {PRIVACY_MANIFESTO.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className={`pt-8 md:pr-8 ${
+                      idx > 0 ? 'md:pl-8 md:border-l md:border-white/[0.08]' : ''
+                    }`}
+                  >
+                    <p className="text-2xl md:text-3xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
+                      {item.metric}
+                    </p>
+                    <h3 className="text-sm font-medium text-[#E2E8F0] mt-3">{item.title}</h3>
+                    <p className="text-sm text-[#94A3B8] mt-2 leading-relaxed">{item.description}</p>
+                  </div>
+                ))}
+              </div>
 
-                <OmegaPrivacyBento
-                  onRequestPilot={() => setPilotModalOpen(true)}
-                  onViewPlans={() => navigatePage('planes')}
+              {/* Bloque 2: Banner Editorial Panorámico (Nube vs. Modo Privado) */}
+              <div className="mt-20 relative rounded-2xl overflow-hidden border border-white/[0.08] min-h-[380px] md:min-h-[420px] flex items-end bg-[#070A10]">
+                <img
+                  src="/media/privacy-sovereign.jpg"
+                  alt="Bóveda arquitectónica de privacidad OMEGA"
+                  className="absolute inset-0 w-full h-full object-cover"
                 />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#05070B]/95 via-[#05070B]/70 to-transparent"
+                />
+
+                <div className="relative z-10 p-8 md:p-12 max-w-xl">
+                  <div
+                    role="tablist"
+                    aria-label="Modo de despliegue"
+                    className="inline-flex p-1 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.10] mb-8"
+                  >
+                    {PRIVACY_BANNER_MODES.map((mode) => {
+                      const active = privacyDeployMode === mode.id;
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setPrivacyDeployMode(mode.id)}
+                          className={`relative px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                            active ? 'text-[#F8FAFC]' : 'text-[#94A3B8] hover:text-[#E2E8F0]'
+                          }`}
+                        >
+                          {active && (
+                            <motion.span
+                              layoutId="privacy-deploy-pill"
+                              transition={SPRING_KOWALSKI}
+                              className="absolute inset-0 rounded-full bg-white/[0.12] border border-white/[0.12]"
+                            />
+                          )}
+                          <span className="relative z-10">{mode.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    <motion.div
+                      key={activePrivacyBanner.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, ease: EASE_OUT }}
+                    >
+                      <h3 className="text-2xl md:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC] text-balance">
+                        {activePrivacyBanner.headline}
+                      </h3>
+                      <p className="text-sm md:text-base text-[#94A3B8] mt-3 leading-relaxed">
+                        {activePrivacyBanner.description}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
+
+                  <div className="mt-7 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPilotModalOpen(true)}
+                      className="bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 rounded-xl text-sm font-medium active:scale-[0.97] transition-transform"
+                    >
+                      Solicitar piloto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigatePage('planes')}
+                      className="text-sm text-[#E2E8F0] hover:text-white px-3 transition-colors"
+                    >
+                      Ver planes →
+                    </button>
+                  </div>
+                </div>
               </div>
             </section>
           )}

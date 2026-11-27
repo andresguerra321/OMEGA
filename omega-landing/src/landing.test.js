@@ -6,8 +6,8 @@ import {
   EDITORIAL_SPACES,
   LANDING_FAQ,
   LANDING_PAGES,
-  PRIVACY_BENTO_TOP,
-  PRIVACY_DEPLOYMENT_MODES,
+  PRIVACY_BANNER_MODES,
+  PRIVACY_MANIFESTO,
   getPlansForProfile,
 } from './data/catalog.js';
 
@@ -18,8 +18,8 @@ test('catalog mantiene precios reales en COP, galería editorial de 3 frentes y 
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
   assert.equal(EDITORIAL_SPACES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
   assert.equal(EDITORIAL_SPACES.map((p) => p.image).join(','), '/media/space-personal.jpg,/media/space-dev.jpg,/media/space-legal.jpg');
-  assert.equal(PRIVACY_BENTO_TOP.zeroStorage.counterLabel, '0 B guardados');
-  assert.equal(PRIVACY_DEPLOYMENT_MODES.map((m) => m.id).join(','), 'cloud,private');
+  assert.equal(PRIVACY_MANIFESTO.map((c) => c.metric).join(','), '0 bytes,Inalterable,100% tuyo');
+  assert.equal(PRIVACY_BANNER_MODES.map((m) => m.id).join(','), 'cloud,private');
   assert.equal(LANDING_FAQ.length, 4);
 
   const monthly = getPlansForProfile('GENERAL', 'monthly');
@@ -33,8 +33,8 @@ test('catalog mantiene precios reales en COP, galería editorial de 3 frentes y 
 
   const serialized = JSON.stringify({
     EDITORIAL_SPACES,
-    PRIVACY_BENTO_TOP,
-    PRIVACY_DEPLOYMENT_MODES,
+    PRIVACY_MANIFESTO,
+    PRIVACY_BANNER_MODES,
     LANDING_FAQ,
     monthly,
     annual,
@@ -147,14 +147,34 @@ test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 
     ]);
     assert.doesNotMatch(galleryText, FORBIDDEN_JARGON);
 
-    // 3. Privacidad
+    // 3. Privacidad minimalista (manifiesto en 3 columnas sin cajas/iconos + banner panorámico 2 modos)
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Privacidad',
     );
     await act(async () => {
       segNav.click();
     });
-    assert.match(container.textContent || '', /Cero almacenamiento oculto/);
+    const privTextCloud = container.textContent || '';
+    assert.match(privTextCloud, /Privacidad por arquitectura\./);
+    assert.match(privTextCloud, /0 bytes/);
+    assert.match(privTextCloud, /Inalterable/);
+    assert.match(privTextCloud, /100% tuyo/);
+    assert.match(privTextCloud, /Empieza en minutos, sin infraestructura\./);
+    assert.equal(container.querySelectorAll('#seguridad ul, #seguridad li').length, 0);
+    assert.equal(container.querySelectorAll('#seguridad svg').length, 0);
+    const bannerImg = container.querySelector('#seguridad img');
+    assert.equal(bannerImg?.getAttribute('src'), '/media/privacy-sovereign.jpg');
+
+    const privateTab = Array.from(container.querySelectorAll('#seguridad [role="tab"]')).find(
+      (btn) => btn.textContent?.trim() === 'En tu empresa',
+    );
+    assert.ok(privateTab);
+    await act(async () => {
+      privateTab.click();
+    });
+    const privTextOnPrem = container.textContent || '';
+    assert.match(privTextOnPrem, /Ningún dato sale de tu red\./);
+    assert.doesNotMatch(privTextOnPrem, FORBIDDEN_JARGON);
 
     // 4. Planes
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(

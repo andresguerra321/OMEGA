@@ -47,47 +47,44 @@ export const EDITORIAL_SPACES = [
   },
 ];
 
-export const PRIVACY_BENTO_TOP = {
-  zeroStorage: {
-    title: 'Cero almacenamiento oculto',
+export const PRIVACY_MANIFESTO = [
+  {
+    id: 'zero-storage',
+    metric: '0 bytes',
+    title: 'Cero retención en disco',
     description:
-      'Tus archivos, respaldos y enlaces se revisan al instante en memoria activa y se descartan automáticamente al emitir el diagnóstico. Nada queda retenido en disco.',
-    counterLabel: '0 B guardados',
+      'Tus archivos y enlaces se procesan al vuelo en memoria temporal y se eliminan automáticamente al emitir el informe.',
   },
-  tamperProof: {
-    title: 'Reportes a prueba de alteraciones',
+  {
+    id: 'tamper-proof',
+    metric: 'Inalterable',
+    title: 'Informes con sello digital',
     description:
-      'Cada informe incluye un sello digital único y trazabilidad de permisos que demuestra ante dirección, auditorías o clientes que el documento nunca fue modificado.',
-    docLabel: 'Informe Ejecutivo · PDF',
-    pillLabel: 'Sello digital íntegro · Inalterable',
-    sealCode: 'ID · 9F4A-82C1 · VERIFICADO',
+      'Cada resultado genera una firma única verificable que garantiza ante auditorías y dirección que el reporte jamás fue alterado.',
   },
-};
+  {
+    id: 'sovereign-control',
+    metric: '100% tuyo',
+    title: 'Control de dónde opera',
+    description:
+      'Úsalo en nuestra nube aislada o despliégalo íntegramente dentro de los servidores privados de tu empresa.',
+  },
+];
 
-export const PRIVACY_DEPLOYMENT_MODES = [
+export const PRIVACY_BANNER_MODES = [
   {
     id: 'cloud',
-    label: 'En la nube de OMEGA',
-    headline: 'Operando en minutos, sin infraestructura propia.',
+    label: 'En la nube',
+    headline: 'Empieza en minutos, sin infraestructura.',
     description:
-      'Ideal para equipos ágiles, consultores y empresas que quieren protección inmediata con aislamiento total por organización.',
-    points: [
-      { icon: 'zap', text: 'Activación inmediata sin instalar servidores' },
-      { icon: 'sliders', text: 'Consumo predecible con límites claros antes de ejecutar' },
-      { icon: 'shield', text: 'Cero retención de tus archivos originales' },
-    ],
+      'Entorno aislado por organización con límites claros y cero retención de tus archivos originales.',
   },
   {
     id: 'private',
-    label: 'Instalado en tu empresa (Modo Privado)',
-    headline: 'Control absoluto dentro de tu propia red.',
+    label: 'En tu empresa',
+    headline: 'Ningún dato sale de tu red.',
     description:
-      'Pensado para despachos jurídicos, bancos y sectores regulados donde ningún dato puede salir del perímetro corporativo.',
-    points: [
-      { icon: 'server', text: 'Opera 100% dentro de tus propios servidores' },
-      { icon: 'cpu', text: 'Inteligencia artificial privada sin costos por consulta' },
-      { icon: 'lock', text: 'Cumplimiento normativo y soberanía total de datos' },
-    ],
+      'Instala OMEGA en tus propios servidores con inteligencia artificial privada local, diseñado para despachos y sectores regulados.',
   },
 ];
 
