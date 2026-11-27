@@ -14,8 +14,9 @@
   :root {
     color-scheme: dark;
     --bg-canvas: #05070B;
-    --glass-fill: rgba(11, 16, 27, 0.72);
-    --glass-fill-strong: rgba(11, 16, 27, 0.90);
+    --surface-elevated: rgba(11, 16, 27, 0.78);
+    --surface-inset: rgba(15, 21, 34, 0.72);
+    --hairline: rgba(255, 255, 255, 0.08);
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
     --text-muted: #64748B;
@@ -31,18 +32,43 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scrollbar-color: rgba(148, 163, 184, 0.24) #05070B;
+    scrollbar-width: thin;
   }
 
   body {
     margin: 0;
     background-color: #05070B;
     color: #F8FAFC;
+    caret-color: #2F6FED;
     overflow-x: hidden;
   }
 
+  a {
+    text-underline-offset: 4px;
+  }
+
   ::selection {
-    background: rgba(47, 111, 237, 0.36);
+    background: rgba(47, 111, 237, 0.34);
     color: #F8FAFC;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #05070B;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.22);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.36);
   }
 
   button:focus-visible,
@@ -52,118 +78,17 @@
   }
 }
 
-/* Glass Dark UI + CSS Border Gradient (sin morados, estrictamente blanco/azul rey OMEGA) */
-.omega-glass-surface {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.01) 100%);
-  background-color: rgba(11, 16, 27, 0.72);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+/* Superficie de vidrio contenida (solo contenedores principales, sin anidar blur) */
+.omega-surface {
+  background-color: rgba(11, 16, 27, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-.omega-border-gradient {
-  position: relative;
-}
-
-.omega-border-gradient::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(47, 111, 237, 0.32) 45%,
-    rgba(255, 255, 255, 0.06) 100%
-  );
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-.omega-border-gradient-pro {
-  position: relative;
-}
-
-.omega-border-gradient-pro::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    160deg,
-    rgba(147, 197, 253, 0.52) 0%,
-    rgba(47, 111, 237, 0.58) 38%,
-    rgba(255, 255, 255, 0.09) 100%
-  );
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Progressive Blur superior (skill progressive-blur) detrás de la navbar flotante */
-.omega-progressive-blur-top {
-  position: fixed;
-  z-index: 30;
-  inset: 0 0 auto 0;
-  height: 92px;
-  pointer-events: none;
-}
-
-.omega-progressive-blur-top > div,
-.omega-progressive-blur-top::before,
-.omega-progressive-blur-top::after {
-  position: absolute;
-  inset: 0;
-}
-
-.omega-progressive-blur-top::before {
-  content: "";
-  z-index: 1;
-  backdrop-filter: blur(0.5px);
-  -webkit-backdrop-filter: blur(0.5px);
-  mask: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 18%, rgba(0, 0, 0, 0) 40%);
-  -webkit-mask: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 18%, rgba(0, 0, 0, 0) 40%);
-}
-
-.omega-progressive-blur-top > div:nth-of-type(1) {
-  z-index: 2;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  mask: linear-gradient(to top, rgba(0, 0, 0, 0) 20%, rgba(0, 0, 0, 1) 42%, rgba(0, 0, 0, 0) 65%);
-  -webkit-mask: linear-gradient(to top, rgba(0, 0, 0, 0) 20%, rgba(0, 0, 0, 1) 42%, rgba(0, 0, 0, 0) 65%);
-}
-
-.omega-progressive-blur-top > div:nth-of-type(2) {
-  z-index: 3;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  mask: linear-gradient(to top, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 1) 70%, rgba(0, 0, 0, 0) 92%);
-  -webkit-mask: linear-gradient(to top, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 1) 70%, rgba(0, 0, 0, 0) 92%);
-}
-
-.omega-progressive-blur-top::after {
-  content: "";
-  z-index: 4;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  mask: linear-gradient(to top, rgba(0, 0, 0, 0) 68%, rgba(0, 0, 0, 1) 100%);
-  -webkit-mask: linear-gradient(to top, rgba(0, 0, 0, 0) 68%, rgba(0, 0, 0, 1) 100%);
-}
-
-/* Textura film-grain sutil para evitar banding en el arco azul rey */
-.omega-film-grain {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
-  background-size: 24px 24px;
-  mask-image: radial-gradient(ellipse 76% 64% at 50% 24%, rgba(0, 0, 0, 0.85) 0%, transparent 82%);
-  -webkit-mask-image: radial-gradient(ellipse 76% 64% at 50% 24%, rgba(0, 0, 0, 0.85) 0%, transparent 82%);
+.omega-surface-flat {
+  background-color: #0B101B;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 @media (prefers-reduced-motion: reduce) {

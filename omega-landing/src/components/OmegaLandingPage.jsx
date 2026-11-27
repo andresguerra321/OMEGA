@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Code2,
+  Copy,
   Cpu,
   Download,
   FileCheck2,
@@ -26,21 +27,21 @@ import {
   LANDING_METRICS,
   LANDING_PROFILES,
   OMEGA_APP_URL,
+  OPERATIONAL_GUARANTEES,
+  PILOT_SUMMARY_TEXT,
   PROFILE_ACCESS_NOTES,
-  TRUST_PILLARS,
   getPlansForProfile,
 } from '../data/catalog';
 
-/* Easing expo-out (skill animation-systems + top-design) */
-const EASE_EXPO_OUT = [0.16, 1, 0.3, 1];
+const EASE_OUT = [0.22, 1, 0.36, 1];
 
-/* Sombras neutras multicapa (skill beautiful-shadows) */
-const SHADOW_SM =
-  'shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.28),0px_1px_0px_0px_rgba(255,255,255,0.06),0px_0px_0px_1px_rgba(255,255,255,0.08)]';
-const SHADOW_MD =
-  'shadow-[0px_0px_0px_1px_rgba(255,255,255,0.06),0px_1px_1px_-0.5px_rgba(0,0,0,0.35),0px_3px_3px_-1.5px_rgba(0,0,0,0.35),0px_6px_6px_-3px_rgba(0,0,0,0.35),0px_12px_12px_-6px_rgba(0,0,0,0.4),0px_24px_24px_-12px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)]';
-const SHADOW_LG =
-  'shadow-[0_2.8px_2.2px_rgba(0,0,0,0.18),0_6.7px_5.3px_rgba(0,0,0,0.24),0_12.5px_10px_rgba(0,0,0,0.30),0_22.3px_17.9px_rgba(0,0,0,0.38),0_41.8px_33.4px_rgba(0,0,0,0.48),0_80px_70px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.12)]';
+/* Sombras neutras con desplazamiento real (sin halos de color con offset 0) */
+const ELEVATION_NAV =
+  'shadow-[0_12px_32px_-12px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)]';
+const ELEVATION_FRAME =
+  'shadow-[0_28px_72px_-20px_rgba(0,0,0,0.78),0_8px_24px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.10)]';
+const ELEVATION_MODAL =
+  'shadow-[0_32px_80px_-16px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.10)]';
 
 const PROFILE_ICONS = {
   GENERAL: Shield,
@@ -48,7 +49,7 @@ const PROFILE_ICONS = {
   LEGAL: Scale,
 };
 
-const PILLAR_ICONS = {
+const GUARANTEE_ICONS = {
   'zero-retention': Cpu,
   'verifiable-evidence': FileCheck2,
   'sovereign-control': Server,
@@ -60,7 +61,7 @@ function Reveal({ children, className = '', delay = 0 }) {
       initial={{ opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.5, delay, ease: EASE_EXPO_OUT }}
+      transition={{ duration: 0.48, delay, ease: EASE_OUT }}
       className={className}
     >
       {children}
@@ -69,58 +70,53 @@ function Reveal({ children, className = '', delay = 0 }) {
 }
 
 /**
- * Arco luminoso azul rey recortado en el horizonte superior.
- * Mantiene el negro obsidiana #05070B intacto en las esquinas.
+ * Horizonte azul rey recortado únicamente en el Hero.
+ * Mantiene el negro obsidiana #05070B intacto en esquinas y resto del documento.
  */
-function LandingEclipseArc({ variant = 'hero' }) {
+function HeroHorizonArc() {
   const uid = useId().replace(/:/g, '');
-  const arcGrad = `omegaLandingArc-${uid}`;
-  const haloGrad = `omegaLandingHalo-${uid}`;
-  const isCta = variant === 'cta';
+  const strokeId = `omegaArcStroke-${uid}`;
+  const fillId = `omegaArcFill-${uid}`;
 
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 overflow-hidden select-none"
+      className="pointer-events-none absolute inset-x-0 top-0 h-[520px] overflow-hidden select-none"
     >
-      <div className="omega-film-grain absolute inset-0" />
       <div
-        className="absolute left-1/2 -translate-x-1/2 rounded-full"
+        className="absolute left-1/2 -translate-x-1/2 -top-40 h-[360px] w-[min(980px,115vw)]"
         style={{
-          top: isCta ? '-140px' : '-210px',
-          width: isCta ? 'min(920px, 120vw)' : 'min(1320px, 145vw)',
-          height: isCta ? '420px' : '640px',
           background:
-            'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(47, 111, 237, 0.28) 0%, rgba(37, 99, 235, 0.12) 42%, rgba(5, 7, 11, 0) 76%)',
+            'radial-gradient(ellipse 58% 50% at 50% 42%, rgba(47, 111, 237, 0.16) 0%, rgba(37, 99, 235, 0.05) 48%, rgba(5, 7, 11, 0) 76%)',
         }}
       />
       <svg
-        viewBox="0 0 1440 480"
+        viewBox="0 0 1440 420"
         preserveAspectRatio="xMidYMin slice"
         fill="none"
         className="absolute inset-x-0 top-0 h-full w-full"
       >
         <defs>
-          <linearGradient id={arcGrad} x1="200" y1="220" x2="1240" y2="220" gradientUnits="userSpaceOnUse">
+          <linearGradient id={strokeId} x1="260" y1="160" x2="1180" y2="160" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#2F6FED" stopOpacity="0" />
-            <stop offset="22%" stopColor="#2F6FED" stopOpacity="0.48" />
-            <stop offset="50%" stopColor="#93C5FD" stopOpacity="0.95" />
-            <stop offset="78%" stopColor="#2F6FED" stopOpacity="0.48" />
+            <stop offset="28%" stopColor="#2F6FED" stopOpacity="0.42" />
+            <stop offset="50%" stopColor="#93C5FD" stopOpacity="0.82" />
+            <stop offset="72%" stopColor="#2F6FED" stopOpacity="0.42" />
             <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
           </linearGradient>
-          <radialGradient id={haloGrad} cx="720" cy={isCta ? '560' : '640'} r="560" gradientUnits="userSpaceOnUse">
-            <stop offset="78%" stopColor="#05070B" stopOpacity="1" />
-            <stop offset="93%" stopColor="#0B1326" stopOpacity="0.94" />
-            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0.16" />
+          <radialGradient id={fillId} cx="720" cy="640" r="560" gradientUnits="userSpaceOnUse">
+            <stop offset="84%" stopColor="#05070B" stopOpacity="1" />
+            <stop offset="96%" stopColor="#091122" stopOpacity="0.85" />
+            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0.08" />
           </radialGradient>
         </defs>
         <circle
           cx="720"
-          cy={isCta ? '690' : '740'}
+          cy="710"
           r="590"
-          fill={`url(#${haloGrad})`}
-          stroke={`url(#${arcGrad})`}
-          strokeWidth={isCta ? '1.5' : '2'}
+          fill={`url(#${fillId})`}
+          stroke={`url(#${strokeId})`}
+          strokeWidth="1.25"
         />
       </svg>
     </div>
@@ -128,38 +124,57 @@ function LandingEclipseArc({ variant = 'hero' }) {
 }
 
 function ActionSheetModal({ mode, onClose, onEnterApp }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!mode) setCopied(false);
+  }, [mode]);
+
   if (!mode) return null;
   const isDownload = mode === 'download';
+
+  async function copyPilotSummary() {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(PILOT_SUMMARY_TEXT);
+      }
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="landing-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070B]/80 backdrop-blur-md p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070B]/82 backdrop-blur-md p-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        initial={{ opacity: 0, y: 10, scale: 0.99 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 8, scale: 0.98 }}
-        transition={{ duration: 0.24, ease: EASE_EXPO_OUT }}
+        exit={{ opacity: 0, y: 6, scale: 0.99 }}
+        transition={{ duration: 0.22, ease: EASE_OUT }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg rounded-2xl omega-glass-surface omega-border-gradient ${SHADOW_LG} p-6 sm:p-7`}
+        className={`w-full max-w-lg rounded-2xl bg-[#0B101B] border border-white/[0.10] ${ELEVATION_MODAL} p-6 sm:p-7`}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#64748B]">
-              {isDownload ? 'OMEGA DESKTOP · v2.2' : 'PILOTO CORPORATIVO & VENTAS'}
-            </p>
             <h3
               id="landing-modal-title"
-              className="mt-1.5 font-[var(--font-display)] text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]"
+              className="font-[var(--font-display)] text-xl font-medium tracking-[-0.025em] text-[#F8FAFC]"
             >
               {isDownload
-                ? 'Instala OMEGA Desktop en tu equipo'
-                : 'Activa un piloto guiado con tu equipo'}
+                ? 'OMEGA Desktop v2.2'
+                : 'Piloto corporativo y despliegue soberano'}
             </h3>
+            <p className="mt-1 text-xs font-mono text-[#64748B]">
+              {isDownload
+                ? 'Cliente nativo Tauri · Sensor local Rust + Conector USB'
+                : 'Enterprise · 5 puestos · 25 dispositivos · 3.000 créditos/mes'}
+            </p>
           </div>
           <button
             type="button"
@@ -172,10 +187,9 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
         </div>
 
         {isDownload ? (
-          <div className="mt-5 space-y-4">
+          <div className="mt-5 space-y-5">
             <p className="text-sm text-[#94A3B8] leading-relaxed">
-              Aplicación nativa en Tauri con sensor local de PC en RAM y conector USB Android/iOS.
-              También puedes iniciar sesión inmediatamente en la aplicación web.
+              Instala el cliente de escritorio para auditar Windows/macOS en RAM y conectar teléfonos Android o iOS por USB, o entra directamente a la cabina web.
             </p>
             <div className="divide-y divide-white/[0.07] border-y border-white/[0.07]">
               <div className="py-3 flex items-center justify-between gap-3">
@@ -183,25 +197,23 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
                   <Terminal className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
                   <div>
                     <p className="text-sm font-medium text-[#F8FAFC]">Windows 10 / 11 (x64)</p>
-                    <p className="text-xs text-[#64748B] font-mono">Instalador MSI / NSIS + sensor local Rust</p>
+                    <p className="text-xs font-mono text-[#64748B]">Instalador MSI / NSIS · sensor de solo lectura</p>
                   </div>
                 </div>
-                <span className="rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/30 px-2.5 py-0.5 text-[11px] font-mono text-[#93C5FD]">
-                  v2.2.0
-                </span>
+                <span className="font-mono text-xs text-[#94A3B8]">v2.2.0</span>
               </div>
               <div className="py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <Smartphone className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
                   <div>
-                    <p className="text-sm font-medium text-[#F8FAFC]">Triaje móvil Android / iOS por USB</p>
-                    <p className="text-xs text-[#64748B] font-mono">Conector portátil integrado en 1 clic</p>
+                    <p className="text-sm font-medium text-[#F8FAFC]">Triaje USB Android (ADB) e iOS (MVT)</p>
+                    <p className="text-xs font-mono text-[#64748B]">Conector portátil incluido en 1 clic</p>
                   </div>
                 </div>
                 <span className="text-xs text-[#94A3B8]">Incluido</span>
               </div>
             </div>
-            <div className="pt-1 flex flex-col sm:flex-row gap-2.5">
+            <div className="flex flex-col sm:flex-row gap-2.5">
               <button
                 type="button"
                 onClick={() => onEnterApp('register')}
@@ -220,26 +232,25 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
             </div>
           </div>
         ) : (
-          <div className="mt-5 space-y-4">
+          <div className="mt-5 space-y-5">
             <p className="text-sm text-[#94A3B8] leading-relaxed">
-              Preparamos tu organización con espacios separados (General, Desarrollo o Legal),
-              despliegue soberano con Ollama local y facturación corporativa.
+              Configura espacios aislados para General, Desarrollo o Legal con MFA organizacional, despliegue administrado o Modo Soberano Local con Ollama.
             </p>
             <div className="divide-y divide-white/[0.07] border-y border-white/[0.07] text-sm">
-              <div className="py-3 flex items-center justify-between">
-                <span className="text-[#94A3B8]">Plan Enterprise base</span>
-                <span className="font-mono text-[#F8FAFC] tabular-nums">$299.900 COP/mes</span>
+              <div className="py-3 flex items-center justify-between gap-4">
+                <span className="text-[#94A3B8]">Plan Enterprise</span>
+                <span className="font-mono text-[#F8FAFC] tabular-nums">$299.900 COP/mes · $2.999.000/año</span>
               </div>
-              <div className="py-3 flex items-center justify-between">
-                <span className="text-[#94A3B8]">Capacidad inicial</span>
+              <div className="py-3 flex items-center justify-between gap-4">
+                <span className="text-[#94A3B8]">Capacidad base</span>
                 <span className="font-mono text-[#F8FAFC] tabular-nums">5 puestos · 25 dispositivos · 3.000 créditos</span>
               </div>
-              <div className="py-3 flex items-center justify-between">
-                <span className="text-[#94A3B8]">Despliegue</span>
-                <span className="text-[#F8FAFC]">Nube administrada o Soberano local</span>
+              <div className="py-3 flex items-center justify-between gap-4">
+                <span className="text-[#94A3B8]">Modo Soberano</span>
+                <span className="font-mono text-[#F8FAFC]">SELF_HOSTED + Ollama (0 créditos IA)</span>
               </div>
             </div>
-            <div className="pt-1 flex flex-col sm:flex-row gap-2.5">
+            <div className="flex flex-col sm:flex-row gap-2.5">
               <button
                 type="button"
                 onClick={() => onEnterApp('register')}
@@ -248,12 +259,23 @@ function ActionSheetModal({ mode, onClose, onEnterApp }) {
                 Crear espacio de organización
                 <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
               </button>
-              <a
-                href="mailto:ventas@omega-sec.local?subject=Piloto%20OMEGA%20Enterprise"
-                className="inline-flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] text-[#F8FAFC] text-sm font-medium px-4 py-2.5 transition-colors"
+              <button
+                type="button"
+                onClick={copyPilotSummary}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] text-[#F8FAFC] text-sm font-medium px-4 py-2.5 transition-colors"
               >
-                Escribir a ventas
-              </a>
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" strokeWidth={1.75} />
+                    Resumen copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
+                    Copiar ficha técnica
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}
@@ -314,19 +336,13 @@ export function OmegaLandingPage({ onEnterApp }) {
 
   return (
     <div className="relative min-h-screen w-full bg-[#05070B] text-[#F8FAFC] overflow-x-hidden">
-      {/* Progressive Blur óptico superior (skill progressive-blur) */}
-      <div aria-hidden="true" className="omega-progressive-blur-top">
-        <div />
-        <div />
-      </div>
-
       {/* 1. Navbar fija minimalista */}
       <header className="fixed top-0 inset-x-0 z-40 px-4 sm:px-6 pt-4">
         <nav
           aria-label="Navegación principal"
           className={`max-w-6xl mx-auto rounded-2xl px-4 sm:px-5 h-14 flex items-center justify-between transition-all duration-300 ${
             scrolled
-              ? `omega-glass-surface border border-white/[0.09] ${SHADOW_MD}`
+              ? `omega-surface border border-white/[0.09] ${ELEVATION_NAV}`
               : 'bg-transparent border border-transparent'
           }`}
         >
@@ -373,7 +389,7 @@ export function OmegaLandingPage({ onEnterApp }) {
             <button
               type="button"
               onClick={() => setModalMode('pilot')}
-              className="rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-[13.5px] font-medium px-4 py-2 transition-colors shadow-[0_0_24px_rgba(47,111,237,0.28)]"
+              className="rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-[13.5px] font-medium px-4 py-2 transition-colors"
             >
               Solicitar piloto
             </button>
@@ -382,50 +398,50 @@ export function OmegaLandingPage({ onEnterApp }) {
       </header>
 
       <main>
-        {/* 2. Hero cinematográfico */}
-        <section id="plataforma" className="relative pt-32 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6 overflow-hidden">
-          <LandingEclipseArc variant="hero" />
+        {/* 2. Hero cinematográfico sobrio */}
+        <section id="plataforma" className="relative pt-32 sm:pt-36 pb-20 sm:pb-24 px-4 sm:px-6 overflow-hidden">
+          <HeroHorizonArc />
 
           <div className="relative z-10 max-w-6xl mx-auto">
             <div className="max-w-3xl mx-auto text-center">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, ease: EASE_EXPO_OUT }}
-                className={`inline-flex items-center gap-2 rounded-full bg-[#0B101B]/80 border border-white/[0.09] px-3.5 py-1.5 text-[11.5px] font-mono text-[#94A3B8] ${SHADOW_SM}`}
+                transition={{ duration: 0.42, ease: EASE_OUT }}
+                className="inline-flex items-center gap-2 rounded-full bg-[#0B101B] border border-white/[0.09] px-3.5 py-1.5 text-[11.5px] font-mono text-[#94A3B8]"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2F6FED]" aria-hidden="true" />
                 OMEGA v2.2 · Zero-Retention &amp; Soberanía de Datos
               </motion.div>
 
               <motion.h1
-                initial={{ opacity: 0, y: 14 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.06, ease: EASE_EXPO_OUT }}
-                className="mt-6 font-[var(--font-display)] text-4xl sm:text-5xl md:text-6xl font-medium tracking-[-0.03em] leading-[1.06] text-[#F8FAFC]"
+                transition={{ duration: 0.5, delay: 0.05, ease: EASE_OUT }}
+                className="mt-6 font-[var(--font-display)] text-4xl sm:text-5xl md:text-6xl font-medium tracking-[-0.03em] leading-[1.06] text-[#F8FAFC] text-balance"
               >
                 Inteligencia forense, AppSec y análisis documental sin exponer tus datos.
               </motion.h1>
 
               <motion.p
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.12, ease: EASE_EXPO_OUT }}
+                transition={{ duration: 0.5, delay: 0.1, ease: EASE_OUT }}
                 className="mt-5 text-base sm:text-lg text-[#94A3B8] max-w-2xl mx-auto leading-relaxed"
               >
-                Auditoría volátil en RAM para equipos y móviles, seguridad de repositorios y expedientes confidenciales con IA citada en una sola plataforma nativa.
+                Inspección volátil en RAM para equipos y teléfonos por USB, auditoría de repositorios y expedientes confidenciales con citas verificables en una sola aplicación nativa.
               </motion.p>
 
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.18, ease: EASE_EXPO_OUT }}
+                transition={{ duration: 0.5, delay: 0.15, ease: EASE_OUT }}
                 className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3"
               >
                 <button
                   type="button"
                   onClick={() => navigateToApp('register')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5 shadow-[0_0_28px_rgba(47,111,237,0.34)]"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-colors"
                 >
                   Comenzar gratis
                   <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
@@ -433,7 +449,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                 <button
                   type="button"
                   onClick={() => scrollToSection('showcase')}
-                  className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg omega-glass-surface hover:bg-[#141923]/90 border border-white/[0.09] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5 ${SHADOW_SM}`}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B101B] hover:bg-[#12192A] border border-white/[0.10] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-colors"
                 >
                   <Play className="w-3.5 h-3.5 text-[#2F6FED]" strokeWidth={1.75} />
                   Ver demostración
@@ -441,33 +457,24 @@ export function OmegaLandingPage({ onEnterApp }) {
               </motion.div>
             </div>
 
-            {/* Product Showcase real con borde gradiente especular + sombra multicapa */}
+            {/* Product Showcase real dentro de marco de escritorio sobrio */}
             <motion.div
               id="showcase"
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.65, delay: 0.24, ease: EASE_EXPO_OUT }}
+              transition={{ duration: 0.55, delay: 0.2, ease: EASE_OUT }}
               className="relative mt-14 sm:mt-16 max-w-5xl mx-auto"
             >
               <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-x-10 -top-12 h-48 rounded-full blur-3xl opacity-75"
-                style={{
-                  background:
-                    'radial-gradient(ellipse at 50% 50%, rgba(47, 111, 237, 0.26) 0%, rgba(5, 7, 11, 0) 72%)',
-                }}
-              />
-
-              <div
-                className={`relative rounded-2xl omega-glass-surface omega-border-gradient ${SHADOW_LG} overflow-hidden`}
+                className={`relative rounded-2xl bg-[#0B101B] border border-white/[0.10] ${ELEVATION_FRAME} overflow-hidden`}
               >
-                <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.07] bg-[#080C15]/85">
+                <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.08] bg-[#080C14]">
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full bg-white/[0.14]" />
                     <span className="h-2.5 w-2.5 rounded-full bg-white/[0.14]" />
                     <span className="h-2.5 w-2.5 rounded-full bg-white/[0.14]" />
                     <span className="ml-2 font-mono text-[11px] text-[#64748B]">
-                      omega-desktop · cabina-seguridad-v2.2
+                      omega-desktop · cabina-v2.2
                     </span>
                   </div>
                   {!videoError && (
@@ -518,16 +525,13 @@ export function OmegaLandingPage({ onEnterApp }) {
           </div>
         </section>
 
-        {/* 3. Banda de credenciales técnicas (4 métricas con hairline) */}
+        {/* 3. Banda de credenciales técnicas (4 métricas con líneas hairline) */}
         <section aria-label="Credenciales técnicas" className="px-4 sm:px-6 py-4">
           <Reveal className="max-w-6xl mx-auto border-y border-white/[0.08]">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.08]">
               {LANDING_METRICS.map((metric) => (
                 <div key={metric.value} className="px-6 py-7">
-                  <p className="font-mono text-[10.5px] tracking-[0.16em] text-[#64748B]">
-                    {metric.code}
-                  </p>
-                  <p className="mt-2 font-mono text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] tabular-nums">
+                  <p className="font-mono text-xl font-medium tracking-[-0.02em] text-[#F8FAFC] tabular-nums">
                     {metric.value}
                   </p>
                   <p className="mt-1.5 text-sm font-medium text-[#CBD5E1]">{metric.label}</p>
@@ -538,15 +542,12 @@ export function OmegaLandingPage({ onEnterApp }) {
           </Reveal>
         </section>
 
-        {/* 4. Sección de Perfiles (Tabs interactivos estilo Aovix) */}
+        {/* 4. Sección de Perfiles (Tabs interactivos con ficha operativa real) */}
         <section id="perfiles" className="px-4 sm:px-6 py-24 sm:py-28">
           <div className="max-w-6xl mx-auto">
             <Reveal className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div className="max-w-2xl">
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#64748B]">
-                  ESPACIOS ESPECIALIZADOS
-                </p>
-                <h2 className="mt-2.5 font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
+                <h2 className="font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
                   Una sola plataforma. Tres espacios de trabajo especializados.
                 </h2>
               </div>
@@ -554,7 +555,7 @@ export function OmegaLandingPage({ onEnterApp }) {
               <div
                 role="tablist"
                 aria-label="Perfiles de espacio de trabajo"
-                className={`inline-flex self-start md:self-auto rounded-full bg-[#0B101B]/85 border border-white/[0.09] p-1 ${SHADOW_SM}`}
+                className="inline-flex self-start md:self-auto rounded-full bg-[#0B101B] border border-white/[0.09] p-1"
               >
                 {LANDING_PROFILES.map((profile) => {
                   const isActive = profile.id === activeProfile;
@@ -574,7 +575,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                       {isActive && (
                         <motion.span
                           layoutId="landing-profile-pill"
-                          transition={{ duration: 0.24, ease: EASE_EXPO_OUT }}
+                          transition={{ duration: 0.22, ease: EASE_OUT }}
                           className="absolute inset-0 rounded-full bg-[#2F6FED]"
                         />
                       )}
@@ -591,16 +592,14 @@ export function OmegaLandingPage({ onEnterApp }) {
                 key={selectedProfile.id}
                 id={`profile-panel-${selectedProfile.id}`}
                 role="tabpanel"
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, ease: EASE_EXPO_OUT }}
-                className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center"
+                transition={{ duration: 0.24, ease: EASE_OUT }}
+                className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
               >
                 <div className="lg:col-span-6 space-y-6">
                   <div>
-                    <p className="font-mono text-xs uppercase tracking-[0.14em] text-[#2F6FED]">
-                      {selectedProfile.badge}
-                    </p>
+                    <p className="text-sm font-medium text-[#2F6FED]">{selectedProfile.domain}</p>
                     <h3 className="mt-2 font-[var(--font-display)] text-2xl sm:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
                       {selectedProfile.headline}
                     </h3>
@@ -611,10 +610,8 @@ export function OmegaLandingPage({ onEnterApp }) {
 
                   <div className="divide-y divide-white/[0.07] border-t border-white/[0.07]">
                     {selectedProfile.capabilities.map((cap) => (
-                      <div key={cap.title} className="py-4 flex items-start gap-3.5">
-                        <span className="mt-0.5 rounded-full bg-[#2F6FED]/15 text-[#2F6FED] p-1 shrink-0">
-                          <Check className="w-3.5 h-3.5" strokeWidth={2} />
-                        </span>
+                      <div key={cap.title} className="py-4 flex items-start gap-3">
+                        <Check className="mt-0.5 w-4 h-4 text-[#2F6FED] shrink-0" strokeWidth={1.75} />
                         <div>
                           <h4 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h4>
                           <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">{cap.detail}</p>
@@ -624,42 +621,35 @@ export function OmegaLandingPage({ onEnterApp }) {
                   </div>
                 </div>
 
+                {/* Ficha técnica operativa + vista real del producto */}
                 <div className="lg:col-span-6">
-                  <div
-                    className={`rounded-2xl omega-glass-surface border border-white/[0.09] ${SHADOW_MD} overflow-hidden`}
-                  >
-                    <div className="relative aspect-[16/10] bg-[#080C15] overflow-hidden border-b border-white/[0.07]">
+                  <div className="rounded-2xl omega-surface-flat border border-white/[0.09] overflow-hidden">
+                    <div className="h-9 px-4 flex items-center justify-between border-b border-white/[0.07] bg-[#080C14]">
+                      <span className="font-mono text-[11px] text-[#64748B]">
+                        {selectedProfile.surfaceLabel}
+                      </span>
+                      <span className="font-mono text-[10.5px] text-[#94A3B8]">
+                        {selectedProfile.label}
+                      </span>
+                    </div>
+
+                    <div className="relative aspect-[16/9] bg-[#080C14] overflow-hidden border-b border-white/[0.07]">
                       <img
                         src={selectedProfile.image}
                         alt={selectedProfile.imageAlt}
                         loading="lazy"
-                        className="h-full w-full object-cover opacity-90"
+                        className="h-full w-full object-cover"
                       />
-                      <div
-                        aria-hidden="true"
-                        className="absolute inset-0 bg-gradient-to-t from-[#0B101B] via-transparent to-transparent"
-                      />
-                      <div className="absolute bottom-4 left-5 right-5">
-                        <p className="font-mono text-[10.5px] tracking-[0.14em] text-[#93C5FD]">
-                          {selectedProfile.previewTag}
-                        </p>
-                        <p className="mt-0.5 text-base font-medium text-[#F8FAFC]">
-                          {selectedProfile.previewTitle}
-                        </p>
-                      </div>
                     </div>
 
-                    <div className="divide-y divide-white/[0.06] px-5">
-                      {selectedProfile.previewStats.map((stat) => (
-                        <div
-                          key={stat.k}
-                          className="py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-sm"
-                        >
-                          <span className="font-mono text-xs text-[#64748B]">{stat.k}</span>
-                          <span className="text-[#E2E8F0]">{stat.v}</span>
+                    <dl className="divide-y divide-white/[0.07] px-5">
+                      {selectedProfile.operationalSpec.map((row) => (
+                        <div key={row.label} className="py-3.5 space-y-1">
+                          <dt className="font-mono text-[11px] text-[#64748B]">{row.label}</dt>
+                          <dd className="text-sm text-[#E2E8F0] leading-relaxed">{row.value}</dd>
                         </div>
                       ))}
-                    </div>
+                    </dl>
                   </div>
                 </div>
               </motion.div>
@@ -667,61 +657,51 @@ export function OmegaLandingPage({ onEnterApp }) {
           </div>
         </section>
 
-        {/* 5. Arquitectura de Confianza (3 pilares en Bento limpio) */}
-        <section id="seguridad" className="px-4 sm:px-6 py-24 sm:py-28 border-t border-white/[0.06]">
+        {/* 5. Garantías y límites operativos (grid arquitectónico hairline, sin tarjetas genéricas) */}
+        <section id="seguridad" className="px-4 sm:px-6 py-24 sm:py-28 border-t border-white/[0.07]">
           <div className="max-w-6xl mx-auto">
             <Reveal className="max-w-2xl">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#64748B]">
-                ARQUITECTURA DE CONFIANZA
-              </p>
-              <h2 className="mt-2.5 font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
-                Diseñada para secretos corporativos y evidencia sensible.
+              <h2 className="font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
+                Qué protege OMEGA y dónde fija sus límites.
               </h2>
+              <p className="mt-3 text-sm sm:text-base text-[#94A3B8] leading-relaxed">
+                Cada garantía técnica viene acompañada de su alcance exacto, sin promesas opacas ni retención oculta.
+              </p>
             </Reveal>
 
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-              {TRUST_PILLARS.map((pillar, idx) => {
-                const Icon = PILLAR_ICONS[pillar.id] || ShieldCheck;
-                return (
-                  <Reveal key={pillar.id} delay={idx * 0.06}>
-                    <article
-                      className={`h-full rounded-2xl omega-glass-surface border border-white/[0.09] ${SHADOW_MD} p-7 flex flex-col justify-between transition-transform duration-200 hover:-translate-y-0.5`}
-                    >
+            <Reveal className="mt-12 border-y border-white/[0.08]">
+              <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.08]">
+                {OPERATIONAL_GUARANTEES.map((item) => {
+                  const Icon = GUARANTEE_ICONS[item.id] || ShieldCheck;
+                  return (
+                    <article key={item.id} className="py-8 md:px-7 first:md:pl-0 last:md:pr-0 flex flex-col justify-between">
                       <div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-[11px] tracking-[0.14em] text-[#64748B]">
-                            {pillar.eyebrow}
-                          </span>
-                          <Icon className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
-                        </div>
-                        <h3 className="mt-5 text-lg font-medium tracking-[-0.02em] text-[#F8FAFC]">
-                          {pillar.title}
+                        <Icon className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
+                        <h3 className="mt-4 text-lg font-medium tracking-[-0.02em] text-[#F8FAFC]">
+                          {item.title}
                         </h3>
                         <p className="mt-2.5 text-sm text-[#94A3B8] leading-relaxed">
-                          {pillar.description}
+                          {item.whatItDoes}
                         </p>
                       </div>
-                      <p className="mt-6 pt-4 border-t border-white/[0.07] font-mono text-xs text-[#93C5FD]">
-                        {pillar.meta}
+                      <p className="mt-6 pt-4 border-t border-white/[0.07] font-mono text-xs text-[#94A3B8] leading-relaxed">
+                        {item.boundary}
                       </p>
                     </article>
-                  </Reveal>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </Reveal>
           </div>
         </section>
 
-        {/* 6. Planes y Suscripciones (Inspiración Avenna — Conversión B2B) */}
-        <section id="planes" className="px-4 sm:px-6 py-24 sm:py-28 border-t border-white/[0.06]">
+        {/* 6. Planes y Suscripciones en COP */}
+        <section id="planes" className="px-4 sm:px-6 py-24 sm:py-28 border-t border-white/[0.07]">
           <div className="max-w-6xl mx-auto">
             <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
               <div className="max-w-2xl">
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#64748B]">
-                  PLANES Y CRÉDITOS EN COP
-                </p>
-                <h2 className="mt-2.5 font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
-                  Precios transparentes para personas, equipos y despachos.
+                <h2 className="font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
+                  Planes y créditos en pesos colombianos.
                 </h2>
                 <p className="mt-3 text-sm text-[#94A3B8]">
                   {PROFILE_ACCESS_NOTES[pricingProfile]}
@@ -732,7 +712,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                 <div
                   role="group"
                   aria-label="Filtrar planes por perfil"
-                  className={`inline-flex rounded-lg bg-[#0B101B]/85 border border-white/[0.09] p-1 ${SHADOW_SM}`}
+                  className="inline-flex rounded-lg bg-[#0B101B] border border-white/[0.09] p-1"
                 >
                   {LANDING_PROFILES.map((p) => (
                     <button
@@ -753,7 +733,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                 <div
                   role="group"
                   aria-label="Frecuencia de facturación"
-                  className={`inline-flex rounded-lg bg-[#0B101B]/85 border border-white/[0.09] p-1 ${SHADOW_SM}`}
+                  className="inline-flex rounded-lg bg-[#0B101B] border border-white/[0.09] p-1"
                 >
                   <button
                     type="button"
@@ -784,55 +764,53 @@ export function OmegaLandingPage({ onEnterApp }) {
 
             <div className="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
               {plans.map((plan, idx) => (
-                <Reveal key={plan.id} delay={idx * 0.06} className="h-full">
+                <Reveal key={plan.id} delay={idx * 0.05} className="h-full">
                   <article
-                    className={`relative h-full rounded-2xl omega-glass-surface p-7 flex flex-col justify-between overflow-hidden transition-transform duration-200 hover:-translate-y-0.5 ${
+                    className={`relative h-full rounded-2xl omega-surface-flat p-7 flex flex-col justify-between overflow-hidden ${
                       plan.featured
-                        ? `omega-border-gradient-pro ${SHADOW_MD}`
-                        : `border border-white/[0.09] ${SHADOW_MD}`
+                        ? 'border border-[#2F6FED]/55'
+                        : 'border border-white/[0.09]'
                     }`}
                   >
                     {plan.featured && (
                       <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#2F6FED] to-transparent"
+                        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#2F6FED]"
                       />
                     )}
 
                     <div>
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="text-lg font-medium text-[#F8FAFC]">{plan.name}</h3>
-                        {plan.badge && (
-                          <span className="rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/40 px-2.5 py-0.5 font-mono text-[11px] text-[#93C5FD]">
-                            {plan.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-2 text-sm text-[#94A3B8] min-h-[2.5rem]">{plan.tagline}</p>
-
-                      <div className="mt-6 pb-6 border-b border-white/[0.08]">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-[var(--font-display)] text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC] tabular-nums">
-                            {plan.displayPrice}
-                          </span>
-                          <span className="text-xs font-mono text-[#64748B]">{plan.periodLabel}</span>
-                        </div>
-                        <p className="mt-2 text-xs text-[#94A3B8] tabular-nums">{plan.annualSubtext}</p>
-                        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11.5px] text-[#CBD5E1] tabular-nums">
-                          <span>{plan.creditsLabel}</span>
-                          <span className="text-[#64748B]">·</span>
-                          <span>{plan.seatsLabel}</span>
-                        </div>
+                        <span className="font-mono text-[11px] text-[#64748B] tabular-nums">
+                          {plan.creditsLabel}
+                        </span>
                       </div>
 
-                      <ul className="mt-6 space-y-3">
-                        {plan.features.map((feat) => (
-                          <li key={feat} className="flex items-start gap-2.5 text-sm text-[#CBD5E1]">
+                      <p className="mt-2 text-sm text-[#94A3B8] leading-relaxed">{plan.tagline}</p>
+
+                      <div className="mt-6 flex items-baseline gap-2">
+                        <span className="font-[var(--font-display)] text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC] tabular-nums">
+                          {plan.displayPrice}
+                        </span>
+                        <span className="font-mono text-xs text-[#64748B]">{plan.periodLabel}</span>
+                      </div>
+                      <p className="mt-1.5 text-xs text-[#64748B] tabular-nums">
+                        {plan.annualSubtext}
+                      </p>
+
+                      <p className="mt-5 py-3 border-y border-white/[0.07] font-mono text-xs text-[#CBD5E1] tabular-nums">
+                        {plan.seatsLabel}
+                      </p>
+
+                      <ul className="mt-5 space-y-3 text-sm text-[#CBD5E1]">
+                        {plan.features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2.5">
                             <Check
-                              className="w-4 h-4 text-[#2F6FED] shrink-0 mt-0.5"
+                              className="mt-0.5 w-4 h-4 text-[#2F6FED] shrink-0"
                               strokeWidth={1.75}
                             />
-                            <span>{feat}</span>
+                            <span>{feature}</span>
                           </li>
                         ))}
                       </ul>
@@ -848,10 +826,10 @@ export function OmegaLandingPage({ onEnterApp }) {
                             navigateToApp('register');
                           }
                         }}
-                        className={`w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors inline-flex items-center justify-center gap-2 ${
+                        className={`w-full inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium px-4 py-2.5 transition-colors ${
                           plan.featured
-                            ? 'bg-[#2F6FED] hover:bg-[#3B7BF2] text-white shadow-[0_0_24px_rgba(47,111,237,0.28)]'
-                            : 'bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.09] text-[#F8FAFC]'
+                            ? 'bg-[#2F6FED] hover:bg-[#3B7BF2] text-white'
+                            : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.09] text-[#F8FAFC]'
                         }`}
                       >
                         {plan.ctaLabel}
@@ -863,16 +841,13 @@ export function OmegaLandingPage({ onEnterApp }) {
               ))}
             </div>
 
-            <p className="mt-8 text-center text-xs font-mono text-[#64748B]">
-              Pagos procesados de forma segura con Mercado Pago · Cancela cuando quieras · Facturación corporativa disponible · Recarga opcional de 200 créditos por $29.900 COP
+            <p className="mt-7 text-center text-xs font-mono text-[#64748B]">
+              Pagos procesados de forma segura con Mercado Pago · Cancela cuando quieras · Facturación corporativa disponible
             </p>
 
-            {/* Preguntas clave de objeción B2B (skill pricing-page & landing-page) */}
+            {/* Preguntas operativas frecuentes */}
             <Reveal className="mt-16 max-w-3xl mx-auto">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#64748B]">
-                PREGUNTAS FRECUENTES
-              </p>
-              <div className="mt-4 divide-y divide-white/[0.08] border-y border-white/[0.08]">
+              <div className="divide-y divide-white/[0.08] border-y border-white/[0.08]">
                 {LANDING_FAQ.map((item, idx) => {
                   const isOpen = openFaq === idx;
                   return (
@@ -886,7 +861,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                         <span>{item.q}</span>
                         <ChevronDown
                           className={`w-4 h-4 text-[#64748B] shrink-0 transition-transform duration-200 ${
-                            isOpen ? 'rotate-180 text-[#2F6FED]' : ''
+                            isOpen ? 'rotate-180 text-[#F8FAFC]' : ''
                           }`}
                           strokeWidth={1.75}
                         />
@@ -902,72 +877,62 @@ export function OmegaLandingPage({ onEnterApp }) {
           </div>
         </section>
 
-        {/* 7. CTA Final */}
-        <section className="px-4 sm:px-6 py-20 sm:py-24">
-          <Reveal className="max-w-6xl mx-auto">
-            <div
-              className={`relative rounded-2xl omega-glass-surface omega-border-gradient ${SHADOW_LG} px-6 sm:px-12 py-16 sm:py-20 text-center overflow-hidden`}
-            >
-              <LandingEclipseArc variant="cta" />
-              <div className="relative z-10 max-w-2xl mx-auto">
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#93C5FD]">
-                  LISTO PARA PRODUCCIÓN Y PILOTOS
-                </p>
-                <h2 className="mt-3 font-[var(--font-display)] text-3xl sm:text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
-                  Lleva seguridad de grado forense a tu equipo.
-                </h2>
-                <p className="mt-4 text-sm sm:text-base text-[#94A3B8]">
-                  Comienza gratis en tu equipo o coordina un piloto guiado con despliegue soberano local para tu organización.
-                </p>
-                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setModalMode('download')}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5 shadow-[0_0_28px_rgba(47,111,237,0.32)]"
-                  >
-                    <Download className="w-4 h-4" strokeWidth={1.75} />
-                    Descargar OMEGA Desktop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalMode('pilot')}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.10] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-all duration-150 hover:-translate-y-0.5"
-                  >
-                    <Building2 className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
-                    Agendar demo
-                  </button>
-                </div>
-              </div>
+        {/* 7. CTA Final sobrio */}
+        <section className="px-4 sm:px-6 py-24 sm:py-28 border-t border-white/[0.07]">
+          <Reveal className="max-w-3xl mx-auto text-center">
+            <h2 className="font-[var(--font-display)] text-3xl sm:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
+              Lleva seguridad de grado forense a tu equipo.
+            </h2>
+            <p className="mt-4 text-base text-[#94A3B8] max-w-xl mx-auto leading-relaxed">
+              Evalúa OMEGA en tu equipo con 30 créditos de bienvenida o configura un piloto Enterprise con despliegue soberano local.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setModalMode('download')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2F6FED] hover:bg-[#3B7BF2] text-white text-sm font-medium px-6 py-3 transition-colors"
+              >
+                <Download className="w-4 h-4" strokeWidth={1.75} />
+                Descargar OMEGA Desktop
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalMode('pilot')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B101B] hover:bg-[#12192A] border border-white/[0.10] text-[#F8FAFC] text-sm font-medium px-6 py-3 transition-colors"
+              >
+                <Building2 className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
+                Solicitar piloto
+              </button>
             </div>
           </Reveal>
         </section>
       </main>
 
-      {/* Footer corporativo sobrio */}
-      <footer className="border-t border-white/[0.08] px-4 sm:px-6 py-14">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+      {/* Footer corporativo */}
+      <footer className="border-t border-white/[0.08] px-4 sm:px-6 py-14 bg-[#05070B]">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10">
           <div className="space-y-3">
             <OmegaBrandMark />
-            <p className="text-xs text-[#64748B] leading-relaxed max-w-xs">
-              Plataforma defensiva de análisis forense en RAM, AppSec y revisión documental con soberanía de datos.
+            <p className="text-xs text-[#64748B] leading-relaxed">
+              Plataforma de inspección preventiva en RAM, seguridad AppSec y gestión confidencial de expedientes jurídicos.
             </p>
           </div>
 
           <div>
-            <h4 className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#64748B]">Producto</h4>
-            <ul className="mt-3 space-y-2.5 text-sm text-[#94A3B8]">
+            <p className="text-xs font-medium text-[#F8FAFC]">Producto</p>
+            <ul className="mt-3 space-y-2 text-xs text-[#94A3B8]">
               <li>
-                <a href="#plataforma" onClick={(e) => { e.preventDefault(); scrollToSection('plataforma'); }} className="hover:text-[#F8FAFC] transition-colors">
+                <a href="#plataforma" className="hover:text-[#F8FAFC] transition-colors">
                   Plataforma
                 </a>
               </li>
               <li>
-                <a href="#perfiles" onClick={(e) => { e.preventDefault(); scrollToSection('perfiles'); }} className="hover:text-[#F8FAFC] transition-colors">
-                  Perfiles de trabajo
+                <a href="#perfiles" className="hover:text-[#F8FAFC] transition-colors">
+                  Perfiles General, Desarrollo y Legal
                 </a>
               </li>
               <li>
-                <a href="#planes" onClick={(e) => { e.preventDefault(); scrollToSection('planes'); }} className="hover:text-[#F8FAFC] transition-colors">
+                <a href="#planes" className="hover:text-[#F8FAFC] transition-colors">
                   Planes y créditos
                 </a>
               </li>
@@ -975,50 +940,58 @@ export function OmegaLandingPage({ onEnterApp }) {
           </div>
 
           <div>
-            <h4 className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#64748B]">Seguridad</h4>
-            <ul className="mt-3 space-y-2.5 text-sm text-[#94A3B8]">
+            <p className="text-xs font-medium text-[#F8FAFC]">Seguridad</p>
+            <ul className="mt-3 space-y-2 text-xs text-[#94A3B8]">
               <li>
-                <a href="#seguridad" onClick={(e) => { e.preventDefault(); scrollToSection('seguridad'); }} className="hover:text-[#F8FAFC] transition-colors">
-                  Zero-Retention en RAM
+                <a href="#seguridad" className="hover:text-[#F8FAFC] transition-colors">
+                  Política Zero-Retention en RAM
                 </a>
               </li>
               <li>
-                <button type="button" onClick={() => setModalMode('download')} className="hover:text-[#F8FAFC] transition-colors">
-                  OMEGA Desktop
-                </button>
+                <a href="#seguridad" className="hover:text-[#F8FAFC] transition-colors">
+                  Integridad SHA-256
+                </a>
               </li>
               <li>
-                <button type="button" onClick={() => setModalMode('pilot')} className="hover:text-[#F8FAFC] transition-colors">
-                  Modo Soberano Local
-                </button>
+                <a href="#seguridad" className="hover:text-[#F8FAFC] transition-colors">
+                  Modo Soberano Local (Ollama)
+                </a>
               </li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#64748B]">Legal</h4>
-            <ul className="mt-3 space-y-2.5 text-sm text-[#94A3B8]">
+            <p className="text-xs font-medium text-[#F8FAFC]">Legal</p>
+            <ul className="mt-3 space-y-2 text-xs text-[#94A3B8]">
               <li>
-                <button type="button" onClick={() => navigateToApp('login')} className="hover:text-[#F8FAFC] transition-colors">
+                <button
+                  type="button"
+                  onClick={() => navigateToApp('login')}
+                  className="hover:text-[#F8FAFC] transition-colors"
+                >
                   Términos y condiciones
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigateToApp('login')} className="hover:text-[#F8FAFC] transition-colors">
+                <button
+                  type="button"
+                  onClick={() => navigateToApp('login')}
+                  className="hover:text-[#F8FAFC] transition-colors"
+                >
                   Privacidad y tratamiento de datos
                 </button>
               </li>
-              <li className="inline-flex items-center gap-1.5 text-xs font-mono text-[#64748B] pt-1">
+              <li className="inline-flex items-center gap-1.5 text-[#64748B]">
                 <Lock className="w-3.5 h-3.5" strokeWidth={1.75} />
-                Aislamiento multi-tenant verificado
+                <span>MFA y auditoría por espacio</span>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto mt-12 pt-6 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-[#64748B]">
+        <div className="max-w-6xl mx-auto mt-12 pt-6 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#64748B]">
           <span>© {new Date().getFullYear()} OMEGA. Todos los derechos reservados.</span>
-          <span>v2.2 · Zero-Retention &amp; Soberanía de Datos</span>
+          <span className="font-mono">Zero-Retention · STIX 2.1 · YARA · SHA-256</span>
         </div>
       </footer>
 
@@ -1037,5 +1010,3 @@ export function OmegaLandingPage({ onEnterApp }) {
     </div>
   );
 }
-
-export default OmegaLandingPage;

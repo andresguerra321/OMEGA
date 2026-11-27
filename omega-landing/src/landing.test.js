@@ -6,14 +6,14 @@ import {
   LANDING_FAQ,
   LANDING_METRICS,
   LANDING_PROFILES,
-  TRUST_PILLARS,
+  OPERATIONAL_GUARANTEES,
   getPlansForProfile,
 } from './data/catalog.js';
 
-test('catalog mantiene precios, créditos, FAQ y límites reales de OMEGA', () => {
+test('catalog mantiene precios reales en COP, límites operativos y FAQ de OMEGA', () => {
   assert.equal(LANDING_METRICS.length, 4);
   assert.equal(LANDING_PROFILES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
-  assert.equal(TRUST_PILLARS.length, 3);
+  assert.equal(OPERATIONAL_GUARANTEES.length, 3);
   assert.equal(LANDING_FAQ.length, 4);
 
   const monthly = getPlansForProfile('GENERAL', 'monthly');
@@ -26,7 +26,7 @@ test('catalog mantiene precios, créditos, FAQ y límites reales de OMEGA', () =
   assert.equal(annual[2].displayPrice, '$2.999.000');
 });
 
-test('OmegaLandingPage renderiza todas las secciones, alterna tabs, precios anuales y FAQ', async () => {
+test('OmegaLandingPage renderiza secciones reales, ficha operativa por perfil, precios anuales y cero clichés', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -106,9 +106,19 @@ test('OmegaLandingPage renderiza todas las secciones, alterna tabs, precios anua
     assert.match(text, /STIX2 & YARA/);
     assert.match(text, /Modo Soberano/);
     assert.match(text, /App Nativa/);
+    assert.match(text, /Manifest\.db en :memory:/);
     assert.match(text, /\$59\.900/);
     assert.match(text, /\$299\.900/);
     assert.doesNotMatch(text, /borrador en revisión/i);
+    assert.doesNotMatch(text, /ventas@omega-sec\.local/i);
+
+    const devTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
+      (btn) => btn.textContent?.includes('Desarrollo'),
+    );
+    await act(async () => {
+      devTab.click();
+    });
+    assert.match(container.textContent || '', /Sin señales detectadas con las reglas actuales/);
 
     const legalTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
       (btn) => btn.textContent?.includes('Legal'),
@@ -116,7 +126,7 @@ test('OmegaLandingPage renderiza todas las secciones, alterna tabs, precios anua
     await act(async () => {
       legalTab.click();
     });
-    assert.match(container.textContent || '', /Expedientes confidenciales con revisión documental citada/);
+    assert.match(container.textContent || '', /LEGAL_ABSTENTION/);
 
     const annualBtn = Array.from(container.querySelectorAll('button')).find(
       (btn) => btn.textContent?.includes('Anual'),

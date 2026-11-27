@@ -1,7 +1,7 @@
 /**
- * Catálogo comercial y técnico para la Landing Page independiente de OMEGA.
- * Sincronizado con PRODUCT.md, docs/perfiles.md, docs/commercial-readiness.md
- * y docs/billing-mercadopago.md (omega_rag.billing_plans).
+ * Catálogo técnico y comercial de la Landing Page de OMEGA.
+ * Fuente única sincronizada con PRODUCT.md, docs/perfiles.md,
+ * docs/commercial-readiness.md y docs/billing-mercadopago.md.
  */
 
 export const OMEGA_APP_URL =
@@ -10,28 +10,24 @@ export const OMEGA_APP_URL =
 
 export const LANDING_METRICS = [
   {
-    code: '01',
     value: '0 B en disco',
     label: 'Análisis volátil en RAM',
     detail: 'Volcados móviles, respaldos cifrados y enlaces se descartan al emitir el resultado.',
   },
   {
-    code: '02',
     value: 'STIX2 & YARA',
     label: 'Catálogo CTI + spyware comercial',
-    detail: 'Cruce verificable contra Pegasus, Predator, Candiru y feeds STIX 2.1.',
+    detail: 'Cruce verificable contra Pegasus, Predator, Candiru, NoviSpy y Triangulation.',
   },
   {
-    code: '03',
     value: 'Modo Soberano',
     label: 'Ejecución local con Ollama',
-    detail: 'Inferencia en infraestructura propia sin enviar datos a nubes externas.',
+    detail: 'Inferencia en infraestructura propia con 0 créditos de IA y sin nube externa.',
   },
   {
-    code: '04',
     value: 'App Nativa',
     label: 'Escritorio Tauri + Java/Python',
-    detail: 'Cliente ligero con sensor local en Rust y backend transaccional aislado.',
+    detail: 'Sensor local en Rust de solo lectura acoplado a un motor transaccional aislado.',
   },
 ];
 
@@ -39,149 +35,181 @@ export const LANDING_PROFILES = [
   {
     id: 'GENERAL',
     label: 'General',
-    badge: 'Seguridad Personal y Ejecutiva',
-    headline: 'Protege tu equipo y tus teléfonos sin exponer archivos personales.',
+    domain: 'Seguridad Personal y Ejecutiva',
+    headline: 'Audita equipos y teléfonos por USB sin copiar archivos personales.',
     summary:
-      'Inspección preventiva de solo lectura sobre Windows/macOS, dispositivos Android/iOS por USB y enlaces sospechosos en una cabina unificada.',
+      'Inspección preventiva de solo lectura sobre Windows y macOS, triaje móvil Android/iOS con MVT y Escudo Web pasivo en una sola cabina.',
     image: '/landing/omega-v2-0-1-showcase.jpg',
-    imageAlt: 'Cabina unificada de protección en RAM de OMEGA',
-    previewTag: 'PERFIL GENERAL · ZERO-RETENTION',
-    previewTitle: 'Centro unificado de protección en RAM',
-    previewStats: [
-      { k: 'Inspector PC', v: 'Procesos, persistencia WMI y sockets TCP en memoria' },
-      { k: 'Triaje USB', v: 'Android ADB e iOS/iPadOS con motor MVT en 1 clic' },
-      { k: 'Escudo Web', v: 'Verificación pasiva sin peticiones HTTP salientes' },
+    imageAlt: 'Cabina de inspección local en RAM del perfil General de OMEGA',
+    surfaceLabel: 'omega-sensor · solo lectura en memoria',
+    operationalSpec: [
+      {
+        label: 'Superficie auditada',
+        value: 'Procesos activos, persistencia WMI root\\subscription, sockets TCP y respaldos iOS Manifest.db en :memory:.',
+      },
+      {
+        label: 'Límite operativo',
+        value: 'No modifica el equipo ni sube archivos fuente. Escudo Web verifica enlaces sin emitir peticiones HTTP salientes.',
+      },
+      {
+        label: 'Salida verificable',
+        value: 'Cruce contra STIX 2.1 y reglas YARA con informe PDF/JSON sellado con hash SHA-256.',
+      },
     ],
     capabilities: [
       {
         title: 'Inspector local de PC en RAM',
-        detail: 'Audita procesos activos, persistencia WMI, sockets salientes y postura del sistema sin tocar archivos personales.',
+        detail: 'Evalúa procesos, tareas programadas, Defender, Firewall, UAC y SmartScreen sin indexar documentos del usuario.',
       },
       {
-        title: 'Triaje de celulares Android e iOS por USB',
-        detail: 'Diagnóstico MVT con conector portátil integrado y lectura en memoria de respaldos cifrados de iPhone.',
+        title: 'Triaje USB Android (ADB) e iOS/iPadOS (MVT)',
+        detail: 'Conector portátil integrado en 1 clic con desbloqueo en memoria de respaldos cifrados de iPhone.',
       },
       {
         title: 'Escudo Web pasivo y catálogo CTI',
-        detail: 'Evalúa enlaces, dominios e indicadores contra STIX 2.1 y YARA sin enviar tráfico directo al sitio analizado.',
+        detail: 'Inspecciona dominios, correos e indicadores sospechosos antes de abrirlos y sin contactar el destino.',
       },
     ],
   },
   {
     id: 'DEVELOPER',
     label: 'Desarrollo',
-    badge: 'AppSec y Cadena de Suministro',
-    headline: 'Audita repositorios, Pull Requests y dependencias con evidencia accionable.',
+    domain: 'AppSec y Cadena de Suministro',
+    headline: 'Inspecciona repositorios, Pull Requests y dependencias con salida lista para CI.',
     summary:
-      'Detecta secretos expuestos, riesgos de cadena de suministro y vulnerabilidades en ingeniería con hallazgos explicables y trazables.',
+      'Detecta secretos expuestos, patrones de exfiltración y riesgos de terceros desde GitHub App o CLI local con trazabilidad por commit.',
     image: '/landing/omega-v2-0-1-shield-pillars.jpg',
-    imageAlt: 'Arquitectura AppSec y cadena de suministro de OMEGA',
-    previewTag: 'PERFIL DESARROLLO · APPSEC & SBOM',
-    previewTitle: 'Hub de Proyectos y Cadena de Suministro',
-    previewStats: [
-      { k: 'GitHub & PRs', v: 'Escaneo automatizado con GitHub App y CLI --project' },
-      { k: 'SBOM & Feeds', v: 'CycloneDX 1.5, SPDX 2.3 e inteligencia OpenSSF' },
-      { k: 'Integración CI', v: 'Exportación SARIF, políticas y monitoreo continuo' },
+    imageAlt: 'Arquitectura AppSec, SBOM y cadena de suministro de OMEGA',
+    surfaceLabel: 'omega-cli --project · appsec & sbom',
+    operationalSpec: [
+      {
+        label: 'Superficie auditada',
+        value: 'Repositorios GitHub, Pull Requests, archivos locales comprimidos, secretos y árbol de dependencias.',
+      },
+      {
+        label: 'Límite operativo',
+        value: 'Nunca afirma "repo seguro": reporta exactamente "Sin señales detectadas con las reglas actuales".',
+      },
+      {
+        label: 'Salida verificable',
+        value: 'Inventario SBOM CycloneDX 1.5 / SPDX 2.3, cruce OpenSSF y exportación SARIF para integración continua.',
+      },
     ],
     capabilities: [
       {
         title: 'Escaneo de repositorios y Pull Requests',
-        detail: 'Inspección estática de código, secretos y vectores de exfiltración en GitHub o archivos locales comprimidos.',
+        detail: 'Análisis estático de código, credenciales filtradas y vectores de exfiltración en GitHub o proyectos locales.',
       },
       {
         title: 'SBOM, OpenSSF y exportación SARIF',
-        detail: 'Genera inventarios CycloneDX/SPDX, cruza inteligencia de cadena de suministro y exporta hallazgos listos para CI.',
+        detail: 'Genera inventarios normalizados de dependencias y entrega hallazgos compatibles con pipelines de ingeniería.',
       },
       {
-        title: 'Políticas, triaje e informes técnicos',
-        detail: 'Gestiona excepciones, prioriza hallazgos persistidos y descarga reportes PDF/JSON con trazabilidad por commit.',
+        title: 'Políticas, triaje y reportes por commit',
+        detail: 'Gestiona excepciones justificadas y exporta informes PDF/JSON desde resultados existentes por 0 créditos.',
       },
     ],
   },
   {
     id: 'LEGAL',
     label: 'Legal',
-    badge: 'Despachos y Firmas Jurídicas',
-    headline: 'Expedientes confidenciales con revisión documental citada y trazable.',
+    domain: 'Despachos y Firmas Jurídicas',
+    headline: 'Expedientes confidenciales con citas obligatorias y abstención determinista.',
     summary:
-      'Organiza casos, verifica conflictos de interés por partes y consulta documentos extensos con abstención determinista cuando no hay base.',
+      'Aísla casos por permisos granulares, verifica conflictos de interés por partes y consulta documentos extensos sin invenciones del modelo.',
     image: '/landing/omega-v2-0-1-showcase.jpg',
-    imageAlt: 'Espacio de expedientes confidenciales del módulo Legal de OMEGA',
-    previewTag: 'PERFIL LEGAL · EXPEDIENTES & CITAS',
-    previewTitle: 'Espacio de casos y verificación documental',
-    previewStats: [
-      { k: 'Aislamiento', v: 'Permisos granulares por expediente y rol' },
-      { k: 'IA con citas', v: 'Documento + página obligatoria y abstención determinista' },
-      { k: 'Conflictos', v: 'Cruce normalizado por partes sin exponer casos restringidos' },
+    imageAlt: 'Espacio de expedientes confidenciales del perfil Legal de OMEGA',
+    surfaceLabel: 'omega-legal · citas verificables & custodia',
+    operationalSpec: [
+      {
+        label: 'Superficie auditada',
+        value: 'Expedientes cerrados con permisos READ/WRITE por rol, documentos procesales y partes normalizadas.',
+      },
+      {
+        label: 'Límite operativo',
+        value: 'Toda respuesta exige cita de documento y página; sin evidencia suficiente responde con LEGAL_ABSTENTION.',
+      },
+      {
+        label: 'Salida verificable',
+        value: 'Verificación de conflictos sin revelar casos restringidos, cronología documental y dossier PDF/JSON con SHA-256.',
+      },
     ],
     capabilities: [
       {
-        title: 'Expedientes confidenciales y permisos granulares',
-        detail: 'Aislamiento estricto por espacio y delegación controlada de lectura/escritura con auditoría encadenada.',
+        title: 'Aislamiento y permisos por expediente',
+        detail: 'Control estricto por espacio y delegación explícita de lectura o escritura con bitácora de auditoría encadenada.',
       },
       {
-        title: 'Revisión documental con citas verificables',
-        detail: 'Cada respuesta enlaza documento y página exacta; si la evidencia no existe, el motor se abstiene sin inventar.',
+        title: 'Revisión documental citada sin alucinaciones',
+        detail: 'Cada afirmación apunta al documento y página exacta; si el respaldo no existe, el motor se abstiene.',
       },
       {
-        title: 'Conflictos, líneas de tiempo e informes PDF',
-        detail: 'Detecta posibles conflictos por partes, construye cronologías documentales y exporta dossiers verificables con SHA-256.',
+        title: 'Conflictos de interés, cronología y dossier',
+        detail: 'Cruza partes normalizadas preservando confidencialidad y genera informes verificables con hash SHA-256.',
       },
     ],
   },
 ];
 
-export const TRUST_PILLARS = [
+export const OPERATIONAL_GUARANTEES = [
   {
     id: 'zero-retention',
-    eyebrow: '01 · MEMORIA VOLÁTIL',
     title: 'Zero-Retention en RAM',
-    description:
-      'Los volcados móviles, respaldos cifrados y análisis de enlaces se procesan en memoria y se descartan al terminar. Los archivos originales no se conservan en el servidor.',
-    meta: '0 bytes persistidos de archivos fuente',
+    whatItDoes:
+      'Volcados ADB/iOS, bases Manifest.db descifradas en :memory: y enlaces sospechosos se procesan en memoria volátil y se liberan al emitir el diagnóstico.',
+    boundary: 'Los archivos originales nunca se conservan en disco del servidor.',
   },
   {
     id: 'verifiable-evidence',
-    eyebrow: '02 · TRAZABILIDAD',
-    title: 'Evidencia verificable y trazable',
-    description:
-      'Cada evento crítico y cada informe PDF/JSON incluye hashes SHA-256 encadenados y permisos auditados para demostrar integridad técnica sin cajas negras.',
-    meta: 'Cadena de custodia SHA-256 verificable',
+    title: 'Integridad SHA-256 trazable',
+    whatItDoes:
+      'Cada evento sensible y cada informe PDF o JSON incluye hash SHA-256 encadenado, registro de permisos y costo transparente antes de ejecutar.',
+    boundary: 'Acredita integridad técnica del archivo; no sustituye una firma electrónica legal.',
   },
   {
     id: 'sovereign-control',
-    eyebrow: '03 · SOBERANÍA',
-    title: 'Control total: Nube o Soberano Local',
-    description:
-      'Opera con despliegue administrado o en modo soberano 100% local con Ollama en tu infraestructura, manteniendo MFA obligatorio y separación por espacios.',
-    meta: 'Despliegue híbrido o autoalojado',
+    title: 'Nube administrada o Soberano Local',
+    whatItDoes:
+      'Opera en infraestructura gestionada o en modo autoalojado (SELF_HOSTED) con Ollama en tu red interna, MFA obligatorio y separación por espacios.',
+    boundary: 'En Ollama local la inferencia de IA consume 0 créditos y ningún dato sale de tu red.',
   },
 ];
 
 export const PROFILE_ACCESS_NOTES = {
-  GENERAL: 'Cuenta individual General incluye acceso gratuito permanente con 30 créditos de bienvenida.',
-  DEVELOPER: 'Los espacios de Desarrollo y organizaciones requieren membresía Pro o Enterprise para operar módulos profesionales.',
-  LEGAL: 'Los despachos y espacios Legal requieren membresía Pro o Enterprise, con aislamiento estricto y MFA organizacional.',
+  GENERAL:
+    'La cuenta individual General incluye acceso gratuito permanente con 30 créditos de bienvenida.',
+  DEVELOPER:
+    'Los espacios de Desarrollo y organizaciones operan bajo membresía Pro o Enterprise.',
+  LEGAL:
+    'Los espacios Legal y despachos operan bajo membresía Pro o Enterprise con MFA organizacional.',
 };
 
 export const LANDING_FAQ = [
   {
-    q: '¿Puedo cancelar o cambiar mi plan cuando quiera?',
-    a: 'Sí. Al cancelar la renovación conservas acceso completo y tus créditos hasta el final del período ya pagado, sin cobros ocultos ni penalidades.',
+    q: '¿Qué pasa si consumo todos los créditos del mes?',
+    a: 'No hay sobreconsumo ni recarga automática. Puedes esperar a la renovación mensual o adquirir una recarga opcional de 200 créditos por $29.900 COP con vigencia de 12 meses.',
   },
   {
-    q: '¿Qué sucede si consumo todos los créditos del mes?',
-    a: 'No existe sobreconsumo ni recarga automática. Puedes comprar un paquete opcional de 200 créditos por $29.900 COP con vigencia de 12 meses o esperar a la renovación mensual.',
+    q: '¿Cuánto cuesta exportar informes PDF o JSON?',
+    a: '0 créditos cuando se generan a partir de resultados ya calculados. Cada exportación incluye su hash SHA-256 para verificación técnica de integridad.',
   },
   {
-    q: '¿Los archivos originales o volcados móviles se suben a la nube?',
-    a: 'No. Bajo política Zero-Retention los análisis de PC, respaldos iOS/Android y enlaces corren en memoria volátil y se descartan al terminar. Exportar informes de resultados existentes cuesta 0 créditos.',
+    q: '¿Puedo cancelar o cambiar de plan cuando quiera?',
+    a: 'Sí. Al cancelar la renovación conservas el acceso y los créditos restantes hasta el final del período pagado, sin penalidades.',
   },
   {
-    q: '¿Cómo funciona el Modo Soberano local y la facturación corporativa?',
-    a: 'En infraestructura propia con Ollama local la inferencia de IA no consume créditos. Para equipos y despachos en Enterprise ofrecemos piloto guiado, 5 puestos compartidos y facturación corporativa.',
+    q: '¿Cómo funciona el Modo Soberano con Ollama local?',
+    a: 'En despliegue autoalojado la inferencia corre en tu propia infraestructura con Ollama y consume 0 créditos de IA. Enterprise incluye piloto guiado y facturación corporativa.',
   },
 ];
+
+export const PILOT_SUMMARY_TEXT = [
+  'OMEGA v2.2 — Resumen de Piloto Corporativo',
+  'Plan Enterprise base: $299.900 COP/mes o $2.999.000 COP/año (ahorro de 2 meses)',
+  'Capacidad inicial: 5 puestos compartidos · 25 dispositivos · 3.000 créditos/mes',
+  'Espacios disponibles: General (PC/USB MVT), Desarrollo (GitHub/SBOM/SARIF) y Legal (Expedientes/Citas)',
+  'Despliegue: Nube administrada o Modo Soberano Local con Ollama (SELF_HOSTED, 0 créditos de IA)',
+].join('\n');
 
 export function formatCop(amount) {
   if (amount === 0) return '$0';
@@ -194,31 +222,31 @@ export function getPlansForProfile(profileId, billingCycle) {
 
   const freeFeatures = isGeneral
     ? [
-        '30 créditos de bienvenida (única vez)',
+        '30 créditos de bienvenida (una sola vez)',
         '1 puesto individual y 1 dispositivo',
         'Inspector local de PC, Escudo Web y catálogo STIX2/YARA',
-        'Triaje USB Android/iOS bajo saldo de créditos',
+        'Triaje USB Android/iOS usando tu saldo de créditos',
       ]
     : [
         '30 créditos de bienvenida al activar suscripción',
-        '1 puesto individual y configuración guiada del espacio',
-        'Acceso al perfil General gratuito mientras evalúas',
-        'Requiere Pro o Enterprise para activar módulos profesionales',
+        '1 puesto individual y acceso al perfil General gratuito',
+        'Configuración previa del espacio antes de migrar',
+        'Requiere Pro o Enterprise para módulos profesionales',
       ];
 
   const proProfileFeature =
     profileId === 'DEVELOPER'
-      ? 'Escaneo de repositorios, PRs en GitHub, SBOM y SARIF'
+      ? 'Escaneo de repositorios, Pull Requests en GitHub, SBOM y SARIF'
       : profileId === 'LEGAL'
-        ? 'Expedientes confidenciales, citas verificables, conflictos y cronología'
-        : 'Triaje USB completo, análisis profundo de PC y monitoreo OSINT';
+        ? 'Expedientes confidenciales, citas obligatorias, conflictos y cronología'
+        : 'Triaje USB completo, auditoría profunda de PC y monitoreo OSINT';
 
   const enterpriseProfileFeature =
     profileId === 'DEVELOPER'
-      ? 'Múltiples proyectos, políticas por organización y CLI/CI en equipo'
+      ? 'Múltiples repositorios, políticas por organización y CLI/CI en equipo'
       : profileId === 'LEGAL'
-        ? 'Múltiples espacios aislados por práctica, MFA reforzado y gestión de firma'
-        : 'Flota de hasta 25 dispositivos con gobierno centralizado por organización';
+        ? 'Espacios aislados por práctica, MFA reforzado y gobierno de firma'
+        : 'Hasta 25 dispositivos gestionados bajo gobierno centralizado';
 
   return [
     {
@@ -226,12 +254,14 @@ export function getPlansForProfile(profileId, billingCycle) {
       name: 'Gratis',
       tagline: isGeneral
         ? 'Evaluación inmediata y protección personal local.'
-        : 'Crea tu cuenta y explora la plataforma antes de suscribirte.',
+        : 'Crea tu cuenta y valida la cabina antes de suscribirte.',
       priceMonthly: 0,
       priceAnnual: null,
       displayPrice: '$0',
       periodLabel: 'COP · sin tarjeta',
-      annualSubtext: isGeneral ? 'Gratis para cuenta individual General' : 'Actualiza a Pro para desbloquear este perfil',
+      annualSubtext: isGeneral
+        ? 'Gratis para cuenta individual General'
+        : 'Actualiza a Pro para activar este perfil',
       creditsLabel: '30 créditos de bienvenida',
       seatsLabel: '1 puesto · 1 dispositivo',
       featured: false,
@@ -242,42 +272,41 @@ export function getPlansForProfile(profileId, billingCycle) {
     {
       id: 'PRO',
       name: 'Pro',
-      tagline: 'Potencia completa para profesionales independientes y especialistas.',
+      tagline: 'Operación completa para especialistas y profesionales independientes.',
       priceMonthly: 59900,
       priceAnnual: 599000,
       displayPrice: isAnnual ? formatCop(599000) : formatCop(59900),
       periodLabel: isAnnual ? 'COP / año' : 'COP / mes',
       annualSubtext: isAnnual
-        ? 'Equivale a $49.917 COP/mes · ahorras 2 meses ($119.800)'
+        ? 'Equivale a $49.917 COP/mes · ahorras $119.800 (2 meses)'
         : 'O $599.000 COP/año con 2 meses de ahorro',
       creditsLabel: '500 créditos / mes',
       seatsLabel: '1 puesto · hasta 5 dispositivos',
       featured: true,
-      badge: 'Recomendado',
       ctaLabel: 'Suscribirse con Mercado Pago',
       ctaAction: 'subscribe',
       features: [
-        '500 créditos mensuales + recargas de 200 por $29.900 COP',
+        '500 créditos mensuales + recargas opcionales de 200 ($29.900 COP)',
         'Hasta 5 dispositivos vinculados y 1 titular',
         proProfileFeature,
-        'Informes PDF y JSON verificables con hash SHA-256 (0 créditos)',
+        'Informes PDF y JSON con hash SHA-256 (0 créditos)',
       ],
     },
     {
       id: 'ENTERPRISE',
       name: 'Enterprise',
-      tagline: 'Para organizaciones, equipos de ingeniería y despachos jurídicos.',
+      tagline: 'Para equipos de ingeniería, organizaciones y despachos jurídicos.',
       priceMonthly: 299900,
       priceAnnual: 2999000,
       displayPrice: isAnnual ? formatCop(2999000) : formatCop(299900),
       periodLabel: isAnnual ? 'COP / año' : 'COP / mes',
       annualSubtext: isAnnual
-        ? 'Equivale a $249.917 COP/mes · ahorras 2 meses ($599.800)'
+        ? 'Equivale a $249.917 COP/mes · ahorras $599.800 (2 meses)'
         : 'O $2.999.000 COP/año · facturación corporativa disponible',
       creditsLabel: '3.000 créditos / mes',
       seatsLabel: '5 puestos compartidos · 25 dispositivos',
       featured: false,
-      ctaLabel: 'Hablar con ventas / Piloto',
+      ctaLabel: 'Solicitar piloto guiado',
       ctaAction: 'pilot',
       features: [
         '3.000 créditos mensuales compartidos por organización',
