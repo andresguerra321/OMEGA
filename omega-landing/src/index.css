@@ -1,22 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'IBM Plex Sans', 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Sora', 'IBM Plex Sans', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
   --color-obsidian: #05070B;
   --color-cobalt: #2F6FED;
-  --color-cobalt-deep: #2563EB;
+  --color-cobalt-deep: #1D4ED8;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
     --bg-canvas: #05070B;
-    --surface-elevated: rgba(11, 16, 27, 0.78);
-    --surface-inset: rgba(15, 21, 34, 0.72);
-    --hairline: rgba(255, 255, 255, 0.08);
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
     --text-muted: #64748B;
@@ -28,7 +25,6 @@
     background-color: #05070B;
     color: #F8FAFC;
     font-family: var(--font-sans);
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -42,6 +38,7 @@
     color: #F8FAFC;
     caret-color: #2F6FED;
     overflow-x: hidden;
+    font-family: var(--font-sans);
   }
 
   a {
@@ -78,17 +75,13 @@
   }
 }
 
-/* Superficie de vidrio contenida (solo contenedores principales, sin anidar blur) */
-.omega-surface {
-  background-color: rgba(11, 16, 27, 0.78);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.omega-surface-flat {
-  background-color: #0B101B;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+/* Superficie de vidrio real coherente con Login y Home de OMEGA */
+.omega-glass {
+  background-color: rgba(11, 16, 27, 0.68);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
