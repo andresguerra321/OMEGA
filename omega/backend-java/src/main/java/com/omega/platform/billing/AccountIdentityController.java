@@ -15,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/account")
 public class AccountIdentityController {
-    @Autowired(required = false)
+    @Autowired
     private AccountSeatService seats;
 
     private final TenantRepository tenants;
@@ -34,18 +34,20 @@ public class AccountIdentityController {
         if(!java.util.Set.of("INDIVIDUAL","ORGANIZATION").contains(request.accountType()==null?"":request.accountType()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Selecciona cuenta individual u organización.");
         users.findByIdAndTenantId(actor.userId(),actor.tenantId()).orElseThrow();
+        if("INDIVIDUAL".equals(request.accountType())
+                && users.findAllByTenantIdOrderByCreatedAtAsc(actor.tenantId()).size()!=1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Este espacio tiene miembros; debe conservarse como organización.");
+        }
+        tenant.setAccountType(request.accountType());
+        tenant.setOwnerUserId(actor.userId());
+        tenants.saveAndFlush(tenant);
         Role effectiveRole = actor.role();
         if("INDIVIDUAL".equals(request.accountType())) {
-            if(users.findAllByTenantIdOrderByCreatedAtAsc(actor.tenantId()).size()!=1)
-                throw new ResponseStatusException(HttpStatus.CONFLICT,"Este espacio tiene miembros; debe conservarse como organización.");
             if (seats != null) {
                 seats.updateWorkspaceMembershipState(actor.tenantId(), actor.userId(), Role.ANALYST, true, actor.userId());
             }
             effectiveRole = Role.ANALYST;
         }
-        tenant.setAccountType(request.accountType());
-        tenant.setOwnerUserId(actor.userId());
-        tenants.save(tenant);
         audit.record(actor.tenantId(),actor.userId(),"ACCOUNT_TYPE_CONFIRMED","TENANT",actor.tenantId().toString(),Map.of("accountType",tenant.getAccountType(),"role",effectiveRole.name()));
         return Map.of("accountType",tenant.getAccountType(),"role",effectiveRole);
     }

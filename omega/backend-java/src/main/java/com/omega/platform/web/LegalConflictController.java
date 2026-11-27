@@ -4,6 +4,7 @@ import com.omega.platform.security.OmegaPrincipal;
 import com.omega.platform.service.LegalConflictService;
 import com.omega.platform.service.LegalConflictService.ConflictCheckResponse;
 import java.util.UUID;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,7 @@ public class LegalConflictController {
     }
 
     @GetMapping("/conflicts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALYST')")
     public ConflictCheckResponse checkConflicts(
             @AuthenticationPrincipal OmegaPrincipal actor,
             @RequestParam(name = "name") String name,

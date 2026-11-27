@@ -21,11 +21,20 @@ public class LegalCaseService {
     private final AuditLogRepository logs;
     private final AuditLogService audit;
     private final ExpedienteAuthorizationService authorization;
+    private final LegalCasePartyService parties;
+
     public LegalCaseService(ExpedienteRepository cases, DocumentRepository documents, DocumentChunkRepository chunks,
             ExpedientePermissionRepository permissions, AuditLogRepository logs, AuditLogService audit,
             ExpedienteAuthorizationService authorization) {
+        this(cases, documents, chunks, permissions, logs, audit, authorization, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public LegalCaseService(ExpedienteRepository cases, DocumentRepository documents, DocumentChunkRepository chunks,
+            ExpedientePermissionRepository permissions, AuditLogRepository logs, AuditLogService audit,
+            ExpedienteAuthorizationService authorization, LegalCasePartyService parties) {
         this.cases=cases; this.documents=documents; this.chunks=chunks; this.permissions=permissions;
-        this.logs=logs; this.audit=audit; this.authorization=authorization;
+        this.logs=logs; this.audit=audit; this.authorization=authorization; this.parties=parties;
     }
 
     public static final Set<String> ALLOWED_PROCESS_TYPES = Set.of(
@@ -129,6 +138,9 @@ public class LegalCaseService {
         applyCaseSheet(value, request.clientName(), request.counterpartyName(), request.courtName(),
                 request.processType(), request.caseStage());
         cases.saveAndFlush(value);
+        if (parties != null) {
+            parties.syncPrimaryParties(actor.tenantId(), value.getId(), value.getClientName(), value.getCounterpartyName());
+        }
         audit.record(actor.tenantId(),actor.userId(),"EXPEDIENTE_CREATED","EXPEDIENTE",value.getId().toString(),
                 Map.of("classification",value.getClassification().name(),"status",value.getStatus().name()));
         return view(actor,value);
@@ -150,6 +162,9 @@ public class LegalCaseService {
         applyCaseSheet(value, request.clientName(), request.counterpartyName(), request.courtName(),
                 request.processType(), request.caseStage());
         cases.saveAndFlush(value);
+        if (parties != null) {
+            parties.syncPrimaryParties(actor.tenantId(), value.getId(), value.getClientName(), value.getCounterpartyName());
+        }
         audit.record(actor.tenantId(),actor.userId(),"EXPEDIENTE_UPDATED","EXPEDIENTE",id.toString(),Map.of("status",value.getStatus().name()));
         return view(actor,value);
     }

@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omega.platform.service.AuditLogService;
+import com.omega.platform.service.LegalCasePartyService;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,10 +20,15 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -38,6 +44,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -90,6 +97,10 @@ class LegalCaseSheetAndConflictIntegrationTest {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private AuditLogService auditLogService;
+    @Autowired private LegalCasePartyService partyService;
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping handlerMapping;
 
     @Test
     void persistsAndValidatesCaseSheetFieldsWhilePreservingLegacyNullCases() throws Exception {
@@ -347,6 +358,17 @@ class LegalCaseSheetAndConflictIntegrationTest {
         assertThat(excludedBody.path("matches")).hasSize(1);
         assertThat(excludedBody.path("matches").get(0).path("code").asText()).isEqualTo("RAD-SHR-02");
 
+        // excludeCaseId sobre un expediente restringido NO actúa como oráculo (no altera restrictedMatches)
+        MvcResult restrictedExcludeProbe = mockMvc.perform(get("/api/v1/legal/conflicts")
+                        .param("name", "ÁVILA")
+                        .param("excludeCaseId", restricted1.toString())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + partialToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode restrictedExcludeBody = objectMapper.readTree(restrictedExcludeProbe.getResponse().getContentAsString());
+        assertThat(restrictedExcludeBody.path("totalMatches").asInt()).isEqualTo(4);
+        assertThat(restrictedExcludeBody.path("restrictedMatches").asInt()).isEqualTo(2);
+
         // --- D. Enmascaramiento total: usuario sin permiso recibe SOLO el conteo ---
         MvcResult zeroPermRes = mockMvc.perform(get("/api/v1/legal/conflicts").param("name", "avila")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + zeroPermToken))
@@ -408,6 +430,109 @@ class LegalCaseSheetAndConflictIntegrationTest {
                     .doesNotContain("\"name\"");
         }
         assertThat(auditLogService.verifyTenantChain(tenantAId).valid()).isTrue();
+    }
+
+    @Test
+    void conflictsMatchAccentVariantsMultiPartiesAndEnforceRoleRateLimitAndUniformity() throws Exception {
+        String slug = "legal-f0-" + UUID.randomUUID().toString().substring(0, 8);
+        String otherSlug = "legal-f0-b-" + UUID.randomUUID().toString().substring(0, 8);
+        String admin = registerLegalTenant(slug, "admin@" + slug + ".invalid");
+        String otherAdmin = registerLegalTenant(otherSlug, "admin@" + otherSlug + ".invalid");
+
+        UUID tenantId = jdbcTemplate.queryForObject(
+                "SELECT id FROM omega_rag.tenants WHERE slug = ?", UUID.class, slug);
+        UUID oscarCaseId = createCaseWithParties(admin, "Caso Óscar", "RAD-OSC-1", "ÓSCAR Muñoz", "Úrsula Pérez", "CIVIL");
+        createCaseWithParties(admin, "Caso José", "RAD-JOS-1", "José Gómez", "Otra Parte", "LABORAL");
+        createCaseWithParties(otherAdmin, "Caso Secreto Otro Despacho", "RAD-OTR-9", "Óscar Exclusivo", "Contraparte", "PENAL");
+
+        // Parte adicional (rol OTHER en legal_case_parties) también se detecta sin transformar texto en SQL
+        partyService.addAdditionalParty(tenantId, oscarCaseId, "OTHER", "Fiduciaria Ñandú S.A.");
+
+        for (String probe : List.of("oscar", "Óscar", "ÓSCAR", "ursula", "ÚRSULA", "Munoz", "Muñoz", "jose", "José", "Nandu", "Ñandú")) {
+            JsonNode body = objectMapper.readTree(mockMvc.perform(get("/api/v1/legal/conflicts").param("name", probe)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertThat(body.path("totalMatches").asInt()).as(probe).isEqualTo(1);
+            if (probe.toLowerCase().contains("nand") || probe.toLowerCase().contains("ñand")) {
+                assertThat(body.path("matches").get(0).path("roles").toString()).contains("OTHER");
+            }
+        }
+
+        // Uniformidad sin enumeración entre nombres inexistentes y nombres existentes en otro tenant
+        String bodyOtherTenantName = mockMvc.perform(get("/api/v1/legal/conflicts").param("name", "Óscar Exclusivo")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String bodyRandomAbsentName = mockMvc.perform(get("/api/v1/legal/conflicts").param("name", "Inexistente Sintético")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(bodyOtherTenantName).isEqualTo(bodyRandomAbsentName)
+                .isEqualTo("{\"totalMatches\":0,\"restrictedMatches\":0,\"matches\":[]}");
+
+        createUser(admin, "cliente@" + slug + ".invalid", "CLIENT");
+        String clientToken = login(slug, "cliente@" + slug + ".invalid");
+        mockMvc.perform(get("/api/v1/legal/conflicts").param("name", "oscar")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + clientToken))
+                .andExpect(status().isForbidden());
+
+        createUser(admin, "burst@" + slug + ".invalid", "ANALYST");
+        String burstToken = login(slug, "burst@" + slug + ".invalid");
+        int tooMany = 0;
+        for (int i = 0; i < 35; i++) {
+            int code = mockMvc.perform(get("/api/v1/legal/conflicts").param("name", "inexistente" + i)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + burstToken)).andReturn().getResponse().getStatus();
+            if (code == 429) tooMany++;
+        }
+        assertThat(tooMany).isGreaterThanOrEqualTo(5);
+        // Otro usuario del mismo espacio no comparte el límite
+        mockMvc.perform(get("/api/v1/legal/conflicts").param("name", "oscar")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin)).andExpect(status().isOk());
+    }
+
+    static Stream<Arguments> nonLegalProfilesAndAllLegalRoutes() {
+        List<Arguments> args = new ArrayList<>();
+        for (String profile : List.of("GENERAL", "DEVELOPER")) {
+            args.add(Arguments.of(profile, "GET", "/api/v1/legal/conflicts?name=prueba", null));
+            args.add(Arguments.of(profile, "GET", "/api/v1/legal/quotas", null));
+            args.add(Arguments.of(profile, "GET", "/api/v1/legal/admin/documents/issues", null));
+            args.add(Arguments.of(profile, "GET", "/api/v1/legal/document-ai/policy", null));
+            args.add(Arguments.of(profile, "POST", "/api/v1/legal/document-ai/consent", "{\"fingerprint\":\"" + "a".repeat(64) + "\"}"));
+        }
+        return args.stream();
+    }
+
+    @ParameterizedTest(name = "{0} bloqueado en {1} {2}")
+    @MethodSource("nonLegalProfilesAndAllLegalRoutes")
+    void legalRoutesRejectGeneralAndDeveloperWorkspaces(String profile, String method, String uri, String jsonBody) throws Exception {
+        String slug = "legal-guard-" + profile.toLowerCase() + "-" + UUID.randomUUID().toString().substring(0, 6);
+        MvcResult res = mockMvc.perform(post("/api/v1/auth/tenants/register").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantSlug\":\"" + slug + "\",\"tenantName\":\"Espacio " + slug + "\","
+                                + "\"adminEmail\":\"admin@" + slug + ".invalid\",\"adminPassword\":\"OmegaLegal!2026\","
+                                + "\"adminFullName\":\"Admin\",\"profile\":\"" + profile + "\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        String token = objectMapper.readTree(res.getResponse().getContentAsString()).path("accessToken").asText();
+
+        var request = "POST".equals(method)
+                ? post(uri).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(jsonBody)
+                : get(uri);
+        mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void parameterizedGuardCoversEveryRegisteredLegalControllerRoute() {
+        Set<String> registeredPaths = handlerMapping.getHandlerMethods().keySet().stream()
+                .flatMap(info -> info.getPatternValues().stream())
+                .filter(pattern -> pattern.startsWith("/api/v1/legal"))
+                .collect(Collectors.toSet());
+        Set<String> testedPaths = Set.of(
+                "/api/v1/legal/conflicts",
+                "/api/v1/legal/quotas",
+                "/api/v1/legal/admin/documents/issues",
+                "/api/v1/legal/document-ai/policy",
+                "/api/v1/legal/document-ai/consent"
+        );
+        assertThat(registeredPaths).isEqualTo(testedPaths);
     }
 
     @Test

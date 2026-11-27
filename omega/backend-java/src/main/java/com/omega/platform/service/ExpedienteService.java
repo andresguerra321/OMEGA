@@ -34,12 +34,9 @@ public class ExpedienteService {
     private final UserRepository userRepository;
     private final ExpedienteAuthorizationService authorizationService;
     private final AuditLogService auditLogService;
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private ObjectStoragePort objectStoragePort;
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
+    private final com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy;
+    private final LegalCasePartyService partyService;
+    private final ObjectStoragePort objectStoragePort;
 
     public ExpedienteService(
             ExpedienteRepository expedienteRepository,
@@ -49,12 +46,40 @@ public class ExpedienteService {
             ExpedienteAuthorizationService authorizationService,
             AuditLogService auditLogService
     ) {
+        this(
+                expedienteRepository,
+                permissionRepository,
+                documentRepository,
+                userRepository,
+                authorizationService,
+                auditLogService,
+                null,
+                null,
+                null
+        );
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExpedienteService(
+            ExpedienteRepository expedienteRepository,
+            ExpedientePermissionRepository permissionRepository,
+            DocumentRepository documentRepository,
+            UserRepository userRepository,
+            ExpedienteAuthorizationService authorizationService,
+            AuditLogService auditLogService,
+            com.omega.platform.security.WorkspaceMfaPolicyService mfaPolicy,
+            LegalCasePartyService partyService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) ObjectStoragePort objectStoragePort
+    ) {
         this.expedienteRepository = expedienteRepository;
         this.permissionRepository = permissionRepository;
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.authorizationService = authorizationService;
         this.auditLogService = auditLogService;
+        this.mfaPolicy = mfaPolicy;
+        this.partyService = partyService;
+        this.objectStoragePort = objectStoragePort;
     }
 
     @Transactional
@@ -73,7 +98,15 @@ public class ExpedienteService {
                 request.processType(),
                 request.caseStage()
         );
-        ExpedienteEntity created = expedienteRepository.save(entity);
+        ExpedienteEntity created = expedienteRepository.saveAndFlush(entity);
+        if (partyService != null) {
+            partyService.syncPrimaryParties(
+                    principal.tenantId(),
+                    created.getId(),
+                    created.getClientName(),
+                    created.getCounterpartyName()
+            );
+        }
         auditLogService.record(principal.tenantId(), principal.userId(), "EXPEDIENTE_CREATED", "EXPEDIENTE",
                 created.getId().toString(), Map.of("classification", created.getClassification().name()));
         return toSummary(created);
@@ -120,7 +153,9 @@ public class ExpedienteService {
     ) {
         ExpedienteEntity expediente = authorizationService.requirePermissionManagementAccess(principal, expedienteId);
         if (mfaPolicy != null) mfaPolicy.requireRecentMfaIfOrganizationalLegal(principal);
-        UserEntity targetUser = userRepository.findByIdAndTenantId(request.userId(), principal.tenantId())
+        userRepository.findActiveWorkspaceMember(request.userId(), principal.tenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario destino no encontrado en el tenant actual"));
+        UserEntity targetUser = userRepository.findById(request.userId())
                 .filter(UserEntity::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario destino no encontrado en el tenant actual"));
 

@@ -115,6 +115,7 @@ public class AccountSeatService {
     ) {
         Role targetRole = role != null ? role : Role.ANALYST;
         if (!active) {
+            requireNotLastActiveWorkspaceAdmin(workspaceTenant, userId);
             int updated = jdbc.update("""
                     UPDATE omega_rag.workspace_memberships
                        SET active = FALSE,
@@ -127,6 +128,10 @@ public class AccountSeatService {
             }
             revokeCreatorApiTokens(workspaceTenant, userId);
             return;
+        }
+
+        if (targetRole != Role.ADMIN) {
+            requireNotLastActiveWorkspaceAdmin(workspaceTenant, userId);
         }
 
         if (!isSoleIndividualOwnerSelfUpdate(workspaceTenant, userId)) {
@@ -149,6 +154,51 @@ public class AccountSeatService {
         );
         if (targetRole == Role.CLIENT) {
             revokeCreatorApiTokens(workspaceTenant, userId);
+        }
+    }
+
+    private void requireNotLastActiveWorkspaceAdmin(UUID workspaceTenant, UUID userId) {
+        Boolean removingActiveAdmin = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                      FROM omega_rag.workspace_memberships wm
+                      JOIN omega_rag.tenants t ON t.id = wm.tenant_id
+                     WHERE wm.tenant_id = ?
+                       AND wm.user_id = ?
+                       AND wm.active = TRUE
+                       AND wm.role = 'ADMIN'
+                       AND t.active = TRUE
+                       AND NOT (t.account_type = 'INDIVIDUAL' AND t.organization_id IS NULL)
+                )
+                """,
+                Boolean.class,
+                workspaceTenant,
+                userId
+        );
+        if (!Boolean.TRUE.equals(removingActiveAdmin)) {
+            return;
+        }
+        Boolean otherAdminExists = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                      FROM omega_rag.workspace_memberships wm
+                      JOIN omega_rag.users u ON u.id = wm.user_id
+                     WHERE wm.tenant_id = ?
+                       AND wm.user_id <> ?
+                       AND wm.active = TRUE
+                       AND wm.role = 'ADMIN'
+                       AND u.active = TRUE
+                )
+                """,
+                Boolean.class,
+                workspaceTenant,
+                userId
+        );
+        if (!Boolean.TRUE.equals(otherAdminExists)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "No puedes desactivar ni cambiar el rol del único administrador activo del espacio."
+            );
         }
     }
 

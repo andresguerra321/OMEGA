@@ -29,6 +29,9 @@ jobs:
           cache-dependency-path: omega/backend-java/pom.xml
       - name: Check Docker for Testcontainers
         run: docker info
+      - name: Flyway validate (migra desde V29 con datos, valida y prueba reversas)
+        working-directory: omega/backend-java
+        run: mvn -B test -Dtest=FlywayMigrationFromV29Test
       - name: Run complete Java suite
         working-directory: omega/backend-java
         run: mvn -B test

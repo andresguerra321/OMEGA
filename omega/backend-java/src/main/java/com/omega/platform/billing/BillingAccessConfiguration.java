@@ -30,6 +30,6 @@ public class BillingAccessConfiguration implements WebMvcConfigurer {
                 }
                 return true;
             }
-        }).addPathPatterns("/api/v1/**");
+        }).addPathPatterns("/api/v1/**").order(0);
     }
 }

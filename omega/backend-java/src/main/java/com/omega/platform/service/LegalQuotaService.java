@@ -264,6 +264,23 @@ public class LegalQuotaService {
         });
     }
 
+    @org.springframework.beans.factory.annotation.Value("${omega.legal.conflict-rate-limit-per-minute:30}")
+    private int conflictRateLimitPerMinute = 30;
+
+    /** Límite por usuario (no por espacio) para consultas de conflicto; excedido devuelve 429. */
+    public void checkConflictSearchRate(OmegaPrincipal principal) {
+        if (principal == null || jdbc == null) return;
+        String bucket = "CONFLICT:" + principal.userId();
+        int limit = Math.max(1, conflictRateLimitPerMinute);
+        runRequiresNew(() -> {
+            lockTenantQuota(principal.tenantId(), bucket);
+            Instant windowMinute = Instant.now().truncatedTo(ChronoUnit.MINUTES);
+            consumePersistentRateBucket(principal.tenantId(), bucket, windowMinute, limit,
+                    "Demasiadas verificaciones de conflicto seguidas. Espera un minuto e inténtalo de nuevo.");
+            return null;
+        });
+    }
+
     @Transactional(readOnly = true)
     public List<AdminDocumentIssueView> listAdminDocumentIssues(OmegaPrincipal principal) {
         if (principal.role() != Role.ADMIN) {

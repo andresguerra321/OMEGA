@@ -59,7 +59,7 @@ import org.springframework.web.util.HtmlUtils;
  */
 @Service
 public class PilotOpsService {
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     private com.omega.platform.billing.AccountSeatService seats;
 
 
@@ -105,7 +105,7 @@ public class PilotOpsService {
     @Autowired(required = false)
     private CommercialSaasService commercialSaasService;
 
-    @Autowired(required = false)
+    @Autowired
     private TwoFactorService twoFactorService;
 
     @Autowired(required = false)
@@ -736,7 +736,7 @@ public class PilotOpsService {
                         return false;
                     }
                     return tenantRepository.findById(u.getTenantId())
-                            .map(root -> orgId.equals(root.getOrganizationId()))
+                            .map(root -> root.getOrganizationId() == null || orgId.equals(root.getOrganizationId()))
                             .orElse(false);
                 })
                 .findFirst();
