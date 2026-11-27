@@ -1,42 +1,85 @@
 import { useId } from 'react';
-import { CheckCircle2, FileText, GitBranch, Lock, ShieldAlert, ShieldCheck, Smartphone, Laptop, Globe } from 'lucide-react';
+import {
+  CheckCircle2,
+  FileCheck2,
+  FileText,
+  GitBranch,
+  Globe,
+  Laptop,
+  Lock,
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 
-function CompactRoyalEclipse() {
+const STAGE_CLASS =
+  'relative rounded-[24px] bg-gradient-to-br from-white/[0.08] via-[#0B1222]/55 to-[#060912]/75 backdrop-blur-2xl border border-white/[0.12] shadow-[inset_0_1px_1px_rgba(255,255,255,0.22),inset_0_-1px_1px_rgba(0,0,0,0.65),0_32px_80px_rgba(0,0,0,0.75)] p-6 md:p-8 min-h-[400px] flex flex-col justify-between gap-6 overflow-hidden';
+
+const ELEVATED_PIECE_CLASS =
+  'bg-gradient-to-b from-[#151E30]/90 to-[#0B101B]/95 rounded-2xl border border-white/[0.07] shadow-[10px_14px_28px_rgba(0,0,0,0.65),-2px_-2px_8px_rgba(255,255,255,0.03),inset_0_1px_0_rgba(255,255,255,0.16)]';
+
+const DEBOSSED_PILL_CLASS =
+  'bg-[#050810]/85 rounded-full border border-white/[0.04] shadow-[inset_4px_4px_10px_rgba(0,0,0,0.85),inset_-1px_-1px_4px_rgba(255,255,255,0.05)]';
+
+const DEBOSSED_WELL_CLASS =
+  'bg-[#050810]/85 rounded-xl border border-white/[0.04] shadow-[inset_4px_4px_10px_rgba(0,0,0,0.85),inset_-1px_-1px_4px_rgba(255,255,255,0.05)]';
+
+function TactileOmegaOrb() {
   const uid = useId().replace(/:/g, '');
-  const rimId = `previewEclipseRim-${uid}`;
+  const glyphId = `tactileOrbGlyph-${uid}`;
 
   return (
-    <div
-      aria-hidden="true"
-      className="relative flex h-24 w-24 items-center justify-center rounded-full bg-[#05070B]"
-      style={{
-        boxShadow: '0 0 36px rgba(47, 111, 237, 0.24)',
-      }}
-    >
-      <svg viewBox="0 0 120 120" fill="none" className="absolute inset-0 h-full w-full">
-        <defs>
-          <linearGradient id={rimId} x1="18" y1="22" x2="102" y2="98" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#1D4ED8" stopOpacity="0.6" />
-            <stop offset="40%" stopColor="#93C5FD" stopOpacity="0.95" />
-            <stop offset="65%" stopColor="#FFFFFF" stopOpacity="0.92" />
-            <stop offset="100%" stopColor="#2F6FED" stopOpacity="0.45" />
-          </linearGradient>
-        </defs>
-        <circle cx="60" cy="60" r="46" fill="#070C17" />
-        <circle cx="60" cy="60" r="46" stroke={`url(#${rimId})`} strokeWidth="1.75" />
-        <path
-          d="M52.8 76.2H41.6V70.3H49C45 66.5 42.6 61.2 42.6 55.2C42.6 45.1 50.2 37.5 60 37.5C69.8 37.5 77.4 45.1 77.4 55.2C77.4 61.2 75 66.5 71 70.3H78.4V76.2H67.2V69.7C70.4 66.6 72.3 61.7 72.3 55.6C72.3 48 67.1 42.4 60 42.4C52.9 42.4 47.7 48 47.7 55.6C47.7 61.7 49.6 66.6 52.8 69.7V76.2Z"
-          fill="#F8FAFC"
-          fillOpacity="0.94"
+    <div className="relative flex h-24 w-24 items-center justify-center rounded-full">
+      {/* Esfera neomórfica oscura */}
+      <div
+        className="relative flex h-full w-full items-center justify-center rounded-full"
+        style={{
+          background:
+            'radial-gradient(circle at 34% 28%, #182238 0%, #090E19 56%, #04060B 100%)',
+          boxShadow:
+            '10px 14px 28px rgba(0,0,0,0.72), -2px -2px 8px rgba(255,255,255,0.04), inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -10px 22px rgba(0,0,0,0.88)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+        }}
+      >
+        {/* Aro de luz azul rey girando suavemente */}
+        <div
+          aria-hidden="true"
+          className="omega-orb-spin omega-orb-ring-mask-glow pointer-events-none absolute -inset-[2px] rounded-full opacity-85"
+          style={{
+            background:
+              'conic-gradient(from 0deg, transparent 0deg, rgba(96, 165, 250, 0.9) 45deg, rgba(37, 99, 235, 0.85) 95deg, transparent 150deg)',
+            filter: 'blur(6px)',
+          }}
         />
-      </svg>
+        <div
+          aria-hidden="true"
+          className="omega-orb-spin omega-orb-ring-mask pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            background:
+              'conic-gradient(from 0deg, transparent 0deg, rgba(96, 165, 250, 0.9) 45deg, rgba(37, 99, 235, 0.85) 95deg, transparent 150deg)',
+          }}
+        />
+
+        <svg viewBox="0 0 80 80" fill="none" className="relative z-10 h-11 w-11">
+          <defs>
+            <linearGradient id={glyphId} x1="40" y1="16" x2="40" y2="62" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#F8FAFC" />
+              <stop offset="100%" stopColor="#CBD5E1" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M32.8 59.8H21.6V53.9H29C25 50.1 22.6 44.8 22.6 38.8C22.6 28.7 30.2 21.1 40 21.1C49.8 21.1 57.4 28.7 57.4 38.8C57.4 44.8 55 50.1 51 53.9H58.4V59.8H47.2V53.3C50.4 50.2 52.3 45.3 52.3 39.2C52.3 31.6 47.1 26 40 26C32.9 26 27.7 31.6 27.7 39.2C27.7 45.3 29.6 50.2 32.8 53.3V59.8Z"
+            fill={`url(#${glyphId})`}
+          />
+        </svg>
+      </div>
     </div>
   );
 }
 
 const GENERAL_MODULE_ICONS = {
   'Equipo Local': Laptop,
-  'iPhone por USB': Smartphone,
+  'Celular USB': Smartphone,
   'Escudo Web': Globe,
 };
 
@@ -45,29 +88,42 @@ export function OmegaProfilePreview({ profile }) {
 
   if (id === 'GENERAL') {
     return (
-      <div className="rounded-2xl bg-[#090D16]/90 border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_60px_rgba(0,0,0,0.6)] p-6 md:p-8 min-h-[380px] flex flex-col justify-between gap-6">
-        <div className="flex flex-1 flex-col items-center justify-center text-center gap-3 pt-2">
-          <span className="text-sm font-medium text-[#94A3B8]">{preview.greeting}</span>
-          <CompactRoyalEclipse />
-          <span className="text-lg font-medium tracking-[-0.02em] text-[#F8FAFC]">
-            {preview.roleLabel}
-          </span>
+      <div className={STAGE_CLASS}>
+        {/* Saludo horizontal fiel al Home actual: ¡Hola! [Orbe Ω] Directivo */}
+        <div className="flex flex-1 items-center justify-center py-4">
+          <div className="grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-6">
+            <span className="text-right text-lg md:text-xl font-medium tracking-[-0.02em] text-[#94A3B8]">
+              {preview.greeting}
+            </span>
+            <TactileOmegaOrb />
+            <span className="text-left text-lg md:text-xl font-medium tracking-[-0.02em] text-[#F8FAFC]">
+              {preview.roleLabel}
+            </span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* 3 módulos elevados táctiles en fila */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           {preview.modules.map((item) => {
             const Icon = GENERAL_MODULE_ICONS[item.name] || ShieldCheck;
             return (
               <div
                 key={item.name}
-                className="rounded-xl bg-[#0E1422] border border-white/[0.08] p-3.5 flex flex-col gap-2"
+                className={`${ELEVATED_PIECE_CLASS} p-4 flex flex-col gap-3 transition-transform duration-300 hover:-translate-y-0.5`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <Icon className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+                  <span className={`${DEBOSSED_WELL_CLASS} h-9 w-9 flex items-center justify-center`}>
+                    <Icon className="w-4 h-4 text-[#CBD5E1]" strokeWidth={1.75} />
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]"
+                  />
                 </div>
-                <p className="text-sm font-medium text-[#F8FAFC]">{item.name}</p>
-                <p className="text-xs font-medium text-emerald-400">{item.status}</p>
+                <div>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{item.name}</p>
+                  <p className="mt-0.5 text-xs font-medium text-emerald-400">{item.status}</p>
+                </div>
               </div>
             );
           })}
@@ -78,35 +134,70 @@ export function OmegaProfilePreview({ profile }) {
 
   if (id === 'DEVELOPER') {
     return (
-      <div className="rounded-2xl bg-[#090D16]/90 border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_60px_rgba(0,0,0,0.6)] p-6 md:p-8 min-h-[380px] flex flex-col justify-between gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
-          <div className="inline-flex items-center gap-2 text-xs font-medium text-[#CBD5E1]">
+      <div className={STAGE_CLASS}>
+        {/* Cabecera en vidrio fino */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.10] pb-4">
+          <div className="inline-flex items-center gap-2 text-xs font-medium text-[#E2E8F0]">
             <GitBranch className="w-4 h-4 text-[#94A3B8]" strokeWidth={1.75} />
             <span>{preview.repoLabel}</span>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 border border-emerald-400/25 px-3 py-1 text-xs font-medium text-emerald-400">
+          <span
+            className={`${DEBOSSED_PILL_CLASS} inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-emerald-400`}
+          >
             <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.75} />
             {preview.repoBadge}
           </span>
         </div>
 
-        <div className="rounded-xl bg-[#0E1422] border border-white/[0.08] p-5 space-y-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/12 border border-rose-500/25 px-3 py-1 text-xs font-medium text-rose-400">
-            <ShieldAlert className="w-3.5 h-3.5" strokeWidth={1.75} />
-            {preview.alertBadge}
-          </span>
-          <h3 className="text-lg font-medium tracking-[-0.02em] text-[#F8FAFC]">
-            {preview.alertTitle}
-          </h3>
-          <p className="text-sm text-[#94A3B8] leading-relaxed">{preview.alertStatus}</p>
+        {/* Bloque protagonista elevado con acento luminoso rojo en borde izquierdo */}
+        <div
+          className={`${ELEVATED_PIECE_CLASS} relative p-5 md:p-6 space-y-4 overflow-hidden transition-transform duration-300 hover:-translate-y-0.5`}
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-3 left-0 w-[2px] rounded-r-full bg-gradient-to-b from-rose-400/90 via-rose-500/80 to-rose-400/20 shadow-[0_0_14px_rgba(244,63,94,0.55)]"
+          />
+
+          <div className="pl-2 space-y-2.5">
+            <span
+              className={`${DEBOSSED_PILL_CLASS} inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-rose-400`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" strokeWidth={1.75} />
+              {preview.alertBadge}
+            </span>
+
+            <h3 className="text-lg font-medium tracking-[-0.02em] text-[#F8FAFC]">
+              {preview.alertTitle}
+            </h3>
+            <p className="text-sm text-[#94A3B8]">{preview.alertSubtitle}</p>
+          </div>
+
+          {/* Barra de estado hundida (debossed) */}
+          <div className="pl-2 pt-1 space-y-2">
+            <div className="flex items-center justify-between text-xs text-[#94A3B8]">
+              <span>{preview.progressLabel}</span>
+              <span className="font-mono tabular-nums text-emerald-400">100%</span>
+            </div>
+            <div
+              className={`${DEBOSSED_PILL_CLASS} h-2.5 w-full p-[2px] overflow-hidden`}
+              aria-hidden="true"
+            >
+              <div className="h-full w-full rounded-full bg-gradient-to-r from-[#2563EB] to-emerald-400" />
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] pt-4 text-xs">
-          <span className="inline-flex items-center gap-2 text-[#CBD5E1] font-medium">
+        {/* Pie con dos pastillas táctiles discretas */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <span
+            className={`${ELEVATED_PIECE_CLASS} rounded-full px-4 py-2 inline-flex items-center gap-2 text-xs font-medium text-[#E2E8F0] transition-transform duration-300 hover:-translate-y-0.5`}
+          >
             <ShieldCheck className="w-4 h-4 text-emerald-400" strokeWidth={1.75} />
             {preview.footerLeft}
           </span>
-          <span className="inline-flex items-center gap-1.5 text-[#93C5FD] font-medium">
+          <span
+            className={`${ELEVATED_PIECE_CLASS} rounded-full px-4 py-2 inline-flex items-center gap-2 text-xs font-medium text-[#93C5FD] transition-transform duration-300 hover:-translate-y-0.5`}
+          >
             <FileText className="w-4 h-4" strokeWidth={1.75} />
             {preview.footerRight}
           </span>
@@ -116,26 +207,44 @@ export function OmegaProfilePreview({ profile }) {
   }
 
   return (
-    <div className="rounded-2xl bg-[#090D16]/90 border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_60px_rgba(0,0,0,0.6)] p-6 md:p-8 min-h-[380px] flex flex-col justify-between gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
-        <div className="inline-flex items-center gap-2 text-xs font-medium text-[#CBD5E1]">
-          <Lock className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
+    <div className={STAGE_CLASS}>
+      {/* Cabecera en vidrio fino */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.10] pb-4">
+        <div className="inline-flex items-center gap-2 text-xs font-medium text-[#E2E8F0]">
+          <FileCheck2 className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
           <span>{preview.caseLabel}</span>
         </div>
+        <span
+          className={`${DEBOSSED_PILL_CLASS} inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-[#94A3B8]`}
+        >
+          <Lock className="w-3.5 h-3.5 text-[#60A5FA]" strokeWidth={1.75} />
+          {preview.accessBadge}
+        </span>
       </div>
 
-      <div className="rounded-xl bg-[#0E1422] border border-white/[0.08] p-5 space-y-4">
-        <p className="text-sm font-medium text-[#94A3B8]">{preview.question}</p>
-        <p className="text-base text-[#F8FAFC] leading-relaxed">{preview.answer}</p>
-        <div className="pt-1">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#2F6FED]/15 border border-[#2F6FED]/35 px-3.5 py-1.5 text-xs font-medium text-[#93C5FD]">
-            <FileText className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
-            <span>{preview.citation}</span>
-          </span>
+      {/* Consulta en burbuja hundida (debossed) + respuesta elevada debajo */}
+      <div className="space-y-4">
+        <div className={`${DEBOSSED_WELL_CLASS} rounded-2xl px-5 py-3.5`}>
+          <p className="text-sm text-[#CBD5E1]">{preview.question}</p>
+        </div>
+
+        <div
+          className={`${ELEVATED_PIECE_CLASS} p-5 space-y-4 transition-transform duration-300 hover:-translate-y-0.5`}
+        >
+          <p className="text-sm md:text-base text-[#F8FAFC] leading-relaxed">
+            {preview.answer}
+          </p>
+
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#2F6FED]/15 border border-[#60A5FA]/40 shadow-[0_0_18px_rgba(47,111,237,0.22)] px-3.5 py-1.5 text-xs font-medium text-[#93C5FD]">
+              <FileText className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+              <span>{preview.citation}</span>
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] pt-4 text-xs text-[#94A3B8]">
+      <div className="flex items-center justify-between gap-3 border-t border-white/[0.10] pt-4 text-xs text-[#94A3B8]">
         <span className="inline-flex items-center gap-2 font-medium text-[#CBD5E1]">
           <ShieldCheck className="w-4 h-4 text-[#2F6FED]" strokeWidth={1.75} />
           {preview.verifiedNote}

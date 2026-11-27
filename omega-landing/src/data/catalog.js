@@ -33,16 +33,31 @@ export const LANDING_PROFILES = [
     headline: 'Protege tus dispositivos sin copiar tus archivos.',
     summary: 'Revisión rápida para computadores, celulares y enlaces sospechosos.',
     capabilities: [
-      'Diagnóstico preventivo de tu computador',
-      'Detección de espionaje en iPhone y Android por USB',
-      'Verificación segura de enlaces antes de abrirlos',
+      {
+        icon: 'laptop',
+        title: 'Revisión silenciosa de tu computador',
+        detail:
+          'Detecta programas ocultos y actividad inusual sin tocar tus documentos personales.',
+      },
+      {
+        icon: 'smartphone',
+        title: 'Diagnóstico de celulares por USB',
+        detail:
+          'Conecta iPhone o Android y descarta señales de espionaje en cuestión de minutos.',
+      },
+      {
+        icon: 'globe',
+        title: 'Escudo preventivo de enlaces',
+        detail:
+          'Verifica links y correos sospechosos antes de abrirlos, sin exponerte al sitio.',
+      },
     ],
     preview: {
       greeting: '¡Hola!',
       roleLabel: 'Directivo',
       modules: [
         { name: 'Equipo Local', status: 'Limpio' },
-        { name: 'iPhone por USB', status: 'Sin amenazas' },
+        { name: 'Celular USB', status: 'Sin amenazas' },
         { name: 'Escudo Web', status: 'Activo' },
       ],
     },
@@ -54,18 +69,34 @@ export const LANDING_PROFILES = [
     headline: 'Detén fallos de seguridad antes de publicar.',
     summary: 'Revisión automática de tu código y dependencias sin frenar entregas.',
     capabilities: [
-      'Alertas claras y priorizadas en cada cambio',
-      'Control automático de librerías externas vulnerables',
-      'Informes ejecutivos listos en un clic',
+      {
+        icon: 'git',
+        title: 'Revisión continua de tu código',
+        detail:
+          'Analiza cada cambio automáticamente y señala únicamente los riesgos que sí importan.',
+      },
+      {
+        icon: 'package',
+        title: 'Control de librerías de terceros',
+        detail:
+          'Detecta componentes externos vulnerables antes de que lleguen a tus clientes.',
+      },
+      {
+        icon: 'file',
+        title: 'Informes ejecutivos en un clic',
+        detail:
+          'Traduce hallazgos técnicos a reportes claros para dirección y auditorías.',
+      },
     ],
     preview: {
       repoLabel: 'repositorio-pagos · Rama principal',
       repoBadge: 'Protegido',
-      alertBadge: 'Riesgo crítico bloqueado',
+      alertBadge: 'Riesgo crítico detenido',
       alertTitle: 'Librería externa con vulnerabilidad conocida',
-      alertStatus: 'Actualización segura lista · Revisado antes de publicación',
-      footerLeft: '0 fallos críticos en producción',
-      footerRight: 'Informe PDF disponible',
+      alertSubtitle: 'Actualización segura lista antes de publicación',
+      progressLabel: 'Verificación completada',
+      footerLeft: '0 fallos en producción',
+      footerRight: 'Informe PDF listo',
     },
   },
   {
@@ -75,16 +106,32 @@ export const LANDING_PROFILES = [
     headline: 'Analiza expedientes con citas exactas y cero filtraciones.',
     summary: 'Consulta contratos y casos confidenciales en segundos.',
     capabilities: [
-      'Cada respuesta cita el documento y la página exacta',
-      'Control estricto de acceso por expediente',
-      'Resúmenes e informes PDF listos para clientes',
+      {
+        icon: 'quote',
+        title: 'Respuestas 100% respaldadas',
+        detail:
+          'Cada hallazgo señala el documento y la página exacta; si no existe evidencia, no inventa.',
+      },
+      {
+        icon: 'lock',
+        title: 'Control estricto por expediente',
+        detail:
+          'Separa casos confidenciales con permisos individuales y trazabilidad completa.',
+      },
+      {
+        icon: 'briefcase',
+        title: 'Resúmenes listos para clientes',
+        detail:
+          'Genera cronologías e informes en PDF en segundos sin subir archivos a terceros.',
+      },
     ],
     preview: {
-      caseLabel: 'Expediente #2026-041 · Acceso restringido',
+      caseLabel: 'Expediente #2026-041',
+      accessBadge: 'Acceso restringido',
       question: '¿Existe cláusula de penalidad por terminación anticipada?',
       answer:
-        'Sí. Se establece un preaviso obligatorio de 30 días y compensación equivalente a un mes de servicio.',
-      citation: 'Contrato_Servicios_2026.pdf · Página 14 · Cláusula 8.2',
+        'Sí. Preaviso obligatorio de 30 días y compensación equivalente a un mes de servicio.',
+      citation: 'Contrato_Servicios_2026.pdf · Pág. 14 · Cláusula 8.2',
       verifiedNote: 'Verificado sin copias externas',
     },
   },

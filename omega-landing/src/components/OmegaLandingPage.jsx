@@ -2,16 +2,24 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
+  Briefcase,
   Building2,
   Check,
   ChevronDown,
   Code2,
   Copy,
   FileCheck2,
+  FileText,
+  GitBranch,
+  Globe,
+  Laptop,
   Lock,
+  Package,
+  Quote,
   Scale,
   Shield,
   ShieldCheck,
+  Smartphone,
   X,
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
@@ -38,6 +46,24 @@ const PROFILE_ICONS = {
   GENERAL: Shield,
   DEVELOPER: Code2,
   LEGAL: Scale,
+};
+
+const CAPABILITY_ICONS = {
+  laptop: Laptop,
+  smartphone: Smartphone,
+  globe: Globe,
+  git: GitBranch,
+  package: Package,
+  file: FileText,
+  quote: Quote,
+  lock: Lock,
+  briefcase: Briefcase,
+};
+
+const ATMOSPHERE_SHIFT = {
+  GENERAL: 'top-4 right-8',
+  DEVELOPER: 'top-14 right-2',
+  LEGAL: 'bottom-2 right-12',
 };
 
 const GUARANTEE_ICONS = {
@@ -420,7 +446,6 @@ export function OmegaLandingPage({ onEnterApp }) {
                 </p>
               </section>
 
-              {/* Sección limpia dedicada para el video nativo debajo del Hero */}
               <section
                 id="demo-video"
                 aria-label="Demostración de producto"
@@ -442,9 +467,9 @@ export function OmegaLandingPage({ onEnterApp }) {
             </>
           )}
 
-          {/* 2. LOS 3 ESPACIOS DE TRABAJO */}
+          {/* 2. TRES ESPACIOS. UN SOLO CONTROL. (Glassmorphismo Óptico + Neomorfismo Táctil) */}
           {activePage === 'perfiles' && (
-            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-24 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
@@ -453,10 +478,11 @@ export function OmegaLandingPage({ onEnterApp }) {
                     Tres espacios. Un solo control.
                   </h1>
 
+                  {/* Carril hundido (Debossed) con píldora elevada iluminada */}
                   <div
                     role="tablist"
                     aria-label="Espacios de trabajo"
-                    className="inline-flex self-start md:self-auto rounded-full omega-glass p-1 shrink-0"
+                    className="inline-flex self-start md:self-auto bg-[#050810]/85 rounded-full border border-white/[0.04] shadow-[inset_4px_4px_10px_rgba(0,0,0,0.85),inset_-1px_-1px_4px_rgba(255,255,255,0.05)] p-1.5 shrink-0"
                   >
                     {LANDING_PROFILES.map((profile) => {
                       const isActive = profile.id === activeProfile;
@@ -476,8 +502,8 @@ export function OmegaLandingPage({ onEnterApp }) {
                           {isActive && (
                             <motion.span
                               layoutId="landing-profile-pill"
-                              transition={{ duration: 0.22, ease: EASE_OUT }}
-                              className="absolute inset-0 rounded-full bg-[#2F6FED]"
+                              transition={{ duration: 0.32, ease: EASE_OUT }}
+                              className="absolute inset-0 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#2563EB] shadow-[0_6px_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.35)]"
                             />
                           )}
                           <Icon className="relative z-10 w-4 h-4" strokeWidth={1.75} />
@@ -493,34 +519,62 @@ export function OmegaLandingPage({ onEnterApp }) {
                     key={selectedProfile.id}
                     id={`profile-panel-${selectedProfile.id}`}
                     role="tabpanel"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.24, ease: EASE_OUT }}
-                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center"
+                    initial={{ opacity: 0, scale: 0.985 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.32, ease: EASE_OUT }}
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center"
                   >
+                    {/* Columna izquierda: 3 bloques ejecutivos con squircle neomórfico táctil */}
                     <div className="lg:col-span-5 space-y-6">
                       <div>
-                        <p className="text-sm font-medium text-[#2F6FED]">{selectedProfile.domain}</p>
+                        <p className="text-sm font-medium text-[#60A5FA]">{selectedProfile.domain}</p>
                         <h2 className="mt-2 text-2xl md:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC]">
                           {selectedProfile.headline}
                         </h2>
-                        <p className="mt-3 text-sm md:text-base text-[#94A3B8] leading-relaxed">
+                        <p className="mt-2.5 text-sm md:text-base text-[#94A3B8] leading-relaxed">
                           {selectedProfile.summary}
                         </p>
                       </div>
 
-                      <ul className="divide-y divide-white/[0.08] border-t border-white/[0.08]">
-                        {selectedProfile.capabilities.map((cap) => (
-                          <li key={cap} className="py-3.5 flex items-center gap-3 text-sm text-[#E2E8F0]">
-                            <Check className="w-4 h-4 text-[#2F6FED] shrink-0" strokeWidth={1.75} />
-                            <span>{cap}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-4 pt-2 border-t border-white/[0.08]">
+                        {selectedProfile.capabilities.map((cap) => {
+                          const CapIcon = CAPABILITY_ICONS[cap.icon] || ShieldCheck;
+                          return (
+                            <div key={cap.title} className="pt-3 flex items-start gap-3.5">
+                              <span
+                                aria-hidden="true"
+                                className="mt-0.5 h-9 w-9 shrink-0 rounded-xl bg-gradient-to-b from-[#151E30]/90 to-[#0B101B]/95 border border-white/[0.08] shadow-[8px_10px_20px_rgba(0,0,0,0.55),-1px_-1px_6px_rgba(255,255,255,0.03),inset_0_1px_0_rgba(255,255,255,0.16)] flex items-center justify-center"
+                              >
+                                <CapIcon className="w-4 h-4 text-[#60A5FA]" strokeWidth={1.75} />
+                              </span>
+                              <div>
+                                <h3 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h3>
+                                <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">
+                                  {cap.detail}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <div className="lg:col-span-7">
-                      <OmegaProfilePreview profile={selectedProfile} />
+                    {/* Columna derecha: Capa 0 (Luz atmosférica) + Capa 1 (Vidrio óptico) + Capa 2 (Neomorfismo) */}
+                    <div className="relative lg:col-span-7">
+                      <div
+                        aria-hidden="true"
+                        className={`pointer-events-none absolute h-[340px] w-[340px] md:h-[420px] md:w-[420px] rounded-full opacity-[0.34] blur-[90px] transition-all duration-500 ${
+                          ATMOSPHERE_SHIFT[selectedProfile.id] || ATMOSPHERE_SHIFT.GENERAL
+                        }`}
+                        style={{
+                          background:
+                            'radial-gradient(circle, #2563EB 0%, #1D4ED8 48%, rgba(5, 7, 11, 0) 76%)',
+                        }}
+                      />
+
+                      <div className="relative z-10">
+                        <OmegaProfilePreview profile={selectedProfile} />
+                      </div>
                     </div>
                   </motion.div>
                 </div>

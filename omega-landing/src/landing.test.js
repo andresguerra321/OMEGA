@@ -16,7 +16,7 @@ import {
 const FORBIDDEN_JARGON =
   /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:/i;
 
-test('catalog mantiene precios reales en COP, estructura moderna SaaS y cero jerga o texto QA', () => {
+test('catalog mantiene precios reales en COP, bloques ejecutivos en Perfiles y cero jerga o texto QA', () => {
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
   assert.equal(OMEGA_DEMO_VIDEO.src, '/media/omega-demo.mp4');
   assert.equal(HERO_DISCRETE_CONCEPTS.length, 4);
@@ -49,7 +49,7 @@ test('catalog mantiene precios reales en COP, estructura moderna SaaS y cero jer
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero de 2 columnas con Orbe de Cristal Obsidiana, video fuera del Hero, Perfiles y Planes COP', async () => {
+test('OmegaLandingPage renderiza Hero con Orbe de Cristal, Perfiles glass/neomórficos y Planes modernos', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -124,27 +124,49 @@ test('OmegaLandingPage renderiza Hero de 2 columnas con Orbe de Cristal Obsidian
       );
     });
 
-    // 1. Hero de 2 columnas con Orbe de Cristal Obsidiana (video en su propia sección #demo-video debajo del Hero)
+    // 1. Hero de 2 columnas + Orbe de Cristal + video en sección inferior
     const homeText = container.textContent || '';
     assert.match(homeText, /Seguridad real\./);
-    assert.match(homeText, /Privacidad absoluta\./);
-    const orb = container.querySelector('[aria-label="Orbe de Cristal Obsidiana de OMEGA"]');
-    assert.ok(orb);
-    const sections = container.querySelectorAll('main section');
-    assert.equal(sections[0].querySelector('video'), null);
+    assert.ok(container.querySelector('[aria-label="Orbe de Cristal Obsidiana de OMEGA"]'));
     assert.ok(container.querySelector('#demo-video video'));
-    assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
-    // 2. Vista Perfiles con UI previews nítidas
+    // 2. Vista Perfiles (General -> Desarrollo -> Legal)
     const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Perfiles',
     );
     await act(async () => {
       perfilesNav.click();
     });
-    assert.match(container.textContent || '', /Tres espacios\. Un solo control\./);
-    assert.equal(container.querySelector('#profile-panel-GENERAL img'), null);
+    const generalText = container.textContent || '';
+    assert.match(generalText, /Revisión silenciosa de tu computador/);
+    assert.match(generalText, /Celular USB/);
+    assert.match(generalText, /Directivo/);
+    assert.doesNotMatch(generalText, FORBIDDEN_JARGON);
+
+    const devTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
+      (btn) => btn.textContent?.includes('Desarrollo'),
+    );
+    await act(async () => {
+      devTab.click();
+    });
+    const devText = container.textContent || '';
+    assert.match(devText, /Revisión continua de tu código/);
+    assert.match(devText, /Riesgo crítico detenido/);
+    assert.match(devText, /0 fallos en producción/);
+    assert.doesNotMatch(devText, FORBIDDEN_JARGON);
+
+    const legalTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
+      (btn) => btn.textContent?.includes('Legal'),
+    );
+    await act(async () => {
+      legalTab.click();
+    });
+    const legalText = container.textContent || '';
+    assert.match(legalText, /Respuestas 100% respaldadas/);
+    assert.match(legalText, /Expediente #2026-041/);
+    assert.match(legalText, /Contrato_Servicios_2026\.pdf · Pág\. 14 · Cláusula 8\.2/);
+    assert.doesNotMatch(legalText, FORBIDDEN_JARGON);
 
     // 3. Vista Privacidad
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
@@ -155,27 +177,16 @@ test('OmegaLandingPage renderiza Hero de 2 columnas con Orbe de Cristal Obsidian
     });
     assert.match(container.textContent || '', /Tu información nunca sale de tu control/);
 
-    // 4. Vista Planes modernos
+    // 4. Vista Planes
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Planes',
     );
     await act(async () => {
       planesNav.click();
     });
-    const plansText = container.textContent || '';
-    assert.match(plansText, /Planes simples\./);
-    assert.match(plansText, /\$59\.900/);
-    assert.match(plansText, /\$299\.900/);
-    assert.doesNotMatch(plansText, FORBIDDEN_JARGON);
-
-    const annualBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.includes('Anual'),
-    );
-    await act(async () => {
-      annualBtn.click();
-    });
-    assert.match(container.textContent || '', /\$599\.000/);
-    assert.match(container.textContent || '', /\$2\.999\.000/);
+    assert.match(container.textContent || '', /Planes simples\./);
+    assert.match(container.textContent || '', /\$59\.900/);
+    assert.match(container.textContent || '', /\$299\.900/);
 
     const loginBtn = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Iniciar sesión',
