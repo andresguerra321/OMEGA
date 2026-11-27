@@ -61,7 +61,6 @@
   }
 
   html {
-    scroll-behavior: smooth;
     background-color: #05070B;
     color: #F8FAFC;
     font-family: var(--font-sans);
@@ -77,7 +76,7 @@
     background-color: #05070B;
     color: #F8FAFC;
     caret-color: #2F6FED;
-    overflow-x: hidden;
+    overflow-x: clip;
     font-family: var(--font-sans);
   }
 
@@ -153,14 +152,23 @@
 
 .omega-orb-spin {
   animation: omega-orb-spin 9s linear infinite;
+  will-change: transform;
 }
 
 .omega-eclipse-breathe {
   animation: omega-eclipse-breathe 4.5s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .omega-glyph-float {
   animation: omega-glyph-float 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+[data-hero-paused="true"] .omega-orb-spin,
+[data-hero-paused="true"] .omega-eclipse-breathe,
+[data-hero-paused="true"] .omega-glyph-float {
+  animation-play-state: paused;
 }
 
 .omega-orb-ring-mask {

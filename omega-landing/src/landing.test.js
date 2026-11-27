@@ -3,23 +3,38 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import {
+  DRIVE_PRIVACY_MODES,
   EDITORIAL_SPACES,
+  HERO_SPECS,
   LANDING_FAQ,
-  LANDING_PAGES,
-  PRIVACY_BANNER_MODES,
-  PRIVACY_MANIFESTO,
+  LANDING_SECTIONS,
+  MANIFESTO_LINES,
+  PRIVACY_SPECS,
+  PRODUCT_OVERVIEW,
   getPlansForProfile,
 } from './data/catalog.js';
 
-const FORBIDDEN_JARGON =
-  /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:/i;
+const FORBIDDEN_CATALOG_JARGON =
+  /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:|omega-demo\.mp4/i;
 
-test('catalog mantiene precios reales en COP, galería editorial de 3 frentes y cero jerga o texto QA', () => {
-  assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
+const FORBIDDEN_DOM_JARGON =
+  /\b(STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:|omega-demo\.mp4/i;
+
+test('catalog mantiene datos reales en COP, descripción ejecutiva de producto y cero jerga técnica', () => {
+  assert.equal(
+    LANDING_SECTIONS.map((s) => s.id).join(','),
+    'plataforma,producto,espacios,privacidad,planes',
+  );
+  assert.equal(HERO_SPECS.map((s) => s.value).join(','), '0 B,3,100%');
+  assert.equal(PRODUCT_OVERVIEW.pillars.length, 4);
+  assert.equal(MANIFESTO_LINES.length, 3);
   assert.equal(EDITORIAL_SPACES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
-  assert.equal(EDITORIAL_SPACES.map((p) => p.image).join(','), '/media/space-personal.jpg,/media/space-dev.jpg,/media/space-legal.jpg');
-  assert.equal(PRIVACY_MANIFESTO.map((c) => c.metric).join(','), '0 bytes,Inalterable,100% tuyo');
-  assert.equal(PRIVACY_BANNER_MODES.map((m) => m.id).join(','), 'cloud,private');
+  assert.equal(
+    EDITORIAL_SPACES.map((p) => p.image).join(','),
+    '/media/space-personal.jpg,/media/space-dev.jpg,/media/space-legal.jpg',
+  );
+  assert.equal(DRIVE_PRIVACY_MODES.map((m) => m.id).join(','), 'cloud,private');
+  assert.equal(PRIVACY_SPECS.map((s) => s.value).join(','), '0 bytes,Sello digital,24/7');
   assert.equal(LANDING_FAQ.length, 4);
 
   const monthly = getPlansForProfile('GENERAL', 'monthly');
@@ -32,17 +47,20 @@ test('catalog mantiene precios reales en COP, galería editorial de 3 frentes y 
   assert.equal(annual[2].displayPrice, '$2.999.000');
 
   const serialized = JSON.stringify({
+    HERO_SPECS,
+    PRODUCT_OVERVIEW,
+    MANIFESTO_LINES,
     EDITORIAL_SPACES,
-    PRIVACY_MANIFESTO,
-    PRIVACY_BANNER_MODES,
+    DRIVE_PRIVACY_MODES,
+    PRIVACY_SPECS,
     LANDING_FAQ,
     monthly,
     annual,
   });
-  assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
+  assert.doesNotMatch(serialized, FORBIDDEN_CATALOG_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 frentes sin pestañas ni adornos', async () => {
+test('OmegaLandingPage renderiza Hero con Ver más, ProductOverview Anti-Slop, SpaceModal visual y Privacidad', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -53,6 +71,7 @@ test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 
     Node: globalThis.Node,
     HTMLElement: globalThis.HTMLElement,
     SVGElement: globalThis.SVGElement,
+    KeyboardEvent: globalThis.KeyboardEvent,
     IntersectionObserver: globalThis.IntersectionObserver,
     ResizeObserver: globalThis.ResizeObserver,
     matchMedia: globalThis.matchMedia,
@@ -66,30 +85,37 @@ test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 
   globalThis.Node = dom.window.Node;
   globalThis.HTMLElement = dom.window.HTMLElement;
   globalThis.SVGElement = dom.window.SVGElement;
+  globalThis.KeyboardEvent = dom.window.KeyboardEvent;
   globalThis.IntersectionObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    observe() { }
+    unobserve() { }
+    disconnect() { }
   };
   globalThis.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    observe() { }
+    unobserve() { }
+    disconnect() { }
   };
   globalThis.matchMedia = () => ({
     matches: true,
     media: '(prefers-reduced-motion: reduce)',
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
+    addEventListener() { },
+    removeEventListener() { },
+    addListener() { },
+    removeListener() { },
   });
   dom.window.matchMedia = globalThis.matchMedia;
   dom.window.IntersectionObserver = globalThis.IntersectionObserver;
-  dom.window.scrollTo = () => {};
+  dom.window.scrollTo = () => { };
+
+  const scrolledIds = [];
+  dom.window.HTMLElement.prototype.scrollIntoView = function () {
+    if (this.id) scrolledIds.push(this.id);
+  };
 
   const vite = await createServer({
-    server: { middlewareMode: true, hmr: false },
+    server: { middlewareMode: true, hmr: false, watch: null },
+    optimizeDeps: { noDiscovery: true },
     appType: 'custom',
     logLevel: 'silent',
   });
@@ -117,74 +143,146 @@ test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 
       );
     });
 
-    // 1. Hero minimalista
-    const homeText = container.textContent || '';
-    assert.match(homeText, /Control total\. Cero rastro\./);
-    assert.ok(container.querySelector('[aria-label="Eclipse OMEGA"]'));
-    assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
+    const fullText = container.textContent || '';
 
-    // 2. Galería editorial de 3 tarjetas verticales (sin tabs, sin botones dentro, 3 imágenes 4:5 reales)
-    const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
-      (btn) => btn.textContent?.trim() === 'Perfiles',
+    // 1. HeroKeynote + botón Ver más hacia #producto
+    assert.match(fullText, /OMEGA\./);
+    assert.match(fullText, /Control total\. Cero rastro\./);
+    assert.ok(container.querySelector('[aria-label="Eclipse OMEGA"]'));
+    const verMasBtn = Array.from(container.querySelectorAll('#plataforma button')).find((btn) =>
+      btn.textContent?.includes('Ver más'),
     );
+    assert.equal(Boolean(verMasBtn), true);
     await act(async () => {
-      perfilesNav.click();
+      verMasBtn.click();
     });
-    const galleryText = container.textContent || '';
-    assert.match(galleryText, /Un solo estándar\. Tres frentes\./);
-    assert.match(galleryText, /Dispositivos y enlaces/);
-    assert.match(galleryText, /Código y entregas/);
-    assert.match(galleryText, /Expedientes privados/);
-    assert.equal(container.querySelectorAll('#perfiles [role="tab"]').length, 0);
-    assert.equal(container.querySelectorAll('#perfiles article button').length, 0);
-    const cardImgs = Array.from(container.querySelectorAll('#perfiles article img')).map((el) =>
+    assert.equal(scrolledIds.includes('producto'), true);
+
+    // 2. ProductOverviewSection minimalista con Orbe Ω y tarjetas flotantes (#producto)
+    assert.match(container.textContent || '', /Defensa preventiva e inteligencia privada en un solo lugar\./);
+    assert.equal((container.textContent || '').includes('AISLAMIENTO EN RAM'), false);
+    assert.match(container.textContent || '', /Procesos y cable USB verificados/);
+    assert.match(container.textContent || '', /Ver arquitectura completa/);
+
+    // Cambiar pestaña con teclado (ArrowDown)
+    const prodTabList = container.querySelector('#producto [role="tablist"]');
+    assert.equal(Boolean(prodTabList), true);
+    await act(async () => {
+      prodTabList.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+      );
+    });
+    assert.match(container.textContent || '', /Redirecciones analizadas sin riesgo/);
+
+    const legalPillarTab = Array.from(container.querySelectorAll('#producto [role="tab"]')).find(
+      (btn) => btn.textContent?.includes('Expedientes legales'),
+    );
+    assert.equal(Boolean(legalPillarTab), true);
+    await act(async () => {
+      legalPillarTab.click();
+    });
+    assert.match(container.textContent || '', /Citas exactas por documento y página/);
+    assert.match(container.textContent || '', /Doc\. y página/);
+
+    // 3. SpacesShowcase + SpaceModal visual (+ clic, Esc, clic fuera, salto a Planes)
+    const spaceImgs = Array.from(container.querySelectorAll('#espacios article img')).map((el) =>
       el.getAttribute('src'),
     );
-    assert.deepEqual(cardImgs, [
+    assert.deepEqual(spaceImgs, [
       '/media/space-personal.jpg',
       '/media/space-dev.jpg',
       '/media/space-legal.jpg',
     ]);
-    assert.doesNotMatch(galleryText, FORBIDDEN_JARGON);
-
-    // 3. Privacidad minimalista (manifiesto en 3 columnas sin cajas/iconos + banner panorámico 2 modos)
-    const segNav = Array.from(container.querySelectorAll('header nav button')).find(
-      (btn) => btn.textContent?.trim() === 'Privacidad',
+    assert.equal(
+      Array.from(container.querySelectorAll('#espacios span')).some(
+        (el) => el.textContent?.trim() === 'Explorar',
+      ),
+      false,
     );
-    await act(async () => {
-      segNav.click();
-    });
-    const privTextCloud = container.textContent || '';
-    assert.match(privTextCloud, /Privacidad por arquitectura\./);
-    assert.match(privTextCloud, /0 bytes/);
-    assert.match(privTextCloud, /Inalterable/);
-    assert.match(privTextCloud, /100% tuyo/);
-    assert.match(privTextCloud, /Empieza en minutos, sin infraestructura\./);
-    assert.equal(container.querySelectorAll('#seguridad ul, #seguridad li').length, 0);
-    assert.equal(container.querySelectorAll('#seguridad svg').length, 0);
-    const bannerImg = container.querySelector('#seguridad img');
-    assert.equal(bannerImg?.getAttribute('src'), '/media/privacy-sovereign.jpg');
 
-    const privateTab = Array.from(container.querySelectorAll('#seguridad [role="tab"]')).find(
+    const legalPlusBtn = container.querySelector('button[aria-label="Explorar frente Legal"]');
+    assert.equal(Boolean(legalPlusBtn), true);
+    await act(async () => {
+      legalPlusBtn.click();
+    });
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), true);
+    assert.equal(
+      Boolean(container.querySelector('[role="dialog"] [data-modal-orb="LEGAL"] svg')),
+      true,
+    );
+    assert.match(container.textContent || '', /Expedientes · Contratos · Lectura privada/);
+    assert.match(container.textContent || '', /Citas exactas por página/);
+    assert.match(container.textContent || '', /Entregable verificado/);
+    assert.match(container.textContent || '', /PDF VERIFICADO · SELLO SHA-256/);
+    assert.match(container.textContent || '', /Citas exactas por página · 0 retención/);
+    const modalButtons = Array.from(container.querySelectorAll('[role="dialog"] button')).map((b) =>
+      b.textContent?.trim(),
+    );
+    assert.equal(modalButtons.includes('Cerrar'), false);
+
+    // Cerrar con botón X
+    const closeXBtn = container.querySelector('[role="dialog"] button[aria-label="Cerrar detalle"]');
+    assert.equal(Boolean(closeXBtn), true);
+    await act(async () => {
+      closeXBtn.click();
+    });
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), false);
+
+    // Reabrir y cerrar con Escape
+    await act(async () => {
+      legalPlusBtn.click();
+    });
+    await act(async () => {
+      dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), false);
+
+    // Clic fuera
+    await act(async () => {
+      legalPlusBtn.click();
+    });
+    const dialogBackdrop = container.querySelector('[role="dialog"]');
+    assert.equal(Boolean(dialogBackdrop), true);
+    await act(async () => {
+      dialogBackdrop.click();
+    });
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), false);
+
+    // Salto a Planes desde SpaceModal
+    const devPlusBtn = container.querySelector('button[aria-label="Explorar frente Desarrollo"]');
+    await act(async () => {
+      devPlusBtn.click();
+    });
+    const planLinkBtn = Array.from(container.querySelectorAll('[role="dialog"] button')).find(
+      (btn) => btn.textContent?.includes('Ver plan para este espacio'),
+    );
+    assert.equal(Boolean(planLinkBtn), true);
+    await act(async () => {
+      planLinkBtn.click();
+    });
+    assert.equal(Boolean(container.querySelector('[role="dialog"]')), false);
+    assert.match(container.textContent || '', /El espacio Desarrollo requiere plan Pro o Enterprise\./);
+
+    // 4. DriveModePrivacy
+    assert.match(container.textContent || '', /Privacidad sin concesiones\./);
+    assert.match(container.textContent || '', /Operando en minutos\./);
+    const privSection = container.querySelector('#privacidad');
+    assert.equal(privSection?.getAttribute('data-drive-mode'), 'cloud');
+
+    const privateTab = Array.from(container.querySelectorAll('#privacidad [role="tab"]')).find(
       (btn) => btn.textContent?.trim() === 'En tu empresa',
     );
-    assert.ok(privateTab);
     await act(async () => {
       privateTab.click();
     });
-    const privTextOnPrem = container.textContent || '';
-    assert.match(privTextOnPrem, /Ningún dato sale de tu red\./);
-    assert.doesNotMatch(privTextOnPrem, FORBIDDEN_JARGON);
+    assert.equal(privSection?.getAttribute('data-drive-mode'), 'private');
+    assert.match(container.textContent || '', /Ningún dato sale de tu red\./);
 
-    // 4. Planes
-    const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
-      (btn) => btn.textContent?.trim() === 'Planes',
-    );
-    await act(async () => {
-      planesNav.click();
-    });
+    // 5. PricingSection, FinalKeynote y cero referencias prohibidas
     assert.match(container.textContent || '', /Planes simples\./);
-    assert.match(container.textContent || '', /\$59\.900/);
+    assert.match(container.textContent || '', /Empieza hoy\./);
+    assert.equal(container.querySelectorAll('video').length, 0);
+    assert.doesNotMatch(container.textContent || '', FORBIDDEN_DOM_JARGON);
 
     const loginBtn = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Iniciar sesión',
@@ -205,6 +303,7 @@ test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 
     globalThis.Node = saved.Node;
     globalThis.HTMLElement = saved.HTMLElement;
     globalThis.SVGElement = saved.SVGElement;
+    globalThis.KeyboardEvent = saved.KeyboardEvent;
     globalThis.IntersectionObserver = saved.IntersectionObserver;
     globalThis.ResizeObserver = saved.ResizeObserver;
     globalThis.matchMedia = saved.matchMedia;

@@ -1,91 +1,264 @@
 /**
- * Catálogo comercial para la Landing Page de OMEGA (público ejecutivo y directivo).
- * Sincronizado con los planes, precios en COP y límites reales de OMEGA.
+ * Catálogo comercial y técnico-ejecutivo de la Landing Page de OMEGA.
+ * Sincronizado con PRODUCT.md, docs/perfiles.md y docs/billing-mercadopago.md.
+ * Cero jerga técnica visible en la interfaz pública.
  */
 
 export const OMEGA_APP_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OMEGA_APP_URL) ||
   'http://localhost:5173';
 
-export const LANDING_PAGES = [
+export const LANDING_SECTIONS = [
   { id: 'plataforma', label: 'Plataforma' },
-  { id: 'perfiles', label: 'Perfiles' },
-  { id: 'seguridad', label: 'Privacidad' },
+  { id: 'producto', label: 'Producto' },
+  { id: 'espacios', label: 'Espacios' },
+  { id: 'privacidad', label: 'Privacidad' },
   { id: 'planes', label: 'Planes' },
+];
+
+export const HERO_SPECS = [
+  { value: '0 B', label: 'Rastro en disco' },
+  { value: '3', label: 'Espacios integrados' },
+  { value: '100%', label: 'Privacidad verificable' },
+];
+
+export const PRODUCT_OVERVIEW = {
+  headline: 'Defensa preventiva e inteligencia privada en un solo lugar.',
+  description:
+    'Unifica la revisión de tus equipos, código, enlaces y expedientes en una sola cabina que nunca almacena tus archivos.',
+  pillars: [
+    {
+      id: 'devices',
+      icon: 'laptop',
+      shortLabel: 'Equipos y celulares',
+      summary: 'Inspección pasiva de PC y teléfonos sin modificar archivos.',
+      scene: {
+        topTag: 'Computador y móvil',
+        topTitle: 'Procesos y cable USB verificados',
+        topMeta: 'Solo lectura',
+        bottomTag: 'Retención en disco',
+        bottomValue: '0 bytes',
+        bottomBarPercent: 100,
+      },
+      metrics: [
+        { label: 'Retención en disco', value: '0 bytes' },
+        { label: 'Operación', value: 'Solo lectura' },
+        { label: 'Cobertura', value: 'USB y procesos' },
+      ],
+      detail:
+        'Comprueba la salud de computadores Windows o macOS y analiza teléfonos Android o copias de iPhone buscando amenazas comerciales sin requerir conocimientos técnicos.',
+    },
+    {
+      id: 'links',
+      icon: 'globe',
+      shortLabel: 'Enlaces y exposición',
+      summary: 'Verifica enlaces dudosos antes de abrirlos y mide riesgos públicos.',
+      scene: {
+        topTag: 'Verificación aislada',
+        topTitle: 'Redirecciones analizadas sin riesgo',
+        topMeta: 'Entorno temporal',
+        bottomTag: 'Exposición controlada',
+        bottomValue: '100%',
+        bottomBarPercent: 96,
+      },
+      metrics: [
+        { label: 'Ejecución externa', value: 'Aislada' },
+        { label: 'Costo por consulta', value: '1 crédito' },
+        { label: 'Consentimiento', value: 'Explícito' },
+      ],
+      detail:
+        'Evalúa redirecciones ocultas, suplantación y campañas maliciosas dentro de un entorno efímero antes de que tú o tu equipo hagan clic.',
+    },
+    {
+      id: 'code',
+      icon: 'code',
+      shortLabel: 'Código y entregas',
+      summary: 'Auditoría de repositorios y librerías externas antes de publicar.',
+      scene: {
+        topTag: 'Espacio Desarrollo',
+        topTitle: 'Dependencias y reglas al día',
+        topMeta: 'Aislado por proyecto',
+        bottomTag: 'Capacidad por análisis',
+        bottomValue: '25 MiB',
+        bottomBarPercent: 88,
+      },
+      metrics: [
+        { label: 'Escala analizada', value: 'Hasta 25 MiB' },
+        { label: 'Criterio', value: 'Reglas reales' },
+        { label: 'Control', value: 'Políticas activas' },
+      ],
+      detail:
+        'Detecta riesgos en código propio y librerías de terceros con trazabilidad completa por entrega para decidir con claridad qué sale a producción.',
+    },
+    {
+      id: 'legal',
+      icon: 'scale',
+      shortLabel: 'Expedientes legales',
+      summary: 'Análisis documental privado con citas exactas por página.',
+      scene: {
+        topTag: 'Expediente reservado',
+        topTitle: 'Citas exactas por documento y página',
+        topMeta: 'Sin suposiciones',
+        bottomTag: 'Trazabilidad legal',
+        bottomValue: 'Doc. y página',
+        bottomBarPercent: 100,
+      },
+      metrics: [
+        { label: 'Trazabilidad', value: 'Doc. y página' },
+        { label: 'Aislamiento', value: 'Por expediente' },
+        { label: 'Evidencia', value: 'Cero suposiciones' },
+      ],
+      detail:
+        'Consulta contratos, anexos escaneados y cronologías con citas exactas por página y abstención segura cuando un dato no consta en el expediente.',
+    },
+  ],
+};
+
+export const MANIFESTO_LINES = [
+  { id: 'teams', text: 'Un antivirus para tus equipos.' },
+  {
+    id: 'code-contracts',
+    text: 'Otra plataforma para tu código. Chats públicos para tus contratos.',
+  },
+  {
+    id: 'omega-unifies',
+    text: 'OMEGA unifica todo en una sola cabina privada, sin guardar tus archivos.',
+    highlight: true,
+  },
 ];
 
 export const EDITORIAL_SPACES = [
   {
     id: 'GENERAL',
+    indexLabel: '01 / PERSONAL',
     eyebrow: 'Personal',
     label: 'General',
     title: 'Dispositivos y enlaces',
     description:
-      'Revisión rápida para computadores, celulares por USB y enlaces sospechosos sin copiar archivos.',
+      'Revisión rápida para computadores, celulares por cable y enlaces sospechosos sin copiar archivos.',
     image: '/media/space-personal.jpg',
-    imageAlt: 'Dispositivos personales y móvil sobre superficie obsidiana',
+    imageAlt: 'Dispositivos personales y teléfono móvil sobre superficie obsidiana',
+    modal: {
+      targetsLine: 'PC y Mac · Android e iPhone · Enlaces y exposición',
+      whatProtects:
+        'Computadores de trabajo o uso personal, teléfonos Android y respaldos de iPhone/iPad, además de enlaces y presencia pública expuesta a vigilancia comercial.',
+      practices: [
+        {
+          title: 'Auditoría de solo lectura',
+          detail:
+            'Revisa procesos activos, defensas del equipo y conexiones salientes sin alterar tus archivos personales.',
+        },
+        {
+          title: 'Inspección móvil directa',
+          detail:
+            'Analiza teléfonos por cable y copias encriptadas buscando señales de espionaje comercial.',
+        },
+        {
+          title: 'Escudo de enlaces y exposición',
+          detail:
+            'Verificación pasiva de enlaces sospechosos en entorno aislado y monitoreo público bajo autorización explícita.',
+        },
+      ],
+      deliverable:
+        'Informe ejecutivo en PDF con diagnóstico comprensible, evidencia priorizada y sello digital de integridad sin costo adicional.',
+      trustNote: 'Sin instalación invasiva · 0 retención',
+    },
   },
   {
     id: 'DEVELOPER',
+    indexLabel: '02 / DESARROLLO',
     eyebrow: 'Desarrollo',
     label: 'Desarrollo',
     title: 'Código y entregas',
     description:
       'Revisión automática de tu código y librerías externas antes de publicar sin frenar entregas.',
     image: '/media/space-dev.jpg',
-    imageAlt: 'Capas de vidrio y metal con haz azul rey para seguridad de código',
+    imageAlt: 'Capas de vidrio y metal con haz azul rey para seguridad de software',
+    modal: {
+      targetsLine: 'Repositorios · Librerías externas · Políticas de entrega',
+      whatProtects:
+        'Repositorios de código fuente, librerías de terceros y flujos de entrega continua de equipos de tecnología.',
+      practices: [
+        {
+          title: 'Escaneo automático explicable',
+          detail:
+            'Análisis por enlace o paquete comprimido hasta 25 MiB con puntaje transparente y trazabilidad clara.',
+        },
+        {
+          title: 'Control de dependencias',
+          detail:
+            'Detección de vulnerabilidades en librerías externas e inteligencia de cadena de suministro con aislamiento por proyecto.',
+        },
+        {
+          title: 'Reglas sin fricción',
+          detail:
+            'Integración fluida con el trabajo diario de ingeniería y políticas claras para frenar entregas riesgosas a tiempo.',
+        },
+      ],
+      deliverable:
+        'Reporte de hallazgos, inventario de dependencias e informe PDF verificable para dirección y auditorías de entrega.',
+      trustNote: 'Sin acceso de escritura · 0 retención',
+    },
   },
   {
     id: 'LEGAL',
+    indexLabel: '03 / LEGAL',
     eyebrow: 'Legal',
     label: 'Legal',
     title: 'Expedientes privados',
     description:
       'Análisis de expedientes confidenciales con citas exactas por página y cero filtraciones.',
     image: '/media/space-legal.jpg',
-    imageAlt: 'Expedientes archivados oscuros y prisma de cristal sobre piedra negra',
+    imageAlt: 'Expedientes confidenciales oscuros y prisma de cristal sobre piedra negra',
+    modal: {
+      targetsLine: 'Expedientes · Contratos · Lectura privada',
+      whatProtects:
+        'Expedientes judiciales, contratos corporativos, anexos escaneados y documentos reservados de firmas y áreas jurídicas.',
+      practices: [
+        {
+          title: 'Citas exactas por página',
+          detail:
+            'Respuestas respaldadas por documento y número de página, con abstención segura cuando un dato no existe.',
+        },
+        {
+          title: 'Permisos y aislamiento total',
+          detail:
+            'Control estricto por usuario y búsqueda transversal en el despacho sin mezclar ni filtrar casos entre clientes.',
+        },
+        {
+          title: 'Cronología y documentos largos',
+          detail:
+            'Construcción automática de línea de tiempo del caso y lectura privada de documentos de hasta 1.000 páginas.',
+        },
+      ],
+      deliverable:
+        'Dossier del expediente en PDF con trazabilidad de permisos y firma única que certifica ante terceros que nunca fue alterado.',
+      trustNote: 'Citas exactas por página · 0 retención',
+    },
   },
 ];
 
-export const PRIVACY_MANIFESTO = [
-  {
-    id: 'zero-storage',
-    metric: '0 bytes',
-    title: 'Cero retención en disco',
-    description:
-      'Tus archivos y enlaces se procesan al vuelo en memoria temporal y se eliminan automáticamente al emitir el informe.',
-  },
-  {
-    id: 'tamper-proof',
-    metric: 'Inalterable',
-    title: 'Informes con sello digital',
-    description:
-      'Cada resultado genera una firma única verificable que garantiza ante auditorías y dirección que el reporte jamás fue alterado.',
-  },
-  {
-    id: 'sovereign-control',
-    metric: '100% tuyo',
-    title: 'Control de dónde opera',
-    description:
-      'Úsalo en nuestra nube aislada o despliégalo íntegramente dentro de los servidores privados de tu empresa.',
-  },
-];
-
-export const PRIVACY_BANNER_MODES = [
+export const DRIVE_PRIVACY_MODES = [
   {
     id: 'cloud',
     label: 'En la nube',
-    headline: 'Empieza en minutos, sin infraestructura.',
+    headline: 'Operando en minutos.',
     description:
-      'Entorno aislado por organización con límites claros y cero retención de tus archivos originales.',
+      'Entorno aislado por organización, consumo predecible y cero retención de tus archivos originales.',
   },
   {
     id: 'private',
     label: 'En tu empresa',
     headline: 'Ningún dato sale de tu red.',
     description:
-      'Instala OMEGA en tus propios servidores con inteligencia artificial privada local, diseñado para despachos y sectores regulados.',
+      'Instalado en tus propios servidores con inteligencia artificial privada local, ideal para despachos y sectores regulados.',
   },
+];
+
+export const PRIVACY_SPECS = [
+  { value: '0 bytes', label: 'Retención en disco' },
+  { value: 'Sello digital', label: 'Informes inalterables' },
+  { value: '24/7', label: 'Control y trazabilidad' },
 ];
 
 export const PROFILE_ACCESS_NOTES = {
@@ -142,16 +315,16 @@ export function getPlansForProfile(profileId, billingCycle) {
       unitLabel: '/mes',
       subtext:
         profileId === 'GENERAL'
-          ? 'COP · sin tarjeta de crédito'
+          ? 'COP · 30 créditos de bienvenida · sin tarjeta'
           : `COP · actualiza a Pro para usar ${spaceLabel}`,
       featured: false,
       ctaLabel: 'Empezar gratis',
       ctaAction: 'register',
       ctaVariant: 'glass',
       features: [
-        '30 créditos de bienvenida',
-        '1 usuario y 1 dispositivo',
-        'Revisión de PC y verificador de enlaces',
+        '30 créditos de bienvenida por única vez',
+        '1 usuario y 1 dispositivo vinculado',
+        'Revisión de computador y enlaces sospechosos',
         'Diagnóstico de celulares con tus créditos',
       ],
     },
@@ -173,10 +346,10 @@ export function getPlansForProfile(profileId, billingCycle) {
       ctaVariant: 'primary',
       features: [
         '500 créditos mensuales incluidos',
-        'Hasta 5 dispositivos vinculados',
+        '1 puesto y hasta 5 dispositivos vinculados',
         'Acceso completo a tu espacio elegido',
-        'Informes PDF profesionales ilimitados',
-        'Recargas opcionales de 200 créditos ($29.900)',
+        'Informes PDF con sello digital ilimitados',
+        'Recargas de 200 créditos por $29.900 COP',
       ],
     },
     {
