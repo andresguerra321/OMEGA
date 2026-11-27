@@ -134,12 +134,9 @@ export const DEPLOYMENT_OPTIONS = [
 ];
 
 export const PROFILE_ACCESS_NOTES = {
-  GENERAL:
-    'La cuenta individual General incluye acceso gratuito permanente con 30 créditos de bienvenida.',
-  DEVELOPER:
-    'Los espacios de Desarrollo y empresas operan bajo membresía Pro o Enterprise.',
-  LEGAL:
-    'Los despachos y firmas legales operan bajo membresía Pro o Enterprise con acceso controlado por caso.',
+  GENERAL: 'La cuenta individual General incluye acceso gratuito permanente.',
+  DEVELOPER: 'El espacio Desarrollo requiere plan Pro o Enterprise.',
+  LEGAL: 'El espacio Legal requiere plan Pro o Enterprise.',
 };
 
 export const LANDING_FAQ = [
@@ -176,98 +173,78 @@ export function formatCop(amount) {
 
 export function getPlansForProfile(profileId, billingCycle) {
   const isAnnual = billingCycle === 'annual';
-  const isGeneral = profileId === 'GENERAL';
-
-  const freeBulletThird =
-    profileId === 'DEVELOPER'
-      ? 'Acceso inicial al espacio personal mientras activas Desarrollo'
-      : profileId === 'LEGAL'
-        ? 'Acceso inicial al espacio personal mientras activas Legal'
-        : 'Revisión de PC y verificador de enlaces';
-
-  const proProfileBullet =
-    profileId === 'DEVELOPER'
-      ? 'Auditoría automática de código, repositorios y librerías externas'
-      : profileId === 'LEGAL'
-        ? 'Expedientes confidenciales, citas exactas y control de acceso por caso'
-        : 'Diagnóstico completo de PC, celulares y alertas de exposición';
+  const spaceLabel =
+    LANDING_PROFILES.find((item) => item.id === profileId)?.label || 'General';
 
   return [
     {
       id: 'FREE',
       name: 'Gratis',
-      tagline: isGeneral
-        ? 'Evaluación inmediata y protección personal en tu equipo.'
-        : 'Crea tu cuenta y explora la plataforma antes de suscribirte.',
+      tagline: 'Para explorar OMEGA en tu equipo personal.',
       priceMonthly: 0,
       priceAnnual: null,
       displayPrice: '$0',
-      periodLabel: 'COP · sin tarjeta',
-      annualSubtext: isGeneral
-        ? 'Gratis para cuenta individual General'
-        : 'Actualiza a Pro para activar este espacio',
-      creditsLabel: '30 créditos de bienvenida',
-      creditsEquivalence:
-        '30 créditos permiten realizar tus primeras revisiones de equipo, enlaces o un teléfono.',
-      seatsLabel: '1 usuario · 1 dispositivo',
+      unitLabel: '/mes',
+      subtext:
+        profileId === 'GENERAL'
+          ? 'COP · sin tarjeta de crédito'
+          : `COP · actualiza a Pro para usar ${spaceLabel}`,
       featured: false,
-      ctaLabel: 'Crear cuenta',
+      ctaLabel: 'Empezar gratis',
       ctaAction: 'register',
+      ctaVariant: 'glass',
       features: [
         '30 créditos de bienvenida',
         '1 usuario y 1 dispositivo',
-        freeBulletThird,
+        'Revisión de PC y verificador de enlaces',
         'Diagnóstico de celulares con tus créditos',
       ],
     },
     {
       id: 'PRO',
       name: 'Pro',
-      tagline: 'Capacidad completa para profesionales independientes y directivos.',
+      badge: 'Recomendado',
+      tagline: 'Para profesionales, consultores y directivos.',
       priceMonthly: 59900,
       priceAnnual: 599000,
       displayPrice: isAnnual ? formatCop(599000) : formatCop(59900),
-      periodLabel: isAnnual ? 'COP / año' : 'COP / mes',
-      annualSubtext: isAnnual
-        ? 'Equivale a $49.917 COP/mes · ahorras $119.800 (2 meses)'
-        : 'O $599.000 COP/año con 2 meses de ahorro',
-      creditsLabel: '500 créditos / mes',
-      creditsEquivalence:
-        '500 créditos cubren decenas de revisiones completas de equipos o análisis documentales al mes.',
-      seatsLabel: '1 titular · hasta 5 dispositivos',
+      unitLabel: isAnnual ? '/año' : '/mes',
+      subtext: isAnnual
+        ? 'COP · equivale a $49.917/mes · ahorras 2 meses'
+        : 'COP · o $599.000/año',
       featured: true,
-      ctaLabel: 'Suscribirse con Mercado Pago',
+      ctaLabel: 'Elegir Pro',
       ctaAction: 'subscribe',
+      ctaVariant: 'primary',
       features: [
-        '500 créditos mensuales (recargas opcionales de 200 por $29.900 COP)',
-        '1 titular y hasta 5 dispositivos',
-        proProfileBullet,
-        'Informes PDF profesionales ilimitados (0 créditos)',
+        '500 créditos mensuales incluidos',
+        'Hasta 5 dispositivos vinculados',
+        'Acceso completo a tu espacio elegido',
+        'Informes PDF profesionales ilimitados',
+        'Recargas opcionales de 200 créditos ($29.900)',
       ],
     },
     {
       id: 'ENTERPRISE',
       name: 'Enterprise',
-      tagline: 'Para empresas, equipos de ingeniería y despachos jurídicos.',
+      tagline: 'Para empresas, equipos técnicos y despachos.',
       priceMonthly: 299900,
       priceAnnual: 2999000,
       displayPrice: isAnnual ? formatCop(2999000) : formatCop(299900),
-      periodLabel: isAnnual ? 'COP / año' : 'COP / mes',
-      annualSubtext: isAnnual
-        ? 'Equivale a $249.917 COP/mes · ahorras $599.800 (2 meses)'
-        : 'O $2.999.000 COP/año · facturación corporativa disponible',
-      creditsLabel: '3.000 créditos / mes',
-      creditsEquivalence:
-        '3.000 créditos respaldan auditorías continuas de múltiples equipos, software y expedientes.',
-      seatsLabel: '5 puestos de equipo · 25 dispositivos',
+      unitLabel: isAnnual ? '/año' : '/mes',
+      subtext: isAnnual
+        ? 'COP · equivale a $249.917/mes · ahorras 2 meses'
+        : 'COP · facturación corporativa disponible',
       featured: false,
-      ctaLabel: 'Solicitar piloto empresarial',
+      ctaLabel: 'Hablar con ventas',
       ctaAction: 'pilot',
+      ctaVariant: 'light',
       features: [
         '3.000 créditos mensuales compartidos',
-        '5 puestos de equipo y hasta 25 dispositivos',
-        'Gestión centralizada de permisos y auditoría',
-        'Opción de instalación privada en tu empresa, piloto guiado y facturación corporativa',
+        '5 puestos de equipo y 25 dispositivos',
+        'Gestión de permisos y auditoría central',
+        'Opción de instalación privada en tu empresa',
+        'Piloto guiado y soporte prioritario',
       ],
     },
   ];

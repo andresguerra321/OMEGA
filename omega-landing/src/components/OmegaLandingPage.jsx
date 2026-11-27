@@ -405,7 +405,7 @@ export function OmegaLandingPage({ onEnterApp }) {
             </section>
           )}
 
-          {/* 2. LOS 3 ESPACIOS DE TRABAJO (COPY RECORTADO + UI PREVIEWS NÍTIDAS HTML/TAILWIND) */}
+          {/* 2. LOS 3 ESPACIOS DE TRABAJO */}
           {activePage === 'perfiles' && (
             <section className="relative px-4 sm:px-6 pt-28 md:pt-36 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
@@ -566,37 +566,35 @@ export function OmegaLandingPage({ onEnterApp }) {
             </section>
           )}
 
-          {/* 4. PLANES Y PRECIOS EN COP */}
+          {/* 4. PLANES Y PRECIOS (Estilo Linear / Cursor / Vercel / Avenna) */}
           {activePage === 'planes' && (
             <section className="relative px-4 sm:px-6 pt-28 md:pt-36 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
-                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-                  <div className="max-w-2xl">
-                    <h1 className="text-3xl sm:text-5xl font-medium tracking-[-0.03em] leading-[1.08] text-[#F8FAFC] text-balance">
-                      Planes y créditos en pesos colombianos.
-                    </h1>
-                    <p className="mt-3 text-sm text-[#94A3B8]">
-                      {PROFILE_ACCESS_NOTES[pricingProfile]}
-                    </p>
-                  </div>
+                <div className="text-center max-w-2xl mx-auto mb-12">
+                  <h1 className="text-4xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC]">
+                    Planes simples.
+                  </h1>
+                  <p className="text-base text-[#94A3B8] mt-3">
+                    Empieza gratis y escala cuando tu equipo lo necesite. Precios en COP.
+                  </p>
 
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
                     <div
                       role="group"
                       aria-label="Filtrar planes por perfil"
-                      className="inline-flex rounded-lg omega-glass p-1"
+                      className="inline-flex rounded-full bg-white/[0.04] border border-white/[0.08] p-1"
                     >
                       {LANDING_PROFILES.map((p) => (
                         <button
                           key={p.id}
                           type="button"
                           onClick={() => setPricingProfile(p.id)}
-                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
                             pricingProfile === p.id
-                              ? 'bg-white/[0.10] text-[#F8FAFC]'
-                              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                              ? 'bg-white/[0.12] text-white'
+                              : 'text-[#94A3B8] hover:text-white'
                           }`}
                         >
                           {p.label}
@@ -607,15 +605,15 @@ export function OmegaLandingPage({ onEnterApp }) {
                     <div
                       role="group"
                       aria-label="Frecuencia de facturación"
-                      className="inline-flex rounded-lg omega-glass p-1"
+                      className="inline-flex rounded-full bg-white/[0.04] border border-white/[0.08] p-1"
                     >
                       <button
                         type="button"
                         onClick={() => setBillingCycle('monthly')}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
                           billingCycle === 'monthly'
-                            ? 'bg-[#2F6FED] text-white'
-                            : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                            ? 'bg-white/[0.12] text-white'
+                            : 'text-[#94A3B8] hover:text-white'
                         }`}
                       >
                         Mensual
@@ -623,65 +621,95 @@ export function OmegaLandingPage({ onEnterApp }) {
                       <button
                         type="button"
                         onClick={() => setBillingCycle('annual')}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
                           billingCycle === 'annual'
-                            ? 'bg-[#2F6FED] text-white'
-                            : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                            ? 'bg-white/[0.12] text-white'
+                            : 'text-[#94A3B8] hover:text-white'
                         }`}
                       >
-                        Anual
-                        <span className="font-mono tabular-nums text-xs opacity-90">-17%</span>
+                        <span>Anual</span>
+                        <span className="text-[#60A5FA] bg-[#2F6FED]/15 px-2 py-0.5 rounded-full text-[11px] tabular-nums">
+                          -17%
+                        </span>
                       </button>
                     </div>
                   </div>
+
+                  <p className="mt-3 text-xs text-[#64748B]">
+                    {PROFILE_ACCESS_NOTES[pricingProfile]}
+                  </p>
                 </div>
 
-                <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-                  {plans.map((plan) => (
-                    <article
-                      key={plan.id}
-                      className={`relative h-full rounded-2xl omega-glass p-7 flex flex-col justify-between overflow-hidden ${
-                        plan.featured ? '!border-[#2F6FED]/55' : ''
-                      }`}
-                    >
-                      {plan.featured && (
-                        <div
-                          aria-hidden="true"
-                          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#2F6FED]"
-                        />
-                      )}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+                  {plans.map((plan) => {
+                    const isFeatured = plan.featured;
+                    const ctaClass =
+                      plan.ctaVariant === 'primary'
+                        ? 'bg-[#2F6FED] hover:bg-[#3B7BF2] text-white shadow-[0_0_24px_rgba(47,111,237,0.35)]'
+                        : plan.ctaVariant === 'light'
+                          ? 'bg-[#F8FAFC] text-[#05070B] hover:bg-white'
+                          : 'bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.12] text-white';
 
-                      <div>
-                        <div className="flex items-center justify-between gap-2">
-                          <h2 className="text-lg font-medium text-[#F8FAFC]">{plan.name}</h2>
-                          <span className="font-mono text-xs text-[#94A3B8] tabular-nums">
-                            {plan.creditsLabel}
-                          </span>
+                    return (
+                      <article
+                        key={plan.id}
+                        className={`relative rounded-2xl p-7 flex flex-col backdrop-blur-xl overflow-hidden ${
+                          isFeatured
+                            ? 'bg-[#0B1222]/85 border border-[#2F6FED]/45 shadow-[inset_0_1px_0_rgba(147,197,253,0.35),0_24px_60px_rgba(0,0,0,0.5)]'
+                            : 'bg-white/[0.02] border border-white/[0.08]'
+                        }`}
+                      >
+                        {isFeatured && (
+                          <div
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-x-0 top-0 h-32 opacity-[0.18]"
+                            style={{
+                              background:
+                                'radial-gradient(ellipse 75% 85% at 50% 0%, #2F6FED 0%, rgba(47, 111, 237, 0) 75%)',
+                            }}
+                          />
+                        )}
+
+                        <div className="relative z-10 flex items-center justify-between gap-2">
+                          <h2 className="text-lg font-medium text-white">{plan.name}</h2>
+                          {plan.badge && (
+                            <span className="bg-[#2F6FED]/15 text-[#60A5FA] border border-[#2F6FED]/30 text-[11px] font-medium px-2.5 py-0.5 rounded-full">
+                              {plan.badge}
+                            </span>
+                          )}
                         </div>
 
-                        <p className="mt-2 text-xs text-[#94A3B8] leading-relaxed">
-                          {plan.creditsEquivalence}
+                        <p className="relative z-10 mt-2 text-sm text-[#94A3B8]">
+                          {plan.tagline}
                         </p>
 
-                        <p className="mt-3 text-sm text-[#CBD5E1] leading-relaxed">{plan.tagline}</p>
-
-                        <div className="mt-6 flex items-baseline gap-2">
-                          <span className="text-4xl font-medium tracking-[-0.03em] text-[#F8FAFC] font-mono tabular-nums">
+                        <div className="relative z-10 mt-6 flex items-baseline gap-1.5">
+                          <span className="text-4xl md:text-[42px] font-semibold tracking-[-0.03em] tabular-nums text-white">
                             {plan.displayPrice}
                           </span>
-                          <span className="font-mono text-xs text-[#64748B] tabular-nums">
-                            {plan.periodLabel}
-                          </span>
+                          <span className="text-sm text-[#94A3B8]">{plan.unitLabel}</span>
                         </div>
-                        <p className="mt-1.5 text-xs text-[#94A3B8] tabular-nums">
-                          {plan.annualSubtext}
+                        <p className="relative z-10 mt-1.5 text-xs text-[#64748B] tabular-nums">
+                          {plan.subtext}
                         </p>
 
-                        <p className="mt-5 py-3 border-y border-white/[0.08] font-mono text-xs text-[#CBD5E1] tabular-nums">
-                          {plan.seatsLabel}
-                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (plan.ctaAction === 'pilot') {
+                              setPilotModalOpen(true);
+                            } else {
+                              navigateToApp('register');
+                            }
+                          }}
+                          className={`relative z-10 mt-6 w-full h-11 rounded-xl font-medium text-sm inline-flex items-center justify-center transition-colors ${ctaClass}`}
+                        >
+                          {plan.ctaLabel}
+                        </button>
 
-                        <ul className="mt-5 space-y-3 text-sm text-[#CBD5E1]">
+                        <div className="relative z-10 my-6 border-t border-white/[0.08]" />
+
+                        <ul className="relative z-10 space-y-3 text-sm text-[#CBD5E1]">
                           {plan.features.map((feature) => (
                             <li key={feature} className="flex items-start gap-2.5">
                               <Check
@@ -692,34 +720,13 @@ export function OmegaLandingPage({ onEnterApp }) {
                             </li>
                           ))}
                         </ul>
-                      </div>
-
-                      <div className="mt-8 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (plan.ctaAction === 'pilot') {
-                              setPilotModalOpen(true);
-                            } else {
-                              navigateToApp('register');
-                            }
-                          }}
-                          className={`w-full inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium h-11 px-4 transition-colors ${
-                            plan.featured
-                              ? 'bg-[#2F6FED] hover:bg-[#3B7BF2] text-white'
-                              : 'bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F1F5F9]'
-                          }`}
-                        >
-                          {plan.ctaLabel}
-                          <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
 
-                <p className="mt-7 text-center text-xs text-[#94A3B8]">
-                  Pagos procesados de forma segura con Mercado Pago · Cancela cuando quieras · Facturación corporativa disponible
+                <p className="mt-8 text-center text-xs text-[#64748B]">
+                  Pagos seguros con Mercado Pago · Cancela cuando quieras · Sin cobros sorpresa
                 </p>
 
                 <div className="mt-14 max-w-3xl mx-auto">

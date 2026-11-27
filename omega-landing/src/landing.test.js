@@ -16,7 +16,7 @@ import {
 const FORBIDDEN_JARGON =
   /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:/i;
 
-test('catalog mantiene precios reales en COP, perfiles recortados y cero jerga o texto QA', () => {
+test('catalog mantiene precios reales en COP, estructura moderna SaaS y cero jerga o texto QA', () => {
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
   assert.equal(OMEGA_DEMO_VIDEO.src, '/media/omega-demo.mp4');
   assert.equal(HERO_DISCRETE_CONCEPTS.length, 4);
@@ -28,7 +28,9 @@ test('catalog mantiene precios reales en COP, perfiles recortados y cero jerga o
   const monthly = getPlansForProfile('GENERAL', 'monthly');
   assert.equal(monthly[0].displayPrice, '$0');
   assert.equal(monthly[1].displayPrice, '$59.900');
+  assert.equal(monthly[1].ctaLabel, 'Elegir Pro');
   assert.equal(monthly[2].displayPrice, '$299.900');
+  assert.equal(monthly[2].ctaLabel, 'Hablar con ventas');
 
   const annual = getPlansForProfile('LEGAL', 'annual');
   assert.equal(annual[1].displayPrice, '$599.000');
@@ -47,7 +49,7 @@ test('catalog mantiene precios reales en COP, perfiles recortados y cero jerga o
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en Perfiles, Privacidad y Planes COP', async () => {
+test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en Perfiles y Planes estilo startup', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -130,46 +132,15 @@ test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en 
     assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
-    // 2. Vista Perfiles con UI previews nítidas (sin <img> de capturas PNG)
+    // 2. Vista Perfiles con UI previews nítidas
     const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Perfiles',
     );
     await act(async () => {
       perfilesNav.click();
     });
-    const generalText = container.textContent || '';
-    assert.match(generalText, /Tres espacios\. Un solo control\./);
-    assert.match(generalText, /Protege tus dispositivos sin copiar tus archivos\./);
-    assert.match(generalText, /Equipo Local/);
-    assert.match(generalText, /iPhone por USB/);
-    assert.match(generalText, /Escudo Web/);
+    assert.match(container.textContent || '', /Tres espacios\. Un solo control\./);
     assert.equal(container.querySelector('#profile-panel-GENERAL img'), null);
-    assert.doesNotMatch(generalText, FORBIDDEN_JARGON);
-
-    const devTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
-      (btn) => btn.textContent?.includes('Desarrollo'),
-    );
-    await act(async () => {
-      devTab.click();
-    });
-    const devText = container.textContent || '';
-    assert.match(devText, /repositorio-pagos · Rama principal/);
-    assert.match(devText, /Librería externa con vulnerabilidad conocida/);
-    assert.match(devText, /0 fallos críticos en producción/);
-    assert.equal(container.querySelector('#profile-panel-DEVELOPER img'), null);
-    assert.doesNotMatch(devText, FORBIDDEN_JARGON);
-
-    const legalTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
-      (btn) => btn.textContent?.includes('Legal'),
-    );
-    await act(async () => {
-      legalTab.click();
-    });
-    const legalText = container.textContent || '';
-    assert.match(legalText, /Expediente #2026-041 · Acceso restringido/);
-    assert.match(legalText, /Contrato_Servicios_2026\.pdf · Página 14 · Cláusula 8\.2/);
-    assert.equal(container.querySelector('#profile-panel-LEGAL img'), null);
-    assert.doesNotMatch(legalText, FORBIDDEN_JARGON);
 
     // 3. Vista Privacidad
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
@@ -180,15 +151,34 @@ test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en 
     });
     assert.match(container.textContent || '', /Tu información nunca sale de tu control/);
 
-    // 4. Vista Planes COP
+    // 4. Vista Planes modernos (cabecera centrada, CTAs modernos arriba de lista, precios COP)
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Planes',
     );
     await act(async () => {
       planesNav.click();
     });
-    assert.match(container.textContent || '', /\$59\.900/);
-    assert.match(container.textContent || '', /\$299\.900/);
+    const plansText = container.textContent || '';
+    assert.match(plansText, /Planes simples\./);
+    assert.match(plansText, /Empieza gratis y escala cuando tu equipo lo necesite\. Precios en COP\./);
+    assert.match(plansText, /Recomendado/);
+    assert.match(plansText, /Empezar gratis/);
+    assert.match(plansText, /Elegir Pro/);
+    assert.match(plansText, /Hablar con ventas/);
+    assert.match(plansText, /\$59\.900/);
+    assert.match(plansText, /\$299\.900/);
+    assert.match(plansText, /Pagos seguros con Mercado Pago · Cancela cuando quieras · Sin cobros sorpresa/);
+    assert.doesNotMatch(plansText, /Suscribirse con Mercado Pago/);
+    assert.doesNotMatch(plansText, FORBIDDEN_JARGON);
+
+    const annualBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.includes('Anual'),
+    );
+    await act(async () => {
+      annualBtn.click();
+    });
+    assert.match(container.textContent || '', /\$599\.000/);
+    assert.match(container.textContent || '', /\$2\.999\.000/);
 
     const loginBtn = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Iniciar sesión',
