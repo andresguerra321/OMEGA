@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createServer } from 'vite';
 import {
+  EDITORIAL_SPACES,
   LANDING_FAQ,
   LANDING_PAGES,
-  LANDING_PROFILES,
   PRIVACY_BENTO_TOP,
   PRIVACY_DEPLOYMENT_MODES,
   getPlansForProfile,
@@ -14,9 +14,10 @@ import {
 const FORBIDDEN_JARGON =
   /\b(RAM|STIX2?|YARA|AppSec|SBOM|CycloneDX|SPDX|SARIF|Ollama|Rust|Tauri|Manifest\.db|ADB|WMI|HTTP|OSINT|SHA-256|SELF_HOSTED|CTI|MVT|YouTube|WebGL|QA|ficticio|borrador en revisión)\b|ventas@omega-sec\.local|:memory:/i;
 
-test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero jerga o texto QA', () => {
+test('catalog mantiene precios reales en COP, galería editorial de 3 frentes y cero jerga o texto QA', () => {
   assert.equal(LANDING_PAGES.map((p) => p.id).join(','), 'plataforma,perfiles,seguridad,planes');
-  assert.equal(LANDING_PROFILES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
+  assert.equal(EDITORIAL_SPACES.map((p) => p.id).join(','), 'GENERAL,DEVELOPER,LEGAL');
+  assert.equal(EDITORIAL_SPACES.map((p) => p.image).join(','), '/media/space-personal.jpg,/media/space-dev.jpg,/media/space-legal.jpg');
   assert.equal(PRIVACY_BENTO_TOP.zeroStorage.counterLabel, '0 B guardados');
   assert.equal(PRIVACY_DEPLOYMENT_MODES.map((m) => m.id).join(','), 'cloud,private');
   assert.equal(LANDING_FAQ.length, 4);
@@ -31,7 +32,7 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.equal(annual[2].displayPrice, '$2.999.000');
 
   const serialized = JSON.stringify({
-    LANDING_PROFILES,
+    EDITORIAL_SPACES,
     PRIVACY_BENTO_TOP,
     PRIVACY_DEPLOYMENT_MODES,
     LANDING_FAQ,
@@ -41,7 +42,7 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero espejo del Home con Eclipse Ω y Dock, más Perfiles, Privacidad y Planes', async () => {
+test('OmegaLandingPage renderiza Hero espejo del Home y galería editorial de 3 frentes sin pestañas ni adornos', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -116,30 +117,35 @@ test('OmegaLandingPage renderiza Hero espejo del Home con Eclipse Ω y Dock, má
       );
     });
 
-    // 1. Hero minimalista espejo del Home (cero marca de agua, cero flotantes, cero kicker, con Eclipse Ω + Dock 3 cards)
+    // 1. Hero minimalista
     const homeText = container.textContent || '';
     assert.match(homeText, /Control total\. Cero rastro\./);
-    assert.match(homeText, /Personal y Directivo/);
-    assert.match(homeText, /Equipos de Tecnología/);
-    assert.match(homeText, /Firmas y Despachos/);
     assert.ok(container.querySelector('[aria-label="Eclipse OMEGA"]'));
-    assert.doesNotMatch(homeText, /SISTEMA DE SEGURIDAD Y PRIVACIDAD/);
-    assert.doesNotMatch(homeText, /— RETENCIÓN/);
-    assert.doesNotMatch(homeText, /Rastro en disco/);
-    assert.doesNotMatch(homeText, /Equipo y celular sin amenazas/);
-    assert.equal(container.querySelector('video'), null);
-    assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
-    // 2. Clic en card del Dock ("Firmas y Despachos") navega directo a #perfiles con Legal activo
-    const legalDockBtn = Array.from(container.querySelectorAll('main button')).find((btn) =>
-      btn.textContent?.includes('Firmas y Despachos'),
+    // 2. Galería editorial de 3 tarjetas verticales (sin tabs, sin botones dentro, 3 imágenes 4:5 reales)
+    const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
+      (btn) => btn.textContent?.trim() === 'Perfiles',
     );
     await act(async () => {
-      legalDockBtn.click();
+      perfilesNav.click();
     });
-    assert.match(container.textContent || '', /Tres espacios\. Un solo control\./);
-    assert.match(container.textContent || '', /Respuestas 100% respaldadas/);
+    const galleryText = container.textContent || '';
+    assert.match(galleryText, /Un solo estándar\. Tres frentes\./);
+    assert.match(galleryText, /Dispositivos y enlaces/);
+    assert.match(galleryText, /Código y entregas/);
+    assert.match(galleryText, /Expedientes privados/);
+    assert.equal(container.querySelectorAll('#perfiles [role="tab"]').length, 0);
+    assert.equal(container.querySelectorAll('#perfiles article button').length, 0);
+    const cardImgs = Array.from(container.querySelectorAll('#perfiles article img')).map((el) =>
+      el.getAttribute('src'),
+    );
+    assert.deepEqual(cardImgs, [
+      '/media/space-personal.jpg',
+      '/media/space-dev.jpg',
+      '/media/space-legal.jpg',
+    ]);
+    assert.doesNotMatch(galleryText, FORBIDDEN_JARGON);
 
     // 3. Privacidad
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
@@ -149,7 +155,6 @@ test('OmegaLandingPage renderiza Hero espejo del Home con Eclipse Ω y Dock, má
       segNav.click();
     });
     assert.match(container.textContent || '', /Cero almacenamiento oculto/);
-    assert.match(container.textContent || '', /0 B guardados/);
 
     // 4. Planes
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(

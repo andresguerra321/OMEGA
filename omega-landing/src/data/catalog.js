@@ -7,10 +7,6 @@ export const OMEGA_APP_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OMEGA_APP_URL) ||
   'http://localhost:5173';
 
-export const OMEGA_DEMO_VIDEO = {
-  src: '/media/omega-demo.mp4',
-};
-
 export const LANDING_PAGES = [
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'perfiles', label: 'Perfiles' },
@@ -18,122 +14,36 @@ export const LANDING_PAGES = [
   { id: 'planes', label: 'Planes' },
 ];
 
-export const HERO_DISCRETE_CONCEPTS = [
-  'Cero rastro',
-  'Contra espionaje real',
-  'Privacidad absoluta',
-  'Informes verificables',
-];
-
-export const LANDING_PROFILES = [
+export const EDITORIAL_SPACES = [
   {
     id: 'GENERAL',
+    eyebrow: 'Personal',
     label: 'General',
-    domain: 'Personal y Directivo',
-    headline: 'Protege tus dispositivos sin copiar tus archivos.',
-    summary: 'Revisión rápida para computadores, celulares y enlaces sospechosos.',
-    capabilities: [
-      {
-        icon: 'laptop',
-        title: 'Revisión silenciosa de tu computador',
-        detail:
-          'Detecta programas ocultos y actividad inusual sin tocar tus documentos personales.',
-      },
-      {
-        icon: 'smartphone',
-        title: 'Diagnóstico de celulares por USB',
-        detail:
-          'Conecta iPhone o Android y descarta señales de espionaje en cuestión de minutos.',
-      },
-      {
-        icon: 'globe',
-        title: 'Escudo preventivo de enlaces',
-        detail:
-          'Verifica links y correos sospechosos antes de abrirlos, sin exponerte al sitio.',
-      },
-    ],
-    preview: {
-      greeting: '¡Hola!',
-      roleLabel: 'Directivo',
-      modules: [
-        { name: 'Equipo Local', status: 'Limpio' },
-        { name: 'Celular USB', status: 'Sin amenazas' },
-        { name: 'Escudo Web', status: 'Activo' },
-      ],
-    },
+    title: 'Dispositivos y enlaces',
+    description:
+      'Revisión rápida para computadores, celulares por USB y enlaces sospechosos sin copiar archivos.',
+    image: '/media/space-personal.jpg',
+    imageAlt: 'Dispositivos personales y móvil sobre superficie obsidiana',
   },
   {
     id: 'DEVELOPER',
+    eyebrow: 'Desarrollo',
     label: 'Desarrollo',
-    domain: 'Equipos de Tecnología',
-    headline: 'Detén fallos de seguridad antes de publicar.',
-    summary: 'Revisión automática de tu código y dependencias sin frenar entregas.',
-    capabilities: [
-      {
-        icon: 'git',
-        title: 'Revisión continua de tu código',
-        detail:
-          'Analiza cada cambio automáticamente y señala únicamente los riesgos que sí importan.',
-      },
-      {
-        icon: 'package',
-        title: 'Control de librerías de terceros',
-        detail:
-          'Detecta componentes externos vulnerables antes de que lleguen a tus clientes.',
-      },
-      {
-        icon: 'file',
-        title: 'Informes ejecutivos en un clic',
-        detail:
-          'Traduce hallazgos técnicos a reportes claros para dirección y auditorías.',
-      },
-    ],
-    preview: {
-      repoLabel: 'repositorio-pagos · Rama principal',
-      repoBadge: 'Protegido',
-      alertBadge: 'Riesgo crítico detenido',
-      alertTitle: 'Librería externa con vulnerabilidad conocida',
-      alertSubtitle: 'Actualización segura lista antes de publicación',
-      progressLabel: 'Verificación completada',
-      footerLeft: '0 fallos en producción',
-      footerRight: 'Informe PDF listo',
-    },
+    title: 'Código y entregas',
+    description:
+      'Revisión automática de tu código y librerías externas antes de publicar sin frenar entregas.',
+    image: '/media/space-dev.jpg',
+    imageAlt: 'Capas de vidrio y metal con haz azul rey para seguridad de código',
   },
   {
     id: 'LEGAL',
+    eyebrow: 'Legal',
     label: 'Legal',
-    domain: 'Firmas y Despachos',
-    headline: 'Analiza expedientes con citas exactas y cero filtraciones.',
-    summary: 'Consulta contratos y casos confidenciales en segundos.',
-    capabilities: [
-      {
-        icon: 'quote',
-        title: 'Respuestas 100% respaldadas',
-        detail:
-          'Cada hallazgo señala el documento y la página exacta; si no existe evidencia, no inventa.',
-      },
-      {
-        icon: 'lock',
-        title: 'Control estricto por expediente',
-        detail:
-          'Separa casos confidenciales con permisos individuales y trazabilidad completa.',
-      },
-      {
-        icon: 'briefcase',
-        title: 'Resúmenes listos para clientes',
-        detail:
-          'Genera cronologías e informes en PDF en segundos sin subir archivos a terceros.',
-      },
-    ],
-    preview: {
-      caseLabel: 'Expediente #2026-041',
-      accessBadge: 'Acceso restringido',
-      question: '¿Existe cláusula de penalidad por terminación anticipada?',
-      answer:
-        'Sí. Preaviso obligatorio de 30 días y compensación equivalente a un mes de servicio.',
-      citation: 'Contrato_Servicios_2026.pdf · Pág. 14 · Cláusula 8.2',
-      verifiedNote: 'Verificado sin copias externas',
-    },
+    title: 'Expedientes privados',
+    description:
+      'Análisis de expedientes confidenciales con citas exactas por página y cero filtraciones.',
+    image: '/media/space-legal.jpg',
+    imageAlt: 'Expedientes archivados oscuros y prisma de cristal sobre piedra negra',
   },
 ];
 
@@ -222,7 +132,7 @@ export function formatCop(amount) {
 export function getPlansForProfile(profileId, billingCycle) {
   const isAnnual = billingCycle === 'annual';
   const spaceLabel =
-    LANDING_PROFILES.find((item) => item.id === profileId)?.label || 'General';
+    EDITORIAL_SPACES.find((item) => item.id === profileId)?.label || 'General';
 
   return [
     {

@@ -2,33 +2,19 @@ import { useEffect, useId, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
-  Briefcase,
   Check,
   ChevronDown,
-  Code2,
   Copy,
-  FileText,
-  GitBranch,
-  Globe,
-  Laptop,
-  Lock,
-  Package,
-  Quote,
-  Scale,
-  Shield,
-  ShieldCheck,
-  Smartphone,
   X,
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
 import { OmegaHeroStage } from './OmegaHeroStage';
 import { OmegaPrivacyBento } from './OmegaPrivacyBento';
-import { OmegaProfilePreview } from './OmegaProfilePreview';
 import { SpecularCard } from './SpecularCard';
 import {
+  EDITORIAL_SPACES,
   LANDING_FAQ,
   LANDING_PAGES,
-  LANDING_PROFILES,
   OMEGA_APP_URL,
   PILOT_SUMMARY_TEXT,
   PROFILE_ACCESS_NOTES,
@@ -38,30 +24,6 @@ import {
 const EASE_OUT = [0.22, 1, 0.36, 1];
 const SPRING_KOWALSKI = { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 };
 const VALID_PAGE_IDS = new Set(LANDING_PAGES.map((p) => p.id));
-
-const PROFILE_ICONS = {
-  GENERAL: Shield,
-  DEVELOPER: Code2,
-  LEGAL: Scale,
-};
-
-const CAPABILITY_ICONS = {
-  laptop: Laptop,
-  smartphone: Smartphone,
-  globe: Globe,
-  git: GitBranch,
-  package: Package,
-  file: FileText,
-  quote: Quote,
-  lock: Lock,
-  briefcase: Briefcase,
-};
-
-const ATMOSPHERE_SHIFT = {
-  GENERAL: 'top-4 right-8',
-  DEVELOPER: 'top-14 right-2',
-  LEGAL: 'bottom-2 right-12',
-};
 
 function readPageFromHash() {
   if (typeof window === 'undefined') return 'plataforma';
@@ -229,14 +191,11 @@ export function OmegaLandingPage({ onEnterApp }) {
     "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
   const [activePage, setActivePage] = useState(readPageFromHash);
-  const [activeProfile, setActiveProfile] = useState('GENERAL');
   const [pricingProfile, setPricingProfile] = useState('GENERAL');
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [openFaq, setOpenFaq] = useState(0);
   const [pilotModalOpen, setPilotModalOpen] = useState(false);
 
-  const selectedProfile =
-    LANDING_PROFILES.find((item) => item.id === activeProfile) || LANDING_PROFILES[0];
   const plans = getPlansForProfile(pricingProfile, billingCycle);
 
   useEffect(() => {
@@ -257,15 +216,8 @@ export function OmegaLandingPage({ onEnterApp }) {
     }
   }
 
-  function openProfileFromHero(profileId) {
-    setActiveProfile(profileId);
-    setActivePage('perfiles');
-    if (typeof window !== 'undefined') {
-      if (window.location.hash !== '#/perfiles') {
-        window.history.pushState(null, '', '#/perfiles');
-      }
-      window.scrollTo?.({ top: 0, behavior: 'smooth' });
-    }
+  function openProfileFromHero() {
+    navigatePage('perfiles');
   }
 
   function navigateToApp(intent = 'login') {
@@ -386,115 +338,42 @@ export function OmegaLandingPage({ onEnterApp }) {
             />
           )}
 
-          {/* TRES ESPACIOS. UN SOLO CONTROL. */}
+          {/* GALERÍA EDITORIAL DE 3 TARJETAS VERTICALES ESTILO APPLE */}
           {activePage === 'perfiles' && (
             <section id="perfiles" className="relative px-4 sm:px-6 pt-32 md:pt-36 pb-24 overflow-hidden">
-              <ClippedRoyalArc position="top" />
+              <div className="max-w-6xl mx-auto">
+                <h1 className="text-3xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC] mb-12 text-balance">
+                  Un solo estándar. Tres frentes.
+                </h1>
 
-              <div className="relative z-10 max-w-6xl mx-auto">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                  <h2 className="text-3xl md:text-5xl font-medium tracking-[-0.03em] text-[#F8FAFC] text-balance">
-                    Tres espacios. Un solo control.
-                  </h2>
-
-                  <div
-                    role="tablist"
-                    aria-label="Espacios de trabajo"
-                    className="omega-debossed inline-flex self-start md:self-auto rounded-full p-1 shrink-0"
-                  >
-                    {LANDING_PROFILES.map((profile) => {
-                      const isActive = profile.id === activeProfile;
-                      const Icon = PROFILE_ICONS[profile.id];
-                      return (
-                        <button
-                          key={profile.id}
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive}
-                          aria-controls={`profile-panel-${profile.id}`}
-                          onClick={() => setActiveProfile(profile.id)}
-                          className={`relative rounded-full px-4 py-2 text-sm font-medium transition-transform active:scale-[0.97] inline-flex items-center gap-2 ${
-                            isActive ? 'text-white' : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                          }`}
-                        >
-                          {isActive && (
-                            <motion.div
-                              layoutId="profile-tab-pill"
-                              transition={SPRING_KOWALSKI}
-                              className="absolute inset-0 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#2563EB] shadow-[0_6px_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.35)]"
-                            />
-                          )}
-                          <Icon className="relative z-10 w-4 h-4" strokeWidth={1.75} />
-                          <span className="relative z-10">{profile.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-12">
-                  <AnimatePresence initial={false}>
-                    <motion.div
-                      key={selectedProfile.id}
-                      id={`profile-panel-${selectedProfile.id}`}
-                      role="tabpanel"
-                      initial={{ opacity: 0, scale: 0.985 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={SPRING_KOWALSKI}
-                      className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center"
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-6xl mx-auto">
+                  {EDITORIAL_SPACES.map((space) => (
+                    <article
+                      key={space.id}
+                      className="aspect-[4/5] rounded-2xl overflow-hidden relative group border border-white/[0.08] bg-[#070A10]"
                     >
-                      <div className="lg:col-span-5 space-y-6">
-                        <div>
-                          <p className="text-sm font-medium text-[#60A5FA]">{selectedProfile.domain}</p>
-                          <h1 className="mt-2 text-2xl md:text-3xl font-medium tracking-[-0.025em] text-[#F8FAFC] text-balance">
-                            {selectedProfile.headline}
-                          </h1>
-                          <p className="mt-2.5 text-sm md:text-base text-[#94A3B8] leading-relaxed">
-                            {selectedProfile.summary}
-                          </p>
-                        </div>
-
-                        <div className="space-y-4 pt-2 border-t border-white/[0.08]">
-                          {selectedProfile.capabilities.map((cap) => {
-                            const CapIcon = CAPABILITY_ICONS[cap.icon] || ShieldCheck;
-                            return (
-                              <div key={cap.title} className="pt-3 flex items-start gap-3.5">
-                                <span
-                                  aria-hidden="true"
-                                  className="omega-sculpted mt-0.5 h-9 w-9 shrink-0 rounded-xl flex items-center justify-center"
-                                >
-                                  <CapIcon className="w-4 h-4 text-[#60A5FA]" strokeWidth={1.75} />
-                                </span>
-                                <div>
-                                  <h3 className="text-sm font-medium text-[#F8FAFC]">{cap.title}</h3>
-                                  <p className="mt-1 text-sm text-[#94A3B8] leading-relaxed">
-                                    {cap.detail}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <img
+                        src={space.image}
+                        alt={space.imageAlt}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03]"
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#05070B] via-[#05070B]/70 to-transparent"
+                      />
+                      <div className="relative z-10 p-7 flex flex-col justify-end h-full">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-[#60A5FA]/80 mb-2">
+                          {space.eyebrow}
+                        </p>
+                        <h2 className="text-xl md:text-2xl font-medium tracking-[-0.02em] text-[#F8FAFC] text-balance">
+                          {space.title}
+                        </h2>
+                        <p className="text-sm text-[#94A3B8] mt-2 leading-relaxed">
+                          {space.description}
+                        </p>
                       </div>
-
-                      <div className="relative lg:col-span-7">
-                        <div
-                          aria-hidden="true"
-                          className={`pointer-events-none absolute h-[340px] w-[340px] md:h-[420px] md:w-[420px] rounded-full opacity-[0.34] blur-[90px] transition-all duration-500 ${
-                            ATMOSPHERE_SHIFT[selectedProfile.id] || ATMOSPHERE_SHIFT.GENERAL
-                          }`}
-                          style={{
-                            background:
-                              'radial-gradient(circle, #2563EB 0%, #1D4ED8 48%, rgba(5, 7, 11, 0) 76%)',
-                          }}
-                        />
-
-                        <div className="relative z-10">
-                          <OmegaProfilePreview profile={selectedProfile} />
-                        </div>
-                      </div>
-                    </motion.div>
-                  </AnimatePresence>
+                    </article>
+                  ))}
                 </div>
               </div>
             </section>
@@ -543,7 +422,7 @@ export function OmegaLandingPage({ onEnterApp }) {
                       aria-label="Filtrar planes por perfil"
                       className="omega-debossed inline-flex rounded-full p-1"
                     >
-                      {LANDING_PROFILES.map((p) => {
+                      {EDITORIAL_SPACES.map((p) => {
                         const active = pricingProfile === p.id;
                         return (
                           <button
