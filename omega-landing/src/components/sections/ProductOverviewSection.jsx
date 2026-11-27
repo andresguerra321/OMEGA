@@ -234,13 +234,15 @@ export function ProductOverviewSection({ onScrollToOffset, onExploreSpaces }) {
                       role="tab"
                       aria-selected={isActive}
                       onClick={() => handleSelectIndex(idx)}
-                      className={`w-full text-left transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-40 hover:opacity-75'
-                        }`}
+                      className={`w-full text-left transition-opacity duration-300 ${
+                        isActive ? 'opacity-100' : 'opacity-40 hover:opacity-75'
+                      }`}
                     >
                       <div className="flex items-baseline gap-3">
                         <span
-                          className={`font-mono text-xs tabular-nums ${isActive ? 'text-[#60A5FA]' : 'text-zinc-500'
-                            }`}
+                          className={`font-mono text-xs tabular-nums ${
+                            isActive ? 'text-[#60A5FA]' : 'text-zinc-500'
+                          }`}
                         >
                           0{idx + 1}
                         </span>
