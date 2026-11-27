@@ -84,8 +84,65 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
+/* Orbe de Cristal Obsidiana (animaciones CSS puras a 60fps) */
+@keyframes omega-orb-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes omega-orb-breathe {
+  0%,
+  100% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.omega-orb-spin {
+  animation: omega-orb-spin 10s linear infinite;
+}
+
+.omega-orb-breathe {
+  animation: omega-orb-breathe 5s ease-in-out infinite;
+}
+
+.omega-orb-ring-mask {
+  padding: 1.5px;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+.omega-orb-ring-mask-glow {
+  padding: 3.5px;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .omega-orb-spin,
+  .omega-orb-breathe {
+    animation: none;
   }
 }

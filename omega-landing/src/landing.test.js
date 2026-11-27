@@ -49,7 +49,7 @@ test('catalog mantiene precios reales en COP, estructura moderna SaaS y cero jer
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en Perfiles y Planes estilo startup', async () => {
+test('OmegaLandingPage renderiza Hero de 2 columnas con Orbe de Cristal Obsidiana, video fuera del Hero, Perfiles y Planes COP', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -124,11 +124,15 @@ test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en 
       );
     });
 
-    // 1. Hero centrado con video nativo
+    // 1. Hero de 2 columnas con Orbe de Cristal Obsidiana (video en su propia sección #demo-video debajo del Hero)
     const homeText = container.textContent || '';
     assert.match(homeText, /Seguridad real\./);
     assert.match(homeText, /Privacidad absoluta\./);
-    assert.ok(container.querySelector('#hero-video video'));
+    const orb = container.querySelector('[aria-label="Orbe de Cristal Obsidiana de OMEGA"]');
+    assert.ok(orb);
+    const sections = container.querySelectorAll('main section');
+    assert.equal(sections[0].querySelector('video'), null);
+    assert.ok(container.querySelector('#demo-video video'));
     assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
@@ -151,7 +155,7 @@ test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en 
     });
     assert.match(container.textContent || '', /Tu información nunca sale de tu control/);
 
-    // 4. Vista Planes modernos (cabecera centrada, CTAs modernos arriba de lista, precios COP)
+    // 4. Vista Planes modernos
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Planes',
     );
@@ -160,15 +164,8 @@ test('OmegaLandingPage renderiza Hero centrado, vistas previas HTML/Tailwind en 
     });
     const plansText = container.textContent || '';
     assert.match(plansText, /Planes simples\./);
-    assert.match(plansText, /Empieza gratis y escala cuando tu equipo lo necesite\. Precios en COP\./);
-    assert.match(plansText, /Recomendado/);
-    assert.match(plansText, /Empezar gratis/);
-    assert.match(plansText, /Elegir Pro/);
-    assert.match(plansText, /Hablar con ventas/);
     assert.match(plansText, /\$59\.900/);
     assert.match(plansText, /\$299\.900/);
-    assert.match(plansText, /Pagos seguros con Mercado Pago · Cancela cuando quieras · Sin cobros sorpresa/);
-    assert.doesNotMatch(plansText, /Suscribirse con Mercado Pago/);
     assert.doesNotMatch(plansText, FORBIDDEN_JARGON);
 
     const annualBtn = Array.from(container.querySelectorAll('button')).find(

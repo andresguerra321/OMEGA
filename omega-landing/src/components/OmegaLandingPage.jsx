@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { OmegaBrandMark } from './OmegaBrandMark';
+import { OmegaObsidianOrb } from './OmegaObsidianOrb';
 import { OmegaProfilePreview } from './OmegaProfilePreview';
 import {
   DEPLOYMENT_OPTIONS,
@@ -210,12 +211,14 @@ function PilotRequestModal({ open, onClose, onEnterApp }) {
 }
 
 export function OmegaLandingPage({ onEnterApp }) {
+  const heroRef = useRef(null);
   const [activePage, setActivePage] = useState(readPageFromHash);
   const [activeProfile, setActiveProfile] = useState('GENERAL');
   const [pricingProfile, setPricingProfile] = useState('GENERAL');
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [openFaq, setOpenFaq] = useState(0);
   const [pilotModalOpen, setPilotModalOpen] = useState(false);
+  const [orbParallax, setOrbParallax] = useState({ x: 0, y: 0 });
 
   const selectedProfile =
     LANDING_PROFILES.find((item) => item.id === activeProfile) || LANDING_PROFILES[0];
@@ -250,9 +253,28 @@ export function OmegaLandingPage({ onEnterApp }) {
     }
   }
 
-  function focusHeroVideo() {
-    const target = document.getElementById('hero-video');
+  function scrollToDemoVideo() {
+    const target = document.getElementById('demo-video');
     target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }
+
+  function handleHeroPointerMove(event) {
+    if (event.pointerType === 'touch') return;
+    const host = heroRef.current;
+    if (!host || typeof window === 'undefined') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const rect = host.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const nx = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
+    const ny = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+    setOrbParallax({
+      x: Math.max(-1, Math.min(1, nx)),
+      y: Math.max(-1, Math.min(1, ny)),
+    });
+  }
+
+  function handleHeroPointerLeave() {
+    setOrbParallax({ x: 0, y: 0 });
   }
 
   return (
@@ -346,46 +368,65 @@ export function OmegaLandingPage({ onEnterApp }) {
           transition={{ duration: 0.28, ease: EASE_OUT }}
           className="w-full"
         >
-          {/* 1. HERO CENTRADO DE UNA SOLA COLUMNA + VIDEO PROTAGONISTA */}
+          {/* 1. HERO DE 2 COLUMNAS: COPY EJECUTIVO + ORBE DE CRISTAL OBSIDIANA */}
           {activePage === 'plataforma' && (
-            <section className="relative overflow-hidden">
-              <ClippedRoyalArc position="top" />
+            <>
+              <section
+                ref={heroRef}
+                onPointerMove={handleHeroPointerMove}
+                onPointerLeave={handleHeroPointerLeave}
+                className="relative px-6 pt-36 md:pt-40 pb-20 md:pb-28 overflow-hidden"
+              >
+                <ClippedRoyalArc position="top" />
 
-              <div className="relative z-10 max-w-4xl mx-auto text-center pt-28 md:pt-36 pb-16 px-6">
-                <h1 className="text-5xl md:text-7xl font-medium tracking-[-0.04em] leading-[1.05] text-[#F8FAFC]">
-                  Seguridad real.
-                  <br />
-                  Privacidad absoluta.
-                </h1>
+                <div className="relative z-10 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                  <div className="lg:col-span-6 text-left">
+                    <h1 className="text-5xl md:text-6xl lg:text-[68px] font-medium tracking-[-0.04em] leading-[1.04] text-[#F8FAFC]">
+                      Seguridad real.
+                      <br />
+                      Privacidad absoluta.
+                    </h1>
 
-                <p className="max-w-xl mx-auto mt-5 text-base md:text-lg text-[#94A3B8] font-normal leading-relaxed">
-                  Protege tus equipos, tu código y tus documentos confidenciales sin guardar ni exponer tus datos.
-                </p>
+                    <p className="mt-5 text-base md:text-lg text-[#94A3B8] max-w-lg leading-relaxed">
+                      Protege tus equipos, tu código y tus documentos confidenciales sin guardar ni exponer tus datos.
+                    </p>
 
-                <div className="mt-8 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => navigateToApp('register')}
-                    className="inline-flex items-center justify-center gap-2 bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 rounded-xl text-sm font-medium transition-colors"
-                  >
-                    Comenzar gratis
-                    <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={focusHeroVideo}
-                    className="inline-flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F1F5F9] h-11 px-6 rounded-xl text-sm font-medium transition-colors"
-                  >
-                    Ver demostración
-                  </button>
+                    <div className="mt-8 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => navigateToApp('register')}
+                        className="inline-flex items-center justify-center gap-2 bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 rounded-xl text-sm font-medium shadow-[0_0_24px_rgba(47,111,237,0.35)] transition-colors"
+                      >
+                        Comenzar gratis
+                        <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={scrollToDemoVideo}
+                        className="inline-flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.12] text-[#F1F5F9] h-11 px-6 rounded-xl text-sm font-medium transition-colors"
+                      >
+                        Ver demostración
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-6 flex items-center justify-center">
+                    <OmegaObsidianOrb parallax={orbParallax} />
+                  </div>
                 </div>
-              </div>
 
-              <div className="relative z-10 px-6 pb-16">
-                <div
-                  id="hero-video"
-                  className="mt-2 max-w-5xl mx-auto rounded-2xl overflow-hidden border border-white/[0.10] bg-[#0B101B] shadow-[0_32px_90px_rgba(0,0,0,0.75)]"
-                >
+                <p className="relative z-10 max-w-6xl mx-auto mt-16 md:mt-20 text-center text-xs text-[#64748B]">
+                  {HERO_DISCRETE_CONCEPTS.join('  ·  ')}
+                </p>
+              </section>
+
+              {/* Sección limpia dedicada para el video nativo debajo del Hero */}
+              <section
+                id="demo-video"
+                aria-label="Demostración de producto"
+                className="border-t border-white/[0.06] px-6 py-20 md:py-24"
+              >
+                <div className="max-w-5xl mx-auto rounded-2xl overflow-hidden border border-white/[0.10] bg-[#0B101B] shadow-[0_32px_90px_rgba(0,0,0,0.75)]">
                   <video
                     src={OMEGA_DEMO_VIDEO.src}
                     autoPlay
@@ -397,17 +438,13 @@ export function OmegaLandingPage({ onEnterApp }) {
                     className="block w-full aspect-video object-cover"
                   />
                 </div>
-
-                <p className="max-w-4xl mx-auto mt-10 text-center text-xs tracking-wide text-[#64748B]">
-                  {HERO_DISCRETE_CONCEPTS.join('  ·  ')}
-                </p>
-              </div>
-            </section>
+              </section>
+            </>
           )}
 
           {/* 2. LOS 3 ESPACIOS DE TRABAJO */}
           {activePage === 'perfiles' && (
-            <section className="relative px-4 sm:px-6 pt-28 md:pt-36 pb-20 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
@@ -493,7 +530,7 @@ export function OmegaLandingPage({ onEnterApp }) {
 
           {/* 3. PRIVACIDAD Y DESPLIEGUE */}
           {activePage === 'seguridad' && (
-            <section className="relative px-4 sm:px-6 pt-28 md:pt-36 pb-20 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
@@ -568,7 +605,7 @@ export function OmegaLandingPage({ onEnterApp }) {
 
           {/* 4. PLANES Y PRECIOS (Estilo Linear / Cursor / Vercel / Avenna) */}
           {activePage === 'planes' && (
-            <section className="relative px-4 sm:px-6 pt-28 md:pt-36 pb-20 overflow-hidden">
+            <section className="relative px-4 sm:px-6 pt-36 md:pt-40 pb-20 overflow-hidden">
               <ClippedRoyalArc position="top" />
 
               <div className="relative z-10 max-w-6xl mx-auto">
