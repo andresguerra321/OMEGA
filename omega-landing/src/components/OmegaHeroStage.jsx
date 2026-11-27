@@ -1,204 +1,208 @@
-import { useRef } from 'react';
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from 'framer-motion';
-import { ArrowUpRight } from 'lucide-react';
-import { OmegaObsidianOrb } from './OmegaObsidianOrb';
+import { useId } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 
-const SPRING_PHYSICS = { stiffness: 420, damping: 36, mass: 0.8 };
-const ENTRANCE_TRANSITION = { duration: 0.45, ease: [0.22, 1, 0.36, 1] };
+const ENTRANCE_TRANSITION = { duration: 0.5, ease: [0.22, 1, 0.36, 1] };
 
-export function OmegaHeroStage({ onStartFree, onViewPlans }) {
-  const heroRef = useRef(null);
-  const reducedMotion = useReducedMotion();
+const HOME_DOCK_CARDS = [
+  {
+    profileId: 'GENERAL',
+    tag: 'General',
+    title: 'Personal y Directivo',
+    description:
+      'Revisión de computadores, celulares por USB y enlaces sin copiar archivos.',
+  },
+  {
+    profileId: 'DEVELOPER',
+    tag: 'Desarrollo',
+    title: 'Equipos de Tecnología',
+    description:
+      'Auditoría continua de repositorios y librerías externas antes de publicar.',
+  },
+  {
+    profileId: 'LEGAL',
+    tag: 'Legal',
+    title: 'Firmas y Despachos',
+    description:
+      'Análisis de expedientes confidenciales con citas exactas y cero filtraciones.',
+  },
+];
 
-  const pointerX = useMotionValue(0);
-  const pointerY = useMotionValue(0);
-  const smoothX = useSpring(pointerX, SPRING_PHYSICS);
-  const smoothY = useSpring(pointerY, SPRING_PHYSICS);
-
-  const orbX = useTransform(smoothX, [-1, 1], [-8, 8]);
-  const orbY = useTransform(smoothY, [-1, 1], [-8, 8]);
-  const pillsX = useTransform(smoothX, [-1, 1], [-16, 16]);
-  const pillsY = useTransform(smoothY, [-1, 1], [-12, 12]);
-  const retCardX = useTransform(smoothX, [-1, 1], [18, -18]);
-  const retCardY = useTransform(smoothY, [-1, 1], [14, -14]);
-  const privCardX = useTransform(smoothX, [-1, 1], [-20, 20]);
-  const privCardY = useTransform(smoothY, [-1, 1], [16, -16]);
-
-  function handlePointerMove(event) {
-    if (event.pointerType === 'touch' || reducedMotion) return;
-    const node = heroRef.current;
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    pointerX.set(Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2)));
-    pointerY.set(Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2)));
-  }
-
-  function handlePointerLeave() {
-    pointerX.set(0);
-    pointerY.set(0);
-  }
+/**
+ * Eclipse Ω compacto idéntico al módulo Home de OMEGA.
+ */
+function HomeEclipseMark() {
+  const uid = useId().replace(/:/g, '');
+  const bodyGradId = `homeEclipseBody-${uid}`;
+  const rimGradId = `homeEclipseRim-${uid}`;
 
   return (
-    <section
-      ref={heroRef}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
-      className="relative pt-32 md:pt-40 pb-16 overflow-hidden"
+    <div
+      aria-label="Eclipse OMEGA"
+      role="img"
+      className="relative flex items-center justify-center w-[156px] h-[156px] md:w-[172px] md:h-[172px] mx-auto select-none pointer-events-none"
     >
-      {/* Capa trasera (z-0): Foco atmosférico azul rey + Palabra monumental OMEGA */}
+      {/* Halo respiratorio contenido del Home */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute right-[8%] top-[16%] h-[460px] w-[460px] rounded-full opacity-[0.28] blur-[110px] z-0"
+        className="omega-eclipse-breathe pointer-events-none absolute -inset-5 rounded-full blur-2xl"
         style={{
-          background: 'radial-gradient(circle, #2F6FED 0%, #1D4ED8 48%, rgba(5, 7, 11, 0) 76%)',
+          background:
+            'radial-gradient(circle, rgba(37, 99, 235, 0.28) 0%, rgba(29, 78, 216, 0.12) 55%, transparent 76%)',
         }}
       />
 
+      {/* Interior oscuro limpio del eclipse */}
+      <svg viewBox="0 0 180 180" fill="none" className="absolute inset-0 h-full w-full">
+        <defs>
+          <radialGradient id={bodyGradId} cx="62" cy="116" r="110" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#172547" />
+            <stop offset="34%" stopColor="#0C1220" />
+            <stop offset="72%" stopColor="#070A12" />
+            <stop offset="100%" stopColor="#05070B" />
+          </radialGradient>
+          <linearGradient id={rimGradId} x1="24" y1="36" x2="152" y2="144" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#2563EB" stopOpacity="0.65" />
+            <stop offset="45%" stopColor="#60A5FA" stopOpacity="0.88" />
+            <stop offset="100%" stopColor="#2563EB" stopOpacity="0.25" />
+          </linearGradient>
+        </defs>
+        <circle cx="90" cy="90" r="88" fill={`url(#${bodyGradId})`} />
+        <circle cx="90" cy="90" r="88" stroke={`url(#${rimGradId})`} strokeWidth="1" strokeOpacity="0.55" />
+      </svg>
+
+      {/* Aro fino azul rey rotando suavemente (9s linear infinite) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none select-none absolute inset-x-0 top-24 md:top-24 flex justify-center z-0 overflow-hidden"
+        className="omega-orb-spin omega-orb-ring-mask-glow pointer-events-none absolute -inset-[2px] rounded-full opacity-80"
+        style={{
+          background:
+            'conic-gradient(from 0deg, transparent 0deg, rgba(96, 165, 250, 0.55) 55deg, rgba(37, 99, 235, 0.7) 110deg, transparent 180deg)',
+          filter: 'blur(8px)',
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="omega-orb-spin omega-orb-ring-mask pointer-events-none absolute inset-0 rounded-full"
+        style={{
+          background:
+            'conic-gradient(from 0deg, transparent 0deg, rgba(96, 165, 250, 0.78) 55deg, rgba(37, 99, 235, 0.9) 110deg, transparent 180deg)',
+        }}
+      />
+
+      {/* Isotipo vectorial Ω nítido centrado (~64px) */}
+      <svg
+        viewBox="0 0 80 80"
+        fill="none"
+        className="omega-glyph-float relative z-10 h-16 w-16"
       >
-        <span className="text-[15vw] font-semibold tracking-[-0.06em] leading-none bg-gradient-to-b from-white/[0.08] via-[#3B82F6]/[0.05] to-transparent bg-clip-text text-transparent">
-          OMEGA
-        </span>
+        <path
+          d="M33.2 55.6H22.2V49.8H29.4C25.5 46.1 23.2 40.9 23.2 35C23.2 25.1 30.6 17.6 40 17.6C49.4 17.6 56.8 25.1 56.8 35C56.8 40.9 54.5 46.1 50.6 49.8H57.8V55.6H46.8V49.2C50 46.2 51.9 41.3 51.9 35.4C51.9 27.9 46.8 22.4 40 22.4C33.2 22.4 28.1 27.9 28.1 35.4C28.1 41.3 30 46.2 33.2 49.2V55.6Z"
+          fill="#E2E8F0"
+          fillOpacity="0.92"
+        />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Hero minimalista espejo del módulo Home de OMEGA:
+ * Eclipse Ω centrado + Titular + Subtítulo + 2 botones + Dock inferior de 3 cards.
+ */
+export function OmegaHeroStage({ onStartFree, onViewPlans, onSelectProfile }) {
+  const uid = useId().replace(/:/g, '');
+  const arcStrokeId = `heroHomeArc-${uid}`;
+  const reducedMotion = useReducedMotion();
+
+  return (
+    <section className="relative overflow-hidden bg-[#05070B]">
+      {/* Arco atmosférico azul rey sutil del Login/Home */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden select-none"
+      >
+        <div
+          className="absolute left-1/2 -top-36 -translate-x-1/2 w-[min(980px,115vw)] h-[340px]"
+          style={{
+            background:
+              'radial-gradient(ellipse 56% 48% at 50% 45%, rgba(29, 78, 216, 0.18) 0%, rgba(47, 111, 237, 0.08) 46%, rgba(5, 7, 11, 0) 74%)',
+          }}
+        />
+        <svg
+          viewBox="0 0 1440 340"
+          preserveAspectRatio="xMidYMin slice"
+          fill="none"
+          className="absolute inset-x-0 top-0 w-full h-[340px]"
+        >
+          <defs>
+            <linearGradient id={arcStrokeId} x1="320" y1="110" x2="1120" y2="110" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#2F6FED" stopOpacity="0" />
+              <stop offset="30%" stopColor="#2F6FED" stopOpacity="0.28" />
+              <stop offset="50%" stopColor="#93C5FD" stopOpacity="0.58" />
+              <stop offset="70%" stopColor="#2F6FED" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <circle cx="720" cy="650" r="590" stroke={`url(#${arcStrokeId})`} strokeWidth="1.1" />
+        </svg>
       </div>
 
-      {/* Grid 2 columnas */}
-      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 items-center gap-12 relative z-10">
-        {/* Columna Izquierda */}
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={ENTRANCE_TRANSITION}
-          className="lg:col-span-5 text-left"
-        >
-          <p className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#60A5FA]/80">
-            SISTEMA DE SEGURIDAD Y PRIVACIDAD
-          </p>
+      <motion.div
+        initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={ENTRANCE_TRANSITION}
+        className="min-h-screen flex flex-col justify-between pt-28 md:pt-32 pb-8 px-6 max-w-6xl mx-auto relative z-10"
+      >
+        {/* Bloque Central: una sola columna centrada */}
+        <div className="my-auto flex flex-col items-center text-center">
+          <HomeEclipseMark />
 
-          <h1 className="text-5xl md:text-6xl font-medium tracking-[-0.04em] leading-[1.04] text-[#F8FAFC] text-balance mt-4">
-            Control total antes de tu próximo paso.
+          <h1 className="mt-8 md:mt-9 text-4xl md:text-6xl font-medium tracking-[-0.035em] leading-[1.06] text-[#F8FAFC] text-balance text-center">
+            Control total. Cero rastro.
           </h1>
 
-          <p className="text-base text-[#94A3B8] mt-5 max-w-md leading-relaxed">
-            Protege tus equipos, tu código y tus expedientes confidenciales con inteligencia privada y cero rastro en disco.
+          <p className="mt-4 text-base md:text-[17px] text-[#94A3B8] max-w-xl mx-auto text-center leading-relaxed font-normal">
+            Protege tus equipos, tu código y tus expedientes confidenciales sin guardar ni exponer tus datos.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-7 md:mt-8 flex items-center justify-center gap-3">
             <button
               type="button"
               onClick={onStartFree}
-              className="rounded-full bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-12 px-7 text-sm font-medium shadow-[0_0_28px_rgba(47,111,237,0.4)] transition-transform duration-150 active:scale-[0.97]"
+              className="bg-[#2F6FED] hover:bg-[#3B7BF2] text-white h-11 px-6 rounded-xl text-sm font-medium transition-transform duration-150 active:scale-[0.97]"
             >
               Comenzar gratis
             </button>
             <button
               type="button"
               onClick={onViewPlans}
-              className="rounded-full bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.12] text-[#F1F5F9] h-12 px-6 text-sm font-medium inline-flex items-center gap-1.5 transition-transform duration-150 active:scale-[0.97]"
+              className="bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.10] text-[#E2E8F0] h-11 px-6 rounded-xl text-sm font-medium transition-transform duration-150 active:scale-[0.97]"
             >
-              <span>Ver planes</span>
-              <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+              Ver planes
             </button>
           </div>
-        </motion.div>
-
-        {/* Columna Derecha: Orbe + Anillos + 3 Piezas Glassmorphismo superpuestas */}
-        <div className="lg:col-span-7 relative flex items-center justify-center min-h-[420px] md:min-h-[480px]">
-          <motion.div
-            style={reducedMotion ? undefined : { x: orbX, y: orbY }}
-            className="relative flex items-center justify-center"
-          >
-            <OmegaObsidianOrb />
-          </motion.div>
-
-          {/* 1. Arriba-izquierda: Dos píldoras apiladas */}
-          <motion.div
-            style={reducedMotion ? undefined : { x: pillsX, y: pillsY }}
-            className="hidden sm:flex flex-col items-start gap-2.5 absolute top-8 md:top-12 left-0 md:left-4 z-20 pointer-events-none"
-          >
-            <div className="rounded-full bg-white/[0.08] backdrop-blur-2xl border border-white/[0.16] px-4 py-2 text-xs text-[#F8FAFC] shadow-[0_12px_32px_rgba(0,0,0,0.5)] inline-flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
-              <span>Equipo y celular sin amenazas</span>
-            </div>
-            <div className="rounded-full bg-white/[0.08] backdrop-blur-2xl border border-white/[0.16] px-4 py-2 text-xs text-[#F8FAFC] shadow-[0_12px_32px_rgba(0,0,0,0.5)] inline-flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-[#2F6FED]" aria-hidden="true" />
-              <span>Expediente verificado · Pág. 14</span>
-            </div>
-          </motion.div>
-
-          {/* 2. Arriba-derecha: Tarjeta flotante RETENCIÓN */}
-          <motion.div
-            style={reducedMotion ? undefined : { x: retCardX, y: retCardY }}
-            className="hidden sm:block absolute top-4 md:top-8 right-0 md:right-6 z-20 omega-glass rounded-2xl p-4 w-[172px] pointer-events-none"
-          >
-            <p className="text-[11px] font-medium tracking-[0.14em] uppercase text-[#94A3B8]">
-              — RETENCIÓN
-            </p>
-            <p className="mt-1.5 text-3xl font-semibold tabular-nums text-white">0 B</p>
-            <p className="mt-1 text-xs text-[#94A3B8] leading-snug">
-              Archivos guardados en servidor
-            </p>
-          </motion.div>
-
-          {/* 3. Abajo-derecha: Tarjeta flotante Modo Privado */}
-          <motion.div
-            style={reducedMotion ? undefined : { x: privCardX, y: privCardY }}
-            className="hidden sm:block absolute bottom-4 md:bottom-8 right-2 md:right-10 z-20 omega-glass rounded-2xl p-4 w-[210px] pointer-events-none"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-[#60A5FA]">Modo Privado</span>
-              <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
-            </div>
-            <p className="mt-1 text-sm font-medium text-[#F8FAFC]">Informe certificado</p>
-            <div className="mt-3 h-1.5 w-full rounded-full bg-white/[0.08] overflow-hidden">
-              <div className="h-full w-full rounded-full bg-gradient-to-r from-[#2F6FED] to-emerald-400" />
-            </div>
-          </motion.div>
         </div>
-      </div>
 
-      {/* Banda inferior monumental del Hero */}
-      <div className="px-6">
-        <div className="max-w-5xl mx-auto mt-10 pt-10 border-t border-white/[0.07] grid grid-cols-1 sm:grid-cols-3 gap-8 items-center text-center">
-          <div>
-            <p className="text-4xl md:text-5xl font-light tracking-[-0.04em] tabular-nums text-white">
-              0 B
-            </p>
-            <p className="text-xs text-[#64748B] mt-1">Rastro en disco</p>
-          </div>
-
-          <div className="pt-2">
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 180 60"
-              fill="none"
-              className="mx-auto -mb-2 w-36 h-12"
+        {/* Dock inferior minimalista: eco de las 3 cards del Home */}
+        <div className="mt-10 md:mt-14 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+          {HOME_DOCK_CARDS.map((card) => (
+            <button
+              key={card.profileId}
+              type="button"
+              onClick={() => onSelectProfile(card.profileId)}
+              className="bg-[#0B101B]/65 backdrop-blur-xl border border-white/[0.08] hover:border-white/[0.15] rounded-2xl p-5 transition-colors text-left cursor-pointer h-full flex flex-col justify-between"
             >
-              <path
-                d="M16 54 A74 74 0 0 1 164 54"
-                stroke="rgba(96, 165, 250, 0.35)"
-                strokeWidth="1.25"
-                strokeDasharray="2 5"
-                strokeLinecap="round"
-              />
-              <circle cx="90" cy="6" r="2" fill="#60A5FA" />
-            </svg>
-            <p className="text-4xl md:text-5xl font-light tracking-[-0.04em] tabular-nums text-white">
-              100%
-            </p>
-            <p className="text-xs text-[#64748B] mt-1">Control de tus datos</p>
-          </div>
-
-          <div>
-            <p className="text-4xl md:text-5xl font-light tracking-[-0.04em] tabular-nums text-white">
-              3
-            </p>
-            <p className="text-xs text-[#64748B] mt-1">Espacios en una sola app</p>
-          </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[15px] font-medium text-[#F8FAFC]">{card.title}</span>
+                <span className="text-[11px] text-[#64748B] shrink-0">{card.tag}</span>
+              </div>
+              <p className="text-[13px] text-[#94A3B8] mt-2 leading-relaxed">
+                {card.description}
+              </p>
+            </button>
+          ))}
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

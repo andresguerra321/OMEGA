@@ -129,12 +129,42 @@
   }
 }
 
+@keyframes omega-eclipse-breathe {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes omega-glyph-float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 .omega-orb-spin {
-  animation: omega-orb-spin 10s linear infinite;
+  animation: omega-orb-spin 9s linear infinite;
+}
+
+.omega-eclipse-breathe {
+  animation: omega-eclipse-breathe 4.5s ease-in-out infinite;
+}
+
+.omega-glyph-float {
+  animation: omega-glyph-float 5s ease-in-out infinite;
 }
 
 .omega-orb-ring-mask {
-  padding: 1.5px;
+  padding: 1.75px;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -146,7 +176,7 @@
 }
 
 .omega-orb-ring-mask-glow {
-  padding: 3.5px;
+  padding: 4px;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -162,7 +192,9 @@
     scroll-behavior: auto;
   }
 
-  .omega-orb-spin {
+  .omega-orb-spin,
+  .omega-eclipse-breathe,
+  .omega-glyph-float {
     animation: none;
   }
 }

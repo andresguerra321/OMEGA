@@ -41,7 +41,7 @@ test('catalog mantiene precios reales en COP, datos Bento de Privacidad y cero j
   assert.doesNotMatch(serialized, FORBIDDEN_JARGON);
 });
 
-test('OmegaLandingPage cumple fases 1-5: Hero sin video, Perfiles SpecularCard, Bento anti-anidamiento y Planes', async () => {
+test('OmegaLandingPage renderiza Hero espejo del Home con Eclipse Ω y Dock, más Perfiles, Privacidad y Planes', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://127.0.0.1:4175/',
   });
@@ -116,43 +116,42 @@ test('OmegaLandingPage cumple fases 1-5: Hero sin video, Perfiles SpecularCard, 
       );
     });
 
-    // Fase 2: Hero sin <video>, sin <iframe>, con Orbe + 3 capas flotantes + banda monumental
+    // 1. Hero minimalista espejo del Home (cero marca de agua, cero flotantes, cero kicker, con Eclipse Ω + Dock 3 cards)
     const homeText = container.textContent || '';
-    assert.match(homeText, /Control total antes de tu próximo paso\./);
-    assert.ok(container.querySelector('[aria-label="Orbe de Cristal Obsidiana de OMEGA"]'));
+    assert.match(homeText, /Control total\. Cero rastro\./);
+    assert.match(homeText, /Personal y Directivo/);
+    assert.match(homeText, /Equipos de Tecnología/);
+    assert.match(homeText, /Firmas y Despachos/);
+    assert.ok(container.querySelector('[aria-label="Eclipse OMEGA"]'));
+    assert.doesNotMatch(homeText, /SISTEMA DE SEGURIDAD Y PRIVACIDAD/);
+    assert.doesNotMatch(homeText, /— RETENCIÓN/);
+    assert.doesNotMatch(homeText, /Rastro en disco/);
+    assert.doesNotMatch(homeText, /Equipo y celular sin amenazas/);
     assert.equal(container.querySelector('video'), null);
     assert.equal(container.querySelector('iframe'), null);
     assert.doesNotMatch(homeText, FORBIDDEN_JARGON);
 
-    // Fase 3: Perfiles
-    const perfilesNav = Array.from(container.querySelectorAll('header nav button')).find(
-      (btn) => btn.textContent?.trim() === 'Perfiles',
+    // 2. Clic en card del Dock ("Firmas y Despachos") navega directo a #perfiles con Legal activo
+    const legalDockBtn = Array.from(container.querySelectorAll('main button')).find((btn) =>
+      btn.textContent?.includes('Firmas y Despachos'),
     );
     await act(async () => {
-      perfilesNav.click();
+      legalDockBtn.click();
     });
     assert.match(container.textContent || '', /Tres espacios\. Un solo control\./);
-    assert.match(container.textContent || '', /Revisión silenciosa de tu computador/);
+    assert.match(container.textContent || '', /Respuestas 100% respaldadas/);
 
-    // Fase 4: Privacidad (0 datos salientes aparece SOLO una vez en modo privado)
+    // 3. Privacidad
     const segNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Privacidad',
     );
     await act(async () => {
       segNav.click();
     });
-    const privateTab = Array.from(container.querySelectorAll('button[role="tab"]')).find(
-      (btn) => btn.textContent?.includes('Instalado en tu empresa'),
-    );
-    await act(async () => {
-      privateTab.click();
-    });
-    const privateText = container.textContent || '';
-    assert.equal((privateText.match(/0 datos salientes/g) || []).length, 1);
-    assert.match(privateText, /Internet externo bloqueado/);
-    assert.doesNotMatch(privateText, FORBIDDEN_JARGON);
+    assert.match(container.textContent || '', /Cero almacenamiento oculto/);
+    assert.match(container.textContent || '', /0 B guardados/);
 
-    // Fase 5: Planes
+    // 4. Planes
     const planesNav = Array.from(container.querySelectorAll('header nav button')).find(
       (btn) => btn.textContent?.trim() === 'Planes',
     );
